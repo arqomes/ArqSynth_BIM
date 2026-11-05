@@ -174,15 +174,75 @@ def bezier_points(anchors, closed=False, steps=BEZIER_STEPS):
     return pts
 
 
-def bezier_curve(anchors, normal, closed=False, steps=BEZIER_STEPS):
-    return {"kind": "bezier", "anchors": [[[float(c) for c in x] for x in a] for a in anchors],
-            "normal": [float(c) for c in _unit(normal)], "closed": bool(closed), "steps": int(steps)}
+def bezier_curve(anchors, normal, closed=False, steps=BEZIER_STEPS, auto=None):
+    """The curve's data. (0.411) auto: which points have automatic tangents (kept: they are worked out again when a
+    point moves — auto_handles)."""
+    c = {"kind": "bezier", "anchors": [[[float(c) for c in x] for x in a] for a in anchors],
+         "normal": [float(c) for c in _unit(normal)], "closed": bool(closed), "steps": int(steps)}
+    if auto is not None and any(auto):
+        c["auto"] = [bool(a) for a in list(auto)[:len(anchors)]] + [False] * max(0, len(anchors) - len(auto))
+    return c
 
 
 def smooth_anchor(point, handle_out):
     """A smooth anchor: its handles opposite each other (the one dragged out, the other mirrored)."""
     p, h = np.asarray(point, float), np.asarray(handle_out, float)
     return [p, 2 * p - h, h]
+
+
+AUTO_HANDLE = 2.5614        # (0.411) Blender's automatic tangents: each about 0.39 of its span (its calchandleNurb)
+
+
+def auto_handles(anchors, auto, closed=False):
+    """(0.411, the owner: «esperava nós na linha que podem ser movidos criando a curva — faça como o Blender») The
+    anchors [[point, handle in, handle out]] with the tangents of those marked `auto` worked out from their
+    neighbours, as Blender's «Auto» handles: along the bisector of the two spans meeting there, each about 0.39 of its
+    span — the curve passes smoothly through every point. An open curve's end: its one tangent towards the next
+    point (the other none). Two points only: a straight span."""
+    pts = [np.asarray(a[0], float) for a in anchors]
+    out = [[np.asarray(x, float).copy() for x in a] for a in anchors]
+    n = len(pts)
+    if n < 2:
+        return out
+    for k in range(n):
+        if not (auto and k < len(auto) and auto[k]):
+            continue
+        p = pts[k]
+        first, last = not closed and k == 0, not closed and k == n - 1
+        nxt = pts[(k + 1) % n] if not last else 2 * p - pts[k - 1]
+        prev = pts[k - 1] if not first else 2 * p - nxt
+        da, db = p - prev, nxt - p
+        la, lb = float(np.linalg.norm(da)), float(np.linalg.norm(db))
+        tvec = (da / la if la > 1e-12 else 0.0) + (db / lb if lb > 1e-12 else 0.0)
+        lt = float(np.linalg.norm(tvec))
+        if lt < 1e-9:                                # (it turns back on itself: a corner)
+            out[k] = [p.copy(), p.copy(), p.copy()]
+            continue
+        d = tvec / lt
+        out[k] = [p.copy(), p.copy() if first else p - d * la / AUTO_HANDLE,
+                  p.copy() if last else p + d * lb / AUTO_HANDLE]
+    return out
+
+
+def split_span(anchors, k, t=0.5):
+    """(0.411) The anchors with a new point on span k (from point k to the next) at `t` — the curve's shape kept (de
+    Casteljau): (new anchors, the new point's index)."""
+    out = [[np.asarray(x, float).copy() for x in a] for a in anchors]
+    j = (k + 1) % len(out)
+    p0, p1, p2, p3 = out[k][0], out[k][2], out[j][1], out[j][0]
+    q0, q1, q2 = p0 + (p1 - p0) * t, p1 + (p2 - p1) * t, p2 + (p3 - p2) * t
+    r0, r1 = q0 + (q1 - q0) * t, q1 + (q2 - q1) * t
+    s = r0 + (r1 - r0) * t
+    out[k][2], out[j][1] = q0, q2
+    out.insert(k + 1, [s, r0, r1])
+    return out, k + 1
+
+
+def span_middles(anchors, closed=False):
+    """(0.411) The curve's point halfway along each span (by its parameter) — where a point can be added."""
+    n = len(anchors)
+    spans = n if closed and n > 2 else n - 1
+    return [split_span(anchors, k)[0][k + 1][0] for k in range(max(spans, 0))]
 
 
 # ---------------------------------------------------------------- a profile's sides (0.375: a wall's elevation)

@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.411 — Curva de Bézier como no Blender
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.411.0**. Abra a planta (F4) de um projeto novo.
+2. Clique no separador **Modelagem** e, no painel de desenho, em **Curva de Bézier** (o botão pequeno junto de
+   «Linha livre»).
+3. Clique em quatro pontos em zigue-zague e carregue em **Enter**: a curva passa, **suave**, por todos os pontos (já
+   enquanto desenha, a curva segue o rato).
+4. Clique em **Curva de Bézier** outra vez, clique em dois pontos e carregue em **Enter**: uma curva reta.
+5. Carregue em **Espaço** (Selecionar) e clique nessa curva reta: aparecem os nós (quadrados) e um **«+» no meio**.
+6. Carregue sem largar no **«+»**, leve o rato para o lado e largue: nasce um nó ali e a linha **curva-se**, suave.
+7. Arraste esse nó novo para outro sítio: a curva segue-o e continua suave.
+8. Arraste uma das tangentes (os losangos nas pontas das linhas cinzentas): esse nó passa a «à mão».
+9. Na ferramenta Curva de Bézier, **Alt + clique** num ponto: aí fica um canto (bico).
+
 ## 0.410 — Contorno do piso como o perfil da parede; furos desenhados
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.410.0**. Abra a planta (F4) de um projeto

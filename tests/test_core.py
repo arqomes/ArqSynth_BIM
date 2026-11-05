@@ -6653,6 +6653,51 @@ class FreeDrawingTest(unittest.TestCase):
         curve_edit.reshape(doc, arc.id, bigger)
         self.assertAlmostEqual(curves.arc_radius(doc.get(arc.id).curve), 10)
 
+    def test_bezier_as_blender(self):
+        """0.411 (the owner: «a curva Bézier não é uma curva, mas uma linha reta. Esperava nós na linha que podem ser
+        movidos criando a curva — faça como o Blender»): points with automatic tangents — the curve passes smoothly
+        through them; a straight curve of two points, a point added halfway (its shape kept) and dragged out: it
+        bends, smooth; a point moved keeps its automatic tangents; a tangent dragged by hand is no longer automatic;
+        kept with the sketches."""
+        import tempfile
+        from arqbim.core import curves
+        from arqbim.model import curve_edit, document
+        pts = [(0, 0, 0), (4, 2, 0), (8, 0, 0)]
+        anchors = curves.auto_handles([[p] * 3 for p in pts], [True] * 3)
+        p, hi, ho = (np.asarray(v) for v in anchors[1])
+        self.assertTrue(np.allclose(np.cross(hi - p, ho - p), 0) and float((hi - p) @ (ho - p)) < 0)   # (smooth)
+        self.assertAlmostEqual(float(np.linalg.norm(ho - p)), float(np.hypot(4, 2)) / curves.AUTO_HANDLE)
+        self.assertTrue(np.allclose(ho - p, (np.linalg.norm(ho - p), 0, 0)))          # (level at the top)
+        self.assertTrue(np.allclose(anchors[0][1], anchors[0][0]) and np.allclose(anchors[2][2], anchors[2][0]))
+        drawn = curves.bezier_points(anchors, False, 12)
+        self.assertTrue(any(np.allclose(q, (4, 2, 0)) for q in drawn))                 # (it passes through it)
+        # two points: straight; the «+» halfway dragged 1 m up — a new point there, the curve bent and smooth
+        straight = curves.bezier_curve(curves.auto_handles([[(0, 0, 0)] * 3, [(6, 0, 0)] * 3], [True, True]),
+                                       (0, 0, 1), auto=[True, True])
+        line = SketchObject("B", np.eye(4), PolyMesh(curves.curve_points(straight), lines=[(0, 1)]), curve=straight)
+        self.assertTrue(all(abs(q[1]) < 1e-9 for q in curves.curve_points(straight)))
+        ends, middles, arrows, what, adds = curve_edit.grips(line)
+        self.assertEqual((len(ends), len(adds), what[-1]), (2, 1, ("add", 0)))
+        self.assertTrue(np.allclose(adds[0], (3, 0, 0)))
+        bent = curve_edit.dragged(line, ("add", 0), (3, 1, 0))
+        self.assertEqual((len(bent["anchors"]), bent["auto"]), (3, [True, True, True]))
+        drawn = curves.curve_points(bent)
+        self.assertAlmostEqual(max(q[1] for q in drawn), 1.0, places=6)                 # (through the point dragged)
+        self.assertTrue(all(q[1] > -1e-9 for q in drawn))
+        p, hi, ho = (np.asarray(v) for v in bent["anchors"][1])
+        self.assertTrue(np.allclose(hi[1], 1.0) and np.allclose(ho[1], 1.0))            # (level at its top: smooth)
+        # that point moved on: its tangents (and its neighbours') still automatic
+        line2 = SketchObject("B", np.eye(4), PolyMesh(drawn, lines=[(0, 1)]), curve=bent)
+        again = curve_edit.dragged(line2, ("anchor", 1), (4, 2, 0))
+        p, hi, ho = (np.asarray(v) for v in again["anchors"][1])
+        self.assertTrue(np.allclose(np.cross(hi - p, ho - p), 0))
+        # a tangent dragged by hand: that point no longer automatic
+        by_hand = curve_edit.dragged(line2, ("out", 1), (5, 3, 0))
+        self.assertEqual(by_hand["auto"], [True, False, True])
+        path = os.path.join(tempfile.mkdtemp(), "c.arqbim")
+        document._write_sketches(path, [SketchObject("B", np.eye(4), PolyMesh(drawn, lines=[(0, 1)]), curve=bent)])
+        self.assertEqual(document._read_sketches(path)[0][0].curve["auto"], [True, True, True])
+
     def test_a_curve_is_saved_with_the_sketches(self):
         import tempfile
         from arqbim.core import curves

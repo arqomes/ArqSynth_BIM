@@ -540,11 +540,11 @@ class SelectTool(Tool):
         obj = self.doc.get(next(iter(ids))) if len(ids) == 1 else None
         found = curve_edit.grips(obj) if obj is not None and not obj.is_bim and obj.curve else None
         if found is not None:                              # (0.373) a curve alone: its own grips, its tangents' lines
-            ends, middles, arrows, what = found
-            self._curve_grips = (obj.id, what, len(ends))
+            ends, middles, arrows, what, adds = found      # (0.411: and a «+» halfway along each span)
+            self._curve_grips = (obj.id, what, len(ends), len(middles))
             self._grip_segments, self._dims = [], []
             self.viewport.show_temp_dims([])
-            self.viewport.show_grips(ends, middles, (), arrows)
+            self.viewport.show_grips(ends, middles, adds, arrows)
             return
         self._dims = selection_dims(self.doc, self.viewport.selection,
                                     faces=bool(getattr(self.host, "dim_faces", False)))
@@ -691,11 +691,11 @@ class SelectTool(Tool):
 
     def _start_curve_move(self, grip, x, y):
         """(0.373) A curve's grip taken: it follows the mouse on the curve's plane, the curve reshaped as it goes."""
-        obj_id, what, n_ends = self._curve_grips
+        obj_id, what, n_ends, n_middles = self._curve_grips
         obj = self.doc.get(obj_id)
         kind, k = grip
-        index = k if kind == "end" else n_ends + k
-        base = self.viewport.grips[0][k] if kind == "end" else self.viewport.grips[1][k]
+        index = k if kind == "end" else n_ends + k if kind == "middle" else n_ends + n_middles + k
+        base = self.viewport.grips[{"end": 0, "middle": 1, "add": 2}[kind]][k]
         normal = obj.matrix[:3, :3] @ np.asarray(obj.curve["normal"], dtype=float)
         normal = normal / np.linalg.norm(normal)
         self._move = _CurveMove(obj_id, what[index], base.copy(), (x, y), (base.copy(), normal))
@@ -1407,9 +1407,10 @@ class SelectTool(Tool):
                 self.viewport.clear_overlays()
                 self.host.set_hint(self.hint())
                 self._click_select(press[0], press[1], modifiers)
-            elif isinstance(self._move, _BlockMove):
+            elif isinstance(self._move, (_BlockMove, _CurveMove)):
                 # (0.382) a roof block's grip moves only dragged: a click moves nothing (a click more where the mouse
-                # was used to pick it up, to follow the mouse until the next click — the owner's wall profile curves)
+                # was used to pick it up, to follow the mouse until the next click — the owner's wall profile curves);
+                # (0.411) a curve's too
                 self.cancel()
             else:
                 self._move.dragging = False               # clicked: the grip follows the mouse to the next click
@@ -1515,7 +1516,9 @@ class SelectTool(Tool):
         if grip is not None and again:
             grip = None                                   # (0.373: a double click on a line, not its middle's grip)
         if grip is not None:
-            if grip[0] == "add":                          # (0.353) a wall's «+»: go on drawing it from that end
+            if grip[0] == "add" and self._curve_grips is not None:     # (0.411) a Bézier span's «+»: a new point,
+                self._start_curve_move(grip, x, y)                     # dragged out — the curve bends
+            elif grip[0] == "add":                        # (0.353) a wall's «+»: go on drawing it from that end
                 if self._wall_ends is not None and hasattr(self.host, "continue_wall"):
                     self.host.continue_wall(self._wall_ends[0], grip[1])
             elif self._door_flips is not None and grip[0] == "middle":   # (0.359) a door's flip arrow

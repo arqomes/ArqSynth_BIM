@@ -8,7 +8,14 @@ Bézier (as the pen of a drawing program): a click puts a corner point; pressing
 tangent pulled out the way the mouse goes (the other side mirrored). The curve follows the mouse to the next point.
 Enter, the right button, Esc or a second click on the last point end it; a click on the first point closes it — a
 face. Picked with Select, its points and tangents have grips that change its shape (tools/select.py, curve grips).
-Both are picked whole and closing an outline with lines drawn before makes the face, as SketchUp's."""
+Both are picked whole and closing an outline with lines drawn before makes the face, as SketchUp's.
+
+(0.411, the owner: «a curva Bézier não é uma curva, mas uma linha reta. Esperava nós na linha que podem ser movidos
+criando a curva — faça como o Blender») As Blender's: a click puts a smooth point whose tangents are worked out by
+themselves («Auto» — core/curves.auto_handles), so the curve passes smoothly through every point clicked (the mouse
+too, while drawing); pressed and dragged, its tangent pulled by hand, as before; Alt and a click, a corner. Picked
+with Select, a «+» halfway along each span: dragged, a new point there and the curve bends; a point moved keeps its
+automatic tangents (and its neighbours' follow)."""
 
 import numpy as np
 
@@ -147,9 +154,14 @@ class BezierTool(Tool):
     def _reset(self):
         self._normal = None
         self._anchors = []          # [[point, handle in, handle out]] (world)
+        self._auto = []             # (0.411) which points have automatic tangents (a click), the others by hand / corners
         self._press = None          # (x, y) of the button held on the last point put, while it may be dragged
         self._cursor = None
         self._closing = False
+
+    def _smooth(self, anchors, auto, closed=False):
+        """(0.411) The anchors with their automatic tangents worked out (as Blender's «Auto»)."""
+        return curves.auto_handles(anchors, auto, closed)
 
     def options(self):
         return [Option("steps", t("ctx.bezier_steps"), "choice", self.steps, tuple((s, str(s)) for s in STEPS))]
@@ -181,12 +193,16 @@ class BezierTool(Tool):
         return bool(np.hypot(x - sx, y - sy) <= CLOSE_PX)
 
     def _show(self, extra=None):
-        """The curve so far (and on to `extra`, a corner where the mouse is), with the tangents of its points."""
+        """The curve so far (and on to `extra`, (0.411) a smooth point where the mouse is: the curve passes through
+        it), with the tangents of its last points."""
         anchors = [list(a) for a in self._anchors] + ([[extra, extra, extra]] if extra is not None else [])
+        auto = list(self._auto) + ([True] if extra is not None else [])
+        anchors = self._smooth(anchors, auto)
         pts = curves.bezier_points(anchors, False, self.steps) if len(anchors) > 1 else [anchors[0][0]]
         segs = [q for a, b in zip(pts, pts[1:]) for q in (a, b)]
         handles = []
-        for p, hi, ho in self._anchors[-2:]:
+        shown = anchors[-3:-1] if extra is not None else anchors[-2:]
+        for p, hi, ho in shown:
             for h in (hi, ho):
                 if np.linalg.norm(h - p) > 1e-9:
                     handles += [p, h]
@@ -194,8 +210,7 @@ class BezierTool(Tool):
         if segs or handles:
             self.viewport.show_polygon([], segments=segs + handles, colors=colours)
         self.viewport.show_grips([a[0] for a in self._anchors],
-                                 [h for _p, hi, ho in self._anchors[-2:] for h in (hi, ho)
-                                  if np.linalg.norm(h - _p) > 1e-9])
+                                 [h for _p, hi, ho in shown for h in (hi, ho) if np.linalg.norm(h - _p) > 1e-9])
 
     def pointer_down(self, x, y, button, modifiers):
         if button == RIGHT:
@@ -211,6 +226,7 @@ class BezierTool(Tool):
             p = np.asarray(plane.point, float)
             self._normal = np.asarray(plane.normal, float)
             self._anchors = [[p.copy(), p.copy(), p.copy()]]
+            self._auto = ["Alt" not in (modifiers or ())]       # (0.411: a click a smooth point, Alt a corner)
             self._press = (x, y)
             self.host.set_hint(self.hint())
             return
@@ -226,6 +242,7 @@ class BezierTool(Tool):
             self._finish(False)
             return
         self._anchors.append([p.copy(), p.copy(), p.copy()])
+        self._auto.append("Alt" not in (modifiers or ()))   # (0.411: a click a smooth point, Alt a corner)
         self._press = (x, y)
         self.host.set_hint(self.hint())
 
@@ -239,6 +256,7 @@ class BezierTool(Tool):
             if h is not None:
                 p = self._anchors[-1][0]
                 self._anchors[-1] = curves.smooth_anchor(p, h)
+                self._auto[-1] = False                  # (0.411: its tangent by hand now)
                 self._show()
                 self.viewport.show_tip(t("snap.bezier_tangent"), h)
             return
@@ -283,15 +301,16 @@ class BezierTool(Tool):
         self.cancel()
 
     def _finish(self, closed):
-        anchors, normal = [list(a) for a in self._anchors], self._normal
+        anchors, normal, auto = [list(a) for a in self._anchors], self._normal, list(self._auto)
         self._reset()
         self.viewport.clear_overlays()
         self.viewport.show_grips()
         self.host.set_hint(self.hint())
         if len(anchors) < 2:
             return
+        anchors = self._smooth(anchors, auto, closed and len(anchors) > 2)
         pts = curves.bezier_points(anchors, closed, self.steps)
-        curve = curves.bezier_curve(anchors, normal, closed, self.steps)
+        curve = curves.bezier_curve(anchors, normal, closed, self.steps, auto)
         obj = _curve_object(self.doc, pts, curve, closed)
         put_curve(self, obj, (anchors[0][0], normal), t("cmd.bezier"), "info.bezier_face", "info.bezier",
                   n=len(anchors))

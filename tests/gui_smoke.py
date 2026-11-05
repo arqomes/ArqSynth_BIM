@@ -3257,13 +3257,49 @@ def free_drawing_flow():
         pump(200)
         click()
         pump(300)
-    grips = bool(bez) and vp.selection == {bez[0].id} and len(vp.grips[0]) == 3 and len(vp.grips[1]) == 2
+    # (0.411: every point smooth — the clicked ones' tangents automatic —, a «+» halfway along each span)
+    grips = bool(bez) and vp.selection == {bez[0].id} and len(vp.grips[0]) == 3 and len(vp.grips[1]) == 4 and \
+        len(vp.grips[2]) == 2
+    # 0.411 (the owner: «a curva Bézier não é uma curva, mas uma linha reta. Esperava nós na linha que podem ser
+    # movidos criando a curva — faça como o Blender»): two clicks and Enter — a straight one; picked, its «+» dragged
+    # 1 m aside: a new point there, the curve bent and smooth through it
     vp.set_view("top", center=(4.5, 3.0, 0.0), radius=7.0)
     pump(300)
+    win.tool_actions["bezier"].trigger()
+    pump(200)
+    before = {o.id for o in sketch("lines")}
+    for p in ((1.0, 8.0, 0.0), (7.0, 8.0, 0.0)):
+        move(near(p), 4)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Return)
+    pump(300)
+    two = [o for o in sketch("lines") if o.id not in before and o.curve and o.curve.get("kind") == "bezier"]
+    straight = len(two) == 1 and all(abs(transform_point(two[0].matrix, v)[1] - 8.0) < 0.05 for v in two[0].mesh.verts)
+    win.set_tool("select")
+    pump(500)
+    bent = False
+    if two:
+        move(near(transform_point(two[0].matrix, two[0].mesh.verts[2])), 4)
+        pump(200)
+        click()
+        pump(300)
+        plus = vp.grips[2][0].copy() if len(vp.grips) > 2 and len(vp.grips[2]) == 1 else None
+        if plus is not None:
+            move(at(plus), 4)
+            pump(150)
+            press()
+            move(near(plus + np.array((0.0, 1.0, 0.0))), 8)
+            pump(150)
+            release()
+            pump(400)
+            c = doc.get(two[0].id).curve
+            ys = [transform_point(two[0].matrix, v)[1] for v in doc.get(two[0].id).mesh.verts]
+            bent = len(c["anchors"]) == 3 and abs(max(ys) - 9.0) < 0.1 and len(set(np.round(ys, 3))) > 5
     shot("373_desenho_livre.png")
-    check("arco_linha_livre_bezier", on_ribbon and closed and half and loop and made and grips,
-          "fita={} face={} meia={} livre={} bezier={} pegas={} {}".format(
-              on_ribbon, closed, half, loop, made, grips, [len(g) for g in vp.grips]))
+    check("arco_linha_livre_bezier", on_ribbon and closed and half and loop and made and grips and straight and bent,
+          "fita={} face={} meia={} livre={} bezier={} pegas={} reta={} curvada={} {}".format(
+              on_ribbon, closed, half, loop, made, grips, straight, bent, [len(g) for g in vp.grips]))
     win.set_discipline("architecture", remember=False)
     doc.modified = False
 

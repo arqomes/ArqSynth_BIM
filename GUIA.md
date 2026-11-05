@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.410.0
+# Guia das ferramentas — ArqSynth BIM 0.411.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.410.0.
+ArqSynth BIM 0.411.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -295,8 +295,8 @@ Operações gerais de criação e edição geométrica.
 
 #### Curva de Bézier
 
-- **Como se usa:** Bézier: clique para um ponto de canto, ou carregue e arraste para um ponto suave (a tangente sai para onde arrasta).
-- **Passos de teste (TESTAR.md):** 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»
+- **Como se usa:** Bézier: clique nos pontos por onde a curva passa (fica suave sozinha, como no Blender). Arrastar: puxa a tangente à mão · Alt + clique: um canto.
+- **Passos de teste (TESTAR.md):** 0.411 «Curva de Bézier como no Blender»
 
 #### Offset  ·  tecla F
 
@@ -1773,4 +1773,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*239 comandos descritos, gerados do ArqSynth BIM 0.410.0.*
+*239 comandos descritos, gerados do ArqSynth BIM 0.411.0.*

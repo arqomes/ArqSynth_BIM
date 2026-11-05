@@ -53,14 +53,15 @@ def reshape(doc, obj_id, curve, label=None):
 # ---------------------------------------------------------------- grips
 
 def grips(obj):
-    """The grips of a curve picked alone: (ends, middles, arrows, what each is) — ends squares, middles diamonds,
-    arrows the tangents' lines (pairs of points) — all world; what: [("start" | "end" | "mid" | ("anchor" | "in" |
-    "out", k))] for the ends, then the middles. None when the curve has no grips of its own."""
+    """The grips of a curve picked alone: (ends, middles, arrows, what each is, adds) — ends squares, middles
+    diamonds, arrows the tangents' lines (pairs of points), (0.411) adds «+» halfway along each span of a Bézier curve
+    (dragged: a new point there) — all world; what: [("start" | "end" | "mid" | ("anchor" | "in" | "out" | "add",
+    k))] for the ends, then the middles, then the adds. None when the curve has no grips of its own."""
     c = obj.curve or {}
     w = lambda p: transform_point(obj.matrix, np.asarray(p, float))        # noqa: E731
     if c.get("kind") == "arc" and not c.get("pie") and not curves.is_closed(c):
         pts = curves.arc_points(c["centre"], c["normal"], c["start"], c["angle"], 64)
-        return [w(pts[0]), w(pts[-1])], [w(pts[32])], [], ["start", "end", "mid"]
+        return [w(pts[0]), w(pts[-1])], [w(pts[32])], [], ["start", "end", "mid"], []
     if c.get("kind") == "bezier":
         ends, middles, arrows, what_e, what_m = [], [], [], [], []
         for k, (p, hi, ho) in enumerate(c["anchors"]):
@@ -71,7 +72,8 @@ def grips(obj):
                     middles.append(w(h))
                     what_m.append((name, k))
                     arrows += [w(p), w(h)]
-        return ends, middles, arrows, what_e + what_m
+        adds = [w(m) for m in curves.span_middles(c["anchors"], c.get("closed"))]
+        return ends, middles, arrows, what_e + what_m + [("add", k) for k in range(len(adds))], adds
     return None
 
 
@@ -101,14 +103,21 @@ def dragged(obj, what, target):
         return curves.arc_curve(centre, normal, s, angle, c.get("segments"), c.get("pie"))
     if c["kind"] == "bezier":
         anchors = [[np.asarray(x, float) for x in a] for a in c["anchors"]]
+        auto = list(c.get("auto") or [])
+        auto += [False] * (len(anchors) - len(auto))
         base = anchors[0][0]
         p = p - float((p - base) @ normal) * normal
         name, k = what
+        if name == "add":                            # (0.411) a new point on that span (its shape kept), moved
+            anchors, k = curves.split_span(anchors, k)
+            auto.insert(k, True)
+            name = "anchor"
         a, hi, ho = anchors[k]
         if name == "anchor":
             d = p - a
             anchors[k] = [a + d, hi + d, ho + d]
         else:
+            auto[k] = False                          # (0.411: its tangent set by hand — Blender's «Aligned»)
             mine, other = (ho, hi) if name == "out" else (hi, ho)
             smooth = np.linalg.norm(other - a) > 1e-9 and \
                 np.linalg.norm(np.cross(mine - a, other - a)) < 1e-6 * max(np.linalg.norm(mine - a), 1.0)
@@ -116,5 +125,7 @@ def dragged(obj, what, target):
             if smooth and np.linalg.norm(p - a) > 1e-9:      # (a smooth point stays smooth: the other turns with it)
                 new_other = a - (p - a) / np.linalg.norm(p - a) * np.linalg.norm(other - a)
             anchors[k] = [a, new_other, p] if name == "out" else [a, p, new_other]
-        return curves.bezier_curve(anchors, normal, c.get("closed"), c.get("steps", curves.BEZIER_STEPS))
+        # (0.411) the automatic tangents worked out again — the point moved and its neighbours: still smooth
+        anchors = curves.auto_handles(anchors, auto, c.get("closed"))
+        return curves.bezier_curve(anchors, normal, c.get("closed"), c.get("steps", curves.BEZIER_STEPS), auto)
     return None

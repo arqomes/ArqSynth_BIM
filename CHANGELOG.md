@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.411.0 — 2026-11-05
+
+**Curva de Bézier como no Blender.** (O dono: «a curva Bézier não é uma curva, mas uma linha reta. Esperava nós na
+linha que podem ser movidos criando a curva — faça como o Blender».)
+
+- **Um clique põe um nó suave:** as tangentes calculam-se sozinhas (como as «Auto» do Blender) e a curva passa,
+  suave, por todos os pontos clicados — já enquanto desenha, até ao rato. Antes, um clique punha um canto e a curva
+  ficava em linhas retas.
+  - Carregar e arrastar continua a puxar a tangente à mão.
+  - **Alt + clique** põe um canto.
+- **Nós na linha:** com a curva escolhida (Selecionar), aparece um **«+» no meio de cada troço**. Arrastá-lo cria
+  ali um nó novo e a linha curva-se — uma curva de dois pontos (reta) fica curva assim.
+- Mover um nó automático refaz as tangentes dele e das vizinhas: a curva continua suave. Arrastar uma tangente
+  passa esse nó a «à mão».
+- As pegas da curva só se movem a arrastar (um clique a mais já não as apanha), como no perfil da parede.
+
 ## 0.410.0 — 2026-11-05
 
 **Contorno do piso como o perfil da parede, e furos desenhados nos dois.** (O dono: «assim como editamos o perfil da

@@ -6205,19 +6205,21 @@ _STRINGS = {
                          "Line(s) moved {d}: the lines joined to their ends follow."),
     "info.lines_rotated": ("Linha(s) rodada(s) {a}: as linhas ligadas às pontas acompanham.",
                            "Line(s) rotated {a}: the lines joined to their ends follow."),
-    "hint.curve_grip": ("Leve a pega para onde quer (a curva muda de forma; as linhas ligadas às pontas acompanham) e "
-                        "solte ou clique. Esc desiste.",
-                        "Take the grip where you want it (the curve changes its shape; the lines joined to its ends "
-                        "follow) and let go or click. Esc gives up."),
+    "hint.curve_grip": ("Com o botão carregado, leve a pega para onde quer (a curva muda de forma; as linhas ligadas "
+                        "às pontas acompanham) e largue. Esc desiste.",
+                        "With the button held, take the grip where you want it (the curve changes its shape; the "
+                        "lines joined to its ends follow) and let go. Esc gives up."),
     "info.curve_reshaped": ("{k}: forma mudada.", "{k}: shape changed."),
     "props.arc_radius": ("Raio", "Radius"),
     "props.arc_angle": ("Ângulo", "Angle"),
     "props.arc_segments": ("Segmentos", "Segments"),
     "props.bezier_points": ("Pontos", "Points"),
     "props.curve_hint": ("Escolhe-se inteira. Arraste as pegas (pontas e meio de um arco, pontos e tangentes de uma "
-                         "Bézier) para lhe mudar a forma; as linhas ligadas às pontas acompanham.",
-                         "Picked whole. Drag its grips (an arc's ends and middle, a Bézier's points and tangents) to "
-                         "change its shape; the lines joined to its ends follow."),
+                         "Bézier; o «+» no meio de um troço põe-lhe um nó novo) para lhe mudar a forma; as linhas "
+                         "ligadas às pontas acompanham.",
+                         "Picked whole. Drag its grips (an arc's ends and middle, a Bézier's points and tangents; the "
+                         "«+» halfway along a span puts a new point there) to change its shape; the lines joined to "
+                         "its ends follow."),
     "info.arc_changed": ("Arco mudado: raio {r}, {a}, {n} segmentos.", "Arc changed: radius {r}, {a}, {n} segments."),
     "cmd.curve_edit": ("Mudar curva", "Change curve"),
     "curve.arc": ("Arco", "Arc"),
@@ -8053,20 +8055,23 @@ _STRINGS = {
     "tool.bezier": ("Curva de Bézier", "Bézier curve"),
     "cmd.bezier": ("Curva de Bézier", "Bézier curve"),
     "ctx.bezier_steps": ("Segmentos por troço", "Segments per span"),
-    "hint.bezier.start": ("Bézier: clique para um ponto de canto, ou carregue e arraste para um ponto suave (a "
-                          "tangente sai para onde arrasta).",
-                          "Bézier: click for a corner point, or press and drag for a smooth one (its tangent goes "
-                          "where you drag)."),
-    "hint.bezier.next": ("Clique (canto) ou arraste (suave) o ponto seguinte. No 1.º ponto fecha uma face; Enter, Esc, "
-                         "botão direito ou outro clique no último ponto acabam.",
-                         "Click (corner) or drag (smooth) the next point. On the first point it closes a face; Enter, "
-                         "Esc, the right button or another click on the last point end it."),
+    # (0.411, as Blender's: a click a smooth point the curve passes through; a drag its tangent by hand; Alt a corner)
+    "hint.bezier.start": ("Bézier: clique nos pontos por onde a curva passa (fica suave sozinha, como no Blender). "
+                          "Arrastar: puxa a tangente à mão · Alt + clique: um canto.",
+                          "Bézier: click the points the curve goes through (it is smooth by itself, as in Blender). "
+                          "Drag: pull the tangent by hand · Alt + click: a corner."),
+    "hint.bezier.next": ("Clique no ponto seguinte (a curva passa por ele, suave) · arrastar: tangente à mão · Alt + "
+                         "clique: canto. No 1.º ponto fecha uma face; Enter, Esc, botão direito ou outro clique no "
+                         "último ponto acabam.",
+                         "Click the next point (the curve goes through it, smooth) · drag: tangent by hand · Alt + "
+                         "click: corner. On the first point it closes a face; Enter, Esc, the right button or another "
+                         "click on the last point end it."),
     "hint.bezier.drag": ("Arraste a tangente; solte para fixar o ponto.", "Drag the tangent; let go to fix the point."),
     "snap.bezier_tangent": ("Tangente", "Tangent"),
-    "info.bezier": ("Curva de Bézier de {n} pontos. Escolhida (Selecionar), as pegas dos pontos e das tangentes "
-                    "mudam-lhe a forma.",
-                    "Bézier curve of {n} points. Picked (Select), the grips of its points and tangents change its "
-                    "shape."),
+    "info.bezier": ("Curva de Bézier de {n} pontos. Escolhida (Selecionar): arraste os nós, as tangentes, ou o «+» "
+                    "no meio de um troço para lhe pôr um nó novo e a curvar.",
+                    "Bézier curve of {n} points. Picked (Select): drag its points, its tangents, or the «+» halfway "
+                    "along a span to put a new point there and bend it."),
     "info.bezier_face": ("A curva fechou o contorno: face de {a} m².", "The curve closed the outline: a face of {a} m²."),
     "hint.pp.start": ("Clique numa face para a empurrar ou puxar (numa das faces escolhidas: todas juntas).",
                       "Click a face to push or pull it (on one of the faces picked: all of them together)."),
