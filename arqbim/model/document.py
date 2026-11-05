@@ -547,6 +547,7 @@ class Document:
         #                                                  order, entry, transitions… (model/presentation.py)
         self.panoramas = []         # (0.368) the 360° panoramas: [{uid, name, file, eye, forward, storey}]
         #                             (model/panoramas.py; their pictures beside the project)
+        self.work_plane = None      # (0.412) model/work_plane.WorkPlane the drawing starts on in 3D (None: the level)
         self.grids = []             # GridAxis: the structural grid's axes (kept in the .arqbim file; IfcGrid in the IFC)
         self.grid_settings = dict(GRID_DEFAULTS)    # its tags, dimensions, bubbles (0.91; kept in the .arqbim file)
         self._grid_dims = {}        # view -> the grid's dimensions drawn in it (made again when the grid changes)
@@ -1206,6 +1207,7 @@ class Document:
         self.ifc = ifc_model
         self.path = path
         self.active_storey = None
+        self.work_plane = None                      # (0.412: the storey's level again)
         self.loading = False
         side = sidecar_path(path) if path else None
         with _reading_sidecar():                    # (0.255: parsed once for all its parts)

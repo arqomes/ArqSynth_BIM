@@ -62,6 +62,8 @@ HATCHES_LATER = 60                # (0.320) more elements cut than this: an edit
 
 BACKGROUND = views_canvas.BACKGROUNDS[False]   # the view's: light at the bottom, a pale sky at the top (0.341: render/canvas)
 GROUND_GRID = "#c3c8cc"                  # the ground grid's lines
+WORK_PLANE_COLOR = (0.24, 0.50, 0.84, 0.45)   # (0.412) the work plane's grid (model/work_plane), in the 3D view:
+WORK_PLANE_SIZE = 12.0                         # a line a metre, this many metres square round where it was put
 # (0.329) an image of the view (render_image): its backgrounds, and the most pixels drawn for it inside the GPU (twice
 # as wide and high, then made smaller: smoother edges — when that stays under this; else as many as the image's)
 IMAGE_BACKGROUNDS = ("view", "white", "transparent")
@@ -403,6 +405,14 @@ class Viewport:
             major_color=views_canvas.ground_grid(GROUND_GRID), axis_thickness=0.0, infinite=True, depth_write=False),
             orientation="xy")
         self.scene.add(self.grid)          # drawn at the level of the active storey
+        # (0.412) the work plane set (doc.work_plane): a square grid on it, in the 3D view only
+        self.work_grid = gfx.Grid(None, _mat(
+            gfx.GridMaterial, turn=False, major_step=1.0, minor_step=0.25, major_thickness=1.0, minor_thickness=0.0,
+            major_color=WORK_PLANE_COLOR, axis_thickness=0.0, infinite=False, depth_write=False,
+            alpha_mode="blend"), orientation="xy")
+        self.work_grid.visible = False
+        self.scene.add(self.work_grid)
+        self._work_shown = None            # (the plane its grid shows, whether shown)
         self.only_active_storey = False    # True: hide what belongs to the other storeys
         self.plan = False                  # plan of the active storey (see set_plan)
         self.section = None                # (point, normal) of the section shown (see set_section)
@@ -436,7 +446,27 @@ class Viewport:
 
     # ------------------------------------------------------------ drawing
 
+    def _sync_work_plane(self):
+        """(0.412) The work plane's grid where the document's work plane is — in the 3D view (not in a plan, section
+        or elevation, which keep their own planes)."""
+        plane = getattr(self.doc, "work_plane", None)
+        shown = plane is not None and self.current_view() is None
+        key = (id(plane), shown)
+        if key == self._work_shown:
+            return
+        self._work_shown = key
+        self.work_grid.visible = shown
+        if shown:
+            size = WORK_PLANE_SIZE
+            corner = np.eye(4)
+            # (a plane standing up: its grid mostly above where it was put — not half under the ground)
+            below = 2.0 if abs(float(np.asarray(plane.v)[2])) > 0.9 else size / 2
+            corner[:3, 3] = (-size / 2, -below if float(np.asarray(plane.v)[2]) >= 0 else below - size, 0.0)
+            scale = np.diag((size, size, 1.0, 1.0))
+            self.work_grid.local.matrix = plane.matrix() @ corner @ scale
+
     def _draw(self):
+        self._sync_work_plane()
         if self.box is not None and not self.cutting():
             # the section box's poché a hair towards the viewer, wherever they turned (see batches)
             lift = tuple(float(c) for c in np.round(-self.view_direction() * POCHE_LIFT, 4))
@@ -4282,7 +4312,8 @@ class Viewport:
     def _tool_marks(self):
         """(0.329) What only the tools show over the model: the ground grid and axes, the guides, the section box, the
         previews, tips, alignments, temporary dimensions, grips and selection regions."""
-        marks = [self.grid, self._axes, self._guides, self._box_view, self._fill, self._volume, self._lines,
+        marks = [self.grid, self.work_grid, self._axes, self._guides, self._box_view, self._fill, self._volume,
+                 self._lines,
                  self._marker,
                  self._label, self._tip, self._align, self._acquired, self._tdim_lines, self._tdim_strong,
                  self._grip_ends,

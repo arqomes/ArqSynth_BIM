@@ -644,6 +644,27 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.412 — Rodar à volta de X, Y ou Z; planos de trabalho
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.412.0**. Num projeto novo, abra a vista **3D**.
+2. Separador **Modelagem**, **Curva de Bézier**: desenhe uma curva no chão, ao longo do eixo verde, e carregue em
+   **Enter**.
+3. Carregue em **Espaço** (Selecionar) e clique na curva. Carregue em **Q** (Rodar) e clique na ponta da curva (o
+   pivô).
+4. Carregue em **X**: aparece uma linha vermelha (o eixo X) pelo pivô, e o balão diz «Rodar à volta do eixo X».
+5. Clique num ponto da curva (a direção de partida), escreva **90** e carregue em **Enter**: a curva fica de pé.
+6. Experimente os botões **X / Y / Z** na barra de cima do Rodar: fazem o mesmo que as teclas.
+7. Clique em **Desenhar ▸ Plano de trabalho**. Na barra de cima está **XZ (vertical)** aceso. Leve o rato pelo chão:
+   vê-se um quadrado onde o plano ficaria. Clique: aparece uma grelha azul de pé.
+8. Carregue em **L** (Linha) e clique em dois pontos «no ar», em frente à grelha: a linha fica no plano. Faça o mesmo
+   com a **Curva de Bézier**.
+9. Abra a planta (F4): lá a grelha não aparece e desenha-se no piso, como sempre. Volte à vista 3D.
+10. Faça uma parede. **Plano de trabalho ▸ Face** e clique numa face da parede: o plano passa a ser o dessa face.
+11. **Plano de trabalho ▸ Voltar ao nível do piso**: a grelha desaparece e desenha-se outra vez no chão.
+12. Escolha a parede, **Q**, clique num canto, carregue em **X**, clique noutro ponto e escreva 90: o programa recusa
+    («só rodam à volta da vertical») e a parede fica de pé.
+13. O **Offset** está agora no painel **Modificar**, por baixo de «Dividir com folga» (a tecla F continua a mesma).
+
 ## 0.411 — Curva de Bézier como no Blender
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.411.0**. Abra a planta (F4) de um projeto novo.

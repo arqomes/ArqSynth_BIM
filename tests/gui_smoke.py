@@ -604,6 +604,7 @@ def bim_flow():
     panorama_flow()
     line_loops_flow()
     free_drawing_flow()
+    work_plane_rotate_flow()
     architecture_tools_flow()
     study_themes_flow()
     model_import_flow()
@@ -3301,6 +3302,199 @@ def free_drawing_flow():
           "fita={} face={} meia={} livre={} bezier={} pegas={} reta={} curvada={} {}".format(
               on_ribbon, closed, half, loop, made, grips, straight, bent, [len(g) for g in vp.grips]))
     win.set_discipline("architecture", remember=False)
+    doc.modified = False
+
+
+def work_plane_rotate_flow():
+    """0.412 (the owner, with a Bézier lying on the ground: «senti dificuldade de manipular no plano XZ… precisamos do
+    plano de trabalho e um comando rotacionar mais poderoso para rodar em qualquer eixo como o do Blender… clico para
+    indicar o pivô e se clicar X, ele rotaciona à volta de X»; «o plano de trabalho, podemos criar de acordo com eixos
+    e inserir na tela onde vai ficar; pode ser também por seleção de faces»), as he does it in the 3D view: a Bézier
+    along the green axis on the ground; picked, Q, a click on its end (the pivot), X — the axis said and drawn —, a
+    click for the start, 90 and Enter: it stands up (along the blue axis); the Y button on the bar, the same: about
+    Y. Plano de trabalho (XZ), a click at y = 3: the blue grid there; the Line, two clicks in the air: on that plane;
+    a Bézier, three clicks: on it too; Face, a click on a wall's face: its plane; «Voltar ao nível do piso»: none. A
+    wall turned about X: refused, upright. Captured: 412_plano_trabalho.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_model
+    from arqbim.ui import ribbon as ribbon_ui
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.resize(1536, 830)                         # (the owner's screen: the Modelagem panels all open there)
+    pump(300)
+    win.set_discipline("modeling", remember=False)
+    pump(300)
+    # (as before 0.412: only «Medir» and «Criar» folded there — Desenhar, Modificar, Copiar e colar open)
+    folded = [p.folded.text() for p in win.ribbon.findChildren(ribbon_ui.Panel) if p.isVisible() and p.is_folded()]
+    open_1536 = not any(w in f for f in folded for w in ("Desenhar", "Modificar", "Copiar"))
+    win.resize(1280, 740)
+    pump(300)
+    win.open_view("3d", None)
+    pump(300)
+    vp.set_view("iso", center=(2.0, 2.0, 1.0), radius=7.0)
+    pump(400)
+
+    def world_points(obj):
+        return [transform_point(obj.matrix, v) for v in obj.mesh.verts]
+
+    # a Bézier along the green axis, on the ground: two clicks, Enter
+    win.tool_actions["bezier"].trigger()
+    pump(200)
+    for p in ((0.0, 0.0, 0.0), (0.0, 4.0, 0.0)):
+        move(near(p), 4)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Return)
+    pump(300)
+    curves = [o for o in sketch("lines") if o.curve and o.curve.get("kind") == "bezier"]
+    curve = curves[0] if len(curves) == 1 else None
+    flat = curve is not None and all(abs(p[2]) < 0.05 for p in world_points(curve))
+    # picked; Rotate: the pivot at its start, X, a starting point, 90 typed
+    win.set_tool("select")
+    pump(200)
+    vp.set_selection({curve.id} if curve else set())
+    pump(100)
+    key(Qt.Key.Key_Q)
+    pump(200)
+    move(near((0.0, 0.0, 0.0)), 4)
+    click()
+    pump(150)
+    key(Qt.Key.Key_X)
+    pump(200)
+    axis_x = win.tool.name == "rotate" and win.tool.axis == "x" and "X" in win.last_message
+    move(near((0.0, 1.5, 0.0)), 6)
+    pump(150)
+    drawn_axis = len(vp._lines.geometry.positions.data) >= 2 if vp._lines.visible else False
+    click()
+    pump(150)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    up = curve is not None and all(abs(p[1]) < 0.05 for p in world_points(doc.get(curve.id))) and \
+        abs(max(p[2] for p in world_points(doc.get(curve.id))) - 4.0) < 0.05
+    # the Y button on the bar: about Y (the curve, now upright at x = 0, leans over to x = 4)
+    win.set_tool("select")
+    vp.set_selection({curve.id} if curve else set())
+    key(Qt.Key.Key_Q)
+    pump(200)
+    button = win.context_bar.findChild(QtWidgets.QToolButton, "ctx_axis_y")
+    if button is not None:
+        button.click()
+        pump(200)
+    axis_y = win.tool.axis == "y"
+    move(near((0.0, 0.0, 0.0)), 4)
+    click()
+    pump(150)
+    move(near((0.0, 0.0, 1.5)), 6)
+    pump(150)
+    click()
+    pump(150)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    pts = world_points(doc.get(curve.id)) if curve else []
+    about_y = bool(pts) and abs(max(abs(p[0]) for p in pts) - 4.0) < 0.05 and all(abs(p[2]) < 0.05 for p in pts)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    # the work plane: XZ through y = 3
+    win.tool_actions["work_plane"].trigger()
+    pump(200)
+    on_ribbon = win.tool_actions["work_plane"] in set(win.ribbon_actions())
+    move(near((1.0, 3.0, 0.0)), 6)
+    pump(200)
+    click()
+    pump(300)
+    plane = doc.work_plane
+    # (the click comes onto the alignments found nearby, as any click does: within ~10 cm here)
+    xz = plane is not None and plane.kind == "xz" and abs(float(plane.origin[1]) - 3.0) < 0.15 and \
+        win.tool.name == "select" and vp.work_grid.visible
+    # the Line, two clicks in the air: on that plane
+    before = {o.id for o in objects()}
+    key(Qt.Key.Key_L)
+    pump(150)
+    for p in ((0.5, 3.0, 1.0), (2.5, 3.0, 2.0)):
+        move(near(p), 6)
+        pump(150)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    new = [o for o in objects() if o.id not in before]
+    y0 = float(plane.origin[1]) if plane is not None else 3.0
+    on_plane = len(new) == 1 and all(abs(p[1] - y0) < 1e-6 for p in world_points(new[0])) and \
+        max(p[2] for p in world_points(new[0])) > 1.5
+    line_pts = [tuple(float(v) for v in np.round(p, 2)) for p in world_points(new[0])] if len(new) == 1 else len(new)
+    # a Bézier, three clicks: on it too
+    before = {o.id for o in objects()}
+    win.tool_actions["bezier"].trigger()
+    pump(200)
+    for p in ((3.5, 3.0, 0.5), (4.5, 3.0, 2.0), (5.5, 3.0, 0.5)):
+        move(near(p), 6)
+        pump(120)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Return)
+    pump(300)
+    new = [o for o in objects() if o.id not in before]
+    bezier_on = len(new) == 1 and all(abs(p[1] - y0) < 1e-6 for p in world_points(new[0])) and \
+        max(p[2] for p in world_points(new[0])) > 1.0
+    shot("412_plano_trabalho.png")
+    # a plan: the work plane is not used there (nor shown)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    hidden_in_plan = not vp.work_grid.visible
+    win.open_view("3d", None)
+    pump(300)
+    # by a face: a wall's
+    wall = bim_model.add_wall(doc, np.array((0.0, 7.0, 0.0)), np.array((5.0, 7.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+    win.tool_actions["work_plane"].trigger()
+    pump(200)
+    face_button = win.context_bar.findChild(QtWidgets.QToolButton, "ctx_kind_face")
+    if face_button is not None:
+        face_button.click()
+        pump(200)
+    move(near((2.5, 6.9, 1.4)), 6)
+    pump(200)
+    click()
+    pump(300)
+    plane = doc.work_plane
+    by_face = plane is not None and plane.kind == "face" and abs(abs(float(plane.normal[1])) - 1.0) < 1e-6
+    # back to the storey's level
+    win.tool_actions["work_plane"].trigger()
+    pump(200)
+    level = win.context_bar.findChild(QtWidgets.QCheckBox, "ctx_level")
+    if level is not None:
+        level.setChecked(True)
+        pump(200)
+    none_again = doc.work_plane is None and not vp.work_grid.visible
+    # a wall about X: refused
+    win.set_tool("select")
+    vp.set_selection({wall})
+    key(Qt.Key.Key_Q)
+    pump(200)
+    move(near((0.0, 7.0, 0.0)), 4)
+    click()
+    pump(150)
+    key(Qt.Key.Key_X)
+    move(near((0.0, 7.0, 1.5)), 6)
+    click()
+    pump(150)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    s, e, _t = doc.ifc.wall_axis(wall)
+    refused = "só rodam à volta da vertical" in win.last_message and abs(s[2]) < 1e-6 and abs(e[2]) < 1e-6
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.set_discipline("architecture", remember=False)
+    check("plano_de_trabalho_e_rodar_xyz", flat and axis_x and drawn_axis and up and axis_y and about_y and on_ribbon
+          and open_1536 and xz and on_plane and bezier_on and hidden_in_plan and by_face and none_again and refused,
+          "deitada={} eixo_x={} eixo_visto={} de_pe={} eixo_y={} roda_y={} fita={}/1536:{} xz={} linha={} bezier={} "
+          "planta={} face={} nivel={} parede={} ({})".format(flat, axis_x, drawn_axis, up, axis_y, about_y, on_ribbon,
+                                                             open_1536, xz,
+                                                   on_plane, bezier_on, hidden_in_plan, by_face, none_again, refused,
+                                                   line_pts))
     doc.modified = False
 
 

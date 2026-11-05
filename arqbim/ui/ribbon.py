@@ -35,9 +35,11 @@ PANELS = {
                          ("sheets_by_storey", "splat"))),
              ("help", ("help", "quit"))),
     "modeling": (("select", ("select",)),
-                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "offset"), "push_pull")),
+                 # (0.412) the work plane beside the curves; Offset with Modify, as Revit's (no column more: the
+                 # owner's 1536 px keep the panels they had open)
+                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
                  ("modify", ("move", "copy", "rotate", "mirror", ("array", "align", "scale"),
-                             ("split_wall", "split_gap"), ("delete", "corner_walls", "trim_extend"),
+                             ("split_wall", "split_gap", "offset"), ("delete", "corner_walls", "trim_extend"),
                              ("wall_joins", "join_geometry", "unjoin_geometry"))),
                  ("clipboard", (("copy_clip", "paste", "paste_storeys"),)),            # (0.326, Revit's Clipboard)
                  ("measure", ("tape", "dimension")),
@@ -51,9 +53,9 @@ PANELS = {
                ("ai", ("ai_link", "ai_install"))),
     "massing": (("select", ("select",)),
                 ("image", ("import_image", "calibrate_image")),
-                ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "offset"), "push_pull")),
+                ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
                 ("freeform", ("param_surface", "control_ring")),     # (0.395) the addon's «Superfícies Paramétricas»
-                ("modify", ("move", "copy", "rotate", ("mirror", "align", "scale"), ("array",))),
+                ("modify", ("move", "copy", "rotate", ("mirror", "align", "scale"), ("array", "offset"))),
                 ("measure", ("tape",)),
                 ("paint", ("paint",)),                                   # (0.391) SketchUp's Paint Bucket
                 ("to_bim", ("classify", ("walls_from_cad", "model_from_scan")))),

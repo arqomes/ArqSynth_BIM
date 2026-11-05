@@ -45,6 +45,7 @@ from .tape import TapeTool
 from .transform import ArrayTool, CopyTool, MoveTool, RotateTool
 from .wall_edit import CornerWallsTool, SplitGapTool, SplitWallTool, TrimExtendTool, WallJoinsTool
 from .wall_opening import NicheTool, WallOpeningTool, WallRevealTool
+from .work_plane import WorkPlaneTool
 
 ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, RotateTool, TapeTool,
              WallTool, SlabTool, ColumnTool, BeamTool, FootingTool, DoorTool, WindowTool, PipeTool, DuctTool, GridTool,
@@ -57,4 +58,4 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              SplitGapTool, TrimExtendTool, WallJoinsTool, WallOpeningTool, WallSweepTool, WallRevealTool,
              CopyTool, ArrayTool, JoinGeometryTool, UnjoinGeometryTool, ArcTool, FreehandTool, BezierTool,
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
-             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool)
+             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool)

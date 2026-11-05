@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.411.0
+# Guia das ferramentas — ArqSynth BIM 0.412.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.411.0.
+ArqSynth BIM 0.412.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -103,9 +103,9 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 ## Índice
 
 1. [Início](#1-início) — 23 comandos
-2. [Modelagem](#2-modelagem) — 33 comandos
+2. [Modelagem](#2-modelagem) — 34 comandos
 3. [Gerenciar](#3-gerenciar) — 21 comandos
-4. [Massa e Estudos](#4-massa-e-estudos) — 25 comandos
+4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
 5. [Terreno](#5-terreno) — 10 comandos
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
@@ -298,10 +298,11 @@ Operações gerais de criação e edição geométrica.
 - **Como se usa:** Bézier: clique nos pontos por onde a curva passa (fica suave sozinha, como no Blender). Arrastar: puxa a tangente à mão · Alt + clique: um canto.
 - **Passos de teste (TESTAR.md):** 0.411 «Curva de Bézier como no Blender»
 
-#### Offset  ·  tecla F
+#### Plano de trabalho
 
-- **Como se usa:** Offset: clique numa face de um esboço ou numa linha (a cadeia dela; as linhas escolhidas antes, se as houver).
-- **Passos de teste (TESTAR.md):** 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.206 «Offset de faces em L e Escala a partir do centro»
+- **Como se usa:** Plano vertical ao longo do eixo vermelho (XZ): clique no ponto por onde passa. Na barra: XY, YZ ou Face. Esc: sair.
+- **Teclas:** XY / XZ / YZ: clique onde o plano fica · Face: clique numa face · Esc: sair
+- **Passos de teste (TESTAR.md):** 0.412 «Rodar à volta de X, Y ou Z; planos de trabalho»
 
 #### Push/Pull  ·  tecla P
 
@@ -321,7 +322,8 @@ Operações gerais de criação e edição geométrica.
 
 #### Rodar  ·  tecla Q
 
-- **Como se usa:** Clique no centro da rotação (roda o que está selecionado, ou o objeto sob o cursor).
+- **Como se usa:** Clique no centro da rotação (roda o que está selecionado, ou o objeto sob o cursor). · Eixo Z — X, Y ou Z muda o eixo.
+- **Passos de teste (TESTAR.md):** 0.412 «Rodar à volta de X, Y ou Z; planos de trabalho»
 
 #### Espelhar
 
@@ -355,6 +357,11 @@ Operações gerais de criação e edição geométrica.
 - **Como se usa:** Clique numa parede onde a quer dividir, com uma folga de 0,02 m ao meio (a folga muda na barra de cima; ou digite a distância à ponta mais perto + Enter). Esc: Selecionar.
 - **Teclas:** Clique: dividir ali · o meio da parede atrai · Esc: Selecionar
 - **Passos de teste (TESTAR.md):** 0.300 «Dividir com folga e aparar / estender até um limite»
+
+#### Offset  ·  tecla F
+
+- **Como se usa:** Offset: clique numa face de um esboço ou numa linha (a cadeia dela; as linhas escolhidas antes, se as houver).
+- **Passos de teste (TESTAR.md):** 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.206 «Offset de faces em L e Escala a partir do centro»
 
 #### Apagar  ·  tecla Delete
 
@@ -583,7 +590,7 @@ Estudos volumétricos: linhas, retângulos, empurrar/puxar; depois classificar e
 
 - **Curva de Bézier** — o mesmo de Modelagem ▸ Desenhar.
 
-- **Offset** — o mesmo de Modelagem ▸ Desenhar.
+- **Plano de trabalho** — o mesmo de Modelagem ▸ Desenhar.
 
 - **Push/Pull** — o mesmo de Modelagem ▸ Desenhar.
 
@@ -615,6 +622,8 @@ Estudos volumétricos: linhas, retângulos, empurrar/puxar; depois classificar e
 - **Escala** — o mesmo de Modelagem ▸ Modificar.
 
 - **Matriz** — o mesmo de Modelagem ▸ Modificar.
+
+- **Offset** — o mesmo de Modelagem ▸ Modificar.
 
 ### Massa e Estudos ▸ Medir
 
@@ -1761,7 +1770,7 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 - **Alinhar** — o mesmo de Modelagem ▸ Modificar.
 
-- **Offset** — o mesmo de Modelagem ▸ Desenhar.
+- **Offset** — o mesmo de Modelagem ▸ Modificar.
 
 - **Matriz** — o mesmo de Modelagem ▸ Modificar.
 
@@ -1773,4 +1782,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*239 comandos descritos, gerados do ArqSynth BIM 0.411.0.*
+*240 comandos descritos, gerados do ArqSynth BIM 0.412.0.*

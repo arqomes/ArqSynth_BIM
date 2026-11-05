@@ -1286,6 +1286,28 @@ def freehand_icon():
     return theme.icon(pm)
 
 
+def work_plane_icon():
+    """Work plane (0.412): a plane seen at a slant, its grid, the red and green axes along its edges."""
+    pm, p = _canvas()
+    quad = [QtCore.QPointF(*xy) for xy in ((4, 22), (17, 28), (28, 17), (15, 11))]
+    p.setPen(_pen(BLUE, 1.6))
+    p.setBrush(QtGui.QColor(61, 127, 214, 60))
+    p.drawPolygon(QtGui.QPolygonF(quad))
+    p.setPen(_pen(BLUE, 0.9))
+    for k in (1, 2):                                 # its grid: two lines each way
+        f = k / 3.0
+        a, b = quad[0] + (quad[3] - quad[0]) * f, quad[1] + (quad[2] - quad[1]) * f
+        c, d = quad[0] + (quad[1] - quad[0]) * f, quad[3] + (quad[2] - quad[3]) * f
+        p.drawLine(a, b)
+        p.drawLine(c, d)
+    p.setPen(_pen(QtGui.QColor("#d64545"), 2.0))
+    p.drawLine(quad[0], quad[1])
+    p.setPen(_pen(QtGui.QColor("#3aa655"), 2.0))
+    p.drawLine(quad[0], quad[3])
+    p.end()
+    return theme.icon(pm)
+
+
 def bezier_icon():
     """Bézier curve (0.373): an S curve through two points, their tangents with handles, as a drawing program's."""
     pm, p = _canvas()
@@ -2640,6 +2662,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "copy": copy_icon, "array": array_icon,                                         # (0.326)
               "join_geometry": join_geometry_icon, "unjoin_geometry": unjoin_geometry_icon,   # (0.333)
               "arc": arc_icon, "freehand": freehand_icon, "bezier": bezier_icon,               # (0.373)
+              "work_plane": work_plane_icon,                                                  # (0.412)
               "niche": niche_icon, "flooring": flooring_icon, "gutter": gutter_icon,           # (0.374)
               "elevator": elevator_icon, "room_separator": room_separator_icon,
               "perforated_panel": perforated_panel_icon,                                # (0.389)

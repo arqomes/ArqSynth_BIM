@@ -5417,6 +5417,56 @@ _STRINGS = {
                         "Esc cancela.",
                         "Turn the mouse and click (snaps every 15°), or type the angle (e.g. 45) and Enter. "
                         "Esc cancels."),
+    # (0.412) about X, Y or Z, as Blender's R then X / Y / Z
+    "hint.rotate.axis": ("  ·  Eixo {a} — X, Y ou Z muda o eixo.", "  ·  Axis {a} — X, Y or Z changes it."),
+    "ctx.rotate_axis": ("Eixo", "Axis"),
+    "info.rotate_axis": ("Rodar à volta do eixo {a}, pelo centro (X vermelho, Y verde, Z azul). X, Y ou Z muda o "
+                         "eixo.",
+                         "Rotate about the {a} axis, through the centre (X red, Y green, Z blue). X, Y or Z changes "
+                         "the axis."),
+    "err.rotate_axis_bim": ("As paredes, lajes e outros elementos BIM só rodam à volta da vertical (Z). À volta de X "
+                            "ou Y rodam os esboços: linhas, faces e curvas.",
+                            "Walls, slabs and the other BIM elements turn about the vertical (Z) only. Sketches — "
+                            "lines, faces, curves — turn about X or Y."),
+    # (0.412) the work plane (model/work_plane, tools/work_plane)
+    "tool.work_plane": ("Plano de trabalho", "Work plane"),
+    "keys.work_plane": ("XY / XZ / YZ: clique onde o plano fica  ·  Face: clique numa face  ·  Esc: sair",
+                        "XY / XZ / YZ: click where the plane goes  ·  Face: click a face  ·  Esc: leave"),
+    "ctx.work_plane": ("Plano", "Plane"),
+    "ctx.work_plane_level": ("Voltar ao nível do piso", "Back to the storey's level"),
+    "workplane.short.xy": ("XY (horizontal)", "XY (horizontal)"),
+    "workplane.short.xz": ("XZ (vertical)", "XZ (vertical)"),
+    "workplane.short.yz": ("YZ (vertical)", "YZ (vertical)"),
+    "workplane.short.face": ("Face", "Face"),
+    "workplane.xy": ("Plano de trabalho horizontal XY", "Horizontal work plane XY"),
+    "workplane.xz": ("Plano de trabalho vertical XZ", "Vertical work plane XZ"),
+    "workplane.yz": ("Plano de trabalho vertical YZ", "Vertical work plane YZ"),
+    "workplane.face": ("Plano de trabalho na face", "Work plane on the face"),
+    "workplane.none": ("Nível do piso", "The storey's level"),
+    "hint.work_plane.xy": ("Plano horizontal (XY): clique no ponto por onde passa (a altura). Na barra: XZ, YZ ou Face. "
+                           "Esc: sair.",
+                           "Horizontal plane (XY): click the point it goes through (its height). On the bar: XZ, YZ "
+                           "or Face. Esc: leave."),
+    "hint.work_plane.xz": ("Plano vertical ao longo do eixo vermelho (XZ): clique no ponto por onde passa. Na barra: XY, "
+                           "YZ ou Face. Esc: sair.",
+                           "Vertical plane along the red axis (XZ): click the point it goes through. On the bar: XY, "
+                           "YZ or Face. Esc: leave."),
+    "hint.work_plane.yz": ("Plano vertical ao longo do eixo verde (YZ): clique no ponto por onde passa. Na barra: XY, "
+                           "XZ ou Face. Esc: sair.",
+                           "Vertical plane along the green axis (YZ): click the point it goes through. On the bar: XY, "
+                           "XZ or Face. Esc: leave."),
+    "hint.work_plane.face": ("Clique numa face: o plano dela passa a ser o plano de trabalho. Esc: sair.",
+                             "Click a face: its plane becomes the work plane. Esc: leave."),
+    "tip.work_plane_no_face": ("Leve o rato a uma face", "Take the mouse to a face"),
+    "err.work_plane_no_face": ("Aí não há uma face: clique numa face.", "There is no face there: click a face."),
+    "info.work_plane": ("{p}{at}. Na vista 3D, a Linha, o Arco, o Retângulo, o Círculo, a Linha livre e a Bézier "
+                        "desenham nele (onde não há uma face por baixo do rato). «Voltar ao nível do piso», na "
+                        "ferramenta Plano de trabalho, tira-o.",
+                        "{p}{at}. In the 3D view, Line, Arc, Rectangle, Circle, Freehand and Bézier draw on it (where "
+                        "there is no face under the mouse). «Back to the storey's level», in the Work plane tool, lets "
+                        "it go."),
+    "info.work_plane_off": ("Sem plano de trabalho: desenha-se outra vez no nível do piso.",
+                            "No work plane: drawing is on the storey's level again."),
     "snap.angle_step": ("Múltiplo de 15°", "Multiple of 15°"),
     "cmd.copy": ("Copiar", "Copy"),
     "hint.copy_mode": ("+ CÓPIA (Ctrl desliga) · ", "+ COPY (Ctrl turns it off) · "),

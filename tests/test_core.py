@@ -6698,6 +6698,37 @@ class FreeDrawingTest(unittest.TestCase):
         document._write_sketches(path, [SketchObject("B", np.eye(4), PolyMesh(drawn, lines=[(0, 1)]), curve=bent)])
         self.assertEqual(document._read_sketches(path)[0][0].curve["auto"], [True, True, True])
 
+    def test_rotation_about_any_axis_and_the_work_plane(self):
+        """0.412 (the owner: «um comando rotacionar mais poderoso para rodar em qualquer eixo como o do Blender»; «o
+        plano de trabalho… de acordo com eixos… também por seleção de faces»): a turn about X, Y, Z through a centre
+        (right hand: about Z as before); its signed angle; the work planes by the axes through a point and by a face;
+        where a ray meets them; a sketch turned about X stands up."""
+        from arqbim.model import bim, work_plane
+        c = np.array((1.0, 2.0, 0.0))
+        self.assertTrue(np.allclose(transform.rotation_about(c, (0, 0, 1), 37.0), transform.rotation_about_z(c, 37.0)))
+        m = transform.rotation_about(c, (1, 0, 0), 90.0)
+        self.assertTrue(np.allclose(m @ (1.0, 3.0, 0.0, 1.0), (1.0, 2.0, 1.0, 1.0)))         # (Y towards Z)
+        m = transform.rotation_about((0, 0, 0), (0, 1, 0), 90.0)
+        self.assertTrue(np.allclose(m @ (0.0, 0.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0)))         # (Z towards X)
+        self.assertAlmostEqual(transform.axis_angle((0, 1, 0), (0, 0, 1), (1, 0, 0)), 90.0)
+        self.assertAlmostEqual(transform.axis_angle((0, 1, 0), (0, 0, -1), (1, 0, 0)), -90.0)
+        xz = work_plane.by_axes("xz", (3.0, 2.0, 1.0))
+        self.assertTrue(np.allclose(np.abs(xz.normal), (0, 1, 0)) and np.allclose(xz.u, (1, 0, 0)) and
+                        np.allclose(xz.v, (0, 0, 1)))
+        self.assertTrue(xz.contains((-5.0, 2.0, 7.0)) and not xz.contains((0.0, 2.5, 0.0)))
+        yz = work_plane.by_axes("yz", (4.0, 0.0, 0.0))
+        self.assertTrue(np.allclose(yz.u, (0, 1, 0)) and np.allclose(yz.v, (0, 0, 1)))
+        self.assertTrue(np.allclose(work_plane.ray_point(xz, (0.0, -8.0, 1.5), (0.0, 1.0, 0.0)), (0.0, 2.0, 1.5)))
+        self.assertIsNone(work_plane.ray_point(xz, (0.0, -8.0, 1.5), (1.0, 0.0, 0.0)))     # (along it)
+        face = work_plane.by_face((1.0, 1.0, 1.0), (1.0, 1.0, 0.0))
+        self.assertAlmostEqual(float(np.linalg.norm(face.normal)), 1.0)
+        self.assertTrue(np.allclose(np.cross(face.u, face.v), face.normal))
+        doc = Document()
+        line = self._lines(doc, [(0, 0, 0), (0, 4, 0)])
+        bim.transform_objects(doc, [line.id], transform.rotation_about((0, 0, 0), (1, 0, 0), 90.0), "Rodar")
+        pts = [sg.transform_point(doc.get(line.id).matrix, v) for v in doc.get(line.id).mesh.verts]
+        self.assertTrue(np.allclose(sorted(p[2] for p in pts), (0.0, 4.0)) and all(abs(p[1]) < 1e-9 for p in pts))
+
     def test_a_curve_is_saved_with_the_sketches(self):
         import tempfile
         from arqbim.core import curves

@@ -828,7 +828,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "perforated_panel": "",                                                    # (0.389)
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
-                "dim_exterior": "", "dim_interior": ""}               # (0.399, 0.400)
+                "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
+                "work_plane": ""}                                     # (0.412)
         for name in self.tools:
             key = keys[name]
             shown = ("Espaço" if lang() == "pt" else "Space") if key == "Space" else key
@@ -2074,6 +2075,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tools["platform_outline"].edit(guid, index)
         self.message(t("info.edit_platform", name=self.doc.get(guid).name))
         return True
+
+    def set_work_plane(self, plane):
+        """(0.412) The work plane the drawing tools start on in the 3D view (model/work_plane) — None: the active
+        storey's level again. Shown as a blue grid."""
+        from ..model.work_plane import describe
+        from ..tools.work_plane import where
+        self.doc.work_plane = plane
+        self.viewport.redraw()
+        if plane is None:
+            self.message(t("info.work_plane_off"))
+            return
+        at = where(plane)
+        self.message(t("info.work_plane", p=t(describe(plane)), at=(" ({})".format(at) if at else "")))
 
     def edit_slab_outline(self, guid=None):
         """Editar contorno (0.100): the selected slab's corners as grips (the tool Contorno da laje). A round
@@ -8436,7 +8450,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if mods & (Mod.ControlModifier | Mod.AltModifier | Mod.MetaModifier):
             return None
         name = {Key.Key_R: "r", Key.Key_Space: "space", Key.Key_F: "f", Key.Key_X: "x", Key.Key_Y: "y",
-                Key.Key_N: "n"}.get(event.key())
+                Key.Key_Z: "z", Key.Key_N: "n"}.get(event.key())         # (0.412: Z — Rotate's axis)
         if name is None or (self._typed and name != "space"):
             return None
         if mods & Mod.ShiftModifier:

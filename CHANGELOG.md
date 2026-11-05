@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.412.0 — 2026-11-05
+
+**Rodar à volta de X, Y ou Z, e planos de trabalho.** (O dono, com a captura de uma curva deitada no chão: «senti
+dificuldade de manipular no plano XZ… precisamos do plano de trabalho e um comando rotacionar mais poderoso para
+rodar em qualquer eixo como o do Blender… clico para indicar o pivô e se clicar X, ele rotaciona à volta de X»; «o
+plano de trabalho, podemos criar de acordo com eixos e inserir na tela onde vai ficar. Pode ser também por seleção de
+faces».)
+
+- **Rodar (Q) em qualquer eixo:** antes ou depois de clicar o centro (o pivô), carregue em **X**, **Y** ou **Z** —
+  ou nos botões X / Y / Z da barra de cima — e a rotação é à volta desse eixo, pelo centro.
+  - O eixo aparece desenhado na sua cor (X vermelho, Y verde, Z azul) e o transferidor fica atravessado a ele.
+  - Por omissão continua a ser Z, a vertical, como antes.
+  - Visto de lado (com o transferidor de perfil), o ângulo segue o rato à volta do centro no ecrã, como no Blender.
+  - À volta de X ou Y rodam os esboços (linhas, faces, curvas). As paredes, lajes e outros elementos BIM ficam de
+    pé: só rodam à volta de Z, e o programa diz porquê.
+- **Plano de trabalho** (Modelagem e Massa ▸ Desenhar ▸ Plano de trabalho):
+  - **XY** (horizontal), **XZ** (vertical, ao longo do eixo vermelho) ou **YZ** (vertical, ao longo do verde):
+    clique no ponto por onde passa; antes do clique, vê-se onde fica.
+  - **Face:** clique numa face, e o plano dela passa a ser o plano de trabalho.
+  - Na vista 3D, fica uma grelha azul leve. A Linha, o Arco, o Retângulo, o Círculo, a Linha livre e a Bézier
+    desenham nele quando não há uma face por baixo do rato, e o Mover desliza nele.
+  - «Voltar ao nível do piso» tira-o. As plantas, os cortes e os alçados não o usam, e as paredes, lajes e outros
+    elementos BIM continuam nos pisos.
+  - Dura enquanto o projeto está aberto (ao abrir ou criar um projeto, volta o nível do piso).
+- O **Offset** passou para o painel Modificar (como no Revit), para o Plano de trabalho caber no painel Desenhar
+  sem dobrar mais nenhum painel no ecrã de 1536 px.
+
 ## 0.411.0 — 2026-11-05
 
 **Curva de Bézier como no Blender.** (O dono: «a curva Bézier não é uma curva, mas uma linha reta. Esperava nós na

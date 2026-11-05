@@ -27,13 +27,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.inference import ENDPOINT, MIDPOINT, ON_EDGE
-from ..core.transform import plan_angle, rotation_about_z, snap_angle, transform_segments, translation
+from ..core.transform import AXES, axis_angle, rotation_about, snap_angle, transform_segments, translation
 from ..core.units import format_angle, format_length, parse_angle, parse_array, parse_lengths
 from ..i18n import decimal_sep, refusal, t
 from ..model import annotations as notes2d
 from ..model import bim, parts
 from ..render.viewport import PREVIEW
-from .base import LEFT, RIGHT, Option, Tool, default_normal, point_from, show_snap, start_plane
+from .base import LEFT, RIGHT, Option, Tool, free_normal, point_from, show_snap, start_plane
 
 Z = np.array((0.0, 0.0, 1.0))
 ARC_STEPS = 32
@@ -55,6 +55,7 @@ class _Last:
     step: object            # Move: displacement (vector); Rotate: angle (degrees)
     copy: bool
     parts: tuple = None     # (0.373) (faces, lines picked alone, sketches pasted) acted on instead of objects
+    axis: object = None     # (0.412) Rotate: the axis turned about
 
 
 class _TransformTool(Tool):
@@ -302,7 +303,8 @@ class MoveTool(_TransformTool):
             plane = start_plane(self.host, x, y, modifiers)
             show_snap(self.viewport, plane.snap if plane else None, plane.point if plane else None)
             return
-        found = point_from(self.viewport, self._base, default_normal(self.viewport.ray(x, y)[1]), x, y, modifiers)
+        found = point_from(self.viewport, self._base, free_normal(self.viewport, self.viewport.ray(x, y)[1]), x, y,
+                           modifiers)                       # (0.412: on the work plane, when one is set)
         if found is None:
             return
         self._target, tip, marker, line = found
@@ -448,30 +450,81 @@ class ArrayTool(CopyTool):
         return super()._commit(ids, origin, step, copy, n, divide)
 
 
+EDGE_ON = 0.2               # (0.412) the turning plane seen this edge-on (|axis · view|): the angle from the screen
+
+
 class RotateTool(_TransformTool):
+    """Rotate: the centre, a point giving the starting direction, the final direction (or the angle typed).
+
+    (0.412, the owner: «um comando rotacionar mais poderoso para rodar em qualquer eixo como o do Blender… clico para
+    indicar o pivô e se clicar X, ele rotaciona à volta de X; se indicar o Z, à volta de Z; Y a mesma coisa») X, Y or
+    Z pressed — before or after the centre is clicked —, or the X / Y / Z buttons on the contextual bar: the turn is
+    about that axis through the centre (drawn in its colour: red, green, blue); the protractor lies across it. Z (the
+    vertical) by default, as before. Walls, slabs and the other BIM elements turn about Z only: X and Y are for
+    sketches — lines, faces, curves. Seen edge-on, the angle comes from the mouse turning round the centre on the
+    screen, as Blender's."""
+
     name = "rotate"
     label_key = "cmd.rotate"
+    common_keys = frozenset(("x", "y", "z"))
 
     def __init__(self, host):
         super().__init__(host)
+        self.axis = "z"
+        self._axis_used = np.array(AXES["z"])
         self._reset()
 
     def _reset(self):
         self._center = None
-        self._ref = None            # unit horizontal starting direction
+        self._ref = None            # unit starting direction, across the axis
         self._radius = 1.0
-        self._value = 0.0           # current angle (degrees, counter-clockwise > 0)
+        self._value = 0.0           # current angle (degrees, counter-clockwise seen from the axis' tip > 0)
+        self._screen = None         # (0.412) seen edge-on: the starting angle of the mouse round the centre (radians)
+
+    def activate(self):
+        super().activate()
+        self.axis = "z"                             # (each time: about the vertical, as before)
+        self._axis_used = np.array(AXES["z"])
+
+    @property
+    def _axis(self):
+        return np.array(AXES[self.axis])
 
     def hint(self):
+        axis = t("hint.rotate.axis", a=self.axis.upper())
         if self._center is None:
-            return self._with_mode(t("hint.rotate.start"))
-        return self._with_mode(t("hint.rotate.end") if self._ref is not None else t("hint.rotate.ref"))
+            return self._with_mode(t("hint.rotate.start")) + axis
+        return self._with_mode(t("hint.rotate.end") if self._ref is not None else t("hint.rotate.ref")) + axis
 
     def vcb_title(self):
         return t("vcb.angle")
 
+    def options(self):
+        return super().options() + [Option("axis", t("ctx.rotate_axis"), "buttons", self.axis,
+                                           tuple((a, a.upper()) for a in ("x", "y", "z")))]
+
+    def set_option(self, key, value):
+        if key == "axis":
+            self.common_key(value or "z")
+            return
+        super().set_option(key, value)
+
+    def common_key(self, name):
+        """(0.412) X, Y or Z: the turn about that axis (through the centre, clicked or to be clicked). A starting
+        direction already given is asked again, across the new axis."""
+        if name not in AXES:
+            return False
+        self.axis = name
+        self._ref, self._screen, self._value = None, None, 0.0
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+        self.host.message(t("info.rotate_axis", a=name.upper()))
+        if hasattr(self.host, "_sync_context_bar"):
+            self.host._sync_context_bar()
+        return True
+
     def _matrix(self, origin, step):
-        return rotation_about_z(origin, step)
+        return rotation_about(origin, self._axis_used, step)
 
     def _take(self, x, y):
         """The objects to turn — or (0.191) the drawings selected in a plan."""
@@ -479,10 +532,23 @@ class RotateTool(_TransformTool):
             return True
         return super()._take(x, y)
 
+    def _restore(self, last):
+        super()._restore(last)
+        if getattr(last, "axis", None) is not None:
+            self._axis_used = np.asarray(last.axis, dtype=float)
+
     def _commit(self, ids, origin, step, copy, n=1, divide=False):
+        upright = abs(float(self._axis_used[2])) > 1.0 - 1e-9
+        if not upright and (getattr(self, "_anns", None) or
+                            any(self.doc.get(i) is not None and self.doc.get(i).is_bim for i in ids)):
+            self.host.message(t("err.rotate_axis_bim"), warning=True)     # (0.412: they stay upright)
+            return False
         anns = getattr(self, "_anns", None)
         if not anns or ids:
-            return super()._commit(ids, origin, step, copy, n, divide)
+            done = super()._commit(ids, origin, step, copy, n, divide)
+            if done and self._last is not None:
+                self._last.axis = self._axis_used.copy()
+            return done
         factors = [k / n for k in range(1, n + 1)] if divide else list(range(1, n + 1))
         up = np.array((0.0, 0.0, 1.0))                     # (a plan seen from above: counter-clockwise about it)
         if copy:
@@ -502,14 +568,18 @@ class RotateTool(_TransformTool):
         self._last = _Last(self.doc.last_command(), [], origin, step, copy)
         return True
 
-    def _plan_dir(self, p):
-        v = (np.asarray(p, dtype=float) - self._center) * np.array((1.0, 1.0, 0.0))
+    # ------------------------------------------------------------ the protractor
+
+    def _across(self, p):
+        """(unit direction from the centre to p across the axis, its distance) — (None, 0) on the axis."""
+        k = self._axis
+        d = np.asarray(p, dtype=float) - self._center
+        v = d - k * float(d @ k)
         n = np.linalg.norm(v)
         return (v / n, n) if n > 1e-9 else (None, 0.0)
 
     def _direction(self, angle):
-        a = np.arctan2(self._ref[1], self._ref[0]) + np.radians(angle)
-        return np.array((np.cos(a), np.sin(a), 0.0))
+        return rotation_about(np.zeros(3), self._axis, angle)[:3, :3] @ self._ref
 
     def _arc(self, angle):
         steps = max(2, int(abs(angle) / 360 * ARC_STEPS * 4))
@@ -519,6 +589,49 @@ class RotateTool(_TransformTool):
             segs += [a, b]
         return segs
 
+    def _axis_line(self):
+        """(0.412) The axis turned about, through the centre, in its colour (both ways)."""
+        from ..render.viewport import AXIS_COLORS
+        reach = max(self._radius * 1.5, 2.0)
+        colour = AXIS_COLORS[self.axis]
+        return [self._center - self._axis * reach, self._center + self._axis * reach], [colour, colour]
+
+    def _edge_on(self):
+        direction = self.viewport.view_direction()
+        return abs(float(np.asarray(direction, dtype=float) @ self._axis)) < EDGE_ON
+
+    def _screen_angle(self, x, y):
+        """The mouse's angle round the centre on the screen (radians, counter-clockwise as seen)."""
+        cx, cy = self.viewport.project(self._center)[:2]
+        return float(np.arctan2(-(y - cy), x - cx))
+
+    def _screen_turn(self, x, y):
+        """Seen edge-on: the turn (degrees) the mouse made round the centre since the starting direction — the way
+        it looks from where the axis' tip is, as Blender's."""
+        toward = -float(np.asarray(self.viewport.view_direction(), dtype=float) @ self._axis)
+        turn = np.degrees(self._screen_angle(x, y) - self._screen)
+        turn = (turn + 180.0) % 360.0 - 180.0
+        return turn if toward >= 0 else -turn
+
+    def _start_ref(self, x, y, p):
+        """The starting direction: from the point clicked across the axis — or, seen edge-on, the mouse round the
+        centre on the screen (the protractor drawn across the axis, square to the view)."""
+        if self._edge_on():
+            across = np.cross(self._axis, np.asarray(self.viewport.view_direction(), dtype=float))
+            if np.linalg.norm(across) < 1e-9:
+                return False
+            self._ref = across / np.linalg.norm(across)
+            cx, cy = self.viewport.project(self._center)[:2]
+            pixels = float(np.hypot(x - cx, y - cy))
+            self._radius = max(pixels * float(self.viewport.world_per_pixel(self._center)), 0.3)
+            self._screen = self._screen_angle(x, y)
+            return True
+        v, dist = self._across(p)
+        if v is None:
+            return False
+        self._ref, self._radius, self._screen = v, max(dist, 0.3), None
+        return True
+
     # ------------------------------------------------------------ mouse
 
     def pointer_move(self, x, y, modifiers):
@@ -526,22 +639,33 @@ class RotateTool(_TransformTool):
             plane = start_plane(self.host, x, y, modifiers)
             show_snap(self.viewport, plane.snap if plane else None, plane.point if plane else None)
             return
-        found = point_from(self.viewport, self._center, Z, x, y, modifiers)
+        axis_segs, axis_colours = self._axis_line()
+        if self._ref is not None and self._screen is not None:
+            self._value, snapped = snap_angle(self._screen_turn(x, y))
+            self._show_turn(snapped, axis_segs, axis_colours)
+            return
+        found = point_from(self.viewport, self._center, self._axis, x, y, modifiers)
         if found is None:
             return
         p, tip, marker, _line = found
-        v, dist = self._plan_dir(p)
-        if v is None:
-            return
         if self._ref is None:
-            self.viewport.show_lines([self._center, self._center + v * dist], [PREVIEW, PREVIEW])
+            v, dist = self._across(p)
+            segs = axis_segs + ([self._center, self._center + v * dist] if v is not None else [])
+            self.viewport.show_lines(segs, axis_colours + [PREVIEW, PREVIEW][:len(segs) - 2])
             self.viewport.show_marker(p, marker)
             self.viewport.show_tip(tip, p if tip else None)
             return
-        self._value, snapped = snap_angle(plan_angle(self._ref, v))
+        v, _dist = self._across(p)
+        if v is None:
+            return
+        self._value, snapped = snap_angle(axis_angle(self._ref, v, self._axis))
+        self._show_turn(snapped, axis_segs, axis_colours)
+
+    def _show_turn(self, snapped, axis_segs, axis_colours):
         end = self._center + self._direction(self._value) * self._radius
         helpers = [self._center, self._center + self._ref * self._radius, self._center, end] + self._arc(self._value)
-        self._ghost(rotation_about_z(self._center, self._value), helpers, [PREVIEW] * len(helpers))
+        self._ghost(rotation_about(self._center, self._axis, self._value), helpers + axis_segs,
+                    [PREVIEW] * len(helpers) + axis_colours)
         self.viewport.show_label(("+ " if self.copy else "") + _angle(self._value), end)
         self.viewport.show_marker(end, PREVIEW)
         self.viewport.show_tip(t("snap.angle_step") if snapped else "", end if snapped else None)
@@ -567,13 +691,15 @@ class RotateTool(_TransformTool):
             self._center = plane.point.copy()
             self.host.set_hint(self.hint())
             return
-        found = point_from(self.viewport, self._center, Z, x, y, modifiers)
-        if found is None:
+        if self._ref is not None and self._screen is not None:
+            held = any(m in ("Control", "Ctrl") for m in (modifiers or ()))
+            self._finish(self._value, self.copy or held)
+            return
+        found = point_from(self.viewport, self._center, self._axis, x, y, modifiers)
+        if found is None and self._ref is not None:
             return
         if self._ref is None:
-            v, dist = self._plan_dir(found[0])
-            if v is not None:
-                self._ref, self._radius = v, max(dist, 0.3)
+            if self._start_ref(x, y, found[0] if found is not None else self._center):
                 self.host.set_hint(self.hint())
             return
         held = any(m in ("Control", "Ctrl") for m in (modifiers or ()))
@@ -596,16 +722,19 @@ class RotateTool(_TransformTool):
         if last is not None and self.doc.last_command() is last.cmd:
             self.doc.undo()                       # an angle typed right after finishing corrects the last one
             self._ids = last.ids
-            self._finish(value * (-1.0 if last.step < 0 else 1.0), last.copy, center=last.origin)
+            self._restore(last)
+            self._finish(value * (-1.0 if last.step < 0 else 1.0), last.copy, center=last.origin, keep_axis=True)
             return
         self.host.message(t("hint.rotate.start"), warning=True)
 
     # ------------------------------------------------------------ internals
 
-    def _finish(self, angle, copy, center=None):
+    def _finish(self, angle, copy, center=None, keep_axis=False):
         if abs(angle) < 1e-9:
             return
         ids, center = list(self._ids), (self._center if center is None else center)
+        if not keep_axis:
+            self._axis_used = self._axis.copy()
         self.viewport.clear_overlays()
         self._reset()
         self.host.set_hint(self.hint())
@@ -619,3 +748,5 @@ class RotateTool(_TransformTool):
         elif not copy:
             self.host.message(t("info.rotated", n=len(ids) or len(getattr(self, "_anns", None) or ()),
                                 a=_angle(angle)))
+
+

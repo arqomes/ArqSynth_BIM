@@ -187,13 +187,32 @@ def level_plane(z):
     return np.array((0.0, 0.0, float(z))), Z_UP
 
 
+def work_plane_of(viewport):
+    """(0.412) The document's work plane (model/work_plane), in the 3D view — plans, sections and elevations keep
+    their own planes —, or None (the active storey's level)."""
+    plane = getattr(viewport.doc, "work_plane", None)
+    if plane is None or viewport.current_view() is not None:
+        return None
+    return plane
+
+
+def free_normal(viewport, direction):
+    """The plane a point is taken on where nothing is snapped (Move's): (0.412) the work plane's, else
+    default_normal."""
+    plane = work_plane_of(viewport)
+    return plane.normal if plane is not None else default_normal(direction)
+
+
 def _start_plane(viewport, hit):
     """Starting a shape: the plane it starts on — the face under the cursor, or the active
-    storey's level where there is none: (point, normal)."""
+    storey's level where there is none ((0.412) the work plane): (point, normal)."""
     if hit is not None:
         obj = viewport.doc.get(hit[0])
         if obj is not None:
             return np.asarray(hit[2], dtype=float), face_world_normal(obj.matrix, obj.mesh, hit[1])
+    plane = work_plane_of(viewport)
+    if plane is not None:
+        return plane.origin, plane.normal
     return level_plane(viewport.doc.work_level())
 
 
@@ -331,7 +350,8 @@ def start_plane(host, x, y, modifiers=()):
       points acquired (alignments, 0.60): exactly there, on the face under the cursor if the
       point lies on it, else on a level plane;
     - else the face under the cursor;
-    - else the level of the active storey (or a vertical plane in front/side views)."""
+    - else the level of the active storey (or a vertical plane in front/side views) — (0.412) or, in the 3D view,
+      the work plane set (a point snapped starts on a plane parallel to it)."""
     viewport = host.viewport
     found, snap, hit = infer_point(viewport, x, y, None, modifiers)
     origin, direction = viewport.ray(x, y)
@@ -340,17 +360,29 @@ def start_plane(host, x, y, modifiers=()):
         obj = host.doc.get(hit[0])
         face_normal = face_world_normal(obj.matrix, obj.mesh, hit[1])
     viewport.show_alignments(found.lines if found is not None else (), found.point if found is not None else None)
+    work = work_plane_of(viewport)
 
     if found is not None and found.kind != ON_FACE:
         p = found.point
         if face_normal is not None and abs((p - hit[2]).dot(face_normal)) < 1e-5:
             return StartPlane(p, face_normal, *plane_axes(face_normal), (hit[0], hit[1]), found)
+        if work is not None:
+            return StartPlane(p, work.normal, work.u, work.v, None, found)
         n = default_normal(direction)
         return StartPlane(p, n, *plane_axes(n), None, found)
 
     if hit is not None:
         return StartPlane(hit[2], face_normal, *plane_axes(face_normal), (hit[0], hit[1]),
                           snap if snap is not None and snap.kind == ON_FACE else None)
+
+    if work is not None:                             # (0.412) on the work plane
+        from ..model.work_plane import ray_point
+        p = ray_point(work, origin, direction)
+        if p is None:
+            p = ray_plane(origin, direction, work.origin, work.normal)
+        if p is None:
+            return None
+        return StartPlane(p, work.normal, work.u, work.v, None, None)
 
     n = default_normal(direction)
     p = ray_plane(origin, direction, np.array((0.0, 0.0, host.doc.work_level())), n)
