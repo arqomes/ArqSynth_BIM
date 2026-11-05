@@ -1,0 +1,122 @@
+{
+  "format": "arqsynth-template",
+  "schema_version": 1,
+  "id": "3f6d2c1e-8b7a-4e0f-9a51-2d8c4b7e6a90",
+  "name": "Exemplo de escritório",
+  "version": 3,
+  "description": "Moradias unifamiliares do gabinete: cotas em cm, três pisos, paredes de 30 cm.",
+  "author": "Gabinete Exemplo, Lda.",
+  "created": "2026-11-04T10:00:00Z",
+  "modified": "2026-11-04T16:30:00Z",
+  "programs": ["arqsynth-bim", "arqsynth-cad"],
+  "generator": {"program": "arqsynth-bim", "version": "0.393.0"},
+  "units": {
+    "system": "metric",
+    "length": "cm",
+    "decimals": 1,
+    "area_decimals": 2,
+    "angle": "degree",
+    "angle_decimals": 1,
+    "decimal_separator": ","
+  },
+  "project": {
+    "name": "Moradia",
+    "site": "Lote",
+    "building": "Moradia",
+    "author": "Ana Silva, arq.",
+    "organization": "Gabinete Exemplo, Lda.",
+    "address": "Rua do Exemplo, 10, Lisboa",
+    "ifc_schema": "IFC4",
+    "ifc_length_unit": "MILLIMETRE"
+  },
+  "storeys": [
+    {"name": "Cave", "elevation": -3.0, "height": 3.0},
+    {"name": "Rés-do-chão", "elevation": 0.0, "height": 3.0},
+    {"name": "Piso 1", "elevation": 3.0, "height": 3.0}
+  ],
+  "materials": [
+    {
+      "key": "reboco",
+      "name": "Reboco",
+      "name_en": "Plaster",
+      "category": "plaster",
+      "color": "#ede8db",
+      "transparency": 0.0,
+      "finish": "",
+      "texture": null,
+      "thermal": {"conductivity": 0.8, "density": 1600.0, "specific_heat": 1000.0},
+      "acoustic": {"absorption": 0.03, "sound_reduction": null},
+      "graphics": {"surface_fg": null, "surface_bg": null, "cut_fg": null, "cut_bg": null}
+    },
+    {
+      "key": "tijolo_30",
+      "name": "Tijolo térmico 30",
+      "name_en": "Thermal brick 30",
+      "category": "brick",
+      "color": "#c77a5c",
+      "transparency": 0.0,
+      "finish": "",
+      "texture": "tijolo.png",
+      "thermal": {"conductivity": 0.18, "density": 750.0, "specific_heat": 900.0},
+      "acoustic": {"absorption": null, "sound_reduction": 52.0},
+      "graphics": {"surface_fg": ["brick", "#8a5240"], "surface_bg": null, "cut_fg": null, "cut_bg": null}
+    }
+  ],
+  "types": {
+    "wall": [
+      {
+        "key": "parede_exterior_34",
+        "name": "Parede exterior 34 cm",
+        "name_en": "Exterior wall 34 cm",
+        "ifc_class": "IfcWallType",
+        "layers": [
+          {"material": "reboco", "thickness": 0.02, "function": "finish1"},
+          {"material": "tijolo_30", "thickness": 0.30, "function": "structure"},
+          {"material": "reboco", "thickness": 0.02, "function": "finish2"}
+        ]
+      }
+    ],
+    "slab": [
+      {
+        "key": "laje_25",
+        "name": "Laje maciça 25 cm",
+        "name_en": "Solid slab 25 cm",
+        "ifc_class": "IfcSlabType",
+        "layers": [{"material": "concreto", "thickness": 0.25, "function": "structure"}]
+      }
+    ],
+    "door": [
+      {
+        "key": "porta_90",
+        "name": "Porta 90×210",
+        "name_en": "Door 90×210",
+        "ifc_class": "IfcDoorType",
+        "width": 0.9,
+        "height": 2.1,
+        "sill": 0.0,
+        "operation": "SINGLE_SWING_LEFT",
+        "transom": 0.0,
+        "lining_depth": null,
+        "design": null
+      }
+    ]
+  },
+  "ifc_classes": {"wall": "IfcWall", "slab": "IfcSlab", "door": "IfcDoor", "room": "IfcSpace"},
+  "annotation": {"text_height": 2.5, "font": ""},
+  "dimensions": {"text": 2.5, "mark": "tick", "unit": "cm", "decimals": 1},
+  "lines": {
+    "pens": {"cut": 0.5, "seen": 0.18, "hatch": 0.1, "dimension": 0.13, "drawn": 0.25},
+    "hatches": {"masonry": {"fill": "#ffffff", "pattern": "lines", "angle": 45.0, "spacing": 1.0}},
+    "symbols": {"section": {"head": "circle", "size": 4.0, "arrow": "filled", "text": 4.8, "line": "dashdot", "pen": 0.3}}
+  },
+  "sheets": {
+    "paper": "A3",
+    "title_block": "full",
+    "title_fields": {"project": "Moradia", "client": "", "site": "Lisboa", "author": "Ana Silva, arq.", "stage": "Licenciamento"}
+  },
+  "interface": {"theme": "light", "palette": "", "start_page": true, "start_view": "3d", "shortcuts": {"paint": "B"}},
+  "extensions": {
+    "arqsynth-bim": {"grid": {"scheme": "numbers_y", "dims": false, "bubble": 0.35}},
+    "arqsynth-cad": {"layers": ["A-WALL", "A-DOOR"]}
+  }
+}

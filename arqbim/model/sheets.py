@@ -1,0 +1,324 @@
+"""Sheets (Phase 3, step 8): a sheet of paper with several views of the model — plans,
+sections, elevations — each at its scale, where the user put it (or laid out on its own).
+A sheet is a view, not IFC: saved with the sketches (.arqbim). The drawings themselves are
+made when the sheet is shown or printed, so a sheet is always the model as it is.
+
+Sizes on the sheet in millimetres, from the sheet's top-left corner (y down, as on paper).
+"""
+
+import uuid
+from dataclasses import dataclass, field
+
+PAPERS = {"A3": (420.0, 297.0), "A2": (594.0, 420.0), "A1": (841.0, 594.0), "A0": (1189.0, 841.0)}  # landscape
+SCALES = (20, 50, 100, 200, 500, 1000)
+MARGIN = 10.0                  # mm: the border's distance from the paper's edge
+TITLE_W, TITLE_H = 120.0, 40.0     # mm: the title block, bottom right inside the border
+TITLE_FIELDS = ("project", "client", "site", "author", "stage")    # the project's, the same on every sheet
+GAP = 12.0                     # mm between two views laid out
+LABEL_H = 8.0                  # mm under a view: its name and scale
+KINDS = ("plan", "section", "elevation", "schedule", "detail", "3d",       # (0.132–0.134)
+         "rebar", "structure", "rebar_cut",    # (0.234: kept in the file too — a member's reinforcement, its section)
+         "structure_below",                    # (0.235: a storey's formwork seen from below)
+         "rebar_details",                      # (0.237: the project's typical reinforcement details)
+         "openings")                           # (0.293: the project's mapa de vãos)
+# (0.234) the scale a kind of view takes when it has none of its own and fits the sheet so: a member's reinforcement
+# at 1:50, its section at 1:20 (their labels and dimensions spaced for it) — (0.237) the typical details at 1:20 —
+# (0.293) the mapa de vãos at 1:50
+USUAL_SCALES = {"rebar": 50, "rebar_cut": 20, "rebar_details": 20, "openings": 50}
+
+
+@dataclass
+class Placed:
+    """A view on a sheet. kind: "plan" (ref: the storey's GlobalId), "section" (ref: its name),
+    "elevation" (ref: "N", "S", "E", "W"). scale: N of 1:N, None = chosen with the layout.
+    at: its centre on the sheet (mm), None = laid out with the others."""
+    kind: str
+    ref: str
+    scale: int = None
+    at: tuple = None
+
+
+@dataclass
+class Sheet:
+    name: str
+    paper: str = "A3"
+    views: list = field(default_factory=list)
+    uid: str = field(default_factory=lambda: uuid.uuid4().hex)    # the same sheet after undo / redo (copies), saved
+    number: str = ""               # its number in the title block ("" = its place among the sheets: 01, 02…)
+    revisions: list = field(default_factory=list)   # (0.127) [{"code", "date", "text"}], oldest first
+    sets: list = field(default_factory=list)        # (0.128) the sets it is in ("Licenciamento", "Execução"…)
+    template: str = "full"                          # (0.129) its title block's template (TEMPLATES)
+
+    def size(self):
+        return PAPERS.get(self.paper, PAPERS["A3"])
+
+
+# (0.127) beside TITLE_FIELDS in the project's title block: its own fields ("extra": [[label, text]…], printed
+# over the title block) and how sheets are numbered ("prefix" before the number, "digits" of it)
+EXTRA_KEY = "extra"
+NUMBERING_KEYS = ("prefix", "digits")
+REVISION_ROW = 4.5             # mm: a row of the revisions' table / the project's own fields, over the title block
+
+
+def number_of(sheets, sheet, fields=None):
+    """The number a sheet shows: its own, else its place among the sheets ("01", "02"… — or as the project
+    numbers them, 0.127: "A-01", "A-001"…)."""
+    if sheet.number:
+        return sheet.number
+    k = next((k for k, s in enumerate(sheets) if s is sheet), None)
+    if k is None:
+        return ""
+    fields = fields or {}
+    digits = int(fields.get("digits") or 2)
+    return "{}{:0{}d}".format(fields.get("prefix") or "", k + 1, max(1, min(digits, 4)))
+
+
+def title_texts(fields, title, number="", project="", revisions=()):
+    """What a title block shows ({field: text}): the project's fields (TITLE_FIELDS; `project`
+    when the project's name is not given), the drawing's title and its number — and (0.127) the project's own
+    fields ("extra": [(label, text)]) and the sheet's revisions ("revisions": [{code, date, text}])."""
+    out = {k: str(fields.get(k) or "").strip() for k in TITLE_FIELDS}
+    out["project"] = out["project"] or project
+    out["title"], out["number"] = title, number
+    out[EXTRA_KEY] = [tuple(pair) for pair in fields.get(EXTRA_KEY) or ()]
+    out["revisions"] = [dict(r) for r in revisions]
+    return out
+
+
+def read_title_fields(data):
+    """The project's title block fields as saved ({field: text}, only the known ones): TITLE_FIELDS, its own
+    fields (EXTRA_KEY: [[label, text]…], 0.127) and the numbering (NUMBERING_KEYS)."""
+    if not isinstance(data, dict):
+        return {}
+    out = {k: str(v).strip() for k, v in data.items() if k in TITLE_FIELDS and isinstance(v, str) and v.strip()}
+    extra = [[str(p[0]).strip(), str(p[1]).strip()] for p in data.get(EXTRA_KEY) or ()
+             if isinstance(p, (list, tuple)) and len(p) == 2 and str(p[0]).strip()]
+    if extra:
+        out[EXTRA_KEY] = extra
+    prefix = data.get("prefix")
+    if isinstance(prefix, str) and prefix.strip():
+        out["prefix"] = prefix.strip()
+    try:
+        digits = int(data.get("digits") or 2)
+    except (TypeError, ValueError):
+        digits = 2
+    if digits != 2:
+        out["digits"] = str(max(1, min(digits, 4)))
+    return out
+
+
+def set_names(sheets):
+    """The sheet sets there are (0.128): the names in any sheet's sets, in alphabetical order."""
+    return sorted({name for s in sheets for name in s.sets}, key=str.lower)
+
+
+def in_set(sheets, name):
+    """The sheets of a set, in their order."""
+    return [s for s in sheets if name in s.sets]
+
+
+def clean_sets(names):
+    out = []
+    for name in names or ():
+        name = str(name).strip()
+        if name and name not in out:
+            out.append(name)
+    return out
+
+
+def clean_revisions(revisions):
+    """A sheet's revisions as typed or read: [{"code", "date", "text"}] with a code or a text."""
+    out = []
+    for r in revisions or ():
+        if not isinstance(r, dict):
+            continue
+        row = {k: str(r.get(k) or "").strip() for k in ("code", "date", "text")}
+        if row["code"] or row["text"]:
+            out.append(row)
+    return out
+
+
+# (0.129) the title block's templates: "full" (the usual one, bottom right), "compact" (smaller, the essentials),
+# "strip" (a column down the right side, its boxes at the bottom — more room for long drawings)
+TEMPLATES = ("full", "compact", "strip")
+STRIP_W = 50.0                 # mm: the strip's width
+# the boxes: (x, y, w, h) mm from the block's top-left corner, what it shows, text size (points), bold
+CELLS = {
+    "full": ((0.0, 0.0, 120.0, 10.0, "project", 11, True), (0.0, 10.0, 70.0, 7.5, "client", 7, False),
+             (70.0, 10.0, 50.0, 7.5, "site", 7, False), (0.0, 17.5, 70.0, 7.5, "author", 7, False),
+             (70.0, 17.5, 50.0, 7.5, "stage", 7, False), (0.0, 25.0, 120.0, 8.0, "title", 9, True),
+             (0.0, 33.0, 35.0, 7.0, "scale", 7, False), (35.0, 33.0, 35.0, 7.0, "date", 7, False),
+             (70.0, 33.0, 50.0, 7.0, "number", 10, True)),
+    "compact": ((0.0, 0.0, 100.0, 8.0, "project", 9, True), (0.0, 8.0, 100.0, 7.0, "title", 8, True),
+                (0.0, 15.0, 33.0, 7.0, "scale", 7, False), (33.0, 15.0, 33.0, 7.0, "date", 7, False),
+                (66.0, 15.0, 34.0, 7.0, "number", 9, True)),
+    "strip": ((0.0, 0.0, 50.0, 12.0, "project", 9, True), (0.0, 12.0, 50.0, 8.0, "client", 7, False),
+              (0.0, 20.0, 50.0, 8.0, "site", 7, False), (0.0, 28.0, 50.0, 8.0, "author", 7, False),
+              (0.0, 36.0, 50.0, 8.0, "stage", 7, False), (0.0, 44.0, 50.0, 12.0, "title", 8, True),
+              (0.0, 56.0, 25.0, 7.0, "scale", 7, False), (25.0, 56.0, 25.0, 7.0, "date", 7, False),
+              (0.0, 63.0, 50.0, 9.0, "number", 10, True)),
+}
+
+
+def block_size(template):
+    """(w, h) mm of a template's boxes."""
+    cells = CELLS.get(template, CELLS["full"])
+    return max(x + w for x, _y, w, _h, *_r in cells), max(y + h for _x, y, _w, h, *_r in cells)
+
+
+def title_box(size, template="full"):
+    """(x, y, w, h) mm of a sheet's title block boxes on its paper (size: (w, h) mm): bottom right inside the
+    border (the strip's at the bottom of its column)."""
+    w, h = size
+    bw, bh = block_size(template)
+    return w - MARGIN - bw, h - MARGIN - bh, bw, bh
+
+
+def drawing_area(paper, template="full"):
+    """(left, top, width, height) in mm where views are laid out: inside the border, above the
+    title block (0.129: beside the strip)."""
+    w, h = PAPERS.get(paper, PAPERS["A3"])
+    if template == "strip":
+        return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - STRIP_W - 12, h - 2 * MARGIN - 8
+    return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - 8, h - 2 * MARGIN - block_size(template)[1] - 12
+
+
+@dataclass
+class Frame:
+    """Where a view goes on the sheet: its scale, its drawing's centre (mm) and the frame
+    it takes (drawing + label, mm) — for printing and for picking it with the mouse."""
+    scale: int
+    centre: tuple
+    width: float
+    height: float
+
+    def rect(self):
+        """(left, top, width, height) in mm: the drawing and its label below."""
+        return (self.centre[0] - self.width / 2, self.centre[1] - (self.height - LABEL_H) / 2,
+                self.width, self.height)
+
+    def contains(self, x, y):
+        left, top, w, h = self.rect()
+        return left <= x <= left + w and top <= y <= top + h
+
+
+def extent(drawing):
+    """(w, h) in metres of what a drawing (model/drawings.Drawing) shows, None if nothing — a schedule's table
+    (0.132): ("mm", w, h), its size on paper whatever the scale."""
+    if drawing is not None and hasattr(drawing, "paper_size"):
+        w, h = drawing.paper_size()
+        return ("mm", float(w), float(h))
+    box = drawing.bounds() if drawing is not None else None
+    if box is None:
+        return None
+    lo, hi = box
+    return float(hi[0] - lo[0]), float(hi[1] - lo[1])
+
+
+def _size_at(extent, scale):
+    """mm taken by a drawing `extent` (w, h) metres at 1:scale, label included (a table's: its own size)."""
+    if extent[0] == "mm":
+        return extent[1], extent[2] + LABEL_H
+    return extent[0] * 1000.0 / scale, extent[1] * 1000.0 / scale + LABEL_H
+
+
+def _shelves(sizes, width):
+    """Rows of (index, w, h), left to right, a new row when one is full. Returns the rows and
+    the size of the whole (w, h)."""
+    rows, row, row_w = [], [], 0.0
+    for k, (w, h) in sizes:
+        if row and row_w + GAP + w > width:
+            rows.append(row)
+            row, row_w = [], 0.0
+        row_w += (GAP if row else 0.0) + w
+        row.append((k, w, h))
+    if row:
+        rows.append(row)
+    total_w = max((sum(w for _k, w, _h in r) + GAP * (len(r) - 1) for r in rows), default=0.0)
+    total_h = sum(max(h for _k, _w, h in r) for r in rows) + GAP * max(len(rows) - 1, 0)
+    return rows, (total_w, total_h)
+
+
+def layout(sheet, extents, defaults=None, extra_rows=0):
+    """Frames for the sheet's views. extents: per view, the (w, h) in metres of its drawing, or
+    None when there is nothing to draw (that view gets no frame: None). Views with a scale keep
+    it (their own on the sheet, else `defaults[k]`: their view template's); the others get the
+    largest usual scale at which all the views laid out fit (all of them the same, as an
+    architect would). Views with a place keep it. (0.127) The rows over the title block — the
+    sheet's revisions and the project's `extra_rows` own fields — are kept clear."""
+    left, top, width, height = drawing_area(sheet.paper, sheet.template)
+    if sheet.template != "strip":                     # (in a strip, the rows are in its column)
+        rows = (len(sheet.revisions) + 1 if sheet.revisions else 0) + int(extra_rows)
+        height -= rows * REVISION_ROW
+    fixed = [v.scale or (defaults[k] if defaults else None) for k, v in enumerate(sheet.views)]
+    for k, v in enumerate(sheet.views):              # (0.234) its kind's usual scale, when it fits the sheet so
+        usual = USUAL_SCALES.get(v.kind)
+        if fixed[k] is None and usual and extents[k] is not None:
+            w, h = _size_at(extents[k], usual)
+            if w <= width and h <= height:
+                fixed[k] = usual
+    frames = [None] * len(sheet.views)
+    free = [k for k, v in enumerate(sheet.views) if extents[k] is not None and v.at is None]
+    chosen = SCALES[-1]
+    for scale in SCALES:
+        sizes = [(k, _size_at(extents[k], fixed[k] or scale)) for k in free]
+        _rows, (w, h) = _shelves(sizes, width)
+        if w <= width and h <= height:
+            chosen = scale
+            break
+    rows, (_w, total_h) = _shelves([(k, _size_at(extents[k], fixed[k] or chosen)) for k in free], width)
+    y = top + max(0.0, (height - total_h) / 2)
+    for row in rows:
+        row_w = sum(w for _k, w, _h in row) + GAP * (len(row) - 1)
+        row_h = max(h for _k, _w, h in row)
+        x = left + max(0.0, (width - row_w) / 2)
+        for k, w, h in row:
+            centre = (x + w / 2, y + (row_h - LABEL_H) / 2)
+            frames[k] = Frame(fixed[k] or chosen, centre, w, h)
+            x += w + GAP
+        y += row_h + GAP
+    for k, view in enumerate(sheet.views):
+        if extents[k] is not None and view.at is not None:
+            scale = fixed[k] or chosen
+            w, h = _size_at(extents[k], scale)
+            frames[k] = Frame(scale, tuple(view.at), w, h)
+    return frames
+
+
+def to_dict(sheet):
+    data = {"name": sheet.name, "paper": sheet.paper, "uid": sheet.uid,
+            "views": [{"kind": v.kind, "ref": v.ref, "scale": v.scale,
+                       "at": [float(c) for c in v.at] if v.at is not None else None} for v in sheet.views]}
+    if sheet.number:
+        data["number"] = sheet.number
+    if sheet.revisions:
+        data["revisions"] = clean_revisions(sheet.revisions)
+    if sheet.sets:
+        data["sets"] = clean_sets(sheet.sets)
+    if sheet.template != "full":
+        data["template"] = sheet.template
+    return data
+
+
+def from_dict(data):
+    """A sheet read back from the .arqbim file (None if it makes no sense)."""
+    try:
+        views = []
+        for v in data.get("views", ()):
+            if v.get("kind") not in KINDS:
+                continue
+            scale = v.get("scale")
+            at = v.get("at")
+            views.append(Placed(str(v["kind"]), str(v["ref"]), int(scale) if scale else None,
+                                (float(at[0]), float(at[1])) if at else None))
+        paper = data.get("paper", "A3")
+        number, uid = data.get("number"), data.get("uid")
+        sheet = Sheet(str(data["name"]), paper if paper in PAPERS else "A3", views,
+                      number=str(number) if isinstance(number, str) else "",
+                      revisions=clean_revisions(data.get("revisions")), sets=clean_sets(data.get("sets")),
+                      template=data.get("template") if data.get("template") in TEMPLATES else "full")
+        if isinstance(uid, str) and uid:
+            sheet.uid = uid                          # (the same sheet when reopened: its tab finds it)
+        return sheet
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return None

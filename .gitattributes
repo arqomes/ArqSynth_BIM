@@ -1,0 +1,3 @@
+# line endings: LF in the repository, as each system likes them in the folder; Windows batch files always CRLF
+* text=auto
+*.bat text eol=crlf

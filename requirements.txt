@@ -1,0 +1,44 @@
+# Python 3.13 (64-bit). Install:  python -m venv .venv  &&  .venv\Scripts\pip install -r requirements.txt
+PySide6-Essentials==6.12.0   # interface (Qt, LGPL-3.0)
+wgpu==0.32.0                 # GPU: Vulkan / DirectX 12 / Metal (BSD-2)
+rendercanvas==2.7.2          # wgpu canvas inside Qt (BSD-2)
+pygfx==0.17.0                # render engine on wgpu, temporary (BSD-2)
+numpy==2.5.4                 # (BSD-3)
+ifcopenshell==0.9.0.post1    # IFC read/write (LGPL-3.0)
+# IDS checking (Phase 4; the owner's go-ahead 2026-10-21). Installed with --no-deps: ifctester would also
+# bring a web server (Flask) and bcf-client that ArqBIM does not use for this.
+#   .venv\Scripts\pip install --no-deps ifctester==0.9.0 xmlschema==4.3.2 elementpath==5.1.4
+ifctester==0.9.0             # IDS requirements checking, IfcOpenShell project (LGPL-3.0)
+xmlschema==4.3.2             # reads the IDS XML against its schema (MIT)
+elementpath==5.1.4           # XPath for xmlschema (MIT)
+# BCF coordination notes (Phase 4; the owner's go-ahead 2026-10-21). Also --no-deps: bcf-client would bring
+# requests (for BCF servers), not used here.
+#   .venv\Scripts\pip install --no-deps bcf-client==0.9.0 xsdata==26.10
+bcf-client==0.9.0            # BCF 2.1 / 3.0 files, IfcOpenShell project (LGPL-3.0)
+xsdata==26.10                # XML data binding used by bcf-client (MIT)
+# point clouds LAZ and E57 (0.284; the owner's go-ahead 2026-10-28)
+laspy==2.7.0                 # LAS / LAZ reading (BSD-2)
+lazrs==0.8.2                 # LAZ decompression for laspy (MIT)
+pye57==0.4.19                # E57 reading, libE57Format inside (MIT)
+pyquaternion==0.9.9          # used by pye57 (MIT)
+# DWG (0.286; the owner's go-ahead 2026-10-28): not a Python package — the ODA File Converter 27.9 (free, Open
+# Design Alliance's own license), installed in WSL from ODAFileConverter_QT6_lnxX64_11dll_27.9.deb (apt; it needs
+# libopengl0), or on Windows from opendesign.com. Without it a DWG is refused with a message; DXF needs nothing.
+# the realistic render (0.343; the owner's go-ahead 2026-11-01): path tracing on the processor, in a process of its
+# own (arqbim/render/path_tracer.py). In WSL it needs Ubuntu's libatomic1 (scripts/wsl_setup.sh).
+mitsuba==3.9.1               # physically based renderer, EPFL (BSD-3)
+drjit==1.5.0                 # its just-in-time array library (BSD-3)
+# SketchUp and Rhino files (0.350; the owner's go-ahead 2026-11-02). The SketchUp C SDK has no Linux build: OpenSKP
+# reads SKP 2013 to now (2021+ too) and writes the 2013–2020 format (which every SketchUp opens) without it. It brings
+# trimesh, defusedxml and mapbox_earcut (shapely and numpy were here); trimesh also reads glTF, OBJ and STL for the
+# 3D import (0.351, model/mesh_import.py).
+rhino3dm==8.17.0             # Rhino 3DM files, McNeel's openNURBS (MIT)
+openskp==1.4.0               # SketchUp SKP files, reverse-engineered, not Trimble's (MIT)
+trimesh==5.2.0               # glTF / OBJ / STL reading, brought by openskp (MIT)
+# Excel workbooks of the schedules (0.370; the owner's go-ahead 2026-11-03)
+openpyxl==3.1.5              # XLSX writing (MIT)
+et-xmlfile==2.0.0            # its XML writer (MIT)
+# USDZ, augmented reality on iPhone and iPad (0.371; the owner's go-ahead 2026-11-03): Pixar's USD, no other package
+usd-core==26.8               # Universal Scene Description (Pixar's TOST-1.0, Apache-2.0 based)
+# development only
+pytest==9.1.1                # needed by IfcOpenShell's full validator (IFC WHERE rules) in the tests

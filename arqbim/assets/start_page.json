@@ -1,0 +1,17 @@
+{
+  "_nota": "Página inicial (0.387): as ligações e listas. Um endereço vazio deixa o botão a dizer que ainda não está ligado. Tutoriais: 'open' é um endereço (https://…), 'help:steps' (Ajuda ▸ Primeiros passos), 'testar:0.380' (a secção do TESTAR.md) ou 'doc:GUIA.md'.",
+  "videos_url": "https://www.youtube.com/@arqsynth_a",
+  "tutorials": [
+    {"title": "Primeiros passos: uma casa", "text": "Paredes, laje, porta, janela, cobertura, ambientes, planta e folhas — clique a clique.", "open": "help:steps"},
+    {"title": "Paredes por retângulo, círculo e arco", "text": "Desenhar paredes com a prévia em volume.", "open": "testar:0.383"},
+    {"title": "Perfil da parede: canto, arco e curva", "text": "Arrastar, Shift para arco, Alt para curva; a concordância.", "open": "testar:0.380"},
+    {"title": "Cobertura por blocos no 3D", "text": "Alças para escalar, «+» e «−» nas águas, as cotas dos beirados.", "open": "testar:0.386"},
+    {"title": "Calhas ligadas nos cantos", "text": "A calha sob a aresta da cobertura, em meia-esquadria.", "open": "testar:0.384"},
+    {"title": "Temas e cores da interface", "text": "As paletas do estudo e «Explorar cores».", "open": "testar:0.376"},
+    {"title": "Guia de todas as ferramentas", "text": "Cada comando da fita: o que faz, onde está, a tecla.", "open": "doc:GUIA.md"}
+  ],
+  "discussions_url": "",
+  "discussions": [],
+  "support_url": "",
+  "supporters": []
+}

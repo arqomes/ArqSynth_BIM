@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arqsynth.com/schemas/template/1.json",
+  "title": "ArqSynth template (.astpl)",
+  "description": "A template of the ArqSynth suite: the settings a new project starts with. A .astpl file is this JSON (UTF-8), or a ZIP with this JSON as template.json and the files it names (textures) under assets/. Lengths in metres, colours \"#rrggbb\". Fields a program does not know are kept when another saves the template; each program's own data goes under extensions.<program>.",
+  "type": "object",
+  "required": ["format", "schema_version", "name", "version"],
+  "properties": {
+    "format": {"const": "arqsynth-template"},
+    "schema_version": {"type": "integer", "minimum": 0, "description": "This file's layout version (1 now). A program reading a newer one keeps what it does not know."},
+    "id": {"type": "string", "description": "A UUID, the same through renames and updates."},
+    "name": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1, "description": "One more at each update."},
+    "description": {"type": "string"},
+    "author": {"type": "string"},
+    "created": {"type": "string", "description": "ISO 8601"},
+    "modified": {"type": "string", "description": "ISO 8601"},
+    "programs": {"type": "array", "items": {"type": "string"}, "description": "The programs it was made for (arqsynth-bim, arqsynth-cad…); any may read it."},
+    "generator": {"type": "object", "properties": {"program": {"type": "string"}, "version": {"type": "string"}}},
+    "units": {"$ref": "#/$defs/units"},
+    "project": {"$ref": "#/$defs/project"},
+    "storeys": {"type": "array", "items": {"$ref": "#/$defs/storey"}},
+    "materials": {"type": "array", "items": {"$ref": "#/$defs/material"}},
+    "types": {
+      "type": "object",
+      "description": "The construction types by kind: wall, slab, roof, column, beam, footing, pile, pipe, duct, conduit (layers or a section), door, window (sizes and a joinery design).",
+      "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/type"}}
+    },
+    "ifc_classes": {
+      "type": "object",
+      "description": "The IFC class each kind of element is made as (wall: IfcWall…).",
+      "additionalProperties": {"type": "string", "pattern": "^Ifc[A-Za-z]+$"}
+    },
+    "annotation": {"$ref": "#/$defs/annotation"},
+    "dimensions": {"$ref": "#/$defs/dimensions"},
+    "lines": {"$ref": "#/$defs/lines"},
+    "sheets": {"$ref": "#/$defs/sheets"},
+    "interface": {"$ref": "#/$defs/interface"},
+    "extensions": {"type": "object", "description": "Each program's own data: {program: {...}}.", "additionalProperties": {"type": "object"}}
+  },
+  "$defs": {
+    "units": {
+      "type": "object",
+      "properties": {
+        "system": {"enum": ["metric"]},
+        "length": {"enum": ["m", "cm", "mm"]},
+        "decimals": {"type": "integer", "minimum": 0, "maximum": 6},
+        "area_decimals": {"type": "integer", "minimum": 0, "maximum": 6},
+        "angle": {"enum": ["degree"]},
+        "angle_decimals": {"type": "integer", "minimum": 0, "maximum": 6},
+        "decimal_separator": {"enum": [",", "."]}
+      }
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "site": {"type": "string", "description": "IfcSite's name"},
+        "building": {"type": "string", "description": "IfcBuilding's name"},
+        "author": {"type": "string"},
+        "organization": {"type": "string"},
+        "address": {"type": "string"},
+        "ifc_schema": {"enum": ["IFC4", "IFC2X3", "IFC4X3"]},
+        "ifc_length_unit": {"enum": ["MILLIMETRE", "METRE"]}
+      }
+    },
+    "storey": {
+      "type": "object",
+      "required": ["name", "elevation"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "elevation": {"type": "number", "description": "m"},
+        "height": {"type": "number", "minimum": 0, "description": "m, floor to floor"}
+      }
+    },
+    "material": {
+      "type": "object",
+      "required": ["key", "name"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "name_en": {"type": "string"},
+        "category": {"type": "string", "description": "concrete, brick, wood, glass, paint…"},
+        "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+        "transparency": {"type": "number", "minimum": 0, "maximum": 1},
+        "finish": {"type": "string"},
+        "texture": {"type": ["string", "null"], "description": "a file under assets/ (a ZIP .astpl)"},
+        "thermal": {
+          "type": "object",
+          "properties": {
+            "conductivity": {"type": ["number", "null"], "description": "W/(m·K)"},
+            "density": {"type": ["number", "null"], "description": "kg/m³"},
+            "specific_heat": {"type": ["number", "null"], "description": "J/(kg·K)"}
+          }
+        },
+        "acoustic": {
+          "type": "object",
+          "properties": {
+            "absorption": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "αw"},
+            "sound_reduction": {"type": ["number", "null"], "description": "Rw, dB"}
+          }
+        },
+        "graphics": {"type": "object", "description": "patterns on its surface and where cut: [pattern, \"#rrggbb\"] or null"}
+      }
+    },
+    "type": {
+      "type": "object",
+      "required": ["key", "name"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "name_en": {"type": "string"},
+        "layers": {
+          "type": "array",
+          "description": "outside -> inside / bottom -> top",
+          "items": {
+            "type": "object",
+            "required": ["material", "thickness"],
+            "properties": {
+              "material": {"type": "string"},
+              "thickness": {"type": "number", "exclusiveMinimum": 0},
+              "function": {"type": ["string", "null"], "enum": ["structure", "substrate", "thermal", "finish1", "finish2", null]}
+            }
+          }
+        },
+        "profile": {"type": ["array", "null"], "items": {"type": ["number", "null"]}},
+        "material": {"type": ["string", "null"]},
+        "predefined": {"type": ["string", "null"]},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0},
+        "sill": {"type": "number"},
+        "design": {"type": ["object", "null"], "description": "a door's / window's joinery (ArqSynth's Caixilho Studio)"}
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "properties": {
+        "text_height": {"type": "number", "exclusiveMinimum": 0, "description": "mm on paper"},
+        "font": {"type": "string"}
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "properties": {
+        "text": {"type": "number", "exclusiveMinimum": 0, "description": "mm on paper"},
+        "mark": {"enum": ["tick", "arrow", "dot"]},
+        "unit": {"enum": ["m", "cm", "mm"]},
+        "decimals": {"type": "integer", "minimum": 0, "maximum": 6}
+      }
+    },
+    "lines": {
+      "type": "object",
+      "description": "pens (mm), the hatches of what is cut by material, the views' symbols",
+      "properties": {
+        "pens": {"type": "object", "additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
+        "hatches": {"type": "object"},
+        "symbols": {"type": "object"}
+      }
+    },
+    "sheets": {
+      "type": "object",
+      "properties": {
+        "paper": {"enum": ["A0", "A1", "A2", "A3", "A4"]},
+        "title_block": {"type": "string"},
+        "title_fields": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "interface": {
+      "type": "object",
+      "properties": {
+        "theme": {"type": "string"},
+        "palette": {"type": "string"},
+        "start_page": {"type": "boolean"},
+        "start_view": {"enum": ["3d", "plan", "start"]},
+        "shortcuts": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    }
+  }
+}

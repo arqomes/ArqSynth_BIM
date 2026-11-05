@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# what the tests and the benchmark make (pictures, caches, big models)
+tests/saida_gui/
+tests/saida_*/
+tests/arqbim_test_cache/
+arqbim_test_cache/
+arqbim_test_share/
+benchmark/
+arquivo/prototipo_blender/tests/saida_gui/
+
+# files the tests leave in the root
+/arqsynth_*.pdf
+/arqsynth_*.png
+
+# kept beside the program, not part of this repository
+arqsynth/
+EXEMPLOS DO BLENDER/
+arquivo/
+/instrucoes-opus-programa-bim.md
+/proposta-interface-arqsynth.html
+exemplos/*.RVT
+exemplos/*.log.html

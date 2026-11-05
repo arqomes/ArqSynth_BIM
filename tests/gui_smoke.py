@@ -1,0 +1,20269 @@
+"""Opens the real ArqBIM window and drives it with simulated mouse/keyboard (QTest).
+
+    .venv\\Scripts\\python tests\\gui_smoke.py [out_dir]
+
+Prints PASS/FAIL per step, saves screenshots, exits 1 on any failure.
+"""
+
+import json
+import math
+import os
+import re
+import shutil
+import sys
+import time
+import traceback
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+# the geometry cache of the files the tests save goes to a temporary folder, not the user's
+os.environ.setdefault("ARQBIM_CACHE_DIR", os.path.join(os.environ.get("TEMP", "."), "arqbim_test_cache"))
+os.environ.setdefault("ARQBIM_SHARE_DIR", os.path.join(os.environ.get("TEMP", "."), "arqbim_test_share"))
+os.environ.setdefault("ARQBIM_RECENT_GROUP", "recentes_dos_testes")     # (0.387: not the user's recent documents)
+
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402,F401
+
+import numpy as np  # noqa: E402
+
+from arqbim.app import create_window  # noqa: E402
+from arqbim.core.sketch_geometry import transform_point  # noqa: E402
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "tests", "saida_gui")
+os.makedirs(OUT, exist_ok=True)
+Qt = QtCore.Qt
+results = []
+
+# "Save changes?" dialogs would block an automated run: answer "Discard".
+QtWidgets.QMessageBox.question = staticmethod(lambda *a, **k: QtWidgets.QMessageBox.StandardButton.Discard)
+
+QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("unidades/comprimento", "m")   # (0.186: lengths in m)
+app, win = create_window()
+win.resize(1280, 740)  # fits a 1080p laptop screen at 125 % scaling
+win.show()
+canvas, vp, doc = win.canvas, win.viewport, win.doc
+mouse = [0.0, 0.0]
+
+
+def pump(ms=150):
+    end = time.time() + ms / 1000
+    while time.time() < end:
+        app.processEvents()
+        time.sleep(0.005)
+
+
+def check(name, ok, detail=""):
+    results.append({"test": name, "ok": bool(ok), "detail": str(detail)})
+    print("PASS" if ok else "FAIL", name, detail, flush=True)
+
+
+def qp(x, y):
+    return QtCore.QPoint(int(round(x)), int(round(y)))
+
+
+held = [Qt.MouseButton.NoButton]                  # the mouse buttons held down (moves carry them)
+
+
+def _deliver():
+    """The canvas hands its pending mouse events to the program now (rendercanvas passes them on at its own
+    pace, which waits while an image is being shown: a check could run before the moves had arrived)."""
+    if hasattr(canvas, "_process_events"):
+        canvas._process_events()
+
+
+def move_event(widget, pos, buttons=None, modifiers=Qt.KeyboardModifier.NoModifier):
+    """A mouse move sent to the widget itself. (QTest.mouseMove moves the system's cursor instead; in Linux
+    (WSLg) that move could reach whatever window is on top at that place, and the test's moves got lost.)"""
+    target = getattr(widget, "_subwidget", widget)                   # (the canvas inside a QRenderWidget)
+    point = QtCore.QPoint(int(round(pos.x())), int(round(pos.y()))) if isinstance(pos, QtCore.QPointF) else pos
+    event = QtGui.QMouseEvent(QtCore.QEvent.Type.MouseMove, QtCore.QPointF(point),
+                              QtCore.QPointF(target.mapToGlobal(point)), Qt.MouseButton.NoButton,
+                              held[0] if buttons is None else buttons, modifiers)
+    QtWidgets.QApplication.sendEvent(target, event)
+
+
+def move(p, steps=1, modifiers=Qt.KeyboardModifier.NoModifier):
+    start = np.array(mouse)
+    for i in range(1, steps + 1):
+        q = start + (np.array(p) - start) * i / steps
+        mouse[:] = q
+        move_event(canvas, qp(*q), modifiers=modifiers)
+        pump(25)
+        _deliver()
+
+
+def press(button=Qt.MouseButton.LeftButton, modifiers=Qt.KeyboardModifier.NoModifier):
+    QtTest.QTest.mousePress(canvas, button, modifiers, qp(*mouse))
+    held[0] = button
+    pump(40)
+    _deliver()
+
+
+def release(button=Qt.MouseButton.LeftButton, modifiers=Qt.KeyboardModifier.NoModifier):
+    QtTest.QTest.mouseRelease(canvas, button, modifiers, qp(*mouse))
+    held[0] = Qt.MouseButton.NoButton
+    pump(40)
+    _deliver()
+
+
+def drag(points, modifiers=Qt.KeyboardModifier.NoModifier, before_release=None):
+    """Press at the first point, move through the others, release at the last (a box, a lasso)."""
+    move(points[0], 2, modifiers)
+    press(modifiers=modifiers)
+    for p in points[1:]:
+        move(p, 3, modifiers)
+    if before_release is not None:
+        before_release()
+    release(modifiers=modifiers)
+    pump(200)
+
+
+def click():
+    press()
+    release()
+
+
+def _active():
+    """Shortcuts work in the active window only; after a dialog closes, Linux (WSLg) does not make the
+    main window active again until it is clicked — as a person would."""
+    if QtWidgets.QApplication.activeModalWidget() is None and not win.isActiveWindow():
+        win.activateWindow()
+        end = time.time() + 2.0                    # (X11 makes it active a moment later)
+        while not win.isActiveWindow() and time.time() < end:
+            pump(30)
+
+
+def key(k, mod=Qt.KeyboardModifier.NoModifier):
+    _active()
+    QtTest.QTest.keyClick(canvas, k, mod)
+    pump(60)
+
+
+def type_text(text):
+    QtTest.QTest.keyClicks(canvas, text)
+    pump(60)
+
+
+def at(p):
+    return vp.project(p)
+
+
+def shot(name):
+    pump(200)
+    if os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        return
+    if sys.platform == "win32":
+        pix = QtGui.QGuiApplication.primaryScreen().grabWindow(int(win.winId()))
+    else:
+        # Linux (WSLg / XWayland): the screen cannot be read back — each widget as Qt paints it, and the
+        # 3D view's last image where the canvas is. The canvas itself is not asked to paint: a paint
+        # outside its own drawing loop (win.grab) left its next images late, and clicks hit old ones.
+        pix = QtGui.QPixmap(win.size())
+        pix.fill(QtGui.QColor("#202020"))
+        painter = QtGui.QPainter(pix)
+        parts = [w for w in win.children() if isinstance(w, QtWidgets.QWidget) and w.isVisible()
+                 and not w.isWindow() and w is not win.centralWidget()]
+        for w in parts + [win.view_bar, win.sheet_window]:
+            if w is not None and w.isVisible():
+                painter.drawPixmap(w.mapTo(win, QtCore.QPoint(0, 0)), w.grab())
+        if canvas.isVisible():
+            rgba = np.ascontiguousarray(vp.snapshot())
+            h, w = rgba.shape[:2]
+            image = QtGui.QImage(rgba.data, w, h, 4 * w, QtGui.QImage.Format.Format_RGBA8888).copy()
+            painter.drawImage(QtCore.QRect(canvas.mapTo(win, QtCore.QPoint(0, 0)), canvas.size()), image)
+        if win.notice.isVisible():                   # (0.321) the balloon over the view
+            painter.drawPixmap(win.notice.mapTo(win, QtCore.QPoint(0, 0)), win.notice.grab())
+        if win.quick.isVisible():                    # (0.354) the quick edit over the view
+            painter.drawPixmap(win.quick.mapTo(win, QtCore.QPoint(0, 0)), win.quick.grab())
+        painter.end()
+    pix.save(os.path.join(OUT, name))
+
+
+def objects():
+    return list(doc.objects.values())
+
+
+def world_z(obj):
+    zs = [transform_point(obj.matrix, v)[2] for v in obj.mesh.verts]
+    return min(zs), max(zs)
+
+
+def volume(obj):
+    return obj.mesh.transformed(obj.matrix).volume()
+
+
+def run():
+    pump(1500)
+    canvas.setFocus()
+
+    # 1. Rectangle: R, click, move, type "3,2;4,5", Enter --------------------
+    key(Qt.Key.Key_R)
+    check("atalho_R_retangulo", win.tool.name == "rectangle", win.tool.name)
+    move(at((0, 0, 0)), 3)
+    click()
+    move(at((2.5, 3.5, 0)), 8)
+    shot("1_retangulo_a_desenhar.png")
+    type_text("3,2;4,5")
+    shot("2_medida_digitada.png")
+    check("caixa_medidas_mostra_digitado", win.vcb.text().startswith("3,2;4,5"), win.vcb.text())
+    key(Qt.Key.Key_Return)
+    check("caixa_medidas_mostra_resultado", win.vcb.text() == "3,20 m × 4,50 m", win.vcb.text())
+    objs = objects()
+    ok = len(objs) == 1 and len(objs[0].mesh.faces) == 1
+    area = objs[0].mesh.face_area(0) if ok else 0
+    check("retangulo_digitado_3,2x4,5", ok and abs(area - 14.4) < 1e-6, "area={:.5f}".format(area))
+    rect = objs[0] if objs else None
+    if rect is not None:
+        corner = rect.matrix[:3, 3]
+        check("retangulo_no_ponto_clicado", np.linalg.norm(corner) < 0.1, np.round(corner, 3))
+
+    # 2. Push/Pull: P, click the rectangle, move up, type "2,8", Enter --------
+    key(Qt.Key.Key_P)
+    check("atalho_P_pushpull", win.tool.name == "push_pull", win.tool.name)
+    pump(300)
+    move(at((1.6, 2.25, 0)), 4)
+    click()
+    move((mouse[0], mouse[1] - 90), 6)
+    shot("3_pushpull_a_puxar.png")
+    type_text("2,8")
+    key(Qt.Key.Key_Return)
+    rect = doc.get(rect.id)
+    check("pushpull_digitado_2,8", abs(volume(rect) - 3.2 * 4.5 * 2.8) < 1e-6 and rect.mesh.is_closed(),
+          "volume={:.4f}".format(volume(rect)))
+
+    # 3. Push/Pull the top face with the mouse only ---------------------------
+    pump(300)
+    move(at((1.6, 2.25, 2.8)), 4)
+    click()
+    move((mouse[0] + 60, mouse[1] - 160), 6)  # end in empty sky, away from edges to snap to
+    click()
+    rect = doc.get(rect.id)
+    zmin, zmax = world_z(rect)
+    check("pushpull_rato_estica_topo", zmax > 2.85 and abs(zmin) < 1e-9 and len(rect.mesh.faces) == 6,
+          "z=({:.3f}, {:.3f}) faces={}".format(zmin, zmax, len(rect.mesh.faces)))
+
+    # 4. Ctrl+Z restores 2,80 m -------------------------------------------------
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    rect = doc.get(rect.id)
+    check("desfazer_ctrl_z", abs(world_z(rect)[1] - 2.8) < 1e-9, "zmax={:.4f}".format(world_z(rect)[1]))
+
+    # 5. Typed value right after finishing corrects the last Push/Pull ---------
+    pump(300)
+    move(at((1.6, 2.25, 2.8)), 3)
+    click()
+    move((mouse[0], mouse[1] - 30), 3)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    z_after = world_z(doc.get(rect.id))[1]
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    z_fixed = world_z(doc.get(rect.id))[1]
+    check("corrigir_ultima_medida", abs(z_after - 3.8) < 1e-9 and abs(z_fixed - 3.3) < 1e-9,
+          "depois de 1 -> {:.3f}, corrigido 0,5 -> {:.3f}".format(z_after, z_fixed))
+
+    # 6. Esc cancels a Push/Pull without changing anything ---------------------
+    pump(300)
+    before = [v.copy() for v in doc.get(rect.id).mesh.verts]
+    move(at((1.6, 2.25, 3.3)), 3)
+    click()
+    move((mouse[0], mouse[1] - 60), 4)
+    key(Qt.Key.Key_Escape)
+    after = doc.get(rect.id).mesh.verts
+    check("esc_cancela", len(before) == len(after) and all(np.allclose(a, b) for a, b in zip(before, after)))
+
+    # 7. Rectangle by dragging -------------------------------------------------
+    key(Qt.Key.Key_R)
+    n0 = len(objects())
+    move(at((7, 0, 0)), 3)
+    press()
+    move(at((9, 1, 0)), 8)
+    release()
+    new = [o for o in objects() if o.id != rect.id]
+    a = new[-1].mesh.face_area(0) if new else 0
+    check("retangulo_arrastando", len(objects()) == n0 + 1 and abs(a - 2.0) < 0.1, "area={:.4f}".format(a))
+
+    # 8. Rectangle drawn on the front wall of the box: it splits the wall -------
+    pump(300)
+    n_objs = len(objects())
+    vol0 = volume(doc.get(rect.id))
+    box = doc.get(rect.id)
+    y_wall = min(transform_point(box.matrix, v)[1] for v in box.mesh.verts)  # front wall of the box
+    move(at((1.0, y_wall, 1.0)), 3)
+    click()
+    move((mouse[0] + 40, mouse[1] - 40), 4)
+    type_text("1;1")
+    key(Qt.Key.Key_Return)
+    box = doc.get(rect.id)
+    check("retangulo_na_parede_divide_a_face",
+          len(objects()) == n_objs and len(box.mesh.faces) == 10 and box.mesh.is_closed(),
+          "objetos={} faces={}".format(len(objects()), len(box.mesh.faces)))
+
+    # 9. Pull the wall rectangle out (balcony) --------------------------------
+    key(Qt.Key.Key_P)
+    pump(300)
+    c = np.array((1.5, y_wall, 1.5))
+    outward = np.array(at(c + np.array((0, -1.0, 0)))) - np.array(at(c))  # screen direction of -Y
+    move(at(c), 3)
+    click()
+    move(np.array(mouse) + outward / np.linalg.norm(outward) * 40, 3)
+    pump(200)
+    op = win.tools["push_pull"]._op
+    debug_pp = "op={} d={} dica={!r}".format(type(op).__name__, None if op is None else round(op.d, 3), vp.tip_text)
+    type_text("1,2")
+    key(Qt.Key.Key_Return)
+    box = doc.get(rect.id)
+    ys = [transform_point(box.matrix, v)[1] for v in box.mesh.verts]
+    check("varanda_puxada_da_parede",
+          abs(min(ys) - (y_wall - 1.2)) < 1e-6 and box.mesh.is_closed() and abs(volume(box) - (vol0 + 1.2)) < 1e-6,
+          "y_min={:.3f} volume={:.3f} {}".format(min(ys), volume(box), debug_pp))
+    shot("4_resultado.png")
+
+    # 10. Select (Space), Delete, Ctrl+Z -----------------------------------------
+    key(Qt.Key.Key_Space)
+    check("atalho_espaco_selecionar", win.tool.name == "select", win.tool.name)
+    pump(300)
+    count = len(objects())
+    move(at((3.2, 2.25, 1.5)), 3)  # right side face of the box
+    click()
+    faces = len(doc.get(rect.id).mesh.faces)
+    side = vp.face_selection.get(rect.id)               # (0.310, as SketchUp: one click, that face)
+    check("clique_seleciona", side is not None and len(side[0]) == 1 and not vp.selection, vp.face_selection)
+    shot("5_selecionado.png")
+    key(Qt.Key.Key_Delete)
+    face_gone = doc.get(rect.id) is not None and len(doc.get(rect.id).mesh.faces) == faces - 1
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(700)                                            # (three new clicks: the whole box)
+    for _k in range(3):
+        click()
+        pump(60)
+    whole = vp.selection == {rect.id}
+    key(Qt.Key.Key_Delete)
+    deleted = doc.get(rect.id) is None and len(objects()) == count - 1
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    check("apagar_e_desfazer", face_gone and whole and deleted and doc.get(rect.id) is not None
+          and len(doc.get(rect.id).mesh.faces) == faces,
+          "face={} três_cliques={} apagado={}".format(face_gone, whole, deleted))
+
+    # 11. Zoom extents ----------------------------------------------------------
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ShiftModifier)
+    shot("6_enquadrar_tudo.png")
+    check("enquadrar_tudo_sem_erro", True)
+
+    inferences()
+    navigation()
+    bim_flow()
+
+
+def probe_doors_flow():
+    """(diagnosis) bim_flow's start — three sketch boxes classified, saved, opened again — then doors and
+    windows."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(3.0, 3.0, 1.0), radius=6.0)
+    pump(300)
+    slab_sketch = make_box((0, 3, 0), "4;3", "0,12", (2, 4.5, 0))
+    col_sketch = make_box((6, 3, 0), "0,3;0,3", "2,8", (6.15, 3.15, 0))
+    wall_sketch = make_box((1, 1, 0), "4,5;0,2", "2,8", (3.25, 1.1, 0))
+    select_at((3.25, 1.0, 1.4))
+    win.classify_actions["parede_alv_20"].trigger()
+    pump(300)
+    vp.set_selection({slab_sketch.id})
+    win.classify_actions["laje_12"].trigger()
+    pump(200)
+    vp.set_selection({col_sketch.id})
+    win.classify_actions["pilar_30"].trigger()
+    pump(300)
+    del wall_sketch
+    path = os.path.join(OUT, "teste_arqbim.ifc")
+    win.save_to(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.open_path(path)
+    pump(500)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    vp.set_selection({walls[0].id} if walls else set())
+    pump(300)
+    doors_and_windows(walls[0].id, path)
+
+
+def near(p, dx=0.0, dy=0.0):
+    x, y = at(p)
+    return x + dx, y + dy
+
+
+def inferences():
+    # 12. New document; rectangle snapped to the origin -------------------------
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    check("novo_documento_vazio", len(objects()) == 0)
+    key(Qt.Key.Key_R)
+    move(near((0, 0, 0), 5, -4), 3)
+    pump(200)  # let the last mouse move be processed before reading the tooltip
+    tip = vp.tip_text
+    click()
+    move(near((1.5, 1.5, 0)), 4)
+    type_text("2;2")
+    key(Qt.Key.Key_Return)
+    a = objects()[-1]
+    check("inferencia_origem", tip == "Origem" and np.allclose(a.matrix[:3, 3], 0, atol=1e-12),
+          "dica={!r} canto={}".format(tip, a.matrix[:3, 3]))
+
+    # 13. Pull it to 3 m: volume A -------------------------------------------------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((1, 1, 0)), 3)
+    click()
+    move((mouse[0] + 40, mouse[1] - 120), 4)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    check("volume_A_3m", abs(world_z(doc.get(a.id))[1] - 3.0) < 1e-12)
+
+    # 14. Second rectangle starting exactly at A's corner (endpoint) ------------
+    key(Qt.Key.Key_R)
+    pump(300)
+    move(near((2.04, -0.04, 0)), 3)          # just outside A, a few pixels from its corner
+    pump(200)
+    tip = vp.tip_text
+    shot("7_inferencia_extremidade.png")
+    click()
+    move(near((3.5, 1.5, 0)), 4)
+    type_text("2;2")
+    key(Qt.Key.Key_Return)
+    b = objects()[-1]
+    check("inferencia_extremidade", tip == "Extremidade" and np.allclose(b.matrix[:3, 3], (2, 0, 0), atol=1e-12),
+          "dica={!r} canto={}".format(tip, b.matrix[:3, 3]))
+
+    # 15. Push/Pull B up to the level of A's top corner -------------------------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((3, 1, 0)), 3)
+    click()
+    move(near((3, 1, 1.5)), 4)
+    move(near((0, 0, 3), 4, -3), 4)          # hover A's top corner
+    pump(200)
+    tip = vp.tip_text
+    shot("8_pushpull_ate_ao_ponto.png")
+    click()
+    zb = world_z(doc.get(b.id))[1]
+    check("pushpull_ate_ao_ponto", tip == "Extremidade" and abs(zb - 3.0) < 1e-12,
+          "dica={!r} altura={:.6f}".format(tip, zb))
+
+
+def make_box(corner, dims, height, top_point):
+    """Rectangle from `corner` with typed `dims`, then Push/Pull by typed `height`
+    clicking at `top_point` (a point inside the rectangle, on the ground)."""
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near(corner), 3)
+    click()
+    move(near(np.array(corner) + (0.7, 0.7, 0)), 3)
+    type_text(dims)
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near(top_point), 3)
+    click()
+    move((mouse[0] + 30, mouse[1] - 100), 3)
+    type_text(height)
+    key(Qt.Key.Key_Return)
+    pump(200)
+    return objects()[-1]
+
+
+def select_at(p, shift=False):
+    key(Qt.Key.Key_Space)
+    pump(300)
+    move(near(p), 3)
+    mod = Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
+    QtTest.QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, mod, qp(*mouse))
+    pump(150)
+
+
+def ifc_count(cls):
+    return doc.ifc.count(cls)
+
+
+def bim_flow():
+    # 18. Sketch boxes for a wall, a slab and a column ---------------------------
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(3.0, 3.0, 1.0), radius=6.0)
+    pump(300)
+    # Back to front, so no box hides the ground where the next one starts.
+    slab_sketch = make_box((0, 3, 0), "4;3", "0,12", (2, 4.5, 0))
+    col_sketch = make_box((6, 3, 0), "0,3;0,3", "2,8", (6.15, 3.15, 0))
+    wall_sketch = make_box((1, 1, 0), "4,5;0,2", "2,8", (3.25, 1.1, 0))
+    from arqbim.core.classify import upright_box
+    dims = []
+    for o in objects():
+        b = upright_box(o)
+        dims.append(None if b is None else tuple(round(v, 3) for v in (b.length, b.width, b.height)))
+    check("tres_caixas_de_esboco", dims == [(4.0, 3.0, 0.12), (0.3, 0.3, 2.8), (4.5, 0.2, 2.8)], dims)
+
+    # 19. Classify the wall box as "Parede alvenaria 20 cm" ----------------------
+    select_at((3.25, 1.0, 1.4))                     # front face of the wall box (0.310: that face; its box classified)
+    check("seleciona_esboco", vp.objects_picked() == {wall_sketch.id}, vp.objects_picked())
+    win.classify_actions["parede_alv_20"].trigger()
+    pump(300)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    props = win.props.text()
+    check("classificar_parede", ifc_count("IfcWall") == 1 and len(walls) == 1 and doc.get(wall_sketch.id) is None
+          and "IfcWall" in props and "Parede alvenaria 20 cm" in props and "Bloco cerâmico" in props,
+          "paredes={} esboço_removido={} painel=[{}]".format(ifc_count("IfcWall"), doc.get(wall_sketch.id) is None,
+                                                             props.replace("\n", " | ")))
+    shot("10_parede_classificada.png")
+
+    # 20. Ctrl+Z / Ctrl+Y over an IFC transaction ---------------------------------
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    undone = ifc_count("IfcWall") == 0 and doc.get(wall_sketch.id) is not None
+    key(Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    check("desfazer_refazer_ifc", undone and ifc_count("IfcWall") == 1 and doc.get(wall_sketch.id) is None)
+
+    # 21. Slab and column ---------------------------------------------------------
+    vp.set_selection({slab_sketch.id})               # (clicking to select is checked above)
+    win.classify_actions["laje_12"].trigger()
+    pump(200)
+    vp.set_selection({col_sketch.id})
+    win.classify_actions["pilar_30"].trigger()
+    pump(300)
+    check("classificar_laje_e_pilar", ifc_count("IfcSlab") == 1 and ifc_count("IfcColumn") == 1
+          and doc.get(slab_sketch.id) is None and doc.get(col_sketch.id) is None,
+          "lajes={} pilares={}".format(ifc_count("IfcSlab"), ifc_count("IfcColumn")))
+
+    # 22. Save: IFC written, validated, sketches stay out of it ---------------------
+    path = os.path.join(OUT, "teste_arqbim.ifc")
+    errors = win.save_to(path)
+    import ifcopenshell
+    f = ifcopenshell.open(path)
+    counts = [len(f.by_type(c)) for c in ("IfcWall", "IfcSlab", "IfcColumn", "IfcBuildingElementProxy")]
+    check("gravar_ifc_valido", errors == [] and counts == [1, 1, 1, 0] and "teste_arqbim.ifc" in win.windowTitle()
+          and not win.windowTitle().endswith("*"), "erros={} contagens={}".format(len(errors), counts))
+
+    # 23. Reopen the file ---------------------------------------------------------
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    ok = win.open_path(path)
+    pump(500)
+    kinds = sorted(o.ifc_class for o in objects() if o.is_bim)
+    check("reabrir_ifc", ok and kinds == ["IfcColumn", "IfcSlab", "IfcWall"], kinds)
+    status = win.last_message
+    check("reabrir_usa_formas_guardadas", win.doc.cache_hits == 3 and "guardadas" in status, status)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    vp.set_selection({walls[0].id} if walls else set())
+    pump(300)
+    shot("11_ifc_reaberto.png")
+    if walls:
+        doors_and_windows(walls[0].id, path)
+    beginner_flow()
+    wall_and_slab_tools()
+    voids_flow()
+    edit_ifc_flow()
+    lines_and_guides()
+    separate_walls()
+    slanted_wall_line()
+    alignments_flow()
+    parametric_lines_flow()
+    structure_flow()
+    services_flow()
+    certification_flow()
+    joined_walls_dim_flow()
+    grid_editing_flow()
+    constraints_flow()
+    selection_flow()
+    filters_flow()
+    navigation_tools_flow()
+    view_cube_flow()
+    walk_flow()
+    brand_flow()
+    environments_flow()
+    notices_flow()
+    pick_flow()
+    view_tools_flow()
+    missing_step_flow()
+    small_fixes_flow()
+    copy_array_flow()
+    help_flow()
+    image_flow()
+    qt_words_flow()
+    element_hatches_flow()
+    pattern_align_flow()
+    unjoin_flow()
+    layer_functions_flow()
+    masonry_flow()
+    concrete_walls_flow()
+    render_flow()
+    render_setup_flow()
+    facade_walls_flow()
+    masonry_type_flow()
+    gltf_flow()
+    presentation_export_flow()
+    presentation_panel_flow()
+    camera_move_flow()
+    scene_sun_flow()
+    rooms_walk_flow()
+    presentation_package_flow()
+    panorama_flow()
+    line_loops_flow()
+    free_drawing_flow()
+    architecture_tools_flow()
+    study_themes_flow()
+    model_import_flow()
+    wall_corners_flow()
+    wall_continue_flow()
+    quick_edit_flow()
+    roof_blocks_double_flow()
+    room_program_flow()
+    section_edit_flow()
+    door_plan_flow()
+    symbol_styles_flow()
+    wall_relations_flow()
+    theme_flow()
+    theme_dialogs_flow()
+    dark_views_flow()
+    context_bar_flow()
+    context_panel_flow()
+    modules_flow()
+    properties_panel_flow()
+    footer_flow()
+    many_properties_flow()
+    placement_keys_flow()
+    types_flow()
+    materials_flow()
+    typical_flow()
+    grid_settings_flow()
+    columns_on_grid_flow()
+    footings_under_flow()
+    beams_between_flow()
+    propose_structure_flow()
+    rooms_flow()
+    slabs_flow()
+    ramps_flow()
+    wall_loops_flow()
+    curved_walls_flow()
+    curved_corner_flow()
+    wall_edit_flow()
+    wall_merge_flow()
+    attach_top_flow()
+    align_flow()
+    mirror_flow()
+    wall_profile_flow()
+    wall_profile_curves_flow()
+    wall_profile_direct_flow()
+    openings_kit_flow()
+    roofs_flow()
+    attach_roof_flow()
+    roof_parts_flow()
+    stairs_flow()
+    railings_flow()
+    spiral_stair_flow()
+    curtain_wall_flow()
+    ceiling_flow()
+    finishes_flow()
+    draft_flow()
+    edit_drawings_flow()
+    level_mark_flow()
+    view_marks_flow()
+    chain_angle_dims_flow()
+    auto_dims_flow()
+    dim_style_flow()
+    dim_types_flow()
+    exterior_dims_flow()            # (0.399; 0.400: and the inside ones)
+    revit_dims_flow()               # (0.401)
+    edit_dims_flow()                # (0.402)
+    dim_drag_flow()                 # (0.405)
+    keynotes_flow()
+    room_schedules_flow()
+    graphic_styles_flow()
+    view_styles_flow()
+    screen_hatches_flow()
+    pattern_buttons_flow()
+    joins_flow()
+    sheets_wizard_flow()
+    sheet_sets_flow()
+    dxf_flow()
+    view_formats_flow()
+    title_templates_flow()
+    own_schedules_flow()
+    schedule_on_sheet_flow()
+    detail_views_flow()
+    view3d_on_sheet_flow()
+    duct_in_plan_flow()
+    drainage_flow()
+    tees_flow()
+    pipe_drop_flow()
+    air_terminals_flow()
+    hvac_units_flow()
+    duct_s_flow()
+    appliance_network_flow()
+    branch_obstacle_flow()
+    wye_flow()
+    slope_paper_flow()
+    contour_labels_flow()
+    batters_flow()
+    edit_platform_flow()
+    terrain_ramp_flow()
+    offset_l_flow()
+    scale_centre_flow()
+    images_paper_flow()
+    facade_image_flow()
+    crop_image_flow()
+    curved_cad_walls_flow()
+    cad_columns_flow()
+    sized_openings_flow()
+    scan_storeys_flow()
+    scan_curved_flow()
+    cloud_splat_flow()
+    slab_use_flow()
+    moments_flow()
+    results_ifc_flow()
+    second_order_flow()
+    shells_flow()
+    slab_top_bars_flow()
+    context_bar_steady_flow()
+    two_layers_flow()
+    shaped_columns_flow()
+    foundations_flow()
+    curtailment_flow()
+    splices_flow()
+    typical_rebars_flow()
+    refrigerant_flow()
+    fixtures_flow()
+    systems_flow()
+    electrical_flow()
+    circuits_flow()
+    electrical_proposal_flow()
+    conduits_flow()
+    electrical_check_flow()
+    water_proposal_flow()
+    clashes_flow()
+    circle_flow()
+    arc_flow()
+    offset_flow()
+    faces_alone_flow()
+    many_faces_flow()
+    scale_flow()
+    background_image_flow()
+    terrain_flow()
+    terrain_dxf_flow()
+    platform_flow()
+    cad_link_flow()
+    dwg_link_flow()
+    cad_walls_flow()
+    cad_model_flow()
+    cloud_link_flow()
+    laz_e57_flow()
+    scan_model_flow()
+    structure_check_flow()
+    structure_actions_flow()
+    structure_analysis_flow()
+    structure_design_flow()
+    structure_report_flow()
+    rebar_drawings_flow()
+    formwork_below_flow()
+    rebar_details_flow()
+    labels_by_hand_flow()
+    cabinets_flow()
+    kitchen_flow()
+    kitchen_corners_flow()
+    sliding_doors_flow()
+    oven_column_flow()
+    front_finish_flow()
+    division_drag_flow()
+    own_profile_flow()
+    keynote_table_flow()
+    combined_footing_flow()
+    roof_profile_flow()
+    curved_curtain_flow()
+    cut_outline_flow()
+    stair_waist_flow()
+    railing_types_flow()
+    railing_type_editor_flow()
+    stair_railings_flow()
+    railing_extensions_flow()
+    block_roof_flow()
+    roof_block_editor_flow()
+    roof_block_grips_flow()
+    roof_edges_flow()
+    ifc_data_flow()
+    external_flow()
+    ai_link_flow()
+    ai_install_flow()
+    type_data_flow()
+    missing_data_flow()
+    carpentry_flow()
+    roof_type_flow()
+    tiles_flow()
+    panels_flow()
+    own_tile_flow()
+    joinery_flow()
+    joinery_generator_flow()
+    joinery_finish_flow()
+    joinery_drawings_flow()
+    joinery_arch_flow()
+    joinery_louvres_flow()
+    joinery_arch_leaves_flow()
+    windows_outward_flow()
+    ribbon_wall_modifiers_flow()
+    wall_flip_join_flow()
+    split_gap_trim_flow()
+    wall_joins_flow()
+    caixilho_studio_flow()
+    caixilho_equal_flow()
+    attach_base_flow()
+    wall_opening_flow()
+    wall_sweep_flow()
+    wall_reveal_flow()
+    appliances_flow()
+    patterns_flow()
+    perforated_panel_flow()           # (0.389)
+    organic_roof_flow()               # (0.390)
+    paint_flow()                      # (0.391)
+    param_surface_flow()              # (0.395)
+    properties_layout_flow()          # (0.396)
+    profile_flow()
+    wavy_flow()
+    splat_flow()
+    curved_openings_flow()
+    finish_layers_flow()
+    l_roof_flow()
+    slanted_roof_flow()
+    barrel_roof_flow()
+    curtain_panel_flow()
+    curtain_embed_flow()
+    storeys_and_faces()
+    angles_move_rotate()
+    copies()
+    joined_walls()
+    components()
+    groups()
+    background_open()
+    project_tree_flow()
+    far_from_origin()
+    plan_flow()
+    schedules_flow()
+    views_flow()
+    view_tabs_flow()
+    library_flow()
+    sheets_flow()
+    dimensions_flow()
+    rules_flow()
+    ids_flow()
+    templates_flow()
+    view_properties_flow()
+    notes_flow()
+    phases_flow()
+    team_flow()
+    complete_house_flow()             # (0.394: the «Casa do Farol», all the program's parts in one house)
+    start_page_flow()                 # (0.387: last — it starts a new project, the flows before use the house)
+
+
+def team_flow():
+    """Team work on a shared folder (Phase 4, step 6): the project shared; another person (Rui,
+    on "his computer") adds a wall; Synchronise brings it; a wall Rui reserved cannot be changed."""
+    import shutil
+    from arqbim.model import sharing
+    from arqbim.model import bim as bim_actions
+    from arqbim.ifc import catalog
+    from arqbim.model.document import Document
+    root = os.path.join(OUT, "equipa")
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(os.path.join(root, "servidor"))
+    shutil.rmtree(os.environ["ARQBIM_SHARE_DIR"], ignore_errors=True)
+    win.save_to(os.path.join(root, "casa_equipa.ifc"))               # (a project of its own for this)
+    win.share_project(os.path.join(root, "servidor"))                # File ▸ Team ▸ Share the project in a folder
+    pump(800)
+    central = sharing.central_of(doc.path)
+    check("equipa_partilhar", central is not None and "(partilhado)" in win.windowTitle()
+          and win.share_label.isVisible(), win.windowTitle())
+
+    mine = bim_actions.add_wall(doc, (1.0, 1.0, 0.0), (4.0, 1.0, 0.0), catalog.BY_KEY["parede_alv_15"])
+    pump(300)
+    reserved = sharing.Reservations(central).read().get(mine, ("?",))[0] == win_author()
+
+    own_dir = os.environ["ARQBIM_SHARE_DIR"]                         # Rui, on his computer
+    os.environ["ARQBIM_SHARE_DIR"] = os.path.join(root, "pc_rui")
+    try:
+        rui_local = sharing.open_shared(central)
+        rui = Document()
+        rui.open(rui_local)
+        theirs = bim_actions.add_wall(rui, (1.0, 3.0, 0.0), (4.0, 3.0, 0.0), catalog.BY_KEY["parede_alv_15"])
+        rui.save(rui_local)
+        sharing.sync(rui_local, "rui")
+    finally:
+        os.environ["ARQBIM_SHARE_DIR"] = own_dir
+    state = _key_state()
+    key(Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)   # Synchronise
+    pump(1500)
+    msg = win.last_message
+    check("equipa_sincronizar", reserved and doc.get(mine) is not None and doc.get(theirs) is not None
+          and "chegaram alterações" in msg, "reservada={} {} [{}]".format(reserved, msg, state))
+
+    wall = next(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall" and o.id not in (mine, theirs))
+    sharing.Reservations(central).take("rui", [wall])                # Rui is changing that one
+    before = doc.ifc.wall_params(wall)[1]
+    win._on_property_edit("height", wall, before + 0.5)              # (Properties ▸ Height)
+    pump(500)
+    msg = win.last_message
+    check("equipa_reservado_por_outro", abs(doc.ifc.wall_params(wall)[1] - before) < 1e-9 and "rui" in msg, msg)
+    bim_actions.add_wall(doc, (1.0, 2.0, 0.0), (4.0, 2.0, 0.0), catalog.BY_KEY["parede_alv_15"])
+    pump(200)
+    state = _key_state()
+    key(Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)   # nothing new there
+    pump(1000)
+    msg = win.last_message
+    check("equipa_sincronizar_mantem_desfazer", doc.can_undo() and "nada novo da equipa" in msg,
+          "{} [{}]".format(msg, state))
+
+
+def _key_state():
+    """(diagnosis) Where a key goes now: the focus, the active window, an open modal dialog, the discipline."""
+    app = QtWidgets.QApplication
+    name = lambda w: type(w).__name__ if w is not None else None                     # noqa: E731
+    return "foco={} ativa={} modal={} disc={}".format(name(app.focusWidget()), name(app.activeWindow()),
+                                                      name(app.activeModalWidget()), win.discipline)
+
+
+def win_author():
+    from arqbim.ui.main_window import _author
+    return _author()
+
+
+def phases_flow():
+    """Phases (Phase 4, step 5): a wall to demolish (BIM ▸ Phase of the selection); the renovation
+    templates made at once; the proposal plan hides it, the changes plan shows it yellow."""
+    from arqbim.model import graphic_rules as rules
+    wall = next(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall")
+    storey = doc.get(wall).storey or doc.storeys()[0][0]
+    vp.set_selection({wall})
+    pump(200)
+    win.phase_actions["DEMOLISH"].trigger()                          # BIM ▸ Phase of the selection ▸ To demolish
+    pump(300)
+    combo = win.props.editors.get("status")
+    check("fase_demolir", doc.status_of(wall) == "DEMOLISH" and combo is not None
+          and combo.currentText() == "A demolir", None if combo is None else combo.currentText())
+
+    def fill_in():
+        dialog = getattr(win, "_templates_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        button = next(b for b in dialog.findChildren(QtWidgets.QPushButton) if b.text() == "Criar modelos de alterações")
+        QtTest.QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        dialog.accept()
+
+    win._templates_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.act_templates.trigger()
+    pump(300)
+    names = [tpl.name for tpl in doc.templates]
+    proposal = next((tpl for tpl in doc.templates if tpl.phases == "proposal"), None)
+    changes = next((tpl for tpl in doc.templates if tpl.rule == ("status",)), None)
+    win.set_active_storey(storey)
+    win.template_action("assign", ("plan", storey), proposal.uid if proposal else None)
+    key(Qt.Key.Key_F4)
+    pump(600)
+    hidden = not vp.is_shown(doc.get(wall))
+    win.template_action("assign", ("plan", storey), changes.uid if changes else None)
+    pump(600)
+    shot("54_alteracoes.png")
+    yellow = vp.colours.get(wall) == rules.PHASE_COLOURS["DEMOLISH"]
+    check("fases_proposta_e_alteracoes", len(names) == 3 and hidden and yellow and vp.is_shown(doc.get(wall)),
+          "{} escondida={} amarela={}".format(names, hidden, yellow))
+    key(Qt.Key.Key_F8)
+    pump(300)
+    for _ in range(4):                                               # the assignments, the templates, the phase
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    check("fases_desfazer", doc.status_of(wall) is None and doc.templates == [] and vp.colours == {},
+          "{} {}".format(doc.status_of(wall), len(doc.templates)))
+
+
+def notes_flow():
+    """Coordination notes (Phase 4, step 4): a note made from the view with a wall selected; back
+    to it from elsewhere; a comment; closed; exported to BCF and imported again."""
+    wall = next(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall")
+    vp.set_view("iso")
+    vp.set_selection({wall})
+    pump(300)
+    position = vp.camera_position()
+
+    def fill_in():
+        dialog = getattr(win, "_note_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        dialog.findChild(QtWidgets.QLineEdit).setText("Parede a confirmar")
+        dialog.findChild(QtWidgets.QPlainTextEdit).setPlainText("Ver com o cliente se fica.")
+        dialog.accept()
+
+    win._note_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.act_new_note.trigger()                                       # BIM ▸ New coordination note…
+    pump(400)
+    panel = win.notes_panel
+    note = doc.notes[-1] if doc.notes else None
+    check("nota_nova", note is not None and note.title == "Parede a confirmar" and note.selected == [wall]
+          and note.snapshot and note.snapshot[:4] == b"\x89PNG" and panel.isVisible()
+          and "Parede a confirmar" in panel.text(), panel.text())
+    vp.set_view("top")                                               # look elsewhere, nothing selected
+    vp.set_selection(set())
+    pump(200)
+    QtTest.QTest.mouseClick(panel.buttons["go"], Qt.MouseButton.LeftButton)   # Go to the view
+    pump(400)
+    check("nota_ir_para_a_vista", np.allclose(vp.camera_position(), position, atol=1e-3) and vp.selection == {wall},
+          "{} {}".format(vp.camera_position(), position))
+    shot("53_notas.png")
+    panel.comment.setText("Fica, confirmado.")
+    QtTest.QTest.keyClick(panel.comment, Qt.Key.Key_Return)
+    pump(200)
+    QtTest.QTest.mouseClick(panel.buttons["toggle"], Qt.MouseButton.LeftButton)   # Close
+    pump(300)
+    path = os.path.join(OUT, "notas.bcfzip")
+    win.export_notes(path)                                           # (Export BCF… with this file)
+    pump(200)
+    win.import_notes(path)                                           # the same notes back: replaced, not doubled
+    pump(300)
+    note = doc.notes[-1]
+    check("nota_comentar_fechar_bcf", note.closed and note.comments[-1][2] == "Fica, confirmado."
+          and os.path.exists(path) and len([n for n in doc.notes if n.title == "Parede a confirmar"]) == 1
+          and "Fechada" in panel.text(), panel.text())
+    panel.hide()
+    pump(100)
+
+
+def templates_flow():
+    """View templates (Phase 4, step 3): a template that hides the walls and colours by class,
+    given to the plan of the ground storey; only that view follows it."""
+    storey = doc.storeys()[0][0]
+    role = Qt.ItemDataRole.UserRole
+
+    def fill_in():
+        dialog = getattr(win, "_templates_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        QtTest.QTest.mouseClick(dialog.findChildren(QtWidgets.QPushButton)[0], Qt.MouseButton.LeftButton)   # New
+        dialog.name.setText("Sem paredes")
+        dialog.name.textEdited.emit("Sem paredes")
+        for k in range(dialog.visible.count()):
+            if dialog.visible.item(k).data(role) == "IfcWall":
+                dialog.visible.item(k).setCheckState(Qt.CheckState.Unchecked)
+        dialog.rule.setCurrentIndex(dialog.rule.findData("class"))
+        dialog.rule.activated.emit(dialog.rule.currentIndex())
+        dialog.accept()
+
+    win._templates_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.act_templates.trigger()                                      # View ▸ View templates…
+    pump(300)
+    tpl = doc.templates[-1] if doc.templates else None
+    check("modelo_de_vista_criar", tpl is not None and tpl.name == "Sem paredes" and tpl.hidden == ["IfcWall"]
+          and tpl.rule == ("class",), None if tpl is None else (tpl.name, tpl.hidden, tpl.rule))
+    win.template_action("assign", ("plan", storey), tpl.uid)         # (right-click the plan ▸ View template)
+    pump(300)
+    win.tree_panel.raise_()
+    pump(300)
+    listed = "· Sem paredes" in win.tree_panel.text()
+    win.set_active_storey(storey)
+    key(Qt.Key.Key_F4)
+    pump(600)
+    walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    shot("52_modelo_de_vista.png")
+    check("modelo_na_planta", listed and vp.plan and walls and all(not vp.is_shown(doc.get(w)) for w in walls)
+          and len(vp.colours) > 0 and win.rules_panel.rule.currentText() == "Classe IFC",
+          "no painel={} paredes escondidas={} cores={}".format(listed, sum(not vp.is_shown(doc.get(w)) for w in walls),
+                                                            len(vp.colours)))
+    key(Qt.Key.Key_F8)
+    pump(400)
+    check("modelo_so_na_sua_vista", all(vp.is_shown(doc.get(w)) for w in walls) and vp.colours == {},
+          len(vp.colours))
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)           # undo the assignment, then the template
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("modelo_desfazer", doc.templates == [] and doc.view_templates == {}, len(doc.templates))
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def view_properties_flow():
+    """0.59: with nothing selected, the Properties panel shows the view shown — the 3D view's, the
+    plan's (cut height, categories seen, template) — each view its own; undone with Ctrl+Z."""
+    from arqbim.model.view_templates import ViewTemplate
+    storey = doc.storeys()[0][0]
+    plan = ("plan", storey)
+    walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    win.props.show()
+    win.props.raise_()
+    key(Qt.Key.Key_F8)                                               # the 3D view
+    pump(400)
+    vp.set_selection(set())
+    pump(300)
+    text = win.props.text()
+    check("propriedades_vista_3d", "Vista: 3D" in text and "Tipo de vista: Vista 3D" in text
+          and "Altura de corte" not in text and "view_hidden" in win.props.editors, "\n" + text)
+    win.set_active_storey(storey)
+    key(Qt.Key.Key_F4)                                               # the plan
+    pump(600)
+    text = win.props.text()
+    check("propriedades_vista_planta", "Tipo de vista: Planta do pavimento" in text and "Altura de corte" in text
+          and "Escala nas folhas: Automática" in text, "\n" + text)
+    panel_set("view_cut", "1,5")
+    pump(300)
+    status = win.last_message
+    check("planta_altura_de_corte", doc.view_settings(plan).cut_height == 1.5 and abs(vp.cut_height - 1.5) < 1e-9
+          and "Ctrl+Z" in status, "corte={} ecrã={} msg={!r}".format(doc.view_settings(plan).cut_height,
+                                                                     vp.cut_height, status[:60]))
+
+    def fill_in():
+        dialog = getattr(win.props, "_visibility_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        dialog.set_hidden(["IfcWall"])
+        dialog.accept()
+
+    a, b, _t = doc.ifc.wall_axis(walls[0])
+    on_wall = a + (b - a) * 0.05 + np.array((0.0, 0.0, 0.6))        # (near the corner: no door or window there)
+    dark = darkest(on_wall)
+    win.props._visibility_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.props.editors["view_hidden"].click()                         # Visibility…: walls unticked
+    pump(500)
+    light = pixel(on_wall)
+    text = win.props.text().replace("\n", " ")
+    check("planta_visibilidade", walls and all(not vp.is_shown(doc.get(w)) for w in walls)
+          and doc.view_settings(plan).hidden == frozenset({"IfcWall"}) and sum(light) > sum(dark) + 150
+          and "Categorias: 1 escondida(s): Paredes" in text,
+          "cor antes={} depois={}\n{}".format(dark, light, text))
+    shot("53_propriedades_da_planta.png")
+    key(Qt.Key.Key_F8)
+    pump(400)
+    check("vista_3d_tem_as_suas", all(vp.is_shown(doc.get(w)) for w in walls) and "Vista: 3D" in win.props.text(),
+          sum(not vp.is_shown(doc.get(w)) for w in walls))
+    doc.set_templates([ViewTemplate("Geral", cut_height=1.0)])
+    key(Qt.Key.Key_F4)
+    pump(600)
+    combo = win.props.editors["view_template"]
+    i = combo.findText("Geral")
+    combo.setCurrentIndex(i)
+    combo.activated.emit(i)                                          # View template: Geral
+    pump(600)
+    text = win.props.text().replace("\n", " ")
+    check("planta_com_modelo", "vêm do modelo «Geral»" in text and abs(vp.cut_height - 1.0) < 1e-9
+          and all(vp.is_shown(doc.get(w)) for w in walls) and "view_cut" not in win.props.editors, "\n" + text)
+    shot("53b_planta_com_modelo.png")
+    for _ in range(4):                       # the template given, the templates, the walls hidden, the cut height
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(600)
+    check("propriedades_vista_desfazer", plan not in doc.view_props and doc.templates == []
+          and abs(vp.cut_height - 1.2) < 1e-9 and all(vp.is_shown(doc.get(w)) for w in walls),
+          "props={} corte={}".format(doc.view_props.get(plan), vp.cut_height))
+    key(Qt.Key.Key_F8)
+    pump(400)
+
+    # 0.63: the 3D view's look — hidden lines, x-ray, axonometric, no edges, no grid; a plan keeps its own
+    vp.set_selection(set())
+    pump(300)
+
+    def choose(editor, value):
+        combo = win.props.editors[editor]
+        k = combo.findData(value)
+        combo.setCurrentIndex(k)
+        combo.activated.emit(k)
+        pump(500)
+
+    slab = next(o for o in objects() if o.is_bim and o.ifc_class == "IfcSlab")
+    top = slab.mesh.bounds()
+    on_slab = (top[0] + top[1]) / 2 * np.array((1, 1, 0)) + np.array((0, 0, top[1][2]))
+    choose("view_style", "hidden")
+    hidden = vp.bim.style == "hidden" and all(b.mesh is None or b.mesh.material is vp.bim.face_materials["hidden"]
+                                              for b in vp.bim.batches) and min(pixel(on_slab)) >= 250
+    shot("57_3d_linhas_escondidas.png")
+    choose("view_style", "xray")
+    choose("view_axonometric", True)
+    axonometric = vp.is_ortho()
+    win.props.editors["view_edges"].setChecked(False)
+    pump(500)
+    win.props.editors["view_grid"].setChecked(False)
+    pump(500)
+    shot("58_3d_raio_x_axonometria.png")
+    no_edges = all(b.lines is None or not b.lines.visible for b in vp.bim.batches) and not vp.grid.visible
+    key(Qt.Key.Key_F4)
+    pump(600)
+    plan_own = vp.bim.style == "shaded" and vp.bim.edges
+    key(Qt.Key.Key_F8)
+    pump(600)
+    back = vp.bim.style == "xray" and vp.is_ortho() and not vp.grid.visible
+    check("estilo_do_3d", hidden and axonometric and no_edges and plan_own and back,
+          "escondidas={} axo={} sem_arestas={} planta={} volta={} props={}".format(
+              hidden, axonometric, no_edges, plan_own, back, doc.view_props.get(("3d",))))
+    for _ in range(5):                                 # grid, edges, axonometric, x-ray, hidden lines
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(600)
+    check("estilo_do_3d_desfazer", ("3d",) not in doc.view_props and vp.bim.style == "shaded" and not vp.is_ortho()
+          and vp.grid.visible, "props={} estilo={}".format(doc.view_props.get(("3d",)), vp.bim.style))
+
+    # 0.64: the section box in the 3D view's properties (typed), a named 3D view with its own look
+    win.props.editors["view_box_on"].setChecked(True)
+    pump(500)
+    panel_set(("view_box", 2), "0; 1,5")                # only up to 1,50 m
+    box = vp.box
+    check("caixa_de_corte_nas_propriedades", box is not None and abs(box[1][2] - 1.5) < 1e-9 and abs(box[0][2]) < 1e-9
+          and doc.view_settings(("3d",)).box is not None and win.act_box.isChecked(),
+          "caixa={}".format(None if box is None else np.round(np.array(box), 3).tolist()))
+    key3d = win.new_view3d()                            # View ▸ New 3D view: this one, kept under a name
+    pump(500)
+    choose("view_style", "hidden")
+    panel_set("view_name", "Fachada")
+    named = (win.views.text(), vp.bim.style, vp.box is not None)
+    shot("59_vista_3d_com_nome.png")
+    win.open_view("3d", None)                            # the 3D view: its own look, its box
+    pump(500)
+    plain = (vp.bim.style, vp.box is not None)
+    win.tree_panel.raise_()
+    pump(300)
+    listed = "Fachada" in win.tree_panel.text()
+    win.open_view("3d", key3d[1])
+    pump(500)
+    check("vista_3d_com_nome", "Fachada" in named[0] and named[1] == "hidden" and named[2] and plain == ("shaded", True)
+          and listed and vp.bim.style == "hidden", "abas={} com_nome={} 3D={} no_painel={}".format(
+              named[0], named[1:], plain, listed))
+    for _ in range(5):                                   # name, style, new view, box face, box
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(600)
+    check("vistas_3d_desfazer", doc.views3d == [] and doc.view_settings(("3d",)).box is None and vp.box is None
+          and "Fachada" not in win.views.text(), "vistas={} abas={}".format(doc.views3d, win.views.text()))
+
+    # 0.65: the plan's crop region (half the house: a wall beyond it is no longer drawn) and its underlay
+    win.open_view("plan", storey)
+    pump(600)
+    vp.set_selection(set())
+    pump(300)
+    lo, hi = vp.bounds()
+    middle_x = float(lo[0] + hi[0]) / 2
+    far_wall = max(walls, key=lambda w: float(sum(doc.get(w).mesh.bounds())[0]))   # (its middle farthest right)
+    fb = doc.get(far_wall).mesh.bounds()
+    on_far = (np.array(fb[0]) + np.array(fb[1])) / 2 * np.array((1, 1, 0)) + np.array((0, 0, 0.6))
+    before = pixel(on_far)
+    win.props.editors["view_crop_on"].setChecked(True)
+    pump(500)
+    panel_set(("view_crop", 0), "{}; {}".format(str(round(float(lo[0]) - 0.5, 3)).replace(".", ","),
+                                               str(round(middle_x, 3)).replace(".", ",")))
+    after = pixel(on_far)
+    crop = doc.view_settings(plan).crop
+    check("planta_regiao_de_recorte", crop is not None and abs(crop[2] - round(middle_x, 3)) < 1e-6
+          and sum(after) > sum(before) + 150 and vp.crop is not None,
+          "recorte={} cor antes={} depois={}".format(crop, before, after))
+    shot("60_planta_recortada.png")
+    upper = win.new_storey()                            # a storey above; its plan with the one below in grey
+    win.open_view("plan", upper)
+    pump(600)
+    vp.set_selection(set())
+    pump(300)
+    choose("view_underlay", "below")
+    pump(400)
+    under = vp._underlay is not None and win._underlay_shown == (("plan", upper), "below")
+    shot("61_planta_com_subjacente.png")
+    check("planta_subjacente", under and doc.view_settings(("plan", upper)).underlay == "below",
+          "subjacente={} ecrã={}".format(doc.view_settings(("plan", upper)).underlay, win._underlay_shown))
+    for _ in range(8):                                   # back: the underlay, the storey, the crop
+        if len(doc.storeys()) == 1 and plan not in doc.view_props:
+            break
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(300)
+    win.set_active_storey(storey)
+    key(Qt.Key.Key_F8)
+    pump(400)
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def ids_flow():
+    """IDS requirements (Phase 4, step 2): the example IDS on the open house; a failing door is
+    picked from the panel."""
+    panel = win.ids_panel
+    win.check_ids(os.path.join(ROOT, "exemplos", "requisitos_exemplo.ids"))     # (BIM ▸ Check against IDS…)
+    pump(500)
+    text = panel.text()
+    doors = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"]
+    check("ids_verificar", panel.isVisible() and "✗  Portas: resistência ao fogo" in text
+          and "Falta" in text and "requisito(s) cumprido(s)" in panel.summary.text(), "\n" + text)
+    shot("51_ids.png")
+    req = next(panel.tree.topLevelItem(k) for k in range(panel.tree.topLevelItemCount())
+               if "Portas" in panel.tree.topLevelItem(k).text(0))
+    child = req.child(0)
+    panel.tree.scrollToItem(child)
+    rect = panel.tree.visualItemRect(child)
+    QtTest.QTest.mouseClick(panel.tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                            rect.center())
+    pump(400)
+    check("ids_clicar_seleciona", len(vp.selection) == 1 and next(iter(vp.selection)) in doors,
+          "{} {}".format(len(vp.selection), child.text(0)))
+
+    def fill_in():                                                   # + Property… ▸ Pset_DoorCommon ▸ FireRating
+        dialog = getattr(win.props, "_add_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        dialog.select("Pset_DoorCommon", "FireRating")
+        dialog.text.setText("EI30")
+        dialog.accept()
+
+    win.props._add_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    QtTest.QTest.mouseClick(win.props.editors["add_property"], Qt.MouseButton.LeftButton)
+    pump(300)
+    QtTest.QTest.mouseClick(panel.again, Qt.MouseButton.LeftButton)  # Check again
+    pump(500)
+    check("ids_acrescentar_propriedade_e_verificar", "falha em 1 de 2" in panel.text(), "\n" + panel.text())
+    panel.hide()
+    pump(100)
+
+
+def rules_flow():
+    """Graphic rules (Phase 4, step 1): colour by IFC class; a legend line selects those elements;
+    back to the usual colours."""
+    panel = win.rules_panel
+    panel.raise_()
+    pump(300)
+    panel.rule.setCurrentIndex(panel.rule.findText("Classe IFC"))    # Colour by: IFC class
+    panel.rule.activated.emit(panel.rule.currentIndex())
+    pump(600)
+    walls = sorted(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall")
+    text = panel.text()
+    check("regras_colorir_por_classe", "IfcWall ({})".format(len(walls)) in text and walls[0] in vp.colours
+          and vp.colours[walls[0]] != vp.colours.get(next(o.id for o in objects() if o.is_bim
+                                                           and o.ifc_class != "IfcWall")), "\n" + text)
+    shot("50_regras_graficas.png")
+    row = next(k for k in range(panel.legend.topLevelItemCount())
+               if panel.legend.topLevelItem(k).text(0) == "IfcWall")
+    rect = panel.legend.visualItemRect(panel.legend.topLevelItem(row))
+    QtTest.QTest.mouseClick(panel.legend.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                            rect.center())
+    pump(300)
+    check("regras_legenda_seleciona", vp.selection == {w for w in walls if vp.is_shown(doc.get(w))},
+          "{} de {}".format(len(vp.selection), len(walls)))
+    panel.rule.setCurrentIndex(0)                                    # Nothing (usual colours)
+    panel.rule.activated.emit(0)
+    pump(400)
+    check("regras_voltar_as_cores", vp.colours == {} and panel.text() == "", len(vp.colours))
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def dimensions_flow():
+    """Cotas (Phase 3, step 14): the Dimension tool (C) in the plan — two points on a wall, then the
+    line; the dimension is shown in the plan only, picked with a click and removed with Delete."""
+    wall = next(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall")
+    a, b, thick = doc.ifc.wall_axis(wall)
+    along = (b - a) / np.linalg.norm(b - a)
+    out = np.array((along[1], -along[0], 0.0))                   # (one side of the wall)
+    level = doc.work_level()
+    key(Qt.Key.Key_F4)
+    pump(500)
+    key(Qt.Key.Key_C)
+    pump(200)
+    before = len(doc.dimensions)
+    for p in (a + out * thick / 2, b + out * thick / 2, (a + b) / 2 + out * 1.2):
+        move(near((p[0], p[1], level)), 3)
+        pump(100)
+        click()
+        pump(200)
+    pump(300)
+    new = doc.dimensions[-1] if len(doc.dimensions) > before else None
+    shot("48_cota_na_planta.png")
+    check("cota_ferramenta_c", win.tool.name == "dimension" and new is not None
+          and new.view == ("plan", doc.active_storey) and new.refs[0] is not None and len(vp._dim_objects) >= 2,
+          "cotas={} vista={} presa={}".format(len(doc.dimensions), None if new is None else new.view,
+                                             None if new is None else new.refs[0] is not None))
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Space)                                        # Select
+    pump(200)
+    if new is not None:
+        ends = vp._dim_lines[vp._dim_owner.index(new)]
+        move(vp.project((ends[0] + ends[1]) / 2), 3)
+        click()
+        pump(200)
+    picked = vp.selected_dims == {new}
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    gone = new not in doc.dimensions
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("cota_selecionar_apagar_desfazer", picked and gone and new in doc.dimensions,
+          "escolhida={} apagada={} voltou={}".format(picked, gone, new in doc.dimensions))
+    vp.set_selection(set())                                      # View ▸ Dimension the walls (all of the storey)
+    before = len(doc.dimensions)
+    win.act_dimension_walls.trigger()
+    pump(400)
+    made = [d for d in doc.dimensions if d.tag]
+    again_count = len(doc.dimensions)
+    win.act_dimension_walls.trigger()                            # again: replaced, not doubled
+    pump(300)
+    shot("49_cotas_automaticas.png")
+    check("cotar_paredes_automatico", len(made) >= 8 and len(doc.dimensions) == again_count
+          and "cotada" in win.last_message,
+          "antes={} depois={} outra_vez={} msg={}".format(before, again_count, len(doc.dimensions),
+                                                         win.last_message[:60]))
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    key(Qt.Key.Key_F8)
+    pump(300)
+    check("cota_so_na_sua_vista", not vp._dim_objects, len(vp._dim_objects))
+
+
+def sheets_flow():
+    """Sheets (Phase 3, step 8): views put on a sheet from the Project panel's right-click menu,
+    laid out at one scale, dragged, a scale chosen, printed (one sheet, then all)."""
+    from arqbim.ui import pdf
+    panel = win.tree_panel
+    panel.raise_()
+    pump(300)
+
+    def put_on_sheet(key, sheet_text):                # right click ▸ Put on sheet ▸ <sheet>
+        menu = panel.menu_for(key, panel.item_for(key))
+        put = next(a for a in menu.actions() if a.text() == "Pôr na folha").menu()
+        next(a for a in put.actions() if a.text() == sheet_text).trigger()
+        pump(800)
+
+    storey = doc.storeys()[0][0]
+    put_on_sheet(("view", "plan", storey), "Nova folha")
+    sw = win.sheet_window
+    check("folha_nova_com_a_planta", sw is not None and sw.isVisible() and len(doc.sheets) == 1
+          and "Planta" in sw.text(), sw.text() if sw else None)
+    put_on_sheet(("view", "section", 0), "Folha 1")
+    put_on_sheet(("view", "elevation", "S"), "Folha 1")
+    frames = sw.frames
+    check("folha_tres_vistas_numa_escala", len(frames) == 3 and all(frames) and len({f.scale for f in frames}) == 1,
+          "\n" + sw.text())
+    text = panel.text()
+    check("folha_no_painel", "Folhas (1)" in text and "Folha 1" in text and "Alçado Sul" in text,
+          "\n" + "\n".join(ln for ln in text.splitlines() if "Folha" in ln or "Alçado Sul" in ln))
+    sw.grab().save(os.path.join(OUT, "47_folha.png"))
+
+    canvas = sw.canvas                                # drag the elevation 40 pixels down
+    f = frames[2]
+    s, x0, y0 = canvas.fit()
+    start = QtCore.QPoint(int(x0 + f.centre[0] * s), int(y0 + f.centre[1] * s))
+    end = start + QtCore.QPoint(0, 40)
+    QtTest.QTest.mousePress(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+    for k in range(1, 5):
+        move_event(canvas, start + QtCore.QPoint(0, 10 * k), Qt.MouseButton.LeftButton)
+        pump(30)
+    QtTest.QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+    pump(400)
+    at = doc.sheets[0].views[2].at
+    check("folha_arrastar_vista", at is not None and abs(at[1] - (f.centre[1] + 40 / s)) < 1.5
+          and sw.frames[2].centre == at, "{} -> {}".format(f.centre, at))
+    _active()
+    QtTest.QTest.keyClick(sw.canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)   # in the sheet's tab
+    pump(400)
+    undone = doc.sheets[0].views[2].at is None and sw.isVisible()
+    _active()
+    QtTest.QTest.keyClick(sw.canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    check("folha_desfazer_e_refazer", undone and doc.sheets[0].views[2].at == at and sw.frames[2].centre == at,
+          "desfeito={} refeito={}".format(undone, doc.sheets[0].views[2].at))
+    sw.scale.setCurrentIndex(sw.scale.findData(100))  # (the elevation is still picked) its scale: 1:100
+    sw.scale.activated.emit(sw.scale.currentIndex())
+    pump(400)
+    check("folha_escala_da_vista", sw.frames[2].scale == 100 and doc.sheets[0].views[2].scale == 100,
+          "\n" + sw.text())
+
+    wall = next(o for o in objects() if o.is_bim and o.ifc_class == "IfcWall")    # the model changes
+    from arqbim.model import bim as bim_actions
+    from arqbim.core.transform import translation
+    bim_actions.transform_objects(doc, [wall.id], translation((0.0, 0.0, 0.0001)), "Mover")
+    pump(300)
+    stale = "mudou" in sw.refresh_button.text()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    QtTest.QTest.mouseClick(sw.refresh_button, Qt.MouseButton.LeftButton)
+    pump(800)
+    check("folha_desatualizada_e_atualizar", stale and "mudou" not in sw.refresh_button.text(),
+          sw.refresh_button.text())
+
+    path = os.path.join(OUT, "folha_1.pdf")
+    if os.path.exists(path):
+        os.remove(path)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    QtTest.QTest.mouseClick(sw.export, Qt.MouseButton.LeftButton)
+    pump(600)
+    pages = pdf.page_count(path) if os.path.exists(path) else 0
+    check("folha_em_pdf", pages == 1 and os.path.getsize(path) > 5000, win.last_message)
+
+    from arqbim.ui import title_block_dialog          # double-click the title block: fill it in
+
+    def fill_title_block():
+        dialog = QtWidgets.QApplication.activeModalWidget()
+        if not isinstance(dialog, title_block_dialog.TitleBlockDialog):
+            QtCore.QTimer.singleShot(100, fill_title_block)
+            return
+        QtTest.QTest.keyClicks(dialog.edits["project"], "Moradia T3")
+        QtTest.QTest.keyClicks(dialog.edits["client"], "J. Silva")
+        dialog.edits["stage"].setCurrentText("Licenciamento")
+        QtTest.QTest.keyClicks(dialog.number, "A.01")
+        dialog.accept()
+
+    QtCore.QTimer.singleShot(100, fill_title_block)
+    s, x0, y0 = canvas.fit()
+    w, h = doc.sheets[0].size()
+    QtTest.QTest.mouseDClick(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                             QtCore.QPoint(int(x0 + (w - 20) * s), int(y0 + (h - 20) * s)))
+    pump(500)
+    block = win.title_block(doc.sheets[0])
+    check("folha_legenda", (block["project"], block["client"], block["stage"], block["number"], block["title"])
+          == ("Moradia T3", "J. Silva", "Licenciamento", "A.01", "Folha 1")
+          and "mudou" not in sw.refresh_button.text(), "{} | {}".format(block, sw.refresh_button.text()))
+    sw.grab().save(os.path.join(OUT, "47b_legenda.png"))
+
+    win.sheet_action("new")                           # Folhas ▸ right click ▸ New sheet: an empty sheet
+    pump(400)
+    put_on_sheet(("view", "elevation", "N"), "Folha 2")
+    path = os.path.join(OUT, "folhas.pdf")
+    if os.path.exists(path):
+        os.remove(path)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    win.act_sheets_pdf.trigger()                      # File ▸ Export sheets as PDF
+    pump(800)
+    pages = pdf.page_count(path) if os.path.exists(path) else 0
+    check("todas_as_folhas_em_pdf", pages == 2, win.last_message)
+
+    f = sw.frames[0]                                  # click the view on sheet 2, Delete: off the sheet
+    _active()                                         # (a real click makes the window active)
+    s, x0, y0 = canvas.fit()
+    QtTest.QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                            QtCore.QPoint(int(x0 + f.centre[0] * s), int(y0 + f.centre[1] * s)))
+    pump(200)
+    QtTest.QTest.keyClick(canvas, Qt.Key.Key_Delete)
+    pump(400)
+    check("folha_tirar_vista", doc.sheets[1].views == [] and sw.frames == [],
+          "{} | escolhida={} folha={} passos={}".format(sw.text(), sw.canvas.selected, sw.sheet.name if sw.sheet else None,
+                                                        [c.label for c in doc._undo][-3:]))
+    # 0.56: the sheets are in tabs beside the views; closing their tabs leaves the sheets in the project
+    tabs = win.views.text()
+    shot("47c_folhas_em_abas.png")
+    for k in reversed(range(len(win.views.keys))):
+        if win.views.keys[k][0] == "sheet":
+            win.views.close(k)
+    pump(300)
+    check("folhas_em_abas", "Folha 1" in tabs and "[Folha 2]" in tabs and len(doc.sheets) == 2
+          and not win.sheet_shown() and win.canvas.isVisible(),
+          "{} -> {}".format(tabs, win.views.text()))
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def library_flow():
+    """The library in the Project panel: a component's copies, placing another one with the mouse."""
+    from arqbim.model import bim as bim_actions
+    from arqbim.core.sketch_geometry import rectangle_matrix, rectangle_mesh, push_pull
+    from arqbim.model.document import AddObject, SketchObject
+    m = rectangle_matrix(np.array((1.0, 1.0, 0.0)), np.array((1.0, 0, 0)), np.array((0, 1.0, 0)))
+    mesh = rectangle_mesh(1.2, 0.8)
+    push_pull(mesh, 0, m, 0.75)
+    table = SketchObject("Mesa", m, mesh)
+    doc.execute(AddObject(table))
+    inst = bim_actions.make_component(doc, [table.id], "Mesa", "furniture")
+    type_guid = doc.ifc.component_type(inst)
+    panel = win.tree_panel
+    panel.raise_()
+    pump(300)
+    check("biblioteca_no_painel", "Biblioteca" in panel.text() and "Mesa   (1 cópia(s))" in panel.text(),
+          "\n" + "\n".join(ln for ln in panel.text().splitlines() if "Mesa" in ln or "Bibli" in ln))
+    win._library_action("place", "component", type_guid)          # (right click ▸ Place another copy)
+    pump(200)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(300)
+    move(near((4.0, 1.0, 0.0)), 3)
+    key(Qt.Key.Key_Tab)                                            # a quarter turn
+    pump(100)
+    click()
+    pump(300)
+    copies = doc.ifc.component_instances(type_guid)
+    new = [g for g in copies if g != inst]
+    size = (doc.get(new[0]).mesh.verts.max(axis=0) - doc.get(new[0]).mesh.verts.min(axis=0)) if new else None
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    check("inserir_outra_copia", len(copies) == 2 and size is not None and np.allclose(size[:2], (0.8, 1.2))
+          and win.tool.name == "select", "cópias={} medidas={}".format(len(copies), size))
+    tree_click(panel.item_for(("lib", "component", type_guid)), double=True)
+    pump(300)
+    check("biblioteca_seleciona_copias", vp.selection == set(copies), len(vp.selection))
+
+    # another project's component: a chair made in a file of its own, brought into this one
+    from arqbim.model.document import Document
+    other = Document()
+    chair = SketchObject("Cadeira", m, rectangle_mesh(0.45, 0.45))
+    push_pull(chair.mesh, 0, m, 0.9)
+    other.execute(AddObject(chair))
+    bim_actions.make_component(other, [chair.id], "Cadeira", "furniture")
+    path = os.path.join(OUT, "biblioteca_cadeira.ifc")
+    other.save(path)
+
+    def tick_and_accept():
+        dialog = getattr(win, "_components_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, tick_and_accept)            # (the file is still being read)
+            return
+        items = dialog.findChild(QtWidgets.QListWidget)
+        items.item(0).setCheckState(Qt.CheckState.Checked)
+        dialog.accept()
+
+    win._components_dialog = None
+    QtCore.QTimer.singleShot(100, tick_and_accept)
+    win.import_components(path)                                     # (BIM ▸ Bring components… with this file)
+    pump(400)
+    brought = [g for g, n, _i, p in doc.ifc.library()["components"] if n == "Cadeira" and p]
+    check("trazer_componente_de_outro_projeto", len(brought) == 1 and "Cadeira" in panel.text()
+          and "Cadeira" in win.last_message, win.last_message)
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def views_flow():
+    """Views in the Project panel: plans, named sections (the one drawn in plan_flow), elevations."""
+    panel = win.tree_panel
+    panel.raise_()
+    pump(300)
+    text = panel.text()
+    check("vistas_no_painel", "Vistas" in text and "Cortes (1)" in text and "Corte 1" in text and "Norte" in text,
+          "\n" + "\n".join(text.splitlines()[:14]))
+    tree_click(panel.item_for(("view", "elevation", "N")), double=True)
+    pump(400)
+    label = win.storey_label.text()
+    check("alcado_norte", vp.section is not None and np.allclose(vp.section[1], (0, -1, 0)) and "Alçado Norte" in label,
+          label)
+    shot("46_alcado_norte.png")
+    path = os.path.join(OUT, "alcado_norte.pdf")
+    if os.path.exists(path):
+        os.remove(path)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    key(Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    data = open(path, "rb").read() if os.path.exists(path) else b""
+    check("pdf_do_alcado", data.startswith(b"%PDF-") and len(data) > 5000, win.last_message)
+    item = panel.item_for(("view", "section", 0))
+    item.setText(0, "Corte A")                   # (F2, then typing: the name changes)
+    pump(300)
+    tree_click(panel.item_for(("view", "section", 0)), double=True)
+    pump(300)
+    check("corte_com_nome", doc.sections[0].name == "Corte A" and "Corte A" in win.storey_label.text()
+          and "Corte A" in panel.text(), win.storey_label.text())
+    storey = doc.storeys()[0][0]
+    tree_click(panel.item_for(("view", "plan", storey)), double=True)
+    pump(300)
+    check("planta_pelo_painel", vp.plan and doc.active_storey == storey, win.storey_label.text())
+    key(Qt.Key.Key_F8)
+    pump(300)
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def start_page_flow():
+    """0.387 (the owner: «vamos criar a página inicial onde à esquerda ficam as opções de abrir novo, carregar arquivo
+    raiz ou arquivo de base, depois tutoriais, depois documentos recentes; no lado direito duas colunas, Discussões no
+    GitHub e apoiadores com o botão de apoiar»): a project saved — on the recent list, with a picture; a base file in
+    the base folder; Início ▸ Página inicial: its tab in front, the canvas and the side panels (and their tabs) out of
+    the way, five cards, the base file listed; a tutorial (a TESTAR section) in its window; a button not linked yet
+    says so; the recent file clicked: opened, the 3D view and the panels back; new from the base file: a project with no
+    path (saved under a new name); the start page not among the tabs saved with the project. Captured:
+    387_pagina_inicial.png.
+    0.388 («a coluna de tutorial passa para a direita, a dos arquivos recentes para a esquerda junto de abrir; preenche
+    todo o restante espaço; deve ter opções de visualização»): the cards' order, the recent ones the widest; details
+    (newest first), list by name, find a word (and none found), taken off the list (the file stays), back to the grid
+    — kept. Captured: 388_recentes_detalhes.png."""
+    import shutil
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import recent, start_page
+    docs = tempfile.mkdtemp(prefix="arqbim_docs_")
+    was_docs = os.environ.get("ARQBIM_DOCUMENTS")
+    os.environ["ARQBIM_DOCUMENTS"] = docs
+    for old in recent.files():                         # (the tests' list, not the user's: from nothing)
+        recent.remove(old)
+    try:
+        key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+        pump(300)
+        bim_actions.add_wall_loop(doc, [(0, 0, 0), (6, 0, 0), (6, 4, 0), (0, 4, 0)], catalog.BY_KEY["parede_alv_20"],
+                                  2.8, "axis", storey=doc.active_storey)
+        vp.set_view("iso")
+        vp.zoom_extents()
+        pump(400)
+        saved = os.path.join(docs, "Casa do teste.ifc")
+        win.save_to(saved)
+        pump(200)
+        listed = recent.files()[:1] == [os.path.abspath(saved)] and os.path.exists(recent.thumb_file(saved))
+        base_dir = start_page.base_folder(docs)
+        os.makedirs(base_dir, exist_ok=True)
+        shutil.copy(saved, os.path.join(base_dir, "Moradia base.ifc"))
+        win.act_start_page.trigger()
+        pump(500)
+        page = win.start_page
+        tab_bars = [w for w in win.findChildren(QtWidgets.QTabBar, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                    if w is not win.view_bar and w.isVisible() and w.count()]
+        shown = win.views.current() == ("start",) and page is not None and page.isVisible() and \
+            not canvas.isVisible() and not any(d.isVisible() for d in win.findChildren(QtWidgets.QDockWidget)) and \
+            not tab_bars
+        cards = all(c.isVisible() for c in (page.start_card, page.tutorials_card, page.recent_card,
+                                            page.discussions_card, page.supporters_card))
+        base_listed = start_page.base_files(docs) == [os.path.join(base_dir, "Moradia base.ifc")]
+        win.grab().save(os.path.join(OUT, "387_pagina_inicial.png"))
+        # (0.388) Começar and the recent documents on the left, the recent ones the widest; their views, order, find
+        order = [c.geometry().x() for c in (page.start_card, page.recent_card, page.tutorials_card,
+                                            page.discussions_card, page.supporters_card)]
+        widest = all(page.recent_card.width() > c.width() for c in (page.start_card, page.tutorials_card,
+                                                                     page.discussions_card, page.supporters_card))
+        placed = order == sorted(order) and widest
+        other = os.path.join(docs, "Armazem norte.ifc")
+        win.save_to(other)
+        pump(200)
+        win.show_start_page()
+        pump(300)
+        page.set_recent_view("details")
+        pump(200)
+        details = page.recent_stack.currentWidget() is page.recent_details and \
+            page.recent_details.topLevelItemCount() == 2 and page.recent_details.topLevelItem(0).text(0) == "Armazem norte"
+        win.grab().save(os.path.join(OUT, "388_recentes_detalhes.png"))
+        page.set_recent_view("list")
+        page.set_recent_order("name")
+        pump(200)
+        by_name = page.recent_stack.currentWidget() is page.recent_list and \
+            [page.recent_list.item(i).text().split("\n")[0] for i in range(page.recent_list.count())] == \
+            ["Armazem norte", "Casa do teste"]
+        page.recent_find.setText("casa")
+        pump(100)
+        found = page.recent_list.count() == 1 and page.recent_count.text() == "1 de 2"
+        page.recent_find.setText("nada disto")
+        pump(100)
+        none_found = page.recent_stack.currentWidget() is page.recent_none and \
+            page.recent_none.text() == start_page.t("start.recent_not_found")
+        page.recent_find.setText("")
+        page.remove_recent(other)
+        pump(100)
+        removed = recent.files() == [os.path.abspath(saved)] and os.path.exists(other)
+        page.set_recent_view("grid")
+        page.set_recent_order("used")
+        pump(200)
+        kept_grid = recent.view() == "grid" and page.recent_stack.currentWidget() is page.recent_grid
+        views_ok = placed and details and by_name and found and none_found and removed and kept_grid
+        # (0.406) a tutorial read on the page, over the Discussions and the Supporters; × brings them back
+        before = (page.tutorials_card.geometry().right(), page.supporters_card.geometry().right())
+        page.open_tutorial({"title": "Perfil", "open": "testar:0.380"})
+        pump(300)
+        reader = page.reader
+        over = reader.isVisible() and not page.discussions_card.isVisible() and \
+            not page.supporters_card.isVisible() and reader.geometry().x() > before[0] and \
+            abs(reader.geometry().right() - before[1]) <= 2 and \
+            reader.width() >= start_page.READER_MIN_W and page.recent_card.isVisible() and \
+            not any(d.isVisible() for d in win.findChildren(QtWidgets.QDockWidget))
+        read_text = "0.380" in reader.view.toPlainText()
+        reader.find.setText("cotovelo")
+        pump(50)
+        reader.find.setText("CONCORDANCIA")                 # (no accent, any case: «concordância»)
+        pump(100)
+        found_words = reader.hits() >= 1 and reader.hits_label.text().startswith("1 de ")
+        reader.find.setText("palavra que não está lá")
+        pump(50)
+        none_words = reader.hits() == 0 and reader.hits_label.text() == start_page.t("start.tutorial_none_found")
+        reader.find.setText("")
+        win.grab().save(os.path.join(OUT, "406_tutorial_na_pagina.png"))
+        page.open_tutorial({"title": "Primeiros passos", "open": "help:steps"})
+        pump(300)
+        steps = reader.isVisible() and reader.key == "help:steps" and "Mostrar onde está" in reader.view.toPlainText()
+        marked = [bool(row.property("current")) for _item, row in page._tutorial_rows]
+        win.grab().save(os.path.join(OUT, "406_primeiros_passos.png"))
+        from arqbim.ui import help_window
+        was_discipline = win.discipline
+        reader._link(QtCore.QUrl("show:wall"))
+        pump(200)
+        shown_where = win.start_shown() and win.discipline == help_window.where("wall")[0]
+        win.set_discipline(was_discipline)
+        reader.find.setFocus()
+        QtTest.QTest.keyClick(reader.find, Qt.Key.Key_Escape)
+        pump(200)
+        closed = not reader.isVisible() and page.discussions_card.isVisible() and \
+            page.supporters_card.isVisible() and \
+            (page.tutorials_card.geometry().right(), page.supporters_card.geometry().right()) == before and \
+            not any(row.property("current") for _item, row in page._tutorial_rows)
+        videos = start_page.config()["videos_url"] == "https://www.youtube.com/@arqsynth_a"
+        tutorial = over and read_text and found_words and none_words and steps and sum(marked) == 1 and \
+            shown_where and closed and videos
+        if not tutorial:
+            print("  tutorial: por_cima={} texto={} procurar={} nada={} passos={} marcado={} onde={} fechou={} "
+                  "videos={}".format(over, read_text, found_words, none_words, steps, marked, shown_where, closed,
+                                     videos))
+        page._open_link("", "Apoiadores")
+        not_linked = "ainda não tem endereço" in win.last_message
+        opened = win.open_recent(saved)
+        pump(600)
+        back = opened and win.views.current() == ("3d",) and not win.start_shown() and canvas.isVisible() and \
+            any(d.isVisible() for d in win.findChildren(QtWidgets.QDockWidget))
+        win.show_start_page()
+        pump(300)
+        from_base = win.new_from_base(start_page.base_files(docs)[0]) and doc.path is None and \
+            doc.ifc.count("IfcWall") == 4
+        pump(400)
+        win.show_start_page()
+        pump(200)
+        not_saved = all(tab["key"] != ["start"] for tab in win.views.state()["tabs"])
+        win.views.open(("3d",))
+        pump(300)
+    finally:
+        if was_docs is None:
+            os.environ.pop("ARQBIM_DOCUMENTS", None)
+        else:
+            os.environ["ARQBIM_DOCUMENTS"] = was_docs
+    check("pagina_inicial", listed and shown and cards and base_listed and tutorial and not_linked and back and from_base
+          and not_saved, "recentes={} mostrada={} cartoes={} base={} tutorial={} sem_ligacao={} volta={} de_base={} "
+                         "fora_do_projeto={}".format(listed, shown, cards, base_listed, tutorial, not_linked, back,
+                                                     from_base, not_saved))
+    check("recentes_vistas", views_ok,
+          "ordem x={} mais_larga={} detalhes={} por_nome={} procurar={} nada={} tirar={} grelha={}".format(
+              order, widest, details, by_name, found, none_found, removed, kept_grid))
+    doc.modified = False
+
+
+def view_tabs_flow():
+    """0.55: a tab per open view (Revit): F4 opens the plan's tab, F8 the 3D's; clicking a tab shows that view as
+    it was left (its zoom); opening a view with a tab shows that tab; closing tabs keeps the project open."""
+    bar = win.view_bar
+    win.views.reset()
+    pump(300)
+    n_objects, path = len(objects()), doc.path
+
+    def click_tab(k):
+        QtTest.QTest.mouseClick(bar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, bar.tabRect(k).center())
+        pump(300)
+
+    key(Qt.Key.Key_F4)
+    pump(400)
+    move(vp.project((2.0, 2.0, doc.work_level())), 2)
+    wheel(3)                                           # the plan zoomed in
+    height = vp.ortho_height()
+    key(Qt.Key.Key_F8)
+    pump(400)
+    two = win.views.text()
+    click_tab(2)                                       # back to the plan: as it was left (0.403: the house first)
+    kept = vp.plan and abs(vp.ortho_height() - height) < 1e-6
+    check("abas_planta_e_3d", two.startswith("[3D] | Planta") and two.count("|") == 1 and kept
+          and win.act_plan.isChecked(), "abas={} depois={} planta={} altura {:.2f} -> {:.2f}".format(
+              two, win.views.text(), vp.plan, height, vp.ortho_height()))
+    # (0.403) the start page: the first tab, a house without a name or a ×, not closed, kept first
+    home = win.views.keys[0] == ("start",) and bar.tabText(0) == "" and not bar.tabIcon(0).isNull() and \
+        bar.tabToolTip(0) == "Início" and \
+        bar.tabButton(0, QtWidgets.QTabBar.ButtonPosition.RightSide) is None and \
+        bar.tabButton(0, QtWidgets.QTabBar.ButtonPosition.LeftSide) is None and win.views.keys[1] == ("3d",)
+    win.views.close(0)
+    pump(100)
+    kept_home = win.views.keys[0] == ("start",) and bar.count() == 3
+    bar.moveTab(2, 0)                                  # (a tab dragged before the house…)
+    win.views._pin()                                   # (…and let go: it goes back after it)
+    pump(100)
+    pinned = win.views.keys[0] == ("start",) and bar.tabText(0) == "" and win.views.keys[1][0] == "plan"
+    bar.moveTab(1, 2)                                  # (the plan back after the 3D)
+    click_tab(0)
+    shown_home = win.views.current() == ("start",) and win.start_shown()
+    shot("403_aba_inicio.png")
+    click_tab(2)
+    check("aba_inicio_fixa", home and kept_home and pinned and shown_home and vp.plan,
+          "casa={} nao_fecha={} fica_primeira={} mostra={} abas={}".format(home, kept_home, pinned, shown_home,
+                                                                           win.views.keys))
+    win.show_elevation("S")
+    pump(400)
+    win.open_view("plan", doc.active_storey)          # (it has a tab: no new one)
+    pump(400)
+    three = bar.count() == 4 and vp.plan and "Alçado Sul" in win.views.text()
+    shot("46b_abas_das_vistas.png")
+    k = win.views.keys.index(("elevation", "S"))
+    button = bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.RightSide) or \
+        bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.LeftSide)
+    QtTest.QTest.mouseClick(button, Qt.MouseButton.LeftButton)          # its ×
+    pump(300)
+    closed = bar.count() == 3 and vp.plan and "Alçado Sul" not in win.views.text()
+    key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)               # close the plan's tab
+    pump(300)
+    only_3d = bar.count() == 2 and not vp.plan and not vp.cutting()      # (0.403: and the house)
+    key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)               # the last one: the 3D view stays
+    pump(300)
+    check("abas_fechar_sem_fechar_o_projeto", three and closed and only_3d and bar.count() == 2
+          and len(objects()) == n_objects and doc.path == path,
+          "três={} fechou_alçado={} só_3d={} abas={}".format(three, closed, only_3d, win.views.text()))
+    key(Qt.Key.Key_F4)
+    pump(300)
+    key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ControlModifier)             # the next tab: 3D (not the house)
+    pump(300)
+    check("abas_ctrl_tab", bar.count() == 3 and not vp.plan and bar.currentIndex() == 1, win.views.text())
+
+    # 0.56: the tabs are saved with the project and come back, each as it was left, when it is opened again
+    win.show_elevation("S")
+    pump(300)
+    key(Qt.Key.Key_F4)                                 # the plan's tab, zoomed in
+    pump(300)
+    move(vp.project((1.0, 1.0, doc.work_level())), 2)
+    wheel(2)
+    height, keys = vp.ortho_height(), list(win.views.keys)
+    path = os.path.join(OUT, "abas_guardadas.ifc")
+    win.save_to(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    after_new = win.views.text()
+    win.open_path(path)
+    pump(800)
+    check("abas_guardadas_com_o_projeto", after_new == "[3D]" and win.views.keys == keys and vp.plan
+          and win.views.current()[0] == "plan" and abs(vp.ortho_height() - height) < 1e-3,
+          "novo={} abas={} altura {:.2f} -> {:.2f}".format(after_new, win.views.text(), height, vp.ortho_height()))
+    key(Qt.Key.Key_F8)
+    pump(300)
+
+
+def schedules_flow():
+    """Phase 3, step 3: the Schedules panel (the georeferenced house is open)."""
+    from arqbim.ui.schedules import GUID
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    check("tabelas_ctrl_t", panel.isVisible() and panel.table.rowCount() == len(walls)
+          and "Comprimento" in panel.text() and panel.totals.text().startswith("{} elementos".format(len(walls))),
+          panel.totals.text())
+    shot("45_tabelas.png")
+
+    col = list(panel._columns).index("height")
+    item = panel.table.item(0, col)
+    guid = item.data(GUID)
+    item.setText("3,10")                         # typed in the cell
+    pump(400)
+    height = doc.ifc.wall_params(guid)[1]
+    shown = panel.table.item([panel.table.item(r, 0).data(GUID) for r in range(panel.table.rowCount())].index(guid),
+                             col).text()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    check("tabelas_editar_altura_e_desfazer", abs(height - 3.1) < 1e-9 and shown == "3,10 m"
+          and abs(doc.ifc.wall_params(guid)[1] - 2.8) < 1e-9, "altura={} na tabela={!r}".format(height, shown))
+
+    panel.table.selectRow(1)
+    pump(300)
+    picked = panel.table.item(1, 0).data(GUID)
+    check("tabelas_linha_seleciona", vp.selection == {picked}, len(vp.selection))
+
+    path = os.path.join(OUT, "paredes.csv")
+    if os.path.exists(path):
+        os.remove(path)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    panel.grouped.setChecked(True)
+    pump(300)
+    grouped_rows = panel.table.rowCount()
+    panel.export.click()
+    pump(300)
+    text = open(path, encoding="utf-8-sig").read() if os.path.exists(path) else ""
+    check("tabelas_por_tipo_e_csv", grouped_rows == 1 and text.startswith("Tipo;Quantidade") and ";4;" in text,
+          "linhas={} csv={!r}".format(grouped_rows, text[:80]))
+    panel.grouped.setChecked(False)
+    pump(300)
+    # (0.370) the same table as an Excel workbook: typed without an extension, the Excel type (the first) chosen
+    import openpyxl
+    book_path = os.path.join(OUT, "paredes")
+    for old in (book_path + ".xlsx",):
+        if os.path.exists(old):
+            os.remove(old)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (book_path, "Livro do Excel (*.xlsx)"))
+    panel.export.click()
+    pump(300)
+    sheet = openpyxl.load_workbook(book_path + ".xlsx").active if os.path.exists(book_path + ".xlsx") else None
+    head = [c.value for c in sheet[1]] if sheet is not None else []
+    length_col = head.index("Comprimento") + 1 if "Comprimento" in head else 0
+    lengths = [sheet.cell(row=r, column=length_col).value for r in range(2, sheet.max_row + 1)] if length_col else []
+    excel = sheet is not None and len(lengths) == 4 and all(isinstance(v, (int, float)) for v in lengths) and \
+        sheet.cell(row=1, column=1).font.b and sheet.freeze_panes == "A2" and \
+        sheet.cell(row=2, column=length_col).number_format.startswith("0.0") and "paredes.xlsx" in win.last_message
+    check("tabelas_em_excel", excel, "folha={} cabecalho={} comprimentos={} formato={} balao={!r}".format(
+        sheet.title if sheet is not None else None, head[:5], lengths,
+        sheet.cell(row=2, column=length_col).number_format if length_col else None, win.last_message))
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+
+    # Phase 3, step 4: the plan as a vector PDF (Ctrl+P)
+    path = os.path.join(OUT, "planta.pdf")
+    if os.path.exists(path):
+        os.remove(path)
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    key(Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    head = open(path, "rb").read(5) if os.path.exists(path) else b""
+    status = win.last_message
+    check("pdf_da_planta", head == b"%PDF-" and os.path.getsize(path) > 5000 and "escala 1:" in status, status)
+
+
+def pixel(p):
+    """Colour of the 3D view at the world point p (the renderer's last image: the same on Windows and Linux)."""
+    vp.redraw()
+    pump(150)
+    image = vp.snapshot()
+    h, w = image.shape[:2]
+    lw, lh = vp.logical_size()
+    x, y = vp.project(p)
+    c = image[min(int(y * h / lh), h - 1), min(int(x * w / lw), w - 1)]
+    return int(c[0]), int(c[1]), int(c[2])
+
+
+def darkest(p, r=3):
+    """(0.319) The darkest colour a few pixels around the world point p: a cut drawn hatched (0.317) is light between
+    its lines, so one pixel may fall between them; around it a line is always seen."""
+    vp.redraw()
+    pump(150)
+    image = vp.snapshot()
+    h, w = image.shape[:2]
+    lw, lh = vp.logical_size()
+    x, y = vp.project(p)
+    row, col = min(int(y * h / lh), h - 1), min(int(x * w / lw), w - 1)
+    patch = image[max(row - r, 0):row + r + 1, max(col - r, 0):col + r + 1, :3].reshape(-1, 3).astype(int)
+    c = patch[np.argmin(patch.sum(axis=1))]
+    return int(c[0]), int(c[1]), int(c[2])
+
+
+def plan_flow():
+    """Phase 3, step 1: the plan of the active storey, cut at 1,20 m, poché, then back to 3D."""
+    walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    a, b, _t = doc.ifc.wall_axis(walls[0])
+    middle = a + (b - a) * 0.05 + np.array((0.0, 0.0, 0.6))      # (near the corner: no door or window there)
+    key(Qt.Key.Key_F4)
+    pump(500)
+    batch = vp.bim.where[walls[0]]
+    dark = darkest(middle)
+    hatched = walls[0] in vp._hatch_parts                            # (0.317) the cut drawn with its hatch
+    check("planta_f4", vp.plan and win.act_plan.isChecked() and "planta" in win.storey_label.text()
+          and batch.poche is not None and batch.poche.visible and not vp.grid.visible and max(dark) < 100
+          and hatched, "poché={} trama={} cor no meio da parede={}".format(batch.poche is not None, hatched, dark))
+    shot("43_planta.png")
+    win.set_tool("select")
+    pump(100)
+    move(vp.project(middle), 2)
+    snap, _hit = vp.snap(*mouse)
+    click()
+    pump(200)
+    check("planta_clicar_parede_cortada", vp.selection == {walls[0]}
+          and (snap is None or abs(snap.point[2] - doc.work_level()) < 1e-9),
+          "seleção={} inferência={}".format(len(vp.selection), None if snap is None else (snap.kind, snap.point)))
+
+    # Phase 3, step 11: in the plan a door is drawn by its symbol (leaf open, swing arc); a click near it picks it
+    from arqbim.model import bim as bim_actions
+    from arqbim.ifc import catalog
+    inner = bim_actions.add_wall(doc, (1.0, 2.5, 0.0), (4.0, 2.5, 0.0), catalog.BY_KEY["parede_alv_15"])
+    door = bim_actions.add_opening(doc, inner, catalog.OPENING_BY_KEY["porta_80"],
+                                   bim_actions.wall_frame(doc, inner), 1.0, -1)
+    pump(400)
+    seg = doc.plan_symbols([door]).get(door)
+    door_batch = vp.bim.where.get(door)
+    hidden = door_batch is not None and door_batch.key[2] == "symbol" and not door_batch.visible
+    vp.set_selection(set())
+    pump(100)
+    if seg is not None:
+        pts = seg.reshape(-1, 3)
+        tip = pts[np.argmax(np.abs(pts[:, 1] - 2.5))]
+        move(vp.project((tip[0], tip[1], vp.cut_level() - 0.05)), 2)
+        click()
+        pump(300)
+    shot("43b_planta_porta.png")
+    check("planta_porta_pelo_simbolo", hidden and vp._symbols is not None and vp.selection == {door},
+          "escondida={} símbolo={} seleção={}".format(hidden, seg is not None, len(vp.selection)))
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+
+    # 0.52: the plan is a drawing — no perspective; the middle button pans (no orbit); the wheel zooms
+    forward, before = vp.view_direction().copy(), vp.camera_position().copy()
+    move(vp.project((3.0, 2.0, doc.work_level())), 2)
+    press(Qt.MouseButton.MiddleButton)
+    move((mouse[0] + 80, mouse[1] + 30), 6)
+    release(Qt.MouseButton.MiddleButton)
+    pump(60)
+    panned = np.linalg.norm(vp.camera_position() - before) > 0.1 and np.allclose(vp.view_direction(), forward)
+    height = vp.ortho_height()
+    wheel(2)
+    check("planta_ortogonal_desloca_e_aproxima", vp.is_ortho() and panned and vp.ortho_height() < height * 0.9,
+          "fov={} deslocou={} altura {:.2f} -> {:.2f}".format(vp.camera.fov, panned, height, vp.ortho_height()))
+    vp.set_view("top")                                 # (frame the plan again)
+    pump(300)
+
+    # ... and walls and doors are drawn in it
+    n_walls = len([o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"])
+    level = doc.work_level()
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(vp.project((1.0, 2.5, level)), 3)
+    click()
+    move(vp.project((3.0, 2.5, level)), 4)
+    pump(200)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    new_walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    drawn = new_walls[-1] if len(new_walls) > n_walls else None
+    key(Qt.Key.Key_D)
+    pump(300)
+    n_doors = len([o for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"])
+    a, b, _t = doc.ifc.wall_axis(drawn.id) if drawn is not None else (np.zeros(3), np.zeros(3), 0)
+    mid = (np.asarray(a) + np.asarray(b)) / 2
+    move(vp.project((mid[0], mid[1] - 0.03, level)), 3)
+    pump(200)
+    click()
+    pump(400)
+    doors = [o for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"]
+    host = doc.ifc.by_guid(doors[-1].id).FillsVoids[0].RelatingOpeningElement.VoidsElements[0].RelatingBuildingElement \
+        if len(doors) > n_doors else None
+    check("planta_desenhar_parede_e_porta", drawn is not None and host is not None and host.GlobalId == drawn.id
+          and abs(doc.ifc.wall_params(drawn.id)[0] - 3.0) < 1e-6,
+          "parede={} porta={} msg={!r}".format(drawn is not None, host is not None,
+                                               win.last_message[:60]))
+    shot("43c_planta_desenhar.png")
+    key(Qt.Key.Key_Escape)
+    sketches = len([o for o in objects() if not o.is_bim])
+    key(Qt.Key.Key_R)                                  # a rectangle and a line on the storey's floor
+    pump(200)
+    move(vp.project((1.5, 1.0, level)), 3)
+    click()
+    move(vp.project((2.0, 1.5, level)), 4)
+    type_text("1;0,5")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(vp.project((3.2, 1.0, level)), 3)
+    click()
+    move(vp.project((4.0, 1.0, level)), 4)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    new = [o for o in objects() if not o.is_bim][sketches:]
+    flat = [o.mesh.transformed(o.matrix) for o in new]
+    on_floor = all(np.allclose([v[2] for v in m.verts], level) for m in flat)
+    areas = sorted(round(m.face_area(0), 6) for m in flat if m.faces)
+    check("planta_desenhar_retangulo_e_linha", len(new) == 2 and on_floor and areas == [0.5],
+          "novos={} no_chao={} areas={}".format(len(new), on_floor, areas))
+    key(Qt.Key.Key_Escape)
+    for _ in range(4):
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+
+    key(Qt.Key.Key_F8)
+    pump(400)
+    check("planta_volta_ao_3d", not vp.plan and not win.act_plan.isChecked() and vp.grid.visible
+          and vp.bim.face_material.side == "both" and not batch.poche.visible and not vp.is_ortho()
+          and vp.bim.face_material.clipping_planes == [], vp.camera.fov)
+
+    # 0.53: the 3D view is whole; F6 puts a section box round the model, its top dragged down to 1,50 m
+    vp.set_selection(set())
+    key(Qt.Key.Key_F6)
+    pump(400)
+    on = vp.box is not None and win.act_box.isChecked() and win.tool.name == "select" \
+        and len(vp.bim.face_material.clipping_planes) == 6
+    lo, hi = vp.box if vp.box is not None else (np.zeros(3), np.ones(3))
+    top = vp.box_handle_point(2, 1) if vp.box is not None else np.zeros(3)
+    move(vp.project(top), 3)
+    press()
+    move(vp.project((top[0], top[1], 1.5)), 6)
+    release()
+    pump(300)
+    z_top = vp.box[1][2] if vp.box is not None else None
+    frame = bim_actions.wall_frame(doc, walls[0])     # in the middle of the wall's thickness, under the cut
+    dark = pixel(frame.to_world((frame.x0 + frame.length * 0.05, (frame.y0 + frame.y1) / 2, (z_top or 1.5) - 0.02)))
+    check("caixa_de_corte_f6_e_arrastar", on and z_top is not None and abs(z_top - 1.5) < 0.05
+          and batch.poche.visible and max(dark) < 110,
+          "ligada={} topo={} poché={} cor={}".format(on, z_top, batch.poche.visible, dark))
+    shot("43d_caixa_de_corte.png")
+    key(Qt.Key.Key_F6)                                  # off: the whole model again
+    pump(300)
+    off = vp.box is None and not win.act_box.isChecked() and vp.bim.face_material.clipping_planes == [] \
+        and not batch.poche.visible
+    vp.set_selection({walls[0]})
+    key(Qt.Key.Key_F6, Qt.KeyboardModifier.ShiftModifier)  # round the selection
+    pump(300)
+    wall_lo, wall_hi = vp.bounds([doc.get(walls[0])])
+    fits = vp.box is not None and np.allclose(vp.box[0], wall_lo - 0.3) and np.allclose(vp.box[1], wall_hi + 0.3)
+    key(Qt.Key.Key_F6)
+    pump(300)
+    check("caixa_desligar_e_a_volta_da_selecao", off and fits and vp.box is None, "desligada={} à_volta={}".format(off, fits))
+    vp.set_selection(set())
+
+    # Phase 3, step 2: a section across the house at y = 1 m, looking north (+y)
+    win.tool_actions["section"].trigger()
+    pump(200)
+    for p in ((-1.0, 1.0, 0.0), (7.0, 1.0, 0.0), (3.0, 2.5, 0.0)):    # the line, then the side it looks at
+        move(near(p), 3)
+        pump(100)
+        click()
+        pump(200)
+    pump(400)
+    west = [w for w in walls if abs(doc.ifc.wall_axis(w)[0][0] - doc.ifc.wall_axis(w)[1][0]) < 1e-6
+            and doc.ifc.wall_axis(w)[0][0] < 1.0]
+    lo, hi = doc.get(west[0]).mesh.verts.min(axis=0), doc.get(west[0]).mesh.verts.max(axis=0)
+    cut_point = np.array(((lo[0] + hi[0]) / 2, 1.0, 1.4))                # the west wall where the plane cuts it
+    shade = darkest(cut_point)
+    normal = vp.section[1] if vp.section is not None else None
+    check("corte_com_a_ferramenta", normal is not None and np.allclose(normal, (0, 1, 0), atol=1e-2)   # (by mouse)
+          and "Corte 1" in win.storey_label.text() and max(shade) < 100 and win.tool.name == "select",
+          "normal={} cor da parede cortada={}".format(normal, shade))
+    shot("44_corte.png")
+    key(Qt.Key.Key_F8)
+    pump(300)
+    left = vp.section is None and vp.grid.visible
+    key(Qt.Key.Key_F5)
+    pump(300)
+    check("corte_f8_e_f5", left and vp.section is not None and np.allclose(vp.section[1], (0, 1, 0), atol=1e-2),
+          "saiu={} voltou={}".format(left, vp.section is not None))
+    key(Qt.Key.Key_F8)
+    pump(300)
+
+
+def far_from_origin():
+    """Phase 2, step 6: a georeferenced model (500 km from the IFC origin) is shown near the origin."""
+    path = os.path.join(ROOT, "exemplos", "casa_georreferenciada.ifc")
+    if not os.path.exists(path):
+        check("abrir_georreferenciado", False, "falta " + path + " (scripts/casa_exemplo.py --georreferenciada)")
+        return
+    ok = win.open_path(path)
+    pump(300)
+    center, radius = vp.scene_bounds()
+    status = win.last_message
+    check("abrir_georreferenciado", ok and np.all(np.abs(center) < 50) and radius < 20 and "longe da origem" in status,
+          "centro={} raio={:.1f} barra={!r}".format(np.round(center, 2), radius, status))
+    shot("42_casa_georreferenciada.png")
+
+
+def tree_click(item, double=False):
+    tree = win.tree_panel.tree
+    tree.scrollToItem(item)
+    pump(50)
+    center = tree.visualItemRect(item).center()
+    QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center)
+    if double:                                   # a real double-click: a click, then the second one
+        QtTest.QTest.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center)
+    pump(250)
+
+
+def project_tree_flow():
+    """Phase 2, step 5: the Project panel (spatial tree) with the building opened just before."""
+    panel = win.tree_panel
+    panel.raise_()
+    pump(300)
+    levels = doc.storeys()
+    count = {g: sum(1 for o in objects() if o.is_bim and o.storey == g) for g, _n, _z in levels}
+    text = panel.text()
+    lines = [ln.strip() for ln in text.splitlines()]
+    want = ["{}   {}   ({})".format(n, ("+" if z > 0 else "") + "{:.2f} m".format(z).replace(".", ","), count[g])
+            for g, n, z in reversed(levels)]
+    top = lines.index("Projeto") if "Projeto" in lines else 0
+    check("arvore_pavimentos", [ln for ln in lines if ln in want] == want
+          and lines[top:top + 3] == ["Projeto", "Terreno", "Edifício"] and lines[0] == "Vistas",
+          "\n" + "\n".join(text.splitlines()[:8]))
+    shot("41_arvore_projeto.png")
+
+    ground = levels[0][0]
+    walls = {o.id for o in objects() if o.is_bim and o.storey == ground and o.ifc_class == "IfcWall"}
+    tree_click(panel.item_for(("cat", ground, "IfcWall")))
+    check("arvore_clicar_categoria", vp.selection == walls, "selecionadas={} paredes={}".format(
+        len(vp.selection), len(walls)))
+
+    one = sorted(walls)[0]
+    vp.set_selection({one})
+    pump(200)
+    current = panel.tree.currentItem()
+    check("selecao_3d_aparece_na_arvore", current is not None and current.text(0) == doc.get(one).name
+          and current.parent() is panel.item_for(("cat", ground, "IfcWall")),
+          current.text(0) if current else None)
+
+    door = sorted(o.id for o in objects() if o.is_bim and o.storey == ground and o.ifc_class == "IfcDoor")[0]
+    tree_click(panel.item_for(("cat", ground, "IfcDoor")))
+    panel.item_for(("cat", ground, "IfcDoor")).setExpanded(True)
+    pump(100)
+    before = np.array(vp.camera.local.position)
+    tree_click(panel.item_for(("obj", door)), double=True)
+    moved = float(np.linalg.norm(np.array(vp.camera.local.position) - before))
+    check("arvore_duplo_clique_enquadra", vp.selection == {door} and moved > 1.0,
+          "seleção={} câmara_moveu={:.1f} m".format(len(vp.selection), moved))
+
+    top = levels[-1][0]
+    win.act_only_active.trigger()                # see only the active storey (the ground floor)
+    pump(200)
+    top_walls = {o.id for o in objects() if o.is_bim and o.storey == top and o.ifc_class == "IfcWall"}
+    tree_click(panel.item_for(("cat", top, "IfcWall")))
+    check("arvore_vai_ao_pavimento_escondido", doc.active_storey == top and vp.selection == top_walls,
+          "ativo={} seleção={}".format(doc.active_storey == top, len(vp.selection)))
+    win.act_only_active.trigger()
+    pump(200)
+
+    vp.set_selection({sorted(top_walls)[0]})
+    pump(100)
+    key(Qt.Key.Key_Delete)                       # (a wall of a group: the same wall goes in every copy)
+    pump(200)
+    left = sum(1 for o in objects() if o.is_bim and o.storey == top and o.ifc_class == "IfcWall")
+    label = panel.item_for(("cat", top, "IfcWall")).text(0)
+    check("arvore_acompanha_apagar", left < len(top_walls) and label.endswith("({})".format(left)), label)
+    win.storeys_panel.raise_()
+    pump(100)
+
+
+def background_open():
+    """Phase 2, step 4: a file opens in a worker thread, with a progress window and Cancel."""
+    import shutil
+    from arqbim.model import geomcache
+    src = os.path.join(ROOT, "benchmark", "modelos", "edificio_pequeno.ifc")
+    path = os.path.join(OUT, "predio_pequeno.ifc")
+    if os.path.exists(src):
+        shutil.copyfile(src, path)
+    else:
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        from benchmark import generate
+        generate(path, 3, 3, 3)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    before = len(objects())
+    geomcache.forget(path)                       # first opening: the shapes are worked out (~1 s)
+    seen = {}
+
+    def cancel_when_shown():
+        w = app.activeModalWidget()
+        if isinstance(w, QtWidgets.QProgressDialog):
+            seen["label"] = w.labelText()
+            w.cancel()
+        else:
+            QtCore.QTimer.singleShot(30, cancel_when_shown)
+
+    QtCore.QTimer.singleShot(450, cancel_when_shown)
+    ok = win.open_path(path)
+    status = win.last_message
+    check("abrir_e_cancelar", not ok and len(objects()) == before and "cancelada" in status
+          and seen.get("label", "").startswith(("A calcular as formas 3D", "A ler", "A preparar o desenho")),
+          "aberto={} janela={!r} barra={!r}".format(ok, seen.get("label"), status))
+    end = time.time() + 15
+    while win._readers and time.time() < end:    # the cancelled reading stops by itself
+        pump(50)
+    geomcache.forget(path)                       # (it may have finished the shapes and kept them)
+
+    ticks = []
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: ticks.append(time.perf_counter()))
+    timer.start(20)
+    ok = win.open_path(path)
+    timer.stop()
+    pause = max((b - a for a, b in zip(ticks, ticks[1:])), default=0.0)
+    n = sum(o.is_bim for o in objects())
+    status = win.last_message
+    check("abrir_em_segundo_plano", ok and n > 100 and len(ticks) > 10 and pause < 1.0 and "guardadas" not in status,
+          "elementos={} sinais_da_janela={} maior_pausa={:.0f} ms barra={!r}".format(n, len(ticks), pause * 1000,
+                                                                                 status))
+    pump(300)
+    shot("40_predio_aberto.png")
+    ok = win.open_path(path)
+    status = win.last_message
+    check("reabrir_com_formas_guardadas", ok and win.doc.cache_hits == n and "guardadas" in status, status)
+
+    # Phase 2, step 7: on screen from the kept shapes while the IFC is read (made slow here on purpose)
+    import arqbim.ui.main_window as mw
+    real_read = mw.read_file
+
+    def slow_read(*args, **kwargs):
+        time.sleep(1.5)
+        return real_read(*args, **kwargs)
+
+    seen = {}
+
+    def look():
+        seen.update(loading=win.doc.loading, shown=sum(o.is_bim for o in objects()), save=win.act_save.isEnabled(),
+                    wall=win.tool_actions["wall"].isEnabled(), bar=win.loading_box.isVisible(),
+                    tree=win.tree_panel.widget().isEnabled(), zoom=win.act_zoom_all.isEnabled())
+
+    mw.read_file = slow_read
+    try:
+        QtCore.QTimer.singleShot(800, look)
+        ok = win.open_path(path)
+        status = win.last_message
+        check("ver_enquanto_le_o_ifc", ok and seen.get("loading") and seen.get("shown") == n and seen.get("bar")
+              and not (seen.get("save") or seen.get("wall") or seen.get("tree")) and seen.get("zoom")
+              and not win.doc.loading and win.act_save.isEnabled() and not win.loading_box.isVisible()
+              and "no ecrã em" in status, "durante={} barra={!r}".format(seen, status))
+        QtCore.QTimer.singleShot(800, win.loading_cancel.click)
+        ok = win.open_path(path)
+        status = win.last_message
+        check("cancelar_enquanto_le_o_ifc", not ok and not win.doc.loading and len(objects()) == 0
+              and status == "Abertura cancelada." and win.act_save.isEnabled(), status)
+    finally:
+        mw.read_file = real_read
+    end = time.time() + 15
+    while win._readers and time.time() < end:
+        pump(50)
+
+    # Phase 2, step 8: a first opening shows the elements as they are worked out (from 500; here from 100)
+    import arqbim.model.document as document_module
+    stream_from = document_module.STREAM_FROM
+    document_module.STREAM_FROM = 100
+    counts = []
+    timer = QtCore.QTimer()
+    timer.timeout.connect(lambda: counts.append(sum(o.is_bim for o in objects())))
+    try:
+        geomcache.forget(path)
+        timer.start(20)
+        ok = win.open_path(path)
+    finally:
+        timer.stop()
+        document_module.STREAM_FROM = stream_from
+    status = win.last_message
+    total = sum(o.is_bim for o in objects())
+    # seen half-way by the 20 ms sampling — or, when it is quicker than that (Linux), told by the status bar:
+    # the first ones on screen before all of them
+    times = [float(s.replace(",", ".")) for s in re.findall(r"em (\d+,\d+) s", status)]
+    gradual = any(0 < c < n for c in counts) or (len(times) >= 2 and times[0] < times[1])
+    check("abrir_aos_poucos", ok and total == n and gradual and "os primeiros no ecrã" in status
+          and not win.doc.loading and win.doc.cache_hits == 0,
+          "contagens a meio={} total={} barra={!r}".format(sorted(set(counts))[:6], total, status))
+    win.open_path(path)                          # open, for what follows
+    pump(200)
+
+
+def groups():
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(5.0, 1.5, 0.0), radius=6.0)
+    pump(400)
+    key(Qt.Key.Key_W)
+    pump(200)
+    while win.tools["wall"].reference != "axis":
+        key(Qt.Key.Key_Tab)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    for target, length in (((2, 0, 0), "4"), ((4, 1.5, 0), "3"), ((2, 3, 0), "4"), ((0, 1.5, 0), "3")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(300)
+    walls = [o.id for o in objects() if o.is_bim]
+    bottom = [g for g in walls if abs(doc.get(g).mesh.verts[:, 1].mean()) < 0.01][0]
+    bim_actions.add_opening(doc, bottom, catalog.OPENING_BY_KEY["porta_80"], bim_actions.wall_frame(doc, bottom),
+                            1.5, -1)
+    pump(300)
+
+    # A. Select the 4 walls (Shift adds) and Ctrl+G: a group, with its door -----------------------------------
+    select_at((3.0, 0.0, 2.8))
+    for p in ((4.0, 1.5, 2.8), (2.0, 3.0, 2.8), (0.0, 1.5, 2.8)):
+        select_at(p, shift=True)
+
+    def answer_name():
+        dlg = QtWidgets.QApplication.activeModalWidget()
+        if isinstance(dlg, QtWidgets.QInputDialog):
+            dlg.setTextValue("Quarto")
+            dlg.accept()
+
+    QtCore.QTimer.singleShot(400, answer_name)
+    key(Qt.Key.Key_G, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    panel = win.props.text()
+    group = doc.ifc.group_of(bottom)
+    check("criar_grupo_ctrl_g", group is not None and group.Name == "Quarto" and len(vp.selection) == 5
+          and "5 elementos" in panel, "grupo={} seleção={} painel=[{}]".format(
+              group.Name if group else None, len(vp.selection), panel.replace("\n", " | ")))
+
+    # B. Copy the group 6 m to the right; 1st click = the whole copy, 2nd click = one wall --------------------
+    key(Qt.Key.Key_M)
+    pump(200)
+    key(Qt.Key.Key_Control)
+    move(near((5.0, -1.0, 0)), 3)
+    click()
+    move(near((6.0, -1.0, 0)), 4)
+    pump(200)
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    select_at((8.5, 0.0, 2.8))
+    whole = len(vp.selection)
+    QtTest.QTest.mouseClick(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, qp(*mouse))
+    pump(300)
+    one = list(vp.selection)
+    panel = win.props.text()
+    check("copia_do_grupo_e_cliques", len(doc.ifc.group_copies(doc.ifc.group_model(group))) == 2 and whole == 5
+          and len(one) == 1 and "repetem-se" in panel, "cópias={} 1.º_clique={} 2.º_clique={}".format(
+              len(doc.ifc.group_copies(doc.ifc.group_model(group))), whole, len(one)))
+
+    # C. Push/Pull the top of that wall in the copy: the original wall follows -----------------------------------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((8.5, 0.0, 2.8)), 3)
+    click()
+    type_text("0,4")                              # typed without moving the mouse: outwards (up)
+    key(Qt.Key.Key_Return)
+    pump(400)
+    heights =(round(doc.ifc.wall_params(one[0])[1], 3), round(doc.ifc.wall_params(bottom)[1], 3)) if one else ()
+    check("mudar_na_copia_muda_o_original", heights == (3.2, 3.2), "alturas copia/original={}".format(heights))
+
+    # D. A typical floor: new storey, then BIM ▸ Repeat on storeys ---------------------------------------------
+    QtTest.QTest.mouseClick(win.storeys_panel.btn_new, Qt.MouseButton.LeftButton)
+    pump(400)
+    first = doc.active_storey
+    vp.set_view("iso", center=(5.0, 1.5, 2.5), radius=7.0)
+    pump(400)
+    vp.set_selection(set(doc.ifc.group_members(group)))
+
+    def answer_storeys():
+        dlg = QtWidgets.QApplication.activeModalWidget()
+        if dlg is not None:
+            listing = dlg.findChild(QtWidgets.QListWidget)
+            for i in range(listing.count()):
+                listing.item(i).setCheckState(Qt.CheckState.Checked)
+            dlg.accept()
+
+    QtCore.QTimer.singleShot(400, answer_storeys)
+    win.act_repeat.trigger()
+    pump(500)
+    copies = doc.ifc.group_copies(doc.ifc.group_model(group))
+    upstairs = [g for g in copies if all(doc.ifc.storey_of(m) == first for m in doc.ifc.group_members(g))]
+    zmin = min(doc.get(m).mesh.verts[:, 2].min() for m in doc.ifc.group_members(upstairs[0])) if upstairs else -1
+    shot("33_grupos_e_piso_tipo.png")
+    errors = doc.ifc.validate(express_rules=True)
+    check("repetir_no_pavimento", len(copies) == 3 and len(upstairs) == 1 and abs(zmin - 3.0) < 1e-6 and errors == [],
+          "cópias={} no_piso_1={} z={:.3f} erros={}".format(len(copies), len(upstairs), zmin, errors[:1]))
+
+
+def components():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(2.5, 1.4, 0.4), radius=3.0)
+    pump(400)
+    make_box((1, 1, 0), "1,2;0,8", "0,75", (1.6, 1.4, 0))
+
+    # A. G (Make component): the dialog asks the name and kind --------------------------------------------
+    select_at((1.6, 1.0, 0.4))                    # the front face of the block
+    asked = []
+
+    def answer_dialog(tries=[0]):
+        dlg = QtWidgets.QApplication.activeModalWidget()
+        if dlg is None:                            # (not open yet: a slower run — look again)
+            tries[0] += 1
+            if tries[0] < 50:
+                QtCore.QTimer.singleShot(100, answer_dialog)
+            return
+        asked.append([c.itemText(i) for c in dlg.findChildren(QtWidgets.QComboBox) for i in range(c.count())])
+        dlg.findChild(QtWidgets.QLineEdit).setText("Mesa")
+        dlg.accept()
+
+    QtCore.QTimer.singleShot(200, answer_dialog)
+    key(Qt.Key.Key_G)
+    pump(400)
+    comps = [o for o in objects() if o.is_bim and o.ifc_class == "IfcFurniture"]
+    check("criar_componente_G", len(comps) == 1 and comps[0].name == "Mesa" and not doc.sketches()
+          and asked and "Mobiliário" in asked[0] and vp.selection == {comps[0].id},
+          "componentes={} pergunta={} seleção={}".format(len(comps), asked, len(vp.selection)))
+    shot("30b_componente_criado.png")
+    first = comps[0].id if comps else None
+
+    # B. Copy it 2 m to the right (M + Ctrl): the copy shares the shape ---------------------------------------
+    key(Qt.Key.Key_M)
+    pump(200)
+    key(Qt.Key.Key_Control)
+    move(near((1.0, 0.5, 0)), 3)
+    click()
+    move(near((2.0, 0.5, 0)), 4)
+    pump(200)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    copy = list(vp.selection)[0] if vp.selection else None
+    shared = len(doc.ifc.file.by_type("IfcRepresentationMap")) == 1
+    panel = win.props.text()
+    shot("30c_copia_do_componente.png")
+    check("copia_partilha_a_forma", len([o for o in objects() if o.is_bim]) == 2 and shared
+          and "Mesa (2 cópia(s))" in panel, "mapas_partilhados={} painel=[{}]".format(shared, panel.replace("\n", " | ")))
+
+    # C. Push/Pull on a copy explains; Edit component, raise the top 25 cm, Close: both copies change ---------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((3.6, 1.4, 0.75)), 3)
+    click()
+    pump(200)
+    explained = "Editar componente" in win.last_message
+    key(Qt.Key.Key_Space)
+    pump(200)
+    vp.set_selection({copy})
+    win.act_component_edit.trigger()
+    pump(400)
+    editing = [o for o in doc.sketches() if o.component]
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((3.6, 1.4, 0.75)), 3)               # the top of the sketch being edited
+    click()
+    move((mouse[0], mouse[1] - 60), 4)
+    type_text("0,25")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    shot("31_editar_componente.png")
+    win.act_component_close.trigger()
+    pump(500)
+    tops = sorted(round(float(o.mesh.verts[:, 2].max()), 3) for o in objects() if o.is_bim)
+    errors = doc.ifc.validate(express_rules=True)
+    check("editar_componente_muda_todas", explained and len(editing) == 1 and tops == [1.0, 1.0]
+          and doc.get(copy) is not None and doc.get(first) is not None and errors == [],
+          "explica={} a_editar={} alturas={} erros={}".format(explained, len(editing), tops, errors[:1]))
+    shot("32_componente_atualizado.png")
+
+
+def joined_walls():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.5, 0.0), radius=5.0)
+    pump(400)
+    key(Qt.Key.Key_W)
+    pump(200)
+    while win.tools["wall"].reference != "axis":
+        key(Qt.Key.Key_Tab)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    for target, length in (((3, 0, 0), "6"), ((6, 2, 0), "4"), ((3, 4, 0), "6"), ((0, 2, 0), "4")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(300)
+    walls = {round(float(o.mesh.verts[:, 1].mean()), 1): o.id for o in objects() if o.is_bim}
+    top, right = walls.get(4.0), None
+    right = [o.id for o in objects() if o.is_bim and abs(o.mesh.verts[:, 0].mean() - 6.0) < 0.01]
+    right = right[0] if right else None
+
+    def room():
+        v = np.vstack([o.mesh.verts for o in objects() if o.is_bim])
+        return v.min(axis=0), v.max(axis=0), sum(o.mesh.volume() for o in objects() if o.is_bim)
+
+    # A. Move the top wall 1 m up: the side walls stretch, the corners stay closed ---------------------
+    select_at((3.0, 4.0, 2.8))
+    picked = vp.selection == {top}
+    key(Qt.Key.Key_M)
+    pump(200)
+    move(near((3.0, 6.0, 0)), 3)
+    click()
+    move(near((3.0, 7.0, 0)), 4)
+    pump(200)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    lo, hi, vol = room()
+    check("paredes_ligadas_acompanham", picked and np.allclose(hi[:2], (6.1, 5.1)) and np.allclose(lo[:2], (-0.1, -0.1))
+          and abs(vol - 22 * 0.2 * 2.8) < 1e-6, "selecionada={} max={} volume={:.4f}".format(picked, hi, vol))
+    vp.set_view("iso", center=(3.0, 2.5, 1.4), radius=5.0)
+    pump(400)
+    shot("30_paredes_ligadas.png")
+
+    # B. The right wall becomes 15 cm in the Properties panel: its corners follow ------------------------
+    key(Qt.Key.Key_Space)
+    pump(200)
+    vp.set_selection({right})
+    pump(300)
+    combo = win.props.editors["type"]
+    i = combo.findText("Parede alvenaria 15 cm")
+    combo.setCurrentIndex(i)
+    combo.activated.emit(i)
+    pump(500)
+    lo, hi, vol = room()
+    errors = doc.ifc.validate(express_rules=True)
+    check("espessura_nova_cantos_limpos", abs(hi[0] - 6.075) < 1e-6
+          and abs(vol - (6.175 * 5.2 - 5.825 * 4.8) * 2.8) < 1e-6 and errors == [],
+          "max_x={:.3f} volume={:.4f} erros={}".format(hi[0], vol, errors[:1]))
+
+
+def copies():
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 3.0, 0.0), radius=7.0)
+    pump(400)
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    move(near((3, 0, 0)), 4)
+    pump(200)
+    type_text("5")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    wall = [o for o in objects() if o.is_bim][0].id
+    door = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"],
+                                   bim_actions.wall_frame(doc, wall), 1.0, -1)
+    pump(300)
+
+    def count(cls):
+        return doc.ifc.count(cls)
+
+    # A. Copy (M + Ctrl) the wall with its door, 3 m up ----------------------------------------------
+    select_at((4.0, 0.0, 2.8))
+    key(Qt.Key.Key_M)
+    pump(200)
+    key(Qt.Key.Key_Control)                       # tap Ctrl: copy on
+    hint = win.hint_label.text()
+    move(near((6, -1, 0)), 3)
+    click()
+    move(near((6, 1, 0)), 8)                      # along the green axis (slowly: the axis must catch)
+    pump(400)
+    label = vp.label_text
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    walls_1, doors_1 = count("IfcWall"), count("IfcDoor")
+    copy_sel = list(vp.selection)
+    original_ok = np.allclose(doc.get(wall).mesh.verts.min(axis=0), (0, -0.1, 0))
+    check("copiar_parede_com_porta", hint.startswith("+ CÓPIA") and label.startswith("+ ") and walls_1 == 2
+          and doors_1 == 2 and original_ok and len(copy_sel) == 1 and copy_sel[0] != wall,
+          "dica={!r} rótulo={!r} paredes={} portas={} original_no_sítio={}".format(
+              hint[:30], label, walls_1, doors_1, original_ok))
+
+    # B. "3x": three copies 3 m apart; "/3": the 3 m split in three; Ctrl+Z removes the series ----------
+    type_text("3x")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    ys_times = sorted(round(float(o.mesh.verts[:, 1].min()), 3) for o in objects()
+                      if o.is_bim and o.ifc_class == "IfcWall")
+    type_text("/3")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    ys_divide = sorted(round(float(o.mesh.verts[:, 1].min()), 3) for o in objects()
+                       if o.is_bim and o.ifc_class == "IfcWall")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("serie_de_copias", ys_times == [-0.1, 2.9, 5.9, 8.9] and ys_divide == [-0.1, 0.9, 1.9, 2.9]
+          and count("IfcWall") == 1 and count("IfcDoor") == 1,
+          "3x={} /3={} depois_de_desfazer={}".format(ys_times, ys_divide, count("IfcWall")))
+
+    # C. Copy a door along its own wall ------------------------------------------------------------------
+    vp.set_selection({door})
+    key(Qt.Key.Key_M)
+    pump(200)
+    key(Qt.Key.Key_Control)
+    move(near((1.4, -1.0, 0)), 3)
+    click()
+    move(near((2.4, -1.0, 0)), 4)
+    pump(200)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    doors = [o for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"]
+    xs = sorted(round(float(o.mesh.verts[:, 0].min()), 3) for o in doors)
+    check("copiar_porta_na_parede", len(doors) == 2 and xs[1] - xs[0] == 2.0
+          and all(doc.ifc.host_wall(o.id) == wall for o in doors), "portas={} x={}".format(len(doors), xs))
+
+    # D. Rotate + copy: 90°, then "3x" around the origin (a polar series) ----------------------------------
+    vp.set_selection({wall})
+    key(Qt.Key.Key_Q)
+    pump(200)
+    key(Qt.Key.Key_Control)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    move(near((2, 0, 0)), 4)
+    pump(200)
+    click()
+    move(near((1.4, 1.4, 0)), 4)
+    pump(200)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    type_text("3x")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    axes = sorted(tuple(np.round(doc.ifc.wall_axis(o.id)[1][:2], 3)) for o in objects()
+                  if o.is_bim and o.ifc_class == "IfcWall")
+    c = win.tools["rotate"]._last.origin           # the centre clicked (it snaps to the wall's corner)
+    end = np.array((5.0, 0.0)) - c[:2]
+    expected = sorted(tuple(np.round(c[:2] + np.array((np.cos(a) * end[0] - np.sin(a) * end[1],
+                                                       np.sin(a) * end[0] + np.cos(a) * end[1])), 3))
+                      for a in np.radians((0, 90, 180, 270)))
+    vp.set_view("iso", center=(0.0, 0.0, 1.4), radius=6.0)
+    pump(400)
+    shot("29_copias_polares.png")
+    errors = doc.ifc.validate(express_rules=True)
+    check("rodar_copiar_em_serie", count("IfcWall") == 4 and count("IfcDoor") == 8 and errors == []
+          and axes == expected, "paredes={} portas={} pontas={} esperado={} erros={}".format(
+              count("IfcWall"), count("IfcDoor"), axes, expected, errors[:1]))
+
+
+def angles_move_rotate():
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 0.5, 0.0), radius=6.0)
+    pump(400)
+
+    # A. Two walls at 60°: the corner is cut in mitre ---------------------------------------------
+    key(Qt.Key.Key_W)
+    pump(200)
+    while win.tools["wall"].reference != "axis":
+        key(Qt.Key.Key_Tab)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    move(near((3, 0, 0)), 4)
+    pump(200)
+    type_text("5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    d60 = np.array((np.cos(np.radians(60)), np.sin(np.radians(60)), 0.0))
+    move(near(np.array((5, 0, 0)) + d60 * 2), 4)
+    pump(200)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    # the one along X (starting at the origin; both share the mitre's lowest corner, so not by Y)
+    first = min(walls, key=lambda o: o.mesh.verts[:, 0].min()).id if walls else None
+    total = sum(o.mesh.volume() for o in walls)
+    cut = doc.ifc.wall_cuts(first)[1] if first else 0
+    check("canto_em_meia_esquadria", len(walls) == 2 and abs(total - 8 * 0.2 * 2.8) < 1e-6 and abs(cut - 30) < 1.0,
+          "paredes={} volume={:.4f} corte={:.2f}°".format(len(walls), total, cut))
+    shot("27_meia_esquadria.png")
+
+    # B. A door slides along its wall with Move (M) -------------------------------------------------
+    door = bim_actions.add_opening(doc, first, catalog.OPENING_BY_KEY["porta_80"],
+                                   bim_actions.wall_frame(doc, first), 1.0, -1)
+    pump(300)
+    x0 = doc.get(door).mesh.verts[:, 0].min()
+    vp.set_selection({door})
+    key(Qt.Key.Key_M)
+    check("atalho_M_mover", win.tool.name == "move", win.tool.name)
+    pump(200)
+    move(near((1.4, -1.0, 0)), 3)
+    click()
+    move(near((2.4, -1.0, 0)), 4)                 # along the red axis
+    pump(200)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    x1 = doc.get(door).mesh.verts[:, 0].min()
+    check("mover_porta_ao_longo_da_parede", abs(x1 - x0 - 1.0) < 1e-6, "x {:.3f} -> {:.3f}".format(x0, x1))
+
+    # C. Move the wall (its door goes along), then correct the distance by typing --------------------
+    select_at((4.0, 0.0, 2.8))
+    picked = vp.selection == {first}
+    lo0 = doc.get(first).mesh.verts.min(axis=0).copy()
+    door0 = doc.get(door).mesh.verts.min(axis=0).copy()
+    key(Qt.Key.Key_M)
+    pump(200)
+    move(near((6, -2, 0)), 3)
+    click()
+    move(near((6, -3, 0)), 4)                     # along the green axis
+    pump(200)
+    tip = vp.tip_text
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    shift1 = doc.get(first).mesh.verts.min(axis=0) - lo0
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    shift2 = doc.get(first).mesh.verts.min(axis=0) - lo0
+    door_shift = doc.get(door).mesh.verts.min(axis=0) - door0
+    check("mover_parede_com_porta_e_corrigir", picked and tip == "No eixo verde" and np.allclose(shift1, (0, -1, 0))
+          and np.allclose(shift2, (0, -2, 0)) and np.allclose(door_shift, (0, -2, 0)),
+          "selecionada={} dica={!r} 1.º={} corrigido={} porta={}".format(picked, tip, np.round(shift1, 3),
+                                                                       np.round(shift2, 3), np.round(door_shift, 3)))
+
+    # its end followed the 60° wall it is joined to: it lies on that wall's axis line (the exact length
+    # depends on the direction the mouse gave that wall: 60° to the pixel)
+    s0, e0, _t = doc.ifc.wall_axis(first)
+    other = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall" and o.id != first][0]
+    a2, b2, _t = doc.ifc.wall_axis(other)
+    d2 = (b2 - a2) / np.linalg.norm(b2 - a2)
+    off = (e0 - a2) - d2 * np.dot(e0 - a2, d2)
+    length0 = float(np.linalg.norm(e0 - s0))
+    check("ponta_segue_a_parede_ligada", np.linalg.norm(off) < 1e-6 and abs(s0[1] + 2.0) < 1e-6,
+          "ponta={} fora do eixo {:.6f} m comprimento={:.3f}".format(np.round(e0, 3), float(np.linalg.norm(off)),
+                                                                    length0))
+
+    # D. Rotate (Q) the wall 90° about the origin with the mouse (the protractor snaps) ---------------
+    key(Qt.Key.Key_Q)
+    check("atalho_Q_rodar", win.tool.name == "rotate", win.tool.name)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    move(near((2, 0, 0)), 4)
+    pump(200)
+    click()
+    move(near((0.03, 2, 0)), 6)
+    pump(200)
+    tip, label = vp.tip_text, vp.label_text
+    shot("28_rodar.png")
+    click()
+    pump(300)
+    s, e, _t = doc.ifc.wall_axis(first)
+    # It turned about the origin and is now vertical, as long as before (turned 90° it can no longer meet the
+    # 60° wall: the joint is let go).
+    rels = doc.ifc.file.by_type("IfcRelConnectsPathElements")
+    check("rodar_parede_90", tip == "Múltiplo de 15°" and label == "90,0°" and np.allclose(s, (2, 0, 0), atol=1e-6)
+          and abs(e[0] - 2.0) < 1e-6 and abs(e[1] - length0) < 1e-6 and len(rels) == 0,
+          "dica={!r} rótulo={!r} eixo={} -> {} ligações={}".format(tip, label, np.round(s, 3), np.round(e, 3), len(rels)))
+    errors = doc.ifc.validate(express_rules=True)
+    check("mover_rodar_ifc_valido", errors == [], errors[:2])
+
+
+def storeys_and_faces():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(5.0, 4.0, 0.0), radius=7.0)
+    pump(400)
+
+    # A. Walls drawn by the outside face (Tab twice: right face), counter-clockwise 10 × 8 -------
+    key(Qt.Key.Key_W)
+    pump(200)
+    key(Qt.Key.Key_Tab)
+    key(Qt.Key.Key_Tab)
+    wall_tool = win.tools["wall"]
+    hint = win.hint_label.text()
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    for target, length in (((5, 0, 0), "10"), ((10, 4, 0), "8"), ((5, 8, 0), "10"), ((0, 4, 0), "8")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(300)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    allv = np.vstack([o.mesh.verts for o in walls]) if walls else np.zeros((1, 3))
+    lo, hi = allv.min(axis=0), allv.max(axis=0)
+    check("paredes_pela_face_exterior", wall_tool.reference == "right" and "pela face direita" in hint
+          and len(walls) == 4 and np.allclose(lo, (0, 0, 0)) and np.allclose(hi, (10, 8, 2.8)),
+          "referência={} dica={!r} min={} max={}".format(wall_tool.reference, hint[:50], lo, hi))
+    ground_walls = [o.id for o in walls]
+
+    # B. New storey from the panel: drawing moves up to its level ------------------------------
+    panel = win.storeys_panel
+    QtTest.QTest.mouseClick(panel.btn_new, Qt.MouseButton.LeftButton)
+    pump(400)
+    levels = doc.storeys()
+    first = doc.active_storey
+    check("novo_pavimento", [(n, z) for _g, n, z in levels] == [("Térreo", 0.0), ("Piso 1", 3.0)]
+          and first == levels[1][0] and "Piso 1 (+3,00 m)" in win.storey_label.text()
+          and abs(vp.grid.local.position[2] - 3.0) < 1e-9 and "*Piso 1" in panel.text(),
+          "pavimentos={} etiqueta={!r} painel=[{}]".format(levels, win.storey_label.text(),
+                                                          panel.text().replace("\n", " / ")))
+    move(near((0.02, 0.02, 3.0)), 3)              # the corner of the walls below
+    pump(200)
+    click()
+    move(near((5, 0, 3.0)), 4)
+    pump(200)
+    type_text("10")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    upper = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall" and o.id not in ground_walls]
+    zmin = upper[0].mesh.verts[:, 2].min() if upper else -1
+    check("parede_no_piso_1", len(upper) == 1 and upper[0].storey == first and abs(zmin - 3.0) < 1e-9,
+          "paredes_novas={} z_base={:.3f}".format(len(upper), zmin))
+    shot("25_pavimentos.png")
+
+    # C. Change the level in the panel: the storey's walls go along; Ctrl+Z ------------------------
+    item = panel.item_for(first)
+    item.setText(1, "3,20")
+    pump(400)
+    moved = doc.get(upper[0].id).mesh.verts[:, 2].min() if upper else -1
+    msg = win.last_message
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = doc.get(upper[0].id).mesh.verts[:, 2].min() if upper else -1
+    check("mudar_cota_do_pavimento", abs(moved - 3.2) < 1e-9 and abs(back - 3.0) < 1e-9 and "acompanharam" in msg,
+          "z={:.3f} desfeito={:.3f} msg={!r}".format(moved, back, msg[:60]))
+
+    # D. Show the active storey only ---------------------------------------------------------------
+    vp.set_view("iso", center=(5.0, 4.0, 2.0), radius=7.0)
+    pump(300)
+    before = (win.act_only_active.isChecked(), panel.only_active.isChecked(), panel.only_active.isVisible(), vp.plan,
+              sorted({str(doc.get(g).storey)[:6] for g in ground_walls if doc.get(g) is not None}),
+              str(doc.active_storey)[:6])
+    # (on its box: a check box answers a click on its box or its words only — its middle, on a wide panel, is past
+    # its words and the click went nowhere)
+    box_at = QtCore.QPoint(9, panel.only_active.height() // 2)
+    QtTest.QTest.mouseClick(panel.only_active, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, box_at)
+    pump(400)
+    for _ in range(26):                           # (a long run, the machine busy: given up to ~3 s to hide them)
+        if all(not vp.is_visible(g) for g in ground_walls):
+            break
+        pump(100)
+    hidden = all(not vp.is_visible(g) for g in ground_walls)
+    shown = vp.is_visible(upper[0].id) if upper else False
+    shot("26_so_o_pavimento_ativo.png")
+    QtTest.QTest.mouseClick(panel.only_active, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, box_at)
+    pump(300)
+    for _ in range(26):
+        if all(vp.is_visible(g) for g in ground_walls):
+            break
+        pump(100)
+    check("ver_so_o_pavimento_ativo", hidden and shown and win.act_only_active.isChecked() is False
+          and all(vp.is_visible(g) for g in ground_walls), "escondidas={} visivel={} antes(acao,caixa,vista_caixa,"
+          "planta,pavimentos,ativo)={}".format(hidden, shown, before))
+
+    # E. PgDn: back to the ground floor; rename Piso 1 in the panel; save ---------------------------
+    key(Qt.Key.Key_PageDown)
+    pump(300)
+    on_ground = doc.active_storey == levels[0][0] and "Térreo" in win.storey_label.text()
+    panel.item_for(first).setText(0, "Primeiro andar")
+    pump(400)
+    names = [n for _g, n, _z in doc.storeys()]
+    path = os.path.join(OUT, "teste_pavimentos.ifc")
+    errors = win.save_to(path)
+    check("pgdn_renomear_gravar", on_ground and names == ["Térreo", "Primeiro andar"] and errors == [],
+          "térreo={} nomes={} erros={}".format(on_ground, names, errors[:2]))
+
+
+def sketch(kind):
+    """Sketch objects: 'face' (faces, no loose lines) or 'lines' (loose lines only)."""
+    out = []
+    for o in objects():
+        if o.is_bim:
+            continue
+        if (kind == "lines") == (len(o.mesh.faces) == 0):
+            out.append(o)
+    return out
+
+
+def line_loops_flow():
+    """0.372 — the Line tool closing on its own chain elsewhere than its first point (the owner's case): from the
+    origin a tail of 1 m, then round a rectangle of 5 × 4 m and back onto the tail's end — the rectangle a face of
+    20 m² at once, the tail a line, the chain ended; Ctrl+Z: the lines as they were. A chain crossing itself: the
+    loop a face, the chain going on from where it was clicked. Captured: 372_linha_fecha_na_cadeia.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)                # snaps to the origin
+    pump(200)
+    click()
+    for target, length in (((2, 0, 0), "1"), ((1, 2, 0), "4"), ((3, 4, 0), "5"), ((6, 2, 0), "4"),
+                           ((3, 0, 0), "5")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(200)
+    faces, loose = sketch("face"), sketch("lines")
+    area = faces[0].mesh.face_area(0) if len(faces) == 1 and len(faces[0].mesh.faces) == 1 else 0.0
+    tail = [sorted(tuple(np.round(o.mesh.transformed(o.matrix).verts[k], 6)) for k in line)
+            for o in loose for line in o.mesh.lines]
+    told = "Contorno fechado" in win.last_message
+    ended = win.tool.name == "line" and not win.tool._pts
+    shot("372_linha_fecha_na_cadeia.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    undone = not sketch("face") and sum(len(o.mesh.lines) for o in sketch("lines")) == 4
+    check("linha_fecha_na_cadeia", abs(area - 20.0) < 1e-6 and tail == [[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]]
+          and told and ended and undone, "area={} cauda={} disse={!r} acabou={} desfeito={}".format(
+              area, tail, win.last_message, ended, undone))
+    # crossing itself: right 4, up 3, left 2, then down 4 across the first line
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(300)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    for target, length in (((2, 0, 0), "4"), ((4, 2, 0), "3"), ((3, 3, 0), "2"), ((2, 1, 0), "4")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(200)
+    faces = sketch("face")
+    crossed = len(faces) == 1 and abs(faces[0].mesh.face_area(0) - 6.0) < 1e-6 and \
+        [tuple(np.round(p, 6)) for p in win.tool._pts] == [(2.0, -1.0, 0.0)]
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    check("linha_cruza_a_cadeia", crossed, "faces={} areas={} cadeia={}".format(
+        len(faces), [round(f.mesh.face_area(0), 6) for f in faces], [tuple(np.round(p, 3)) for p in win.tool._pts]))
+    doc.modified = False
+
+
+def free_drawing_flow():
+    """0.373 — the free drawing as SketchUp's (the owner: «não consigo selecionar uma linha, copiar, ou usar o offset;
+    preciso de ferramenta de arco nesse grupo, linha livre, curvas de Bézier»), as a beginner goes: three lines; a
+    click on the middle one picks it alone; Ctrl+C, Ctrl+V and a click: a copy of it; two clicks: its chain; Move,
+    a click and «1»: it moves, the lines at its ends stretch; F, a click on the first line, «0,5»: the chain's
+    parallel. A, a click on each end of a line and «1,5»: the arc closes a face with it; «2r» right after: a half
+    circle. Freehand round a loop: a face. Bézier: a click, a drag, a click, Enter: a curve of 24 pieces, picked
+    whole, its grips (points and the dragged tangent). Captured: 373_desenho_livre.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    for target, length in (((2, 0, 0), "4"), ((4, 2, 0), "3"), ((3, 3, 0), "2")):
+        move(near(target), 4)
+        pump(200)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(200)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    chain = sketch("lines")[0] if sketch("lines") else None
+    key(Qt.Key.Key_Space)
+    pump(300)
+    move(near((4, 1.5, 0)), 4)                        # the middle of the 2nd line (not on a grip: none yet)
+    pump(300)
+    click()
+    pump(300)
+    alone = chain is not None and vp.line_selection == {chain.id: frozenset({1})} and not vp.selection
+    key(Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    move(near((1, 3, 0)), 4)
+    key(Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    move(near((1, 3.5, 0)), 4)
+    pump(200)
+    click()
+    pump(300)
+    copies = [o for o in sketch("lines") if chain is not None and o.id != chain.id]
+    pasted = len(copies) == 1 and len(copies[0].mesh.lines) == 1
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(700)
+    move(near((4, 1.5, 0)), 4)
+    pump(200)
+    click()
+    pump(60)
+    click()                                           # (two clicks in a row: its chain, the middle grip not taken)
+    pump(300)
+    whole = chain is not None and vp.selection == {chain.id} and win.tool._move is None
+    pump(700)
+    click()
+    pump(300)
+    key(Qt.Key.Key_M)
+    pump(200)
+    move(near((4, 1.5, 0)), 3)
+    pump(200)
+    click()
+    move(near((5, 1.5, 0)), 4)
+    pump(200)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    w = [tuple(np.round(v, 3)) for v in doc.get(chain.id).mesh.verts] if chain is not None else []
+    moved = w == [(0, 0, 0), (5, 0, 0), (5, 3, 0), (2, 3, 0)] and vp.line_selection == {chain.id: frozenset({1})}
+    win.set_tool("select")
+    key(Qt.Key.Key_Escape)
+    vp.set_selection(set())
+    key(Qt.Key.Key_F)
+    pump(200)
+    move(near((2, 0, 0)), 4)
+    pump(200)
+    click()
+    move(near((2, 0.6, 0)), 4)
+    pump(200)
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    parallel = [o for o in sketch("lines") if o.id not in [chain.id] + [c.id for c in copies]]
+    offset_ok = len(parallel) == 1 and [tuple(np.round(transform_point(parallel[0].matrix, v), 3))
+                                        for v in parallel[0].mesh.verts] == [(0, 0.5, 0), (4.5, 0.5, 0),
+                                                                             (4.5, 2.5, 0), (2, 2.5, 0)]
+    check("linha_sozinha_copiar_mover_offset", alone and pasted and whole and moved and offset_ok,
+          "uma={} colada={} cadeia={} movida={} {} offset={}".format(alone, pasted, whole, moved, w, offset_ok))
+    # the Arc: on a line drawn before, closing a face; «2r» right after: a half circle
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 3.0, 0.0), radius=6.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    move(near((0.02, 0.02, 0)), 3)
+    pump(200)
+    click()
+    move(near((2, 0, 0)), 4)
+    pump(200)
+    type_text("4")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    win.set_discipline("modeling", remember=False)
+    pump(200)
+    key(Qt.Key.Key_A)
+    pump(200)
+    on_ribbon = win.tool.name == "arc" and {win.tool_actions[k] for k in ("arc", "freehand", "bezier")} <= \
+        set(win.ribbon_actions())
+    move(near((4, 0, 0)), 4)
+    pump(150)
+    click()
+    move(near((0, 0, 0)), 4)
+    pump(150)
+    click()
+    move(near((2, 1.2, 0)), 4)
+    pump(200)
+    type_text("1,5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    face = sketch("face")
+    closed = len(face) == 1 and not sketch("lines")
+    type_text("2r")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    face = sketch("face")
+    half = len(face) == 1 and abs(face[0].mesh.face_area(0) - 2 * math.pi) < 0.1
+    # freehand round a loop
+    win.tool_actions["freehand"].trigger()
+    pump(200)
+    c = np.array((3.0, 5.5, 0.0))
+    move(near(c + (1.0, 0, 0)), 3)
+    press()
+    for k in range(1, 41):
+        a = 2 * math.pi * k / 40
+        move(near(c + (math.cos(a), math.sin(a) * 0.7, 0)), 1)
+    release()
+    pump(300)
+    loop = len(sketch("face")) == 2
+    # Bézier: a click, a drag (a smooth point), a click, Enter
+    win.tool_actions["bezier"].trigger()
+    pump(200)
+    move(near((7, 0, 0)), 3)
+    click()
+    move(near((8, 2, 0)), 3)
+    press()
+    move(near((9, 3, 0)), 4)
+    release()
+    move(near((7, 5, 0)), 4)
+    click()
+    pump(100)
+    key(Qt.Key.Key_Return)
+    pump(300)
+    bez = [o for o in sketch("lines") if o.curve and o.curve.get("kind") == "bezier"]
+    made = len(bez) == 1 and len(bez[0].mesh.lines) == 24
+    win.set_tool("select")
+    pump(700)
+    if bez:
+        move(near(transform_point(bez[0].matrix, bez[0].mesh.verts[6])), 4)
+        pump(200)
+        click()
+        pump(300)
+    grips = bool(bez) and vp.selection == {bez[0].id} and len(vp.grips[0]) == 3 and len(vp.grips[1]) == 2
+    vp.set_view("top", center=(4.5, 3.0, 0.0), radius=7.0)
+    pump(300)
+    shot("373_desenho_livre.png")
+    check("arco_linha_livre_bezier", on_ribbon and closed and half and loop and made and grips,
+          "fita={} face={} meia={} livre={} bezier={} pegas={} {}".format(
+              on_ribbon, closed, half, loop, made, grips, [len(g) for g in vp.grips]))
+    win.set_discipline("architecture", remember=False)
+    doc.modified = False
+
+
+def architecture_tools_flow():
+    """0.374 — the addon's inventory and the owner's study, as a beginner goes: Arquitetura ▸ Retangular, a click and
+    «6;4»: four walls; Separador across the middle; Identificar: two rooms; Áreas (the table); Piso inside the left
+    room; Nicho on the front wall, «0,6;0,5»; Elevador with a click; the roof by the walls, the Calha on its eave.
+    Captured: 374_arquitetura.png."""
+    from arqbim.model import bim as bim_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_discipline("architecture", remember=False)
+    vp.set_view("top", center=(4.0, 3.0, 0.0), radius=7.0)
+    pump(400)
+    on_ribbon = {win.act_wall_rect, win.act_rooms_identify, win.act_areas} | \
+        {win.tool_actions[k] for k in ("niche", "flooring", "gutter", "elevator", "room_separator")} <= \
+        set(win.ribbon_actions())
+    win.act_wall_rect.trigger()
+    pump(200)
+    move(near((0, 0, 0)), 4)
+    click()
+    move(near((6, 4, 0)), 4)
+    type_text("6;4")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    walls = [o for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "wall"]
+    win.tool_actions["room_separator"].trigger()
+    pump(100)
+    # (on the walls' inner faces, y = 0,1 and 3,9, as one draws it — not 40 cm off them: whether the click was caught
+    # on the face from there hung on the view's size in pixels, and a separator short of the walls parts nothing)
+    move(near((3, 0.1, 0)), 4)
+    pump(100)
+    click()
+    move(near((3, 3.9, 0)), 4)
+    pump(100)
+    click()
+    separator_said = win.last_message[:50]
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    win.act_rooms_identify.trigger()
+    pump(400)
+    rooms = len(doc.ifc.spaces(doc.active_storey))
+    shown = []
+    real_exec = QtWidgets.QDialog.exec
+    QtWidgets.QDialog.exec = lambda self: shown.append(self) or 0
+    try:
+        win.act_areas.trigger()
+    finally:
+        QtWidgets.QDialog.exec = real_exec
+    pump(200)
+    table = shown[0].findChild(QtWidgets.QTableWidget) if shown else None
+    areas = table is not None and table.rowCount() == 2 and "m²" in table.item(0, 2).text()
+    win.tool_actions["flooring"].trigger()
+    pump(100)
+    move(near((1.5, 2, 0)), 4)
+    pump(200)
+    click()
+    pump(400)
+    floors = [o for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "flooring"]
+    vp.set_view("iso", center=(3.0, 0.0, 1.2), radius=5.0)
+    pump(400)
+    win.tool_actions["niche"].trigger()
+    pump(100)
+    move(near((1.0, -0.1, 0.8)), 4)
+    click()
+    move(near((1.6, -0.1, 1.3)), 4)
+    type_text("0,6;0,5")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    niche = "Nicho" in win.last_message
+    vp.set_view("top", center=(4.0, 3.0, 0.0), radius=7.0)
+    pump(300)
+    win.tool_actions["elevator"].trigger()
+    pump(100)
+    move(near((7.5, 0.5, 0)), 4)
+    click()
+    pump(400)
+    lifts = [o for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "elevator"]
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win.tool.set_option("shape", "wand")
+    move(near((1.5, 2, 0)), 4)
+    pump(200)
+    click()
+    pump(500)
+    roofs = [o for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "roof"]
+    eaves = bim_model.roof_eaves(doc, roofs[0].id) if roofs else []
+    if eaves:
+        a, b, _o = eaves[0]
+        vp.set_view("top", center=(3.0, 2.0, 0.0), radius=7.0)
+        pump(300)
+        win.tool_actions["gutter"].trigger()
+        pump(100)
+        move(near((a + b) / 2 - _o * 0.2), 4)
+        pump(200)
+        click()
+        pump(400)
+    gutters = [o for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "gutter"]
+    win.set_tool("select")
+    vp.set_view("iso", center=(3.5, 2.0, 1.5), radius=8.0)
+    pump(400)
+    shot("374_arquitetura.png")
+    check("ferramentas_de_arquitetura", on_ribbon and len(walls) == 4 and rooms == 2 and areas and len(floors) == 1
+          and niche and len(lifts) == 1 and len(roofs) == 1 and len(gutters) == 1,
+          "fita={} paredes={} ambientes={} areas={} piso={} nicho={} elevador={} cobertura={} calha={} ({}) "
+          "separador: {!r}".format(
+              on_ribbon, len(walls), rooms, areas, len(floors), niche, len(lifts), len(roofs), len(gutters),
+              win.last_message[:60], separator_said))
+    doc.modified = False
+
+
+def study_themes_flow():
+    """0.374 — the five palettes of the owner's interface study (Visualizar ▸ Tema): Bege and Grafite at once, the
+    panels' titles in the study's header colour; «Explorar cores…» changes the accent and keeps it; back to the light
+    theme. Captured: 374_tema_bege.png, 374_tema_grafite.png."""
+    from arqbim.ui import theme as ui_theme
+    before = ui_theme.NAME                          # (put back at the end: the computer's own choice)
+    kept = QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(ui_theme.PALETTE_KEY)
+    win.set_discipline("view", remember=False)
+    pump(200)
+    on_ribbon = {win.act_theme_bege, win.act_theme_grafite, win.act_theme_studio} <= set(win.ribbon_actions())
+    # (0.376) the header's palette button, always in sight: every theme in its menu
+    header_menu = win.theme_menu(show=False)
+    on_ribbon = on_ribbon and "theme" in win.header.buttons and win.header.buttons["theme"].isVisible() and \
+        {win.act_theme_light, win.act_theme_dark, win.act_theme_bege, win.act_theme_revit, win.act_theme_pedra,
+         win.act_theme_escuro, win.act_theme_grafite, win.act_theme_studio} <= set(header_menu.actions())
+    header_menu.deleteLater()
+    win.act_theme_bege.trigger()
+    pump(400)
+    bege = ui_theme.NAME == "bege" and win.act_theme_bege.isChecked() and \
+        ui_theme.C["panel_head"] in win.findChildren(QtWidgets.QDockWidget)[0].styleSheet()
+    shot("374_tema_bege.png")
+    win.act_theme_grafite.trigger()
+    pump(400)
+    grafite = ui_theme.is_dark() and QtWidgets.QApplication.instance().palette().window().color().name() == "#202020"
+    shot("374_tema_grafite.png")
+    win.act_theme_revit.trigger()
+    pump(300)
+    revit = ui_theme.NAME == "revit" and win.act_theme_revit.isChecked() and \
+        QtWidgets.QApplication.instance().palette().window().color().name() == "#374456"
+    on_ribbon = on_ribbon and revit and not hasattr(win, "act_theme_areia")
+    shot("minimal_tema_revit.png")
+
+    win.set_discipline("architecture", remember=False)
+    for name in ui_theme.STUDY:
+        win.set_theme(name)
+        pump(100)
+        wall_button = win.ribbon_bar.findChild(QtWidgets.QToolButton, "wall")
+        on_ribbon = on_ribbon and wall_button is not None and not wall_button.icon().isNull()
+    win.set_theme("bege")
+    pump(150)
+    shot("minimal_arquitetura_bege.png")
+    win.set_theme("revit")
+    pump(150)
+    shot("minimal_arquitetura_revit.png")
+    studio = win.explore_colours()
+    pump(300)
+    studio.set_colour("accent", "#c0392b")
+    pump(300)
+    custom = ui_theme.NAME == ui_theme.CUSTOM and ui_theme.C["accent"] == "#c0392b"
+    studio.close()
+    settings = QtCore.QSettings("ArqSynth", "ArqSynth BIM")
+    if kept is None:
+        settings.remove(ui_theme.PALETTE_KEY)
+    else:
+        settings.setValue(ui_theme.PALETTE_KEY, kept)
+    win.set_theme(before)
+    pump(300)
+    win.set_discipline("architecture", remember=False)
+    check("temas_do_estudo", on_ribbon and bege and grafite and custom and ui_theme.NAME == before,
+          "fita={} bege={} grafite={} sua={} agora={}".format(on_ribbon, bege, grafite, custom, ui_theme.NAME))
+
+
+def lines_and_guides():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 3.0, 0.0), radius=5.5)
+    pump(400)
+
+    # A. Line (L): an L-shaped room outline with typed lengths, closed on the 1st point --------
+    key(Qt.Key.Key_L)
+    check("atalho_L_linha", win.tool.name == "line", win.tool.name)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)                # snaps to the origin
+    pump(200)
+    click()
+    tips = []
+    for target, length in (((3, 0, 0), "6"), ((6, 1.5, 0), "3"), ((4, 3, 0), "4"), ((2, 5, 0), "4"),
+                           ((1, 7, 0), "2")):
+        move(near(target), 4)
+        pump(200)
+        tips.append(vp.tip_text)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(200)
+    chain = sketch("lines")
+    pts = [tuple(np.round(v, 6)) for v in chain[0].mesh.verts] if chain else []
+    check("linhas_com_medidas_digitadas", len(chain) == 1 and pts == [(0, 0, 0), (6, 0, 0), (6, 3, 0), (2, 3, 0),
+                                                                       (2, 7, 0), (0, 7, 0)],
+          "dicas={} pontos={}".format(tips, pts))
+    move(near((0, 0, 0), 3, -3), 3)               # back on the first point
+    pump(200)
+    tip = vp.tip_text
+    shot("20_linha_a_fechar.png")
+    click()
+    pump(300)
+    faces = sketch("face")
+    area = faces[0].mesh.face_area(0) if faces else 0
+    check("contorno_fechado_vira_face_em_L", tip == "Fechar contorno" and len(faces) == 1 and not sketch("lines")
+          and len(faces[0].mesh.verts) == 6 and abs(area - 26.0) < 1e-9,
+          "dica={!r} faces={} área={:.4f}".format(tip, len(faces), area))
+    floor = faces[0] if faces else None
+
+    # B. Tape measure (T): two guide lines at typed distances from two edges ------------------
+    key(Qt.Key.Key_T)
+    check("atalho_T_fita", win.tool.name == "tape", win.tool.name)
+    pump(200)
+    move(near((4.5, 0, 0)), 3)                    # bottom edge of the L
+    pump(200)
+    tip1 = vp.tip_text
+    click()
+    move(near((4.5, -1, 0)), 4)
+    type_text("1,5")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    move(near((0, 5.5, 0)), 3)                    # left edge of the L
+    pump(200)
+    click()
+    move(near((-1, 5.5, 0)), 4)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    guides = sorted((tuple(np.round(g.point, 6)), tuple(np.round(np.abs(g.direction), 6))) for g in doc.guides.values())
+    ok = (len(guides) == 2 and any(abs(p[1] + 1.5) < 1e-9 and d == (1, 0, 0) for p, d in guides)
+          and any(abs(p[0] + 1.0) < 1e-9 and d == (0, 1, 0) for p, d in guides))
+    check("fita_cria_guias_paralelas", tip1 == "Na aresta" and ok, "dica={!r} guias={}".format(tip1, guides))
+
+    # C. Line from where the guides cross, along a guide -------------------------------------
+    key(Qt.Key.Key_L)
+    pump(200)
+    vp.tracking.clear()                           # (a slow run may have acquired a point on the way: an alignment)
+    move(near((-1, -1.5, 0), 4, -3), 3)
+    pump(200)
+    tip = vp.tip_text
+    shot("21_guias_intersecao.png")
+    click()
+    move(near((1.5, -1.5, 0)), 4)
+    pump(200)
+    tip2 = vp.tip_text
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)                        # ends the chain: the open line stays
+    pump(200)
+    loose = sketch("lines")
+    pts = [tuple(np.round(v, 9)) for v in loose[0].mesh.verts] if loose else []
+    check("linha_na_intersecao_e_na_guia", tip == "Interseção" and tip2 == "Na guia" and len(loose) == 1
+          and pts == [(-1, -1.5, 0), (2, -1.5, 0)], "dicas={!r}/{!r} pontos={}".format(tip, tip2, pts))
+
+    # D. Select the line (Space + click on it), Delete, Ctrl+Z --------------------------------
+    select_at((0.8, -1.5, 0))
+    picked = vp.selection == {loose[0].id} if loose else False
+    panel = win.props.text()
+    key(Qt.Key.Key_Delete)
+    gone = not sketch("lines")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    check("selecionar_apagar_linha", picked and gone and len(sketch("lines")) == 1
+          and "1 segmento(s), 3,00 m no total" in panel,
+          "selecionada={} apagada={} painel=[{}]".format(picked, gone, panel.replace("\n", " | ")))
+
+    # E. Edit ▸ Delete guide lines, and undo -----------------------------------------------------
+    win.act_delete_guides.trigger()
+    pump(200)
+    none_left = len(doc.guides) == 0
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    check("apagar_linhas_guia_e_desfazer", none_left and len(doc.guides) == 2)
+
+    # F. Blue axis: a vertical line, 2,50 high ----------------------------------------------------
+    vp.set_view("iso", center=(4.0, 2.0, 1.0), radius=6.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((9, 0, 0)), 3)
+    click()
+    move(near((9, 0, 1.5)), 4)
+    pump(200)
+    tip = vp.tip_text
+    type_text("2,5")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    tops = [o for o in sketch("lines") if np.allclose(o.mesh.verts[0], (9, 0, 0), atol=0.05)]
+    top = tops[0].mesh.verts[-1] if tops else np.zeros(3)
+    check("linha_no_eixo_azul", tip == "No eixo azul" and np.allclose(top[:2], tops[0].mesh.verts[0][:2] if tops else 0)
+          and abs(top[2] - 2.5) < 1e-9, "dica={!r} topo={}".format(tip, np.round(top, 4)))
+
+    # G. Push/Pull the L-shaped face: an L-shaped volume ------------------------------------------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((1, 1, 0)), 3)
+    click()
+    move((mouse[0] + 20, mouse[1] - 100), 4)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    vol = volume(doc.get(floor.id)) if floor else 0
+    check("pushpull_face_em_L", floor is not None and abs(vol - 26 * 3) < 1e-9 and doc.get(floor.id).mesh.is_closed(),
+          "volume={:.4f}".format(vol))
+    shot("22_volume_em_L_e_guias.png")
+
+    # G1. Line (L) across the top of the volume, edge to edge: the top is divided; Push/Pull (P) raises one part
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((4.0, 0.0, 3.0)), 3)
+    pump(200)
+    click()
+    move(near((4.0, 3.0, 3.0)), 4)
+    pump(200)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    mesh = doc.get(floor.id).mesh.transformed(doc.get(floor.id).matrix) if floor else None
+    tops = [fi for fi in range(len(mesh.faces)) if np.allclose(mesh.face_normal(fi), (0, 0, 1))] if mesh else []
+    check("linha_divide_o_topo", len(tops) == 2 and mesh.is_closed() and len(sketch("lines")) == 2,
+          "topos={} linhas={} msg={!r}".format(len(tops), len(sketch("lines")), win.last_message[:50]))
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((5.0, 1.5, 3.0)), 3)
+    click()
+    move((mouse[0], mouse[1] - 80), 4)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    mesh = doc.get(floor.id).mesh.transformed(doc.get(floor.id).matrix) if floor else None
+    left = max(v[2] for v in mesh.verts if v[0] < 3.5) if mesh else 0
+    vol = volume(doc.get(floor.id)) if floor else 0
+    check("pushpull_so_uma_parte", mesh.is_closed() and abs(left - 3.0) < 1e-9 and 83.0 < vol < 85.0,
+          "volume={:.3f} topo_esquerdo={}".format(vol, left))
+    shot("22b_parte_do_topo.png")
+
+    # G2. In 3D: tape from the bottom edge of the volume, mouse out on the ground -> guide on the ground
+    key(Qt.Key.Key_T)
+    pump(200)
+    move(near((4.0, 0.0, 0.0)), 3)
+    pump(200)
+    tip = vp.tip_text
+    click()
+    move(near((4.0, -0.8, 0.0)), 4)
+    pump(200)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    new = [g for g in doc.guides.values() if abs(g.point[1] + 1.0) < 1e-9 and abs(g.point[2]) < 1e-9
+           and np.allclose(np.abs(g.direction), (1, 0, 0))]
+    check("fita_em_3d_guia_no_chao", tip == "Na aresta" and len(new) == 1 and len(doc.guides) == 3,
+          "dica={!r} guias={}".format(tip, [tuple(np.round(g.point, 3)) for g in doc.guides.values()]))
+
+    # H. Save and reopen: lines and guides come back (sketch file beside the IFC) -----------------
+    path = os.path.join(OUT, "teste_linhas.ifc")
+    errors = win.save_to(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.open_path(path)
+    pump(400)
+    check("gravar_reabrir_linhas_e_guias", errors == [] and len(doc.guides) == 3 and len(sketch("lines")) == 2
+          and len(sketch("face")) == 1, "guias={} linhas={} volumes={}".format(
+              len(doc.guides), len(sketch("lines")), len(sketch("face"))))
+
+
+def separate_walls():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(400)
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    click()
+    move(near((3, 0, 0)), 4)
+    pump(200)
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)                        # the first wall is drawn on its own
+    pump(300)
+    first = [o for o in objects() if o.is_bim][0].id
+    move(near((6, 0, 0), 4, 3), 3)                # the end of its axis
+    pump(200)
+    tip = vp.tip_text
+    shot("23_eixo_da_parede.png")
+    click()
+    move(near((6, 2, 0)), 4)
+    pump(200)
+    type_text("4")
+    key(Qt.Key.Key_Return)
+    msg = win.last_message
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    total = sum(o.mesh.volume() for o in walls)
+    length = doc.ifc.wall_params(first)[0]
+    check("paredes_separadas_unem_o_canto", tip == "Eixo da parede" and len(walls) == 2
+          and abs(total - (6.1 + 3.9) * 0.2 * 2.8) < 1e-6 and abs(length - 6.1) < 1e-9 and "unido" in msg,
+          "dica={!r} volume={:.4f} comprimento_1={:.3f} msg={!r}".format(tip, total, length, msg[:60]))
+    vp.set_view("iso", center=(4.0, 1.5, 1.4), radius=4.5)
+    pump(400)
+    shot("24_canto_unido.png")
+    errors = doc.ifc.validate(express_rules=True)
+    check("paredes_unidas_validas", errors == [], errors[:2])
+
+    # Line (L) across the wall's front face, end to end at 1 m: two rectangles; P pushes the lower one in (niche)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((0.0, -0.1, 1.0)), 3)
+    pump(200)
+    click()
+    move(near((6.1, -0.1, 1.0)), 4)
+    pump(200)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    msg = win.last_message
+    rects = [o for o in objects() if not o.is_bim]
+    check("linha_na_parede_dois_retangulos", len(rects) == 2 and "duas partes" in msg,
+          "esboços={} msg={!r}".format(len(rects), msg[:60]))
+    key(Qt.Key.Key_P)
+    pump(300)
+    c = np.array((3.0, -0.1, 0.5))
+    inward = np.array(at(c + np.array((0, 1.0, 0)))) - np.array(at(c))
+    move(near(c), 3)
+    click()
+    move(np.array(mouse) + inward / np.linalg.norm(inward) * 30, 3)
+    type_text("0,05")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    niches = [o for o in doc.ifc.file.by_type("IfcOpeningElement") if o.PredefinedType == "RECESS"]
+    errors = doc.ifc.validate(express_rules=True)
+    check("parte_da_parede_empurrada_faz_nicho", len(niches) == 1 and errors == []
+          and len([o for o in objects() if not o.is_bim]) == 1,
+          "nichos={} erros={} msg={!r}".format(len(niches), errors[:1], win.last_message[:60]))
+    shot("24b_nicho_pela_linha.png")
+
+
+def slanted_wall_line():
+    """0.58: a slanted line on a wall's face (corner to the top edge, as the owner drew it) divides the face; the
+    triangle pushed in becomes a niche of that shape. 0.58.1: the wall's hole stays seen through the part
+    covering it (only the parts' outlines are drawn on the wall)."""
+    from arqbim.model import bim as bim_actions
+    from arqbim.ifc import catalog
+    from arqbim.core.sketch_geometry import rectangle_matrix, rectangle_mesh
+    from arqbim.model.document import AddObject, SketchObject
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, (0, 0, 0), (5, 0, 0), catalog.BY_KEY["parede_alv_20"])
+    hole = SketchObject("furo", rectangle_matrix(np.array((3.9, -0.1, 1.0)), np.array((1.0, 0, 0)),
+                                                 np.array((0, 0, 1.0))), rectangle_mesh(0.6, 0.6))
+    doc.execute(AddObject(hole))
+    bim_actions.push_void(doc, hole, bim_actions.sheet_host(doc, hole), 0.2)     # right through: a window's hole
+    vol, top = doc.get(wall).mesh.volume(), float(doc.get(wall).mesh.verts[:, 2].max())
+    vp.set_view("iso", center=(2.5, 0.0, 1.4), radius=4.0)
+    pump(400)
+    through = (4.2, -0.1, 1.3)
+    seen = pixel(through)
+    key(Qt.Key.Key_L)
+    pump(200)
+    move(near((0.0, -0.1, 0.0)), 3)                   # the bottom corner
+    pump(200)
+    click()
+    move(near((3.4, -0.1, top)), 4)                   # the top edge
+    pump(200)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    msg = win.last_message
+    parts = [o for o in objects() if not o.is_bim]
+    triangle = next((o for o in parts if len(o.mesh.faces[0]) == 3), None)
+    check("linha_inclinada_divide_a_parede", len(parts) == 2 and triangle is not None and "duas partes" in msg,
+          "partes={} msg={!r}".format([len(o.mesh.faces[0]) for o in parts], msg[:60]))
+    if triangle is None:
+        return
+    after = pixel(through)
+    check("furo_visivel_depois_de_dividir", max(abs(a - b) for a, b in zip(seen, after)) <= 12,
+          "antes={} depois={}".format(seen, after))
+    shot("24c_parede_dividida_com_furo.png")
+    corners = [transform_point(triangle.matrix, v) for v in triangle.mesh.verts]
+    centre = np.mean(corners, axis=0)
+    area = triangle.mesh.face_area(0)
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near(centre), 3)
+    click()
+    move(inward(centre, (0, -1.0, 0), px=30), 3)
+    type_text("0,05")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    drawn = [v for v in doc.ifc.voids(wall) if not v[3] and not v[4]]       # (the window's hole is a box)
+    cut = vol - doc.get(wall).mesh.volume()
+    check("nicho_triangular_na_parede", len(drawn) == 1 and abs(cut - area * 0.05) < 1e-5
+          and doc.ifc.validate(express_rules=True) == [], "vãos={} volume_cortado={:.4f} esperado={:.4f}".format(
+              len(drawn), cut, area * 0.05))
+    shot("24d_nicho_triangular.png")
+
+
+def alignments_flow():
+    """0.60 / 0.61: alignments. A line's end lines up by itself with a corner near the cursor (dashed red)
+    where it crosses the green axis — exactly; Shift keeps the red axis whatever the mouse; a line starts at
+    a distance typed from a corner; a wall starts aligned. Revit's temporary dimensions: a wall's length
+    and a line's, clicked and typed over."""
+    shift = Qt.KeyboardModifier.ShiftModifier
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(2.0, 1.5, 0.0), radius=4.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    move(near((0.0, 0.0, 0.0)), 3)                     # the origin
+    click()
+    move(near((3.5, 0.0, 0.0)), 3)
+    type_text("4")
+    key(Qt.Key.Key_Return)
+    move(near((4.0, 2.5, 0.0)), 3)
+    type_text("3")
+    key(Qt.Key.Key_Return)                             # (0, 0) → (4, 0) → (4, 3)
+    key(Qt.Key.Key_Escape)
+    move(near((0.0, 0.0, 0.0)), 3)
+    click()                                            # a new line, from the origin
+    move(near((0.0, 3.0, 0.0), 4, 3), 4)              # up the green axis, level with the corner (4, 3): no pause
+    tip, kinds, dims = vp.tip_text, list(vp.alignment_kinds), [round(d.value, 4) for d, _at, _t in vp.temp_dims]
+    shot("54_alinhamentos.png")
+    click()
+    lines_obj = max((o for o in objects() if not o.is_bim), key=lambda o: o.name)
+    ends = [transform_point(lines_obj.matrix, v) for v in lines_obj.mesh.verts]
+    check("alinhado_sozinho_com_canto", tip == "Cruzamento de alinhamentos" and "align_x" in kinds
+          and any(np.allclose(e, (0, 3, 0), atol=1e-9) for e in ends) and dims == [3.0],
+          "dica={!r} linhas={} cotas={} pontas={}".format(tip, kinds, dims, np.round(ends, 4).tolist()))
+    move(near((2.0, 3.0, 0.0), 0, 4), 3)               # along the red axis…
+    move(near((2.0, 4.0, 0.0)), 3, modifiers=shift)    # …Shift held: the mouse leaves it, the point does not
+    tip = vp.tip_text
+    QtTest.QTest.mousePress(canvas, Qt.MouseButton.LeftButton, shift, qp(*mouse))
+    QtTest.QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, shift, qp(*mouse))
+    pump(100)
+    _deliver()
+    ends = [transform_point(lines_obj.matrix, v) for v in doc.get(lines_obj.id).mesh.verts]
+    check("shift_bloqueia_direcao", "No eixo vermelho — bloqueado" in tip
+          and any(abs(e[1] - 3.0) < 1e-9 and e[0] > 1.0 for e in ends),
+          "dica={!r} pontas={}".format(tip, np.round(ends, 4).tolist()))
+    key(Qt.Key.Key_Escape)
+
+    # a line starting 2 m below the corner (4, 0): along its green alignment, typed before the first click
+    move(near((4.0, -1.5, 0.0), 3, 0), 4)
+    shown = [(np.round(d.a, 4).tolist(), round(d.value, 2)) for d, _at, _t in vp.temp_dims]
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    move(near((6.0, -2.0, 0.0), 0, 3), 4)
+    click()
+    key(Qt.Key.Key_Escape)
+    typed_line = max((o for o in objects() if not o.is_bim), key=lambda o: o.name)
+    ends = [transform_point(typed_line.matrix, v) for v in typed_line.mesh.verts]
+    check("inicio_a_distancia_escrita", shown and shown[0][0] == [4.0, 0.0, 0.0]
+          and any(np.allclose(e, (4, -2, 0), atol=1e-9) for e in ends),
+          "cota={} pontas={}".format(shown, np.round(ends, 4).tolist()))
+
+    key(Qt.Key.Key_W)                                  # a wall starting level with the corners (4, …)
+    move(near((4.0, -3.0, 0.0), 3, 0), 4)
+    tip = vp.tip_text
+    click()
+    move(near((6.0, -3.0, 0.0)), 4)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    walls_now = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    a = doc.ifc.wall_axis(walls_now[0])[0] if walls_now else None
+    check("parede_alinhada_com_ponto", a is not None and abs(a[0] - 4.0) < 1e-6 and "verde" in tip,
+          "início={} dica={!r}".format(None if a is None else np.round(a, 4).tolist(), tip))
+    if not walls_now:
+        return
+
+    # Revit's temporary dimensions: select the wall, click its length, type 3
+    key(Qt.Key.Key_Space)
+    move(near((5.0, a[1], 1.4)), 4)
+    click()
+    pump(200)
+    length_dim = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "wall_length"), None)
+    shot("55_cotas_temporarias.png")
+    if length_dim is None:
+        check("cota_temporaria_da_parede", False, "cotas={}".format([d.key for d, _a, _t in vp.temp_dims]))
+        return
+    sx, sy = vp.project(length_dim[1])
+    move((sx, sy - 8), 3)
+    click()
+    active = win.tool._active is length_dim[0]
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    length = doc.ifc.wall_params(walls_now[0])[0]
+    check("cota_temporaria_da_parede", active and abs(length - 3.0) < 1e-6 and "Ctrl+Z" in win.last_message,
+          "ativa={} comprimento={:.3f}".format(active, length))
+    vp.set_selection({typed_line.id})                  # the line typed above (behind the wall here): 1,50 long
+    pump(200)
+    line_dim = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "line"), None)
+    if line_dim is not None:
+        sx, sy = vp.project(line_dim[1])
+        move((sx, sy - 8), 3)
+        click()
+        type_text("1,5")
+        key(Qt.Key.Key_Return)
+        pump(300)
+    ends = [transform_point(typed_line.matrix, v) for v in doc.get(typed_line.id).mesh.verts]
+    check("cota_temporaria_da_linha", line_dim is not None and any(np.allclose(e, (5.5, -2, 0), atol=1e-9) for e in ends),
+          "pontas={}".format(np.round(ends, 4).tolist()))
+    key(Qt.Key.Key_Escape)
+
+
+def parametric_lines_flow():
+    """0.62: lines stay editable. A chain (0,0)→(4,0)→(4,3) and a line (0,0)→(0,3) drawn apart; the chain
+    selected shows its grips; its end at the origin clicked, moved 1 m (typed): the other line follows; its
+    middle grip dragged; the other line's length typed in the Properties panel."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(2.0, 1.5, 0.0), radius=4.0)
+    pump(400)
+    key(Qt.Key.Key_L)
+    for p, typed in (((0.0, 0.0, 0.0), None), ((3.5, 0.0, 0.0), "4"), ((4.0, 2.5, 0.0), "3")):
+        move(near(p), 3)
+        if typed is None:
+            click()
+        else:
+            type_text(typed)
+            key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    move(near((0.0, 0.0, 0.0)), 3)
+    click()
+    move(near((0.0, 2.5, 0.0)), 3)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    chain, other = sorted((o for o in objects() if not o.is_bim), key=lambda o: o.name)
+
+    def ends(obj):
+        o = doc.get(obj.id)
+        return [np.round(transform_point(o.matrix, v), 4).tolist() for v in o.mesh.verts]
+
+    key(Qt.Key.Key_Space)
+    vp.set_selection({chain.id})
+    pump(300)
+    grips = (len(vp.grips[0]), len(vp.grips[1]))
+    move(near((0.0, 0.0, 0.0)), 3)                     # the end at the origin: clicked…
+    click()
+    move(near((-0.6, 0.0, 0.0), 0, 2), 4)              # …taken to the left…
+    type_text("1")
+    key(Qt.Key.Key_Return)                             # …1 m
+    pump(300)
+    check("pegas_e_linhas_ligadas", grips == (3, 2) and [-1.0, 0.0, 0.0] in ends(chain)
+          and [-1.0, 0.0, 0.0] in ends(other) and "Ctrl+Z" in win.last_message,
+          "pegas={} cadeia={} outra={}".format(grips, ends(chain), ends(other)))
+    shot("56_linhas_parametricas.png")
+    vp.set_selection({chain.id})
+    pump(300)
+    mid = np.array((4.0, 1.5, 0.0))                    # the middle of (4,0)-(4,3): dragged to the right
+    move(near(mid), 3)
+    press()
+    move(near(mid + (1.0, 0.0, 0.0), 0, 3), 6)
+    release()
+    pump(300)
+    moved = ends(chain)
+    check("pega_do_meio_arrasta_o_segmento", abs(moved[1][1]) < 1e-9 and abs(moved[2][1] - 3.0) < 1e-9
+          and moved[1][0] > 4.5 and abs(moved[1][0] - moved[2][0]) < 1e-9, "cadeia={}".format(moved))
+    vp.set_selection({other.id})
+    pump(300)
+    text = win.props.text()
+    panel_set(("line_length", 0), "2")
+    o = doc.get(other.id)
+    a, b = (transform_point(o.matrix, v) for v in o.mesh.verts[:2])
+    check("linha_no_painel", "Ângulo (na planta)" in text and "Início (x; y; z): -1; 0; 0" in text
+          and abs(np.linalg.norm(b - a) - 2.0) < 1e-9, "comprimento={:.4f}\n{}".format(np.linalg.norm(b - a), text))
+    key(Qt.Key.Key_Escape)
+
+
+def structure_flow():
+    """0.66 (Phase 5, step 1): the Column tool (a click), the Beam tool (a click, a length typed), the
+    beam's top changed in the Properties panel."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(2.5, 0.0, 1.4), radius=4.5)
+    pump(400)
+    win.tool_actions["column"].trigger()
+    pump(200)
+    hint = win.hint_label.text()
+    move(near((0.0, 0.0, 0.0)), 3)                     # the origin
+    click()
+    move(near((5.0, 0.0, 0.0)), 4)
+    click()
+    pump(300)
+    columns = [o for o in objects() if o.is_bim and o.ifc_class == "IfcColumn"]
+    win.tool_actions["beam"].trigger()
+    pump(200)
+    move(near((0.0, 0.0, 2.8)), 3)
+    click()
+    move(near((4.5, 0.0, 2.8), 0, 3), 4)
+    type_text("5")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    beams = [o for o in objects() if o.is_bim and o.ifc_class == "IfcBeam"]
+    shot("62_pilares_e_viga.png")
+    info = doc.ifc.describe(beams[0].id) if beams else None
+    check("pilares_e_viga", len(columns) == 2 and "Pilar" in hint and len(beams) == 1
+          and abs(info["params"]["length"] - 5.0) < 1e-6 and abs(info["params"]["top"] - 2.8) < 1e-6
+          and doc.ifc.validate(express_rules=True) == [],
+          "pilares={} vigas={} params={}".format(len(columns), len(beams), info and info["params"]))
+    if not beams:
+        return
+    key(Qt.Key.Key_Space)
+    vp.set_selection({beams[0].id})
+    pump(300)
+    panel_set("beam_top", "3")
+    top = doc.ifc.describe(beams[0].id)["params"]["top"]
+    check("viga_cota_no_painel", abs(top - 3.0) < 1e-6, "topo={:.3f}".format(top))
+
+    # 0.67: two grid axes (Eixo tool), a column on where they cross (a snap)
+    win.tool_actions["grid"].trigger()
+    pump(200)
+    move(near((2.5, -1.0, 0.0)), 3)
+    click()
+    move(near((2.5, 3.0, 0.0)), 4)
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    move(near((-1.0, 3.0, 0.0)), 4)
+    click()
+    move(near((3.0, 3.0, 0.0)), 4)
+    type_text("8")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    tags = [a.tag for a in doc.grids]
+    crossing = None
+    if len(doc.grids) == 2:
+        from arqbim.core.lines import line_line_intersection
+        (a1, b1), (a2, b2) = [(np.array((*g.start, 0.0)), np.array((*g.end, 0.0))) for g in doc.grids]
+        crossing = line_line_intersection(a1, b1 - a1, a2, b2 - a2)
+    win.tool_actions["column"].trigger()
+    pump(200)
+    if crossing is not None:
+        move(near(crossing, 2, 2), 4)
+        pump(200)
+    tip = vp.tip_text
+    click()
+    pump(300)
+    newest = max((o for o in objects() if o.is_bim and o.ifc_class == "IfcColumn"), key=lambda o: o.name)
+    foot = (np.array(newest.mesh.bounds()[0]) + np.array(newest.mesh.bounds()[1])) / 2
+    shot("63_eixos_e_pilar.png")
+    check("eixos_e_pilar_no_cruzamento", tags == ["1", "A"] and doc.ifc.count("IfcGrid") == 1
+          and crossing is not None and np.allclose(foot[:2], crossing[:2], atol=1e-6)
+          and doc.ifc.validate(express_rules=True) == [],
+          "eixos={} cruzamento={} pilar={} dica={!r}".format(tags, None if crossing is None else np.round(crossing, 4),
+                                                            np.round(foot, 4), tip))
+    key(Qt.Key.Key_Escape)
+
+    # 0.68: the Footing tool — a click on the first column puts a pad under it
+    win.tool_actions["footing"].trigger()
+    pump(200)
+    hint = win.hint_label.text()
+    move(near((0.0, 0.0, 1.4)), 4)                       # the column at the origin, half way up
+    pump(200)
+    tip = vp.tip_text
+    click()
+    pump(300)
+    footings = [o for o in objects() if o.is_bim and o.ifc_class == "IfcFooting"]
+    lo, hi = (np.array(footings[0].mesh.bounds()[0]), np.array(footings[0].mesh.bounds()[1])) if footings else (None, None)
+    shot("64_sapata_sob_pilar.png")
+    check("sapata_sob_o_pilar", len(footings) == 1 and "pilar" in tip and "Sapata" in hint
+          and np.allclose(lo, (-0.4, -0.4, -0.4)) and np.allclose(hi, (0.4, 0.4, 0.0))
+          and doc.ifc.validate(express_rules=True) == [],
+          "sapatas={} dica={!r} caixa={} {}".format(len(footings), tip, lo, hi))
+    key(Qt.Key.Key_Escape)
+
+
+def services_flow():
+    """0.69 (Phase 5, step 4): the Pipe tool in 3D (two clicks, then a length typed — it goes on from the
+    last end), the Duct tool in a plan (above the cut: the message says so), the pipe's axis in the panel."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(2.0, 1.0, 0.5), radius=4.0)
+    pump(400)
+    win.tool_actions["pipe"].trigger()
+    pump(200)
+    hint = win.hint_label.text()
+    move(near((0.0, 0.0, 0.3)), 3)
+    click()
+    move(near((3.0, 0.0, 0.3), 0, 3), 4)
+    click()
+    move(near((3.0, 2.0, 0.3), 3, 0), 4)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    pipes = sorted((o for o in objects() if o.is_bim and o.ifc_class == "IfcPipeSegment"), key=lambda o: o.name)
+    params = [doc.ifc.describe(o.id)["params"] for o in pipes]
+    bends = [o for o in objects() if o.is_bim and o.ifc_class == "IfcPipeFitting"]
+    shot("65_tubos.png")
+    # 0.74: a bend in the corner (the second pipe 5 cm shorter: it starts where the bend ends)
+    check("tubos_ponto_a_ponto", len(pipes) == 2 and len(bends) == 1 and "Tubo" in hint
+          and abs(params[1]["length"] - 1.95) < 1e-6
+          and all(abs(p["z"] - 0.3) < 1e-6 for p in params) and doc.ifc.validate(express_rules=True) == [],
+          "tubos={} curvas={} params={} dica={!r}".format(len(pipes), len(bends), params, hint[:40]))
+    if pipes:
+        key(Qt.Key.Key_Space)
+        vp.set_selection({pipes[0].id})
+        pump(300)
+        panel = win.props.text()
+        check("tubo_ligacoes_no_painel", "Ligações: 1: livre · 2: Curva 1" in panel, panel[-200:])
+        panel_set("segment_z", "0,5")
+        z = doc.ifc.describe(pipes[0].id)["params"]["z"]
+        check("tubo_cota_do_eixo_no_painel", abs(z - 0.5) < 1e-6, "eixo={:.3f}".format(z))
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.tool_actions["duct"].trigger()
+    pump(200)
+    move(near((0.0, -1.0, 2.5)), 3)
+    click()
+    move(near((4.0, -1.0, 2.5), 0, 3), 4)
+    click()
+    pump(300)
+    shown = win.last_message
+    key(Qt.Key.Key_Escape)
+    ducts = [o for o in objects() if o.is_bim and o.ifc_class == "IfcDuctSegment"]
+    check("conduta_na_planta_avisa_corte", len(ducts) == 1 and "corte" in shown
+          and doc.ifc.validate(express_rules=True) == [],
+          "condutas={} mensagem={!r}".format(len(ducts), shown[:90]))
+    key(Qt.Key.Key_Escape)
+
+
+def certification_flow():
+    """0.70 (Phase 5, step 5): BIM ▸ Check the IFC for certification — only georeferencing is missing on a
+    model made here; BIM ▸ Site location… fills it; Check again: all met; the report saved as a page."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+    win.act_check_ifc.trigger()
+    pump(400)
+    first = win.ids_panel.text()
+    missing = [line for line in first.splitlines() if line.startswith("✗")]
+
+    def fill_in():
+        dialog = getattr(win, "_site_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        boxes = dialog.findChildren(QtWidgets.QDoubleSpinBox)
+        for box, value in zip(boxes, (38.7223, -9.1393, 50.0)):
+            box.setValue(value)
+        dialog.accept()
+
+    win._site_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.act_site_location.trigger()
+    pump(300)
+    win.ids_panel.again.click()
+    pump(400)
+    again = win.ids_panel.text()
+    path = os.path.join(OUT, "verificacao_ifc.html")
+    win.save_check_report(path)
+    with open(path, encoding="utf-8") as fh:
+        page = fh.read()
+    check("verificacao_para_certificacao", len(missing) == 1 and "Georreferenciação" in missing[0]
+          and "✗" not in again and win.ids_panel.windowTitle() == "Verificar IFC para certificação"
+          and "Unidades" in page,
+          "em_falta={} depois={!r}".format(missing, [l for l in again.splitlines() if l.startswith("✗")]))
+    shot("66_verificacao_ifc.png")
+    win.ids_panel.hide()                       # (the 3D view gets its height back for the flows that follow)
+    pump(300)
+
+
+def joined_walls_dim_flow():
+    """0.71 (the owner's three walls): A along X, B back from its end, C on from B's end. A's length typed over
+    in its temporary dimension: B goes along with A's end and C stretches back to it — they stay joined."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((9.0, 0.0, 0.0)), spec)
+    b = bim_actions.add_wall(doc, np.array((9.0, 0.0, 0.0)), np.array((9.0, 5.0, 0.0)), spec,
+                             prev=(a, np.array((1.0, 0.0, 0.0))))
+    c = bim_actions.add_wall(doc, np.array((9.0, 5.0, 0.0)), np.array((14.0, 5.0, 0.0)), spec,
+                             prev=(b, np.array((0.0, 1.0, 0.0))))
+    vp.set_view("iso", center=(7.0, 2.5, 1.4), radius=9.0)
+    pump(400)
+    key(Qt.Key.Key_Space)
+    vp.set_selection({a})
+    pump(300)
+    length_dim = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "wall_length"), None)
+    if length_dim is None:
+        check("cota_temporaria_mantem_ligacoes", False, "cotas={}".format([d.key for d, _a, _t in vp.temp_dims]))
+        return
+    sx, sy = vp.project(length_dim[1])
+    move((sx, sy - 8), 3)
+    click()
+    target = length_dim[0].value - 2.0
+    type_text("{:.2f}".format(target).replace(".", ","))
+    key(Qt.Key.Key_Return)
+    pump(400)
+    sb, eb, _t = doc.ifc.wall_axis(b)
+    sc, ec, _t = doc.ifc.wall_axis(c)
+    shot("67_paredes_continuam_ligadas.png")
+    check("cota_temporaria_mantem_ligacoes", abs(sb[0] - 7.0) < 1e-6 and abs(eb[0] - 7.0) < 1e-6
+          and abs(ec[0] - 14.0) < 1e-6 and sc[0] < 7.2
+          and len(doc.ifc.file.by_type("IfcRelConnectsPathElements")) == 2,
+          "B={} C={}..{}".format(np.round(sb, 3).tolist(), np.round(sc, 3).tolist(), np.round(ec, 3).tolist()))
+    key(Qt.Key.Key_Escape)
+
+
+def grid_editing_flow():
+    """0.72: BIM ▸ Generate grid… (3 numbered at 5 m, 2 lettered at 6 m); in the plan, axis 2 picked by its
+    bubble; its blue dimension to axis 1 typed over (4); its top bubble dragged up 2 m — the bubbles lined up
+    with it go too; Delete removes it."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+    def fill_in():
+        dialog = getattr(win, "_grid_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, fill_in)
+            return
+        spins = dialog.findChildren(QtWidgets.QSpinBox)
+        edits = [e for e in dialog.findChildren(QtWidgets.QLineEdit)          # (not the spin boxes' own)
+                 if not isinstance(e.parent(), QtWidgets.QAbstractSpinBox)]
+        spins[0].setValue(3)
+        spins[1].setValue(2)
+        edits[0].setText("5")
+        edits[1].setText("6")
+        dialog.accept()
+
+    win._grid_dialog = None
+    QtCore.QTimer.singleShot(100, fill_in)
+    win.act_grid_generate.trigger()
+    pump(300)
+    tags = [a.tag for a in doc.grids]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.set_view("top", center=(5.0, 3.0, 0.0), radius=8.0)
+    pump(400)
+    key(Qt.Key.Key_Space)
+    pump(200)
+    move(near((5.0, 7.5 + 0.35, 0.0)), 3)                  # axis 2's top bubble
+    click()
+    pump(300)
+    picked = set(vp.selected_axes)
+    panel = win.props.text()
+    dim = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "grid_offset" and d.key[2] == 0), None)
+    shot("68_eixo_selecionado.png")
+    moved_x = None
+    if dim is not None:
+        sx, sy = vp.project(dim[1])
+        move((sx, sy - 8), 3)
+        click()
+        type_text("4")
+        key(Qt.Key.Key_Return)
+        pump(300)
+        moved_x = doc.grids[1].start[0]
+    check("eixo_selecionado_e_cota", tags == ["1", "2", "3", "A", "B"] and picked == {1} and "Etiqueta: 2" in panel
+          and moved_x is not None and abs(moved_x - 4.0) < 1e-6,
+          "eixos={} escolhido={} x={} painel={!r}".format(tags, picked, moved_x, panel[:80]))
+    vp.select_axes({1})                                    # (picked again: the grips where the axis is now)
+    pump(300)
+    grip = vp.project(np.array((4.0, 7.5, 0.0)))
+    move(grip, 3)
+    press(Qt.MouseButton.LeftButton)
+    move((grip[0], grip[1] - 1), 2)
+    move(near((4.0, 9.5, 0.0)), 6)
+    release(Qt.MouseButton.LeftButton)
+    pump(300)
+    tops = [round(a.end[1], 3) for a in doc.grids[:3]]
+    check("bolhas_alinhadas_acompanham", len(set(tops)) == 1 and abs(tops[0] - 9.5) < 0.05, "topos={}".format(tops))
+    vp.select_axes({1})
+    pump(200)
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    check("apagar_eixo", [a.tag for a in doc.grids] == ["1", "3", "A", "B"], [a.tag for a in doc.grids])
+    shot("69_eixos_editados.png")
+    key(Qt.Key.Key_Escape)
+
+
+def constraints_flow():
+    """0.73: a wall's top tied to the storey above in the Properties panel (Restrição do topo ▸ Piso 1), then
+    its base offset typed (0,5): the wall goes from 0,50 up to Piso 1's level."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    first = bim_actions.add_storey(doc, "Piso 1", 3.2)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"], storey=doc.ifc.storeys()[0][0])
+    vp.set_view("iso", center=(2.5, 0.0, 1.6), radius=5.0)
+    pump(300)
+    key(Qt.Key.Key_Space)
+    vp.set_selection({wall})
+    pump(300)
+    combo = win.props.editors.get("c_top")
+    if combo is None:
+        check("restricoes_base_topo", False, win.props.text()[:200])
+        return
+    combo.setCurrentIndex(combo.findData(first))
+    combo.activated.emit(combo.currentIndex())
+    pump(400)
+    height_tied = doc.ifc.wall_params(wall)[1]
+    panel_set("c_base_offset", "0,5")
+    lo, hi = (np.array(b) for b in doc.get(wall).mesh.bounds())
+    panel = win.props.text()
+    shot("70_restricoes_base_topo.png")
+    check("restricoes_base_topo", abs(height_tied - 3.2) < 1e-6 and abs(lo[2] - 0.5) < 1e-6 and abs(hi[2] - 3.2) < 1e-6
+          and "Restrição do topo: Piso 1" in panel,
+          "altura_ligada={:.3f} base={:.3f} topo={:.3f}".format(height_tied, lo[2], hi[2]))
+    key(Qt.Key.Key_Escape)
+
+
+def selection_flow():
+    """0.75: three walls in a row (A, B, C), seen from above. A box dragged rightwards takes A only (wholly
+    inside); leftwards, A and B (touched); Ctrl + a box adds C; the lasso takes B; a polygon clicked round C;
+    a fence crossing A and B; Ctrl+A all, Ctrl+I none."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array((x0, 0.0, 0.0)), np.array((x0 + 3.0, 0.0, 0.0)), spec)
+             for x0 in (0.0, 4.0, 8.0)]
+    a, b, c = walls
+    vp.set_view("top", center=(5.5, 0.0, 0.0), radius=8.0)
+    pump(400)
+    key(Qt.Key.Key_Space)
+    pump(200)
+    sel = lambda: set(vp.selection)                       # noqa: E731
+    drag([near((-1.0, 1.0, 0.0)), near((5.5, -1.0, 0.0))])                      # rightwards: window
+    window = sel()
+    shown = []
+    drag([near((5.5, 1.0, 0.0)), near((-1.0, -1.0, 0.0))],
+         before_release=lambda: (shown.append(vp.region_shown and vp.region_shown[1]),
+                                 shot("71_caixa_cruzamento.png")))                # leftwards: crossing
+    crossing = sel()
+    drag([near((9.5, 1.0, 0.0)), near((7.0, -1.0, 0.0))], Qt.KeyboardModifier.ControlModifier)   # Ctrl: adds C
+    added = sel()
+    check("caixa_janela_e_cruzamento", window == {a} and crossing == {a, b} and shown == ["crossing"]
+          and added == {a, b, c}, "janela={} cruzamento={} mostrado={} ctrl={}".format(
+              len(window), len(crossing), shown, len(added)))
+    win.set_drag_shape("lasso")
+    path = [near((3.7, -1.0, 0.0)), near((7.4, -1.0, 0.0)), near((7.4, 1.0, 0.0)), near((3.7, 1.0, 0.0)),
+            near((3.6, -0.5, 0.0))]                                              # round B, rightwards first
+    drag(path)
+    lasso = sel()
+    win.set_drag_shape("box")
+    win.pick_region("polygon")
+    for p in ((7.6, -2.0), (14.0, -2.0), (14.0, 2.0), (7.6, 2.0)):     # (in perspective the tops look wider)
+        move(near((p[0], p[1], 0.0)), 2)
+        click()
+    key(Qt.Key.Key_Return)
+    polygon = sel()
+    win.pick_region("fence")
+    for p in ((1.5, 1.0), (1.5, -1.0), (5.5, -1.0), (5.5, 1.0)):
+        move(near((p[0], p[1], 0.0)), 2)
+        click()
+    key(Qt.Key.Key_Return)
+    fence = sel()
+    check("laco_poligono_cerca", lasso == {b} and polygon == {c} and fence == {a, b},
+          "laço={} polígono={} cerca={}".format(len(lasso), len(polygon), len(fence)))
+    key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    everything = sel()
+    vp.set_selection({a})
+    key(Qt.Key.Key_I, Qt.KeyboardModifier.ControlModifier)
+    inverted = sel()
+    check("selecionar_tudo_e_inverter", everything == {a, b, c} and inverted == {b, c},
+          "tudo={} invertido={}".format(len(everything), len(inverted)))
+    key(Qt.Key.Key_Escape)
+
+
+def navigation_tools_flow():
+    """0.78: Zoom window (a box: the wall fills the view; back to Select), Previous / Next view, Zoom to the
+    selection, the Orbit / Pan / Zoom tools (Orbit pans in a plan), a double click of the middle button (all),
+    the middle button as in Revit (pans)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_wall(doc, np.array((10.0, 6.0, 0.0)), np.array((14.0, 6.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    vp.set_view("iso")
+    pump(300)
+    key(Qt.Key.Key_Space)
+    start = vp.camera_snapshot()
+    w, h = vp.logical_size()
+
+    def wall_size():
+        lo, hi = (np.array(v) for v in doc.get(a).mesh.bounds())
+        xy = vp.project_many(np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]))
+        return max((xy[:, 0].max() - xy[:, 0].min()) / w, (xy[:, 1].max() - xy[:, 1].min()) / h)
+
+    before = wall_size()
+    key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+    tool_during = win.tool.name
+    lo, hi = (np.array(v) for v in doc.get(a).mesh.bounds())
+    corners = vp.project_many(np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]))
+    drag([(corners[:, 0].min() - 10, corners[:, 1].min() - 10), (corners[:, 0].max() + 10, corners[:, 1].max() + 10)])
+    zoomed = wall_size()
+    back_tool = win.tool.name
+    key(Qt.Key.Key_Left, Qt.KeyboardModifier.AltModifier)
+    after_back = vp.camera_snapshot()
+    key(Qt.Key.Key_Right, Qt.KeyboardModifier.AltModifier)
+    forward_size = wall_size()
+    check("zoom_janela_e_vista_anterior", tool_during == "zoom_window" and back_tool == "select" and zoomed > 2 * before
+          and np.allclose(after_back["position"], start["position"]) and abs(forward_size - zoomed) < 1e-6,
+          "tamanho {:.2f}→{:.2f} ferramenta={}/{}".format(before, zoomed, tool_during, back_tool))
+    vp.set_view("iso")
+    vp.set_selection({a})
+    key(Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier)
+    selected_size = wall_size()
+    key(Qt.Key.Key_O)
+    orbit_tool = win.tool.name
+    rot = np.array(vp.camera_snapshot()["rotation"])
+    drag([(w / 2, h / 2), (w / 2 + 80, h / 2)])
+    orbited = not np.allclose(np.array(vp.camera_snapshot()["rotation"]), rot)
+    key(Qt.Key.Key_H)
+    snap = vp.camera_snapshot()
+    drag([(w / 2, h / 2), (w / 2 + 60, h / 2 + 30)])
+    after = vp.camera_snapshot()
+    panned = np.allclose(after["rotation"], snap["rotation"]) and not np.allclose(after["position"], snap["position"])
+    key(Qt.Key.Key_Z)
+    pivot = vp.point_under(w / 2, h / 2)
+    d0 = np.linalg.norm(vp.camera_position() - pivot)
+    drag([(w / 2, h / 2), (w / 2, h / 2 - 60)])
+    closer = np.linalg.norm(vp.camera_position() - pivot) < d0 * 0.9
+    check("enquadrar_selecao_e_ferramentas", selected_size > 0.5 and orbit_tool == "orbit" and orbited and panned and closer,
+          "seleção={:.2f} orbitou={} deslocou={} aproximou={}".format(selected_size, orbited, panned, closer))
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    key(Qt.Key.Key_O)
+    rot = np.array(vp.camera_snapshot()["rotation"])
+    drag([(w / 2, h / 2), (w / 2 + 80, h / 2 + 20)])
+    plan_kept = np.allclose(np.array(vp.camera_snapshot()["rotation"]), rot)
+    win.open_view("3d", None)
+    pump(400)
+    key(Qt.Key.Key_Space)
+    move((w / 2, h / 2), 2)
+    for _ in range(2):                                     # a double click of the middle button: all of it
+        press(Qt.MouseButton.MiddleButton)
+        release(Qt.MouseButton.MiddleButton)
+    both = vp.project_many(np.array([(0.0, 0.0, 0.0), (14.0, 6.0, 2.8)]))
+    framed = bool(np.all((both >= 0) & (both <= (w, h))))
+    settings = QtCore.QSettings("ArqSynth", "ArqSynth BIM")
+    old_scheme = settings.value("navegacao/botao_do_meio", "orbit")
+    win.set_mouse_scheme("pan")
+    snap = vp.camera_snapshot()
+    move((w / 2, h / 2), 2)
+    press(Qt.MouseButton.MiddleButton)
+    move((w / 2 + 70, h / 2 + 10), 4)
+    release(Qt.MouseButton.MiddleButton)
+    after = vp.camera_snapshot()
+    revit_pans = np.allclose(after["rotation"], snap["rotation"]) and not np.allclose(after["position"], snap["position"])
+    win.set_mouse_scheme(old_scheme if old_scheme in ("orbit", "pan") else "orbit")
+    check("orbitar_na_planta_duplo_clique_e_rato_revit", plan_kept and framed and revit_pans,
+          "planta_não_roda={} tudo_à_vista={} revit_desloca={}".format(plan_kept, framed, revit_pans))
+    shot("72_navegacao.png")
+    key(Qt.Key.Key_Space)
+
+
+def view_cube_flow():
+    """0.79 / 0.81: the view cube in the 3D view's corner, as Revit's — the face under the mouse lit; a click on
+    TOPO looks straight down, on a corner from between three faces; seen square, a triangle goes to the next
+    face and a curved arrow rolls 90°; a letter of the compass looks from that side; dragging the ring turns the
+    model round, dragging the cube orbits; the ▾ sets the current view as the starting one and the house goes
+    back to it. Not in a plan."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.render import viewcube
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    vp.set_view("iso")
+    pump(300)
+    key(Qt.Key.Key_Space)
+    cube = vp.cube
+    size = vp.logical_size()
+    rx, ry, rw, rh = cube.rect(size)
+
+    def at_cube(p):
+        """Where a point of the cube's scene is on the screen now, through the cube's camera."""
+        m = np.asarray(cube.camera.camera_matrix, float)
+        c = m @ np.append(np.asarray(p, float), 1.0)
+        nx, ny = c[0] / c[3], c[1] / c[3]
+        return rx + (nx + 1) / 2 * rw, ry + (1 - ny) / 2 * rh
+
+    def at_button(name):
+        bx, by, bw, bh = cube.buttons[name][1]
+        return rx + bx + bw / 2, ry + by + bh / 2
+
+    def turned():
+        pump(900)                                          # (the smooth turn)
+        return vp.view_direction()
+
+    move(at_cube((0, 0, 0.5)), 3)                          # over TOPO: lit, the cube opaque
+    lit = (cube.hover == ("cube", (0.0, 0.0, 1.0)) and cube.lit.visible and cube.active
+           and len(cube.seen) == 3)                        # (only the edges of the 3 faces seen drawn)
+    shot("73_cubo_realce.png")
+    click()
+    looks_down = turned()[2] < -0.99
+    square = cube.buttons["up"][0].visible
+    shot("74_cubo_topo.png")
+    move(at_button("up"), 2)                               # the triangle above: the face beyond (north, TRÁS)
+    click()
+    to_back = np.allclose(turned(), (0.0, -1.0, 0.0), atol=0.02)
+    vp.look_from((0.0, 0.0, 1.0), animate=False)           # from above again, then the roll arrow
+    pump(300)
+    up0 = np.asarray(vp.camera.world.up, float)
+    move(at_button("roll_cw"), 2)
+    click()
+    turned()
+    up1 = np.asarray(vp.camera.world.up, float)
+    # (the model turned clockwise: what was on the left, west, now at the top)
+    rolled = abs(float(up0 @ up1)) < 0.05 and float(np.cross(up0, up1) @ -vp.view_direction()) > 0.9
+    vp.set_view("iso")
+    pump(300)
+    f0 = vp.view_direction()
+    mid = (viewcube.RING_IN + viewcube.RING_OUT) / 2
+    move(at_cube((mid, 0.0, viewcube.RING_Z)), 3)          # the letter E on the ring
+    hover_e = cube.hover
+    click()
+    f1 = turned()
+    from_east = f1[0] < -0.75 and abs(f1[2] - f0[2]) < 0.02
+    f2 = vp.view_direction()
+    start = at_cube((0.0, -mid, viewcube.RING_Z))
+    drag([start, (start[0] + 40, start[1] - 10)])          # dragging the ring: the model turns round
+    f3 = vp.view_direction()
+    ring_turns = np.linalg.norm(f3[:2] - f2[:2]) > 0.05 and abs(f3[2] - f2[2]) < 1e-6
+    c = at_cube((0, 0, 0))
+    drag([c, (c[0] + 25, c[1] + 15)])                      # dragging the cube: it orbits
+    f4 = vp.view_direction()
+    cube_orbits = abs(f4[2] - f3[2]) > 0.02
+    check("cubo_realce_triangulo_rodar_bussola", lit and looks_down and square and to_back and rolled
+          and hover_e == ("compass", (1.0, 0.0)) and from_east and ring_turns and cube_orbits,
+          "realce={} topo={} triângulos={} trás={} rodou={} E={} de_leste={} anel={} cubo={}".format(
+              lit, looks_down, square, to_back, rolled, hover_e, from_east, ring_turns, cube_orbits))
+    move(at_button("menu"), 2)
+    click()
+    pump(300)
+    menu = getattr(win, "_cube_menu_shown", None)
+    entries = [a.text() for a in menu.actions() if a.text()] if menu is not None else []
+    set_home = next((a for a in menu.actions() if a.text() == "Definir a vista atual como inicial"), None) if menu else None
+    if menu is not None:
+        menu.close()
+    eye = vp.camera_position()
+    if set_home is not None:
+        set_home.trigger()
+    pump(200)
+    kept = doc.view_props.get(("3d",), {}).get("home")
+    vp.set_view("top")
+    pump(300)
+    move(at_button("home"), 2)
+    click()
+    turned()
+    back_home = kept is not None and np.allclose(vp.camera_position(), eye, atol=1e-3)
+    shot("75_cubo_inicial.png")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    no_cube = not vp.cube_event("down", rx + rw / 2, ry + rh / 2, 1)
+    win.open_view("3d", None)
+    pump(300)
+    move((rx - 200, ry + 300), 3)                          # the mouse away: half see-through again
+    faded = not cube.active
+    check("cubo_menu_casa_planta", "Ir para a vista inicial" in entries and back_home and no_cube and faded,
+          "menu={} casa={} planta_sem_cubo={} esbatido={}".format(entries[:3], back_home, no_cube, faded))
+
+
+def rooms_flow():
+    """0.99: in the plan of a 10 × 6 m house with a wall across, the Room tool — a click in each half: two
+    rooms (1 and 2), shown with their labels; Select: a click inside one selects it (Properties: Room), its name
+    changed there; the wall across moved: both rooms follow; Delete removes the selected room."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 6.0)), ((10.0, 6.0), (0.0, 6.0)),
+                 ((0.0, 6.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    middle = bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 6.0, 0.0)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.tool_actions["room"].trigger()
+    pump(100)
+    move(near((2.0, 3.0, 0.0)), 3)
+    click()
+    move(near((7.0, 3.0, 0.0)), 3)
+    click()
+    pump(300)
+    rooms = doc.ifc.spaces(doc.active_storey)
+    made = [r["number"] for r in sorted(rooms, key=lambda r: r["number"])] == ["1", "2"]
+    labels = len(vp._room_objects) >= 3
+    shot("90_salas.png")
+    key(Qt.Key.Key_Escape)
+    first = next(r["guid"] for r in rooms if r["number"] == "1")
+    move(near((2.0, 4.5, 0.0)), 3)
+    click()
+    pump(200)
+    picked = vp.selected_rooms == {first} and "Ambiente" in win.props.text()        # (0.357: was «Sala»)
+    win._on_property_edit("room_name", first, "Quarto")
+    pump(200)
+    named = doc.ifc.space_info(first)["name"] == "Quarto"
+    m = np.eye(4)
+    m[0, 3] = 1.0
+    bim_actions.transform_objects(doc, [middle], m, "mover")
+    pump(200)
+    followed = abs(doc.ifc.space_info(first)["area"] - 4.8 * 5.8) < 1e-6
+    vp.select_rooms({first})
+    key(Qt.Key.Key_Delete)
+    pump(200)
+    deleted = len(doc.ifc.spaces(doc.active_storey)) == 1
+    win.open_view("3d", None)
+    pump(300)
+    check("salas", made and labels and picked and named and followed and deleted,
+          "feitas={} etiquetas={} selecionada={} nome={} acompanham={} apagada={}".format(
+              made, labels, picked, named, followed, deleted))
+
+
+def slabs_flow():
+    """0.100: the Slab tool in a plan — Tab: polygon, four corners clicked and a click on the first closes it;
+    Tab: circle, its centre clicked and the radius typed; Tab: magic wand, a click inside a 10 × 6 m house (to the
+    walls' inner faces); the polygon selected: the contextual bar offers Edit outline — a corner picked up and put
+    down 1 m further (its area changes, one undo step), a corner added in a side's middle and taken away with
+    Delete; the round slab's function changed in Properties (it no longer carries)."""
+    from shapely.geometry import Polygon
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    house = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 6.0)), ((10.0, 6.0), (0.0, 6.0)),
+                          ((0.0, 6.0), (0.0, 0.0)))]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents(house)                                  # (the house only: closer, a pixel a smaller step)
+    pump(200)
+    win.tool_actions["slab"].trigger()
+    pump(100)
+    key(Qt.Key.Key_Tab)
+    poly_shape = win.tool.shape == "poly"
+    before = {e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")}
+    corners = [(5.0, 1.0, 0.0), (9.0, 1.0, 0.0), (9.0, 3.0, 0.0), (6.0, 4.0, 0.0)]
+    for c in corners + [corners[0]]:
+        move(near(c), 3)
+        click()
+        pump(80)
+    pump(300)
+    shot("100b_laje_poligono.png")
+    new = [g for g in (e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")) if g not in before]
+    want = Polygon([c[:2] for c in corners]).area
+    poly = new[0] if len(new) == 1 else None
+    poly_area = round(doc.ifc.slab_outline(poly)["area"], 3) if poly is not None else None
+    # (the corners clicked come to the centimetre: a centimetre off each of them is ~0,1 m² on a 9 m² polygon)
+    poly_ok = poly is not None and abs(poly_area - want) < 0.15
+    key(Qt.Key.Key_Tab)
+    circle_shape = win.tool.shape == "circle"
+    before = {e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")}
+    move(near((2.5, 4.5, 0.0)), 3)
+    click()
+    move(near((3.2, 4.5, 0.0)), 3)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    new = [g for g in (e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")) if g not in before]
+    circle = new[0] if len(new) == 1 else None
+    circle_ok = circle is not None and abs(doc.ifc.slab_outline(circle)["area"] - np.pi) < 1e-3
+    key(Qt.Key.Key_Tab)
+    wand_shape = win.tool.shape == "wand"
+    before = {e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")}
+    move(near((3.0, 2.0, 0.0)), 3)
+    pump(100)
+    preview = "m²" in vp.label_text
+    click()
+    pump(300)
+    new = [g for g in (e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")) if g not in before]
+    wand_ok = len(new) == 1 and abs(doc.ifc.slab_outline(new[0])["area"] - 9.8 * 5.8) < 0.01
+    shot("91_lajes.png")
+    key(Qt.Key.Key_Tab)                                   # (back to the rectangle for the next tests)
+    win.set_tool("select")
+    pump(100)
+    # the polygon selected: Edit outline on the contextual bar
+    vp.set_selection({poly})
+    drawn = [tuple(q) for q in doc.ifc.slab_outline(poly)["outline"]] if poly is not None else []
+    win._refresh_context_bar()
+    offered = win.act_edit_outline in win._selection_actions(win._categories({poly}, set()))
+    win.act_edit_outline.trigger()
+    pump(200)
+    editing = win.tool.name == "slab_outline" and len(vp.grips[0]) == 4
+    move(near((9.0, 3.0, 0.0)), 3)
+    press()                                               # (0.382: dragged — a click no longer picks a corner up)
+    move(near((9.5, 3.5, 0.0)), 4)
+    pump(60)
+    release()
+    pump(300)
+    # (0.298) the corner (9; 3) moved to (9,5; 3,5), the others where the clicks left them
+    moved = [(9.5, 3.5) if np.hypot(x - 9.0, y - 3.0) < 0.1 else (x, y) for x, y in drawn]
+    corner_ok = abs(doc.ifc.slab_outline(poly)["area"] - Polygon(moved).area) < 0.05
+    shot("92_contorno_laje.png")
+    click()                                               # (0.382) a click more there: the corner stays put
+    move(near((7.0, 1.0, 0.0)), 6)
+    pump(200)
+    stays = abs(doc.ifc.slab_outline(poly)["area"] - Polygon(moved).area) < 0.05 and win.tool._picked is None
+    mid = vp.grips[1][2]                                  # the middle of the side (9,5; 3,5)-(6; 4)
+    move(at(mid), 3)
+    press()
+    pump(100)
+    added = len(win.tool._ring) == 5 and win.tool._picked == 3
+    key(Qt.Key.Key_Delete)                                # (picked, not moved: taken away again)
+    pump(300)
+    release()
+    pump(100)
+    back = len(doc.ifc.slab_outline(poly)["outline"]) == 4 and len(win.tool._ring) == 4
+    corner = next(k for k, q in enumerate(win.tool._ring) if np.hypot(q[0] - 9.5, q[1] - 3.5) < 0.1)
+    move(at(vp.grips[0][corner]), 3)                      # (0.382) a click on a corner and Delete: it goes
+    click()
+    pump(100)
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    chosen_gone = len(doc.ifc.slab_outline(poly)["outline"]) == 3
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = back and stays and chosen_gone and len(doc.ifc.slab_outline(poly)["outline"]) == 4
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    selected_tool = win.tool.name == "select"
+    vp.set_selection({circle})
+    pump(200)
+    props = win.props.text()
+    shown = "Raio" in props and "Função" in props
+    win._on_property_edit("slab_function", circle, "acabamento")
+    pump(200)
+    import ifcopenshell.util.element as ue
+    finish = ue.get_psets(doc.ifc.by_guid(circle))["Pset_SlabCommon"]["LoadBearing"] is False
+    win.open_view("3d", None)
+    pump(300)
+    check("lajes_contorno", poly_shape and poly_ok and circle_shape and circle_ok and wand_shape and preview
+          and wand_ok and offered and editing and corner_ok and added and back and selected_tool and shown and finish,
+          "poligono={}/{} ({}) circulo={}/{} varinha={}/{}/{} oferece={} edita={} canto={} acrescenta={} tira={} "
+          "esc={} painel={} acabamento={}".format(poly_shape, poly_ok, poly_area, circle_shape, circle_ok, wand_shape,
+                                                   preview, wand_ok, offered, editing, corner_ok, added, back,
+                                                   selected_tool, shown, finish))
+
+
+def ramps_flow():
+    """0.101: the Ramp tool, seen from above — its rise set to 60 cm on the contextual bar, its foot clicked, the mouse
+    to the right: its slope shown; 6 typed: a 6 m ramp rising 60 cm (IfcRamp); selected, Properties shows its
+    slope (10,0 %); its width typed there; shown in 3D."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(4.0, 2.0, 0.0), radius=6.0)
+    pump(300)
+    win.tool_actions["ramp"].trigger()
+    pump(100)
+    win._context_option("rise", 0.6)
+    pump(60)
+    risen = win.tool.rise == 0.6
+    move(near((1.0, 2.0, 0.0)), 3)
+    click()
+    move(near((5.0, 2.0, 0.0)), 4)
+    pump(100)
+    slope_shown = "Inclinação" in vp.label_text
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    ramps = doc.ifc.file.by_type("IfcRamp")
+    made = len(ramps) == 1
+    guid = ramps[0].GlobalId if made else None
+    sized = False
+    if made:
+        start, end, width, rise, _t = doc.ifc.ramp_params(guid)
+        sized = abs(np.linalg.norm((end - start)[:2]) - 6.0) < 1e-6 and abs(rise - 0.6) < 1e-9 and \
+            abs(width - 1.2) < 1e-9
+    key(Qt.Key.Key_Escape)
+    vp.set_selection({guid} if guid else set())
+    pump(200)
+    props = win.props.text()
+    shown = "Inclinação: 10,0 %" in props
+    win._on_property_edit("ramp_width", guid, 1.5)
+    pump(200)
+    wider = made and abs(doc.ifc.ramp_params(guid)[2] - 1.5) < 1e-9
+    win.open_view("3d", None)
+    pump(300)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("93_rampa.png")
+    check("rampa", risen and slope_shown and made and sized and shown and wider,
+          "desnivel={} inclinacao_vista={} feita={} medidas={} painel={} largura={}".format(
+              risen, slope_shown, made, sized, shown, wider))
+
+
+def wall_loops_flow():
+    """0.102: the Wall tool's shapes — Rectangle, by its outer face: a corner clicked and 6;4 typed, four walls
+    joined at the corners inside 6 × 4 (one undo step); From a face: the mouse over an L slab shows its six walls,
+    a click makes them; back to Line by the axis."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(8.0, 2.5, 0.0), radius=10.0)
+    pump(300)
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    win._context_option("shape", "rect")
+    win._context_option("reference", "right")
+    pump(60)
+    move(near((0.0, 0.0, 0.0)), 3)
+    click()
+    move(near((5.0, 3.0, 0.0)), 4)
+    pump(100)
+    band = vp._volume.visible and not vp._fill.visible       # (0.383: a solid, not two outlines)
+    type_text("6;4")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    walls = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall")]
+    lo = np.min([doc.get(g).mesh.verts.min(axis=0) for g in walls], axis=0) if walls else np.zeros(3)
+    hi = np.max([doc.get(g).mesh.verts.max(axis=0) for g in walls], axis=0) if walls else np.zeros(3)
+    rect_ok = len(walls) == 4 and np.allclose(lo[:2], (0, 0)) and np.allclose(hi[:2], (6, 4)) and \
+        all(doc.ifc.wall_joints(g) for g in walls)
+    slab = bim_actions.add_slab_outline(doc, [(9, 0), (15, 0), (15, 3), (12, 3), (12, 5), (9, 5)], 0.0,
+                                        catalog.BY_KEY["laje_12"])
+    pump(300)
+    win._context_option("shape", "face")
+    pump(60)
+    move(near((10.0, 1.0, 0.0)), 4)
+    pump(150)
+    preview = "6 paredes" in vp.label_text
+    click()
+    pump(400)
+    face_ok = len(doc.ifc.file.by_type("IfcWall")) == 10
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("94_paredes_contorno.png")
+    doc.undo()
+    pump(200)
+    undone = len(doc.ifc.file.by_type("IfcWall")) == 4
+    win._context_option("shape", "line")
+    win._context_option("reference", "axis")
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    del slab
+    check("paredes_retangulo_e_face", band and rect_ok and preview and face_ok and undone,
+          "faixa={} retangulo={} previa={} face={} desfeito={}".format(band, rect_ok, preview, face_ok, undone))
+
+
+def curved_corner_flow():
+    """0.189 — A corner with a curved wall: the Wall tool's Arc from (0,0) to (6,0) through (3,2); then a straight
+    wall drawn up to the arc's end: the two joined by themselves, the corner exact (the straight wall's end corners
+    are the arc's); the plan shows it closed."""
+    from arqbim.core.curved_joints import cut_ends
+    from arqbim.core.walls import footprint
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.0, -1.0, 0.0), radius=6.0)
+    pump(300)
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    tool = win.tools["wall"]
+    tool.reference = "axis"
+    win._context_option("shape", "arc")
+    pump(60)
+    for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0)):
+        move(near(p), 4)
+        pump(60)
+        click()
+    move(near((3.0, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(300)
+    win._context_option("shape", "line")
+    pump(60)
+    move(near((6.0, -4.0, 0.0)), 4)
+    click()
+    move(near((6.0, 0.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    walls = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall")]
+    arc = next((g for g in walls if doc.ifc.kind_of(g) == "curved_wall"), None)
+    wall = next((g for g in walls if doc.ifc.kind_of(g) == "wall"), None)
+    joined = arc is not None and wall is not None and doc.ifc.joined_walls([wall]) == [arc]
+    exact = False
+    if joined:
+        s, e, t_ = doc.ifc.wall_axis(wall)
+        length = float(np.linalg.norm((e - s)[:2]))
+        x = (e - s)[:2] / length
+        y = np.array((-x[1], x[0]))
+        pts = footprint(length, t_, *doc.ifc.wall_cuts(wall))
+        mine = [s[:2] + x * px + y * py for px, py in (pts[1], pts[2])]
+        centre, r, start, sweep, _h, ta = doc.ifc.curved_wall_params(arc)
+        (_o0, _i0), (o1, i1) = cut_ends(r, sweep, ta, *doc.ifc.wall_cuts(arc))
+        theirs = [centre[:2] + rad * np.array((np.cos(start + a), np.sin(start + a)))
+                  for rad, a in ((r + ta / 2, o1), (r - ta / 2, i1))]
+        exact = all(any(np.allclose(p, q, atol=1e-6) for q in theirs) for p in mine)
+    # an arc started on a straight wall's end (its first point on the storey, not on the wall's top): joined too
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    other = bim_actions.add_wall(doc, np.array((10.0, 0.0, 0.0)), np.array((14.0, 0.0, 0.0)),
+                                 catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    vp.set_view("top", center=(14.0, -1.0, 0.0), radius=4.0)
+    pump(300)
+    win._context_option("shape", "arc")
+    pump(60)
+    for p in ((14.0, 0.0, 0.0), (16.0, -2.0, 0.0)):
+        move(near(p), 4)
+        pump(60)
+        click()
+    move(near((14.6, -1.4, 0.0)), 4)                           # (bulging below: it leaves the wall going down)
+    pump(100)
+    click()
+    pump(300)
+    win._context_option("shape", "line")
+    curved = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall")
+              if doc.ifc.kind_of(e.GlobalId) == "curved_wall" and e.GlobalId != arc]
+    second = len(curved) == 1 and abs(doc.ifc.curved_wall_params(curved[0])[0][2]) < 1e-9 and \
+        doc.ifc.joined_walls([curved[0]]) == [other]
+    win.set_tool("select")
+    win.set_plan(True)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    shot("189_canto_curvo.png")
+    win.set_plan(False)
+    pump(200)
+    check("canto_parede_curva_e_reta", joined and exact and second, "juntas={} exato={} arco_na_ponta={}".format(
+        joined, exact, second))
+
+
+def curved_walls_flow():
+    """0.103: the Wall tool's Arc — its start and end clicked, the mouse 2 m to one side, a click: a curved wall
+    through the three points (radius 3,25 m); Circle — its centre clicked and 3 typed: a round wall; the arc
+    selected, Properties shows its radius and sweep; its radius changed there."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(7.0, 1.0, 0.0), radius=10.0)
+    pump(300)
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    win._context_option("shape", "arc")
+    pump(60)
+    for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0)):
+        move(near(p), 4)
+        pump(60)
+        click()
+    move(near((3.0, 2.0, 0.0)), 4)
+    pump(100)
+    radius_shown = "raio" in vp.label_text and vp._volume.visible     # (0.383: the arc as a solid)
+    click()
+    pump(300)
+    curved = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall") if doc.ifc.kind_of(e.GlobalId) == "curved_wall"]
+    arc = curved[0] if len(curved) == 1 else None
+    arc_ok = arc is not None and abs(doc.ifc.curved_wall_params(arc)[1] - 3.25) < 0.05
+    win._context_option("shape", "circle")
+    pump(60)
+    move(near((13.0, 0.0, 0.0)), 4)
+    click()
+    move(near((15.0, 0.0, 0.0)), 4)
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    curved = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall") if doc.ifc.kind_of(e.GlobalId) == "curved_wall"]
+    ring = [g for g in curved if g != arc]
+    ring_ok = len(ring) == 1 and abs(doc.ifc.curved_wall_params(ring[0])[1] - 3.0) < 1e-9 and \
+        abs(abs(doc.ifc.curved_wall_params(ring[0])[3]) - 2 * np.pi) < 1e-9
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("95_paredes_curvas.png")
+    win._context_option("shape", "line")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_selection({arc} if arc else set())
+    pump(200)
+    props = win.props.text()
+    shown = "Abertura" in props and "Raio (eixo)" in props
+    if arc:
+        win._on_property_edit("cw_radius", arc, 4.0)
+        pump(200)
+    changed = arc is not None and abs(doc.ifc.curved_wall_params(arc)[1] - 4.0) < 1e-9
+    check("paredes_curvas", radius_shown and arc_ok and ring_ok and shown and changed,
+          "raio_visto={} arco={} circulo={} painel={} raio_mudado={}".format(radius_shown, arc_ok, ring_ok, shown,
+                                                                           changed))
+
+
+def wall_edit_flow():
+    """0.104: Split wall — over a 10 m wall its middle snaps (5 + 5), a click splits it there; Trim / extend to
+    corner — a click on one wall, then on another apart from it: both reach their corner, joined."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((10.0, 0.0, 0.0)), spec)
+    p = bim_actions.add_wall(doc, np.array((14.0, 0.0, 0.0)), np.array((18.0, 0.0, 0.0)), spec)
+    q = bim_actions.add_wall(doc, np.array((20.0, 1.0, 0.0)), np.array((20.0, 5.0, 0.0)), spec)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(10.0, 2.0, 0.0), radius=12.0)
+    pump(400)
+    win.tool_actions["split_wall"].trigger()
+    pump(100)
+    move(near((5.05, 0.0, 2.8)), 4)
+    pump(150)
+    middle = "Meio da parede" in vp.tip_text
+    click()
+    pump(300)
+    halves = sorted(round(doc.ifc.wall_params(g)[0], 6) for g in
+                    [e.GlobalId for e in doc.ifc.file.by_type("IfcWall")] if g not in (p, q))
+    split_ok = halves == [5.0, 5.0]
+    win.tool_actions["corner_walls"].trigger()
+    pump(100)
+    move(near((15.0, 0.0, 2.8)), 4)
+    click()
+    pump(100)
+    first = vp.selection == {p}
+    move(near((20.0, 4.0, 2.8)), 4)
+    pump(100)
+    click()
+    pump(300)
+    _ps, pe, _t = doc.ifc.wall_axis(p)
+    qs, _qe, _t = doc.ifc.wall_axis(q)
+    corner_ok = np.linalg.norm((pe - np.array((20.0, 0.0, 0.0)))[:2]) < 0.11 and \
+        np.linalg.norm((qs - np.array((20.0, 0.0, 0.0)))[:2]) < 0.11 and q in doc.ifc.joined_walls([p])
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("96_dividir_e_canto.png")
+    key(Qt.Key.Key_Escape)
+    del a
+    check("dividir_e_aparar_ao_canto", middle and split_ok and first and corner_ok,
+          "meio={} metades={} primeira={} canto={}".format(middle, halves, first, corner_ok))
+
+
+def wall_merge_flow():
+    """0.105: two walls in line selected — the contextual bar offers Merge walls: one wall; a wall 2° off the red
+    axis selected — Orthogonalize makes it straight; a wall joined to another selected — Disallow joins lets its
+    joint go."""
+    import math
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), spec)
+    b = bim_actions.add_wall(doc, np.array((5.0, 0.0, 0.0)), np.array((10.0, 0.0, 0.0)), spec)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({a, b})
+    win._refresh_context_bar()
+    pump(100)
+    offered = win.act_merge_walls in win.context_bar.actions()
+    win.act_merge_walls.trigger()
+    pump(300)
+    kept = [g for g in (a, b) if doc.ifc.by_guid(g) is not None]
+    merged = len(kept) == 1 and abs(doc.ifc.wall_params(kept[0])[0] - 10.0) < 1e-6 and kept[0] == a   # (Parede 1)
+    a = kept[0] if kept else a
+    w = bim_actions.add_wall(doc, np.array((0.0, 5.0, 0.0)),
+                             np.array((8.0, 5.0 + 8 * math.tan(math.radians(2)), 0.0)), spec)
+    vp.set_selection({w})
+    win._refresh_context_bar()
+    pump(100)
+    straight_offered = win.act_orthogonalize in win.context_bar.actions()
+    win.act_orthogonalize.trigger()
+    pump(300)
+    s, e, _t = doc.ifc.wall_axis(w)
+    straight = abs(s[1] - e[1]) < 1e-9
+    c = bim_actions.add_wall(doc, np.array((10.0, 0.0, 0.0)), np.array((10.0, 4.0, 0.0)), spec,
+                             prev=(a, np.array((1.0, 0.0, 0.0))))
+    pump(200)
+    joined = c in doc.ifc.joined_walls([a])
+    vp.set_selection({c})
+    win._refresh_context_bar()
+    win.act_unjoin_walls.trigger()
+    pump(300)
+    let_go = c not in doc.ifc.joined_walls([a])
+    vp.set_selection(set())
+    check("juntar_ortogonalizar_soltar", offered and merged and straight_offered and straight and joined and let_go,
+          "oferece={} junta={} ortogonal={}/{} ligada={} solta={}".format(offered, merged, straight_offered,
+                                                                         straight, joined, let_go))
+
+
+def wall_profile_direct_flow():
+    """0.378–0.380 (the owner: «precisa ser uma experiência mais simples e direta»; «clico 2x abre a edição e ao pegar
+    os pontos ele cria vértices. Mas se pegar e clicar em Shift ele faz arco. Se clicar no ponto e clicar na tecla Alt
+    ele ativa a curva Bézier. Se clicar em Alt e clicar no ponto do canto, ele faz um fillet com controlo do raio.»),
+    as a beginner does it: W, a click, `6`, Enter, Esc; Space, two clicks on the wall — its profile edited, the camera
+    square on to it, the balloon saying Shift and Alt; the top's diamond pressed and pulled 1 m up — a corner shown —,
+    Shift pressed (the mouse still): an arc shown at once; let go with Shift: an arc; the left side's diamond dragged
+    with Alt: a curve; the bottom's dragged up with nothing: a new corner (a cut-out); Alt and a click on a corner next
+    to the arc: refused; Alt and a click on the bottom right corner, `0,5` typed, Enter: a fillet of 0,50 m; C is the
+    Dimension tool again (no letters of its own); Esc: Select, the camera back. Captured: 380_perfil_gestos.png."""
+    win.resize(1536, 830)
+    pump(300)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(near((0.0, 0.0, 0.0)), 3)
+    click()
+    pump(200)
+    move(near((3.0, 0.0, 0.0)), 4)
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    key(Qt.Key.Key_Space)
+    pump(200)
+    wall = walls[0] if walls else None
+    if wall is None:
+        check("perfil_direto", False, "sem parede")
+        return
+    s, e, _th = doc.ifc.wall_axis(wall)
+    before = vp.camera_snapshot()
+    move(at((s + e) / 2 + np.array((0.0, 0.0, 1.4))), 3)
+    click()
+    pump(120)
+    click()
+    pump(600)
+    tool = win.tool
+    along = (e - s) / np.linalg.norm(e - s)
+    square = tool.name == "wall_profile" and abs(float(vp.view_direction() @ along)) < 1e-3 and \
+        abs(float(vp.view_direction()[2])) < 1e-3
+    said = "Shift" in win.last_message and "Alt" in win.last_message
+    SHIFT, ALT = Qt.KeyboardModifier.ShiftModifier, Qt.KeyboardModifier.AltModifier
+
+    def kinds():
+        parts = doc.ifc.wall_profile_parts(wall)
+        return parts and [sd and sd["kind"] for sd in parts[1]]
+
+    def grip_of_side(side):
+        k = next(k for k, (sd, _w) in enumerate(tool._mids) if sd == side)
+        return vp.grips[1][k].copy()
+
+    # the top's diamond pulled up: a corner shown; Shift pressed, the mouse still: an arc shown; let go: an arc
+    p = grip_of_side(2)
+    move(at(p), 4)
+    pump(150)
+    press()
+    move(at(p + np.array((0.0, 0.0, 1.0))), 8)
+    pump(150)
+    corner_first = tool._picked == ("side", 2) and vp.tip_text.startswith("Canto")
+    QtTest.QTest.keyPress(QtWidgets.QApplication.focusWidget() or canvas, Qt.Key.Key_Shift)
+    pump(200)
+    arc_at_once = vp.tip_text.startswith("Arco")
+    release(modifiers=SHIFT)
+    QtTest.QTest.keyRelease(QtWidgets.QApplication.focusWidget() or canvas, Qt.Key.Key_Shift)
+    pump(500)
+    parts = doc.ifc.wall_profile_parts(wall)
+    arc = kinds() == [None, None, "arc", None] and abs(parts[1][2]["through"][1] - 3.8) < 0.1
+    # the left side's diamond dragged with Alt: a curve
+    p = grip_of_side(3)
+    move(at(p), 4)
+    pump(150)
+    press(modifiers=ALT)
+    move(at(p + np.array((0.6 * float(along[0]), 0.6 * float(along[1]), 0.0))), 8, modifiers=ALT)
+    pump(150)
+    release(modifiers=ALT)
+    pump(500)
+    curve = kinds() == [None, None, "arc", "bezier"]
+    # the bottom's dragged up, nothing held: a new corner (a cut-out)
+    p = grip_of_side(0)
+    move(at(p), 4)
+    pump(150)
+    press()
+    move(at(p + np.array((0.0, 0.0, 0.8))), 8)
+    pump(150)
+    release()
+    pump(500)
+    cut = kinds() == [None, None, None, "arc", "bezier"] and len(doc.ifc.wall_profile_parts(wall)[0]) == 5
+    # Alt and a click on the top right corner (next to the arc): refused; on the bottom right one: a fillet, 0,5 typed
+    pts = tool._pts
+    top_right = next(k for k, q in enumerate(pts) if abs(q[0] - 6.0) < 1e-6 and abs(q[1] - 2.8) < 1e-6)
+    bottom_right = next(k for k, q in enumerate(pts) if abs(q[0] - 6.0) < 1e-6 and abs(q[1]) < 1e-6)
+    move(at(vp.grips[0][top_right]), 4)
+    press(modifiers=ALT)
+    release(modifiers=ALT)
+    pump(300)
+    refused = tool._picked is None and "lados retos" in win.last_message
+    move(at(vp.grips[0][bottom_right]), 4)
+    press(modifiers=ALT)
+    release(modifiers=ALT)
+    pump(200)
+    filleting = tool._picked == ("fillet", bottom_right) and tool.accepts_typing
+    move(at(vp.grips[0][bottom_right] + np.array((-0.4 * float(along[0]), -0.4 * float(along[1]), 0.3))), 6)
+    pump(200)
+    radius_shown = vp.tip_text.startswith("Raio")
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    pump(500)
+    parts = doc.ifc.wall_profile_parts(wall)
+    fillet = parts is not None and len(parts[0]) == 6 and [sd and sd["kind"] for sd in parts[1]].count("arc") == 2
+    if fillet:                                  # (its arc touching the two sides, 0,50 m round)
+        k = next(i for i, q in enumerate(parts[0]) if abs(q[0] - 6.0) < 1e-6 and q[1] > 1e-6 and q[1] < 2.0)
+        t1, t2 = np.array(parts[0][k - 1]), np.array(parts[0][k])
+        through = np.array(parts[1][k - 1]["through"])
+        sa, sb, sc = (float(np.linalg.norm(t1 - through)), float(np.linalg.norm(through - t2)),
+                      float(np.linalg.norm(t2 - t1)))
+        u, v = through - t1, t2 - t1
+        area = abs(float(u[0] * v[1] - u[1] * v[0])) / 2
+        fillet = area > 1e-9 and abs(sa * sb * sc / (4 * area) - 0.5) < 0.02     # (the circle through the three)
+    shot("380_perfil_gestos.png")
+    key(Qt.Key.Key_Escape)
+    pump(400)
+    back = win.tool.name == "select" and np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-6)
+    win.edit_wall_profile(wall)
+    pump(400)
+    key(Qt.Key.Key_C)                           # (no letters of its own: C is the Dimension tool)
+    pump(300)
+    c_is_dimension = win.tool.name == "dimension"
+    win.set_tool("select")
+    win.open_view("3d", None)
+    pump(300)
+    check("perfil_direto", square and said and corner_first and arc_at_once and arc and curve and cut and refused
+          and filleting and radius_shown and fillet and c_is_dimension and back and doc.ifc.validate() == [],
+          "de_frente={} dito={} canto_primeiro={} arco_logo={} arco={} curva={} recorte={} recusa={} concordancia={} "
+          "raio_dito={} raio={} C_cota={} de_volta={} {}".format(square, said, corner_first, arc_at_once, arc, curve,
+                                                               cut, refused, filleting, radius_shown, fillet,
+                                                               c_is_dimension, back, kinds()))
+    doc.modified = False
+    win.resize(1280, 740)
+    pump(300)
+
+
+def wall_profile_curves_flow():
+    """0.375 (the owner: «na edição do perfil da parede preciso de mais controlo para poder criar arcos ou curva
+    Bézier»), (0.381: «porque não está funcionando para as curvas?» — the owner's own gestures, as the X server saw
+    them): a 6 m wall, its profile edited; Shift held, the top's diamond dragged 1 m up and let go: an arch; a click
+    again where the mouse was (on the arc's grip, under it) — it no longer picks the arc up —; the mouse taken to the
+    left side: the arc stays as it was; Alt held, the left side's diamond dragged in and let go, another click there: a
+    Bézier side; a click on a corner and Delete: the corner taken away; kept in the IFC. Captured:
+    375_perfil_curvas.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+    vp.set_view("front", center=(3.0, 0.0, 1.6), radius=4.5)
+    pump(400)
+    win.edit_wall_profile(wall)
+    pump(400)
+    tool = win.tool
+    SHIFT, ALT = Qt.KeyboardModifier.ShiftModifier, Qt.KeyboardModifier.AltModifier
+    top = next(k for k, (s, _w) in enumerate(tool._mids) if s == 2)
+    p = vp.grips[1][top]
+    move(at(p), 4)
+    pump(200)
+    press(modifiers=SHIFT)
+    move(at(p + np.array((0.0, 0.0, 1.0))), 8, modifiers=SHIFT)
+    pump(200)
+    arc_mode = vp.tip_text.startswith("Arco")
+    release(modifiers=SHIFT)
+    pump(500)
+    parts = doc.ifc.wall_profile_parts(wall)
+    arch = parts is not None and parts[1][2] is not None and parts[1][2]["kind"] == "arc" and \
+        abs(parts[1][2]["through"][1] - 3.8) < 0.05
+    press(modifiers=SHIFT)                          # (a click again there, on the arc's own grip)
+    release(modifiers=SHIFT)
+    pump(300)
+    left = next(k for k, (s, _w) in enumerate(tool._mids) if s == 3)
+    p = vp.grips[1][left]
+    move(at(p), 8)                                  # (the mouse taken away: the arc must not follow it)
+    pump(300)
+    parts = doc.ifc.wall_profile_parts(wall)
+    stays = tool._picked is None and abs(parts[1][2]["through"][1] - 3.8) < 0.05 and \
+        abs(parts[1][2]["through"][0] - 3.0) < 0.05
+    press(modifiers=ALT)
+    move(at(p + np.array((0.8, 0.0, 0.3))), 8, modifiers=ALT)
+    pump(200)
+    release(modifiers=ALT)
+    pump(500)
+    press(modifiers=ALT)                            # (and a click again there)
+    release(modifiers=ALT)
+    pump(300)
+    parts = doc.ifc.wall_profile_parts(wall)
+    curves_kept = [s and s["kind"] for s in parts[1]] == [None, None, "arc", "bezier"]
+    shot("375_perfil_curvas.png")
+    move(at(vp.grips[0][0]), 6)                     # (the bottom left corner: a click, Delete)
+    click()
+    pump(200)
+    key(Qt.Key.Key_Delete)
+    pump(500)
+    parts = doc.ifc.wall_profile_parts(wall)
+    deleted = parts is not None and len(parts[0]) == 3
+    win.set_tool("select")
+    check("perfil_com_arco_e_bezier", arc_mode and arch and stays and curves_kept and deleted
+          and doc.ifc.validate() == [],
+          "modo_arco={} arco={} fica={} curvas={} apagado={} ({})".format(
+              arc_mode, arch, stays, parts and [s and s["kind"] for s in parts[1]], deleted, win.last_message[:60]))
+    doc.modified = False
+
+
+def attach_top_flow():
+    """0.106: a wall and a slab over it selected — the contextual bar offers Attach top to slab: the wall reaches
+    the slab's underside; Properties shows its top tied to the slab; the slab moved up, the wall follows."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 1.0, 0.0)), np.array((6.0, 1.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    slab = bim_actions.add_slab_outline(doc, [(-1, -1), (7, -1), (7, 4), (-1, 4)], 3.2, catalog.BY_KEY["laje_12"])
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({wall, slab})
+    win._refresh_context_bar()
+    pump(100)
+    offered = win.act_attach_top in win.context_bar.actions()
+    win.act_attach_top.trigger()
+    pump(300)
+    reached = abs(doc.ifc.constraints(wall)["height"] - 3.2) < 1e-6
+    vp.set_selection({wall})
+    pump(200)
+    shown = "face de baixo" in win.props.text()
+    m = np.eye(4)
+    m[2, 3] = 0.3
+    bim_actions.transform_objects(doc, [slab], m, "mover")
+    pump(300)
+    followed = abs(doc.ifc.constraints(wall)["height"] - 3.5) < 1e-6
+    vp.set_selection(set())
+    check("topo_ligado_a_laje", offered and reached and shown and followed,
+          "oferece={} chega={} painel={} acompanha={}".format(offered, reached, shown, followed))
+
+
+def align_flow():
+    """0.107: Align — a grid axis (along X at y = 0) clicked as the reference, then the lower face of a wall
+    1,20 m above it: the wall moves down until that face is on the axis (its axis at 0,10); a column's face too."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 8.0], [0.0])
+    wall = bim_actions.add_wall(doc, np.array((1.0, 1.2, 0.0)), np.array((6.0, 1.2, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    column = bim_actions.add_column(doc, np.array((7.0, 2.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(4.0, 1.0, 0.0), radius=6.0)
+    pump(400)
+    win.tool_actions["align"].trigger()
+    pump(100)
+    move(near((3.0, 0.0, 0.0)), 4)
+    pump(150)
+    tip_grid = vp.tip_text.startswith("Eixo")
+    click()
+    pump(100)
+    move(near((3.0, 1.13, 2.8)), 4)
+    pump(150)
+    tip_move = "mover" in vp.tip_text
+    click()
+    pump(300)
+    s, _e, _t = doc.ifc.wall_axis(wall)
+    wall_ok = abs(s[1] - 0.1) < 1e-6
+    move(near((7.0, 1.88, 2.8)), 4)                      # the column's lower face (y = 1,85)
+    pump(150)
+    click()
+    pump(300)
+    centre = doc.ifc.column_box(column)[0]
+    column_ok = abs(float(centre[1]) - 0.15) < 1e-6
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    check("alinhar", tip_grid and tip_move and wall_ok and column_ok,
+          "dica_eixo={} dica_mover={} parede={} pilar={}".format(tip_grid, tip_move, s[1], centre[1]))
+
+
+def mirror_flow():
+    """0.108: a wall with a door selected, Mirror, Ctrl (copy), the axis clicked at x = 6: a mirror-image copy of
+    the wall at 8..12 with its door hinged the other way; the original as it was."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)),
+                             catalog.BY_KEY["parede_alv_20"])
+    door = bim_actions.add_opening(doc, a, catalog.OPENING_BY_KEY["porta_80"], bim_actions.wall_frame(doc, a), 1.0, 1)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(6.0, 1.0, 0.0), radius=8.0)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({a})
+    win.tool_actions["mirror"].trigger()
+    pump(100)
+    win.tool.ctrl_tap()
+    copy_on = win.tool.copy
+    move(near((6.0, -1.0, 0.0)), 4)
+    click()
+    move(near((6.0, 3.0, 0.0)), 4)
+    pump(100)
+    preview = vp._lines.visible
+    click()
+    pump(300)
+    walls = [e.GlobalId for e in doc.ifc.file.by_type("IfcWall")]
+    new = [g for g in walls if g != a]
+    copied = len(new) == 1
+    where = None
+    if copied:
+        # the original (0..4) mirrored about the axis x = c clicked: 2c−4..2c, as long as it — c within half a pixel
+        # of 6 (where (6, …) falls on the screen: the view's width even or odd moves it by half a pixel, 2,3 cm here)
+        lo, hi = doc.get(new[0]).mesh.verts.min(axis=0), doc.get(new[0]).mesh.verts.max(axis=0)
+        c = float(hi[0]) / 2.0
+        copied = abs((hi[0] - lo[0]) - 4.0) < 1e-6 and abs(c - 6.0) < 0.03
+        where = (round(float(lo[0]), 4), round(float(hi[0]), 4))
+    doors = [d for d in doc.ifc.file.by_type("IfcDoor") if d.GlobalId != door]
+    hinged = len(doors) == 1 and doors[0].OperationType.endswith("RIGHT")
+    original = doc.ifc.by_guid(door).OperationType.endswith("LEFT")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("97_espelhar.png")
+    key(Qt.Key.Key_Escape)
+    check("espelhar", copy_on and preview and copied and hinged and original,
+          "copia={} previa={} parede={} porta={} original={} (paredes novas {}, de x a x: {}; {})".format(
+              copy_on, preview, copied, hinged, original, len(new), where, win.last_message[:80]))
+
+
+def wall_profile_flow():
+    """0.109: a wall selected, Edit profile on the contextual bar — its four corners as grips; the top side's
+    middle picked up (a new corner) and put down 1,20 m higher: a gable (5 corners, 4,00 m at its top)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("front", center=(3.0, 0.0, 2.0), radius=5.0)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    win._refresh_context_bar()
+    pump(100)
+    offered = win.act_edit_profile in win.context_bar.actions()
+    win.act_edit_profile.trigger()
+    pump(200)
+    tool = win.tool
+    editing = tool.name == "wall_profile" and len(vp.grips[0]) == 4
+    top_middle = next(k for k, (a, b) in enumerate(zip(tool._pts, tool._pts[1:] + tool._pts[:1]))
+                      if abs(a[1] - 2.8) < 1e-6 and abs(b[1] - 2.8) < 1e-6)
+    move(at(vp.grips[1][top_middle]), 4)
+    press()                                         # (0.381: dragged — a click no longer picks a grip up)
+    move(at(tool._world([(3.0, 4.0)])[0]), 6)
+    pump(100)
+    release()
+    pump(300)
+    profile = doc.ifc.wall_profile(wall) or []
+    gable = len(profile) == 5 and abs(max(z for _x, z in profile) - 4.0) < 0.06
+    shot("98_perfil_parede.png")
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    check("perfil_da_parede", offered and editing and gable,
+          "oferece={} edita={} empena={} {}".format(offered, editing, gable, profile))
+
+
+def openings_kit_flow():
+    """0.110: the Door tool with the kit «Porta 80×210 + bandeira 50» — a click on a wall: the door, marked P1
+    (Properties shows its mark); the Window tool with Opening only: a click, the hole with no frame; a door
+    selected: Number doors and windows on the contextual bar."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((8.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("front", center=(4.0, 0.0, 1.5), radius=5.0)
+    pump(300)
+    win.tool_actions["door"].trigger()
+    pump(100)
+    win._context_option("type", "porta_80_bandeira")
+    pump(60)
+    move(near((2.0, -0.1, 1.2)), 4)
+    pump(150)
+    click()
+    pump(300)
+    doors = doc.ifc.file.by_type("IfcDoor")
+    marked = len(doors) == 1 and doors[0].Tag == "P1"
+    win.tool_actions["window"].trigger()
+    pump(100)
+    win._context_option("bare", True)
+    pump(60)
+    move(near((6.0, -0.1, 1.6)), 4)
+    pump(150)
+    click()
+    pump(300)
+    openings = doc.ifc.file.by_type("IfcOpeningElement")
+    bare = len(doc.ifc.file.by_type("IfcWindow")) == 0 and any(not o.HasFillings for o in openings)
+    win._context_option("bare", False)
+    win.set_tool("select")
+    vp.set_selection({doors[0].GlobalId} if doors else set())
+    win._refresh_context_bar()
+    pump(200)
+    shown = "Marca: P1" in win.props.text()
+    offered = win.act_renumber in win.context_bar.actions()
+    shot("99_porta_bandeira_e_vao.png")
+    vp.set_selection(set())
+    del wall
+    check("porta_bandeira_marca_vao", marked and bare and shown and offered,
+          "marca={} vao={} painel={} numerar={}".format(marked, bare, shown, offered))
+
+
+def _seat30():
+    """(0.275) How much higher a 15 cm roof at 30° stands over 20 cm walls' outer line, resting on their inner top
+    edge (core/roofs.seat)."""
+    import math
+    return 0.15 / math.cos(math.radians(30)) - 0.2 * math.tan(math.radians(30))
+
+
+def roofs_flow():
+    """0.111: a 10 × 6 m house, the Roof tool (by the walls, four slopes at 30°, 50 cm eaves): a click inside it —
+    an IfcRoof on top of the walls, its ridge 3,10 m in; in Properties made two slopes; flat; undo."""
+    import math
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 6.0)), ((10.0, 6.0), (0.0, 6.0)),
+                 ((0.0, 6.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    move(near((3.0, 3.0, 0.0)), 4)
+    pump(150)
+    preview = "m²" in vp.label_text
+    click()
+    pump(400)
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    made = len(roofs) == 1 and roofs[0].PredefinedType == "HIP_ROOF"
+    guid = roofs[0].GlobalId if roofs else None
+    ridge = False
+    if made:
+        hi = doc.get(guid).mesh.verts.max(axis=0)
+        ridge = abs(hi[2] - (2.8 + _seat30() + 3.1 * math.tan(math.radians(30)))) < 1e-4
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("100_cobertura.png")
+    if guid:
+        vp.set_selection({guid})
+        pump(200)
+    shown = "Quatro águas" in win.props.text()
+    if guid:
+        win._on_property_edit("roof_form", guid, "gable")
+        pump(300)
+    gable = guid is not None and doc.ifc.by_guid(guid).PredefinedType == "GABLE_ROOF"
+    shot("101_cobertura_duas_aguas.png")
+    if guid:
+        win._on_property_edit("roof_form", guid, "flat")
+        pump(300)
+    flat = guid is not None and abs(doc.get(guid).mesh.verts.max(axis=0)[2] - 2.95) < 1e-6   # (0.275: on the walls)
+    doc.undo()
+    pump(200)
+    undone = guid is not None and doc.ifc.by_guid(guid).PredefinedType == "GABLE_ROOF"
+    vp.set_selection(set())
+    check("coberturas", preview and made and ridge and shown and gable and flat and undone,
+          "previa={} feita={} cumeeira={} painel={} duas={} plana={} desfeita={}".format(
+              preview, made, ridge, shown, gable, flat, undone))
+
+
+def l_roof_flow():
+    """0.179 — A hip roof over an L-shaped house (two arms 4 m wide): the Roof tool (four slopes at 30°) clicked
+    inside it — an IfcRoof HIP_ROOF over the L, its ridges 2,10 m in from the walls' outer line; seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [(0.0, 0.0), (8.0, 0.0), (8.0, 4.0), (4.0, 4.0), (4.0, 8.0), (0.0, 8.0)]
+    for k in range(6):
+        bim_actions.add_wall(doc, np.array(corners[k] + (0.0,)), np.array(corners[(k + 1) % 6] + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win.tool.set_option("form", "hip")
+    move(near((2.0, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(500)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    made = len(roofs) == 1 and roofs[0].PredefinedType == "HIP_ROOF"
+    top = float(doc.get(roofs[0].GlobalId).mesh.verts[:, 2].max()) if roofs else 0.0
+    ridge = abs(top - (2.8 + _seat30() + 2.1 * math.tan(math.radians(30)))) < 1e-4
+    win.open_view("3d", None)
+    pump(200)
+    vp.look_from((-0.7, -1.0, 0.8), animate=False)
+    vp.zoom_extents()
+    pump(500)
+    shot("179_cobertura_em_L.png")
+    check("cobertura_em_L", made and ridge, "feita={} topo={:.3f}".format(made, top))
+
+
+def slanted_roof_flow():
+    """0.190 — A hip roof over a house with slanted sides and a corner turned in (an L, its sides at any angle,
+    walls joined in a chain): the Roof tool (four slopes) clicked inside — an IfcRoof HIP_ROOF, one slope per side
+    of the outline (the straight skeleton), every corner of the roof as high from each slope it is on."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.core.walls import horizontal_dir
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [(0.0, 0.0), (10.0, 0.0), (10.0, 4.0), (5.0, 5.0), (3.0, 10.0), (0.0, 9.0)]
+    prev = first = None
+    for k in range(6):
+        a, b = np.array(corners[k] + (0.0,)), np.array(corners[(k + 1) % 6] + (0.0,))
+        d = horizontal_dir(a, b)
+        guid = bim_actions.add_wall(doc, a, b, spec, prev=prev, first=first if k == 5 else None)
+        prev = (guid, d)
+        if k == 0:
+            first = (guid, d)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win.tool.set_option("form", "hip")
+    move(near((2.0, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(600)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    made = len(roofs) == 1 and roofs[0].PredefinedType == "HIP_ROOF"
+    slopes = len([i for r in roofs[0].Representation.Representations if r.RepresentationIdentifier == "Body"
+                  for i in r.Items]) if made else 0
+    whole = False
+    if made:
+        from arqbim.core import roofs as core_roofs
+        p = doc.ifc.roof_params(roofs[0].GlobalId)
+        outline = core_roofs.grown(p["local"], p["overhang"])
+        faces = core_roofs.faces(outline, [True] * len(outline)) or []
+        heights = {}
+        for (a, _e, n), face in faces:
+            for q in face:
+                heights.setdefault((round(q[0], 4), round(q[1], 4)), []).append(
+                    (q[0] - a[0]) * n[0] + (q[1] - a[1]) * n[1])
+        whole = bool(faces) and all(max(v) - min(v) < 1e-3 for v in heights.values()) and slopes == len(outline) == 6
+    win.open_view("3d", None)
+    pump(200)
+    vp.look_from((-0.7, -1.0, 0.8), animate=False)
+    vp.zoom_extents()
+    pump(500)
+    shot("190_cobertura_obliqua.png")
+    check("cobertura_quatro_aguas_obliqua", made and whole, "feita={} águas={} inteira={}".format(made, slopes, whole))
+
+
+def barrel_roof_flow():
+    """0.180 — Roofs by extrusion: a 10 × 6 m house, the Roof tool with Barrel (30°) clicked inside it — an IfcRoof
+    BARREL_ROOF, its crown 0,83 m over the walls; in the Properties made a butterfly: its valley in the middle."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 6.0)), ((10.0, 6.0), (0.0, 6.0)),
+                 ((0.0, 6.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win.tool.set_option("form", "barrel")
+    win.tool.set_option("slope", 30.0)
+    move(near((3.0, 3.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(500)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    guid = roofs[0].GlobalId if roofs else None
+    barrel = bool(roofs) and roofs[0].PredefinedType == "BARREL_ROOF"
+    crown = float(doc.get(guid).mesh.verts[:, 2].max()) if guid else 0.0
+    expected = 2.8 + _seat30() + 3.1 / math.sin(math.radians(30)) * (1 - math.cos(math.radians(30)))
+    win.open_view("3d", None)
+    pump(200)
+    vp.look_from((-0.8, -1.0, 0.6), animate=False)
+    vp.zoom_extents()
+    pump(500)
+    shot("180_abobada.png")
+    if guid:
+        win._on_property_edit("roof_form", guid, "butterfly")
+        pump(400)
+    butterfly = guid is not None and doc.ifc.by_guid(guid).PredefinedType == "BUTTERFLY_ROOF"
+    valley = doc.ifc.roof_height_at(guid, (5.0, 3.0)) if butterfly else 0.0
+    shot("180b_borboleta.png")
+    check("cobertura_por_extrusao", barrel and abs(crown - expected) < 3e-3 and butterfly and valley < 2.8 - 1.0,
+          "abobada={} coroa={:.3f}/{:.3f} borboleta={} calha={:.2f}".format(barrel, crown, expected, butterfly,
+                                                                           valley))
+
+
+def curtain_embed_flow():
+    """0.188 — A curtain wall drawn in a wall (8 m, 20 cm): the Curtain wall tool, its start clicked on the wall's
+    axis at 2 m, the mouse along it — the tip says it goes into Parede 1 — and 3 typed: the opening cut in the wall,
+    which it fills; its Properties: Embedded in the wall ticked, the wall, its distances to the wall's ends (1 m
+    from the start: it slides there); unticked: the wall whole again; Ctrl+Z: back in the wall."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((8.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    full = doc.get(wall).mesh.volume()
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.5, 0.0, 0.0), radius=3.0)
+    pump(300)
+    win.tool_actions["curtain_wall"].trigger()
+    pump(100)
+    move(near((2.0, 0.0, 0.0)), 4)
+    click()
+    move(near((4.0, 0.0, 0.0)), 4)
+    pump(150)
+    tip = win.hint_label.text()
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(500)
+    cws = [e.GlobalId for e in doc.ifc.file.by_type("IfcCurtainWall")]
+    made = len(cws) == 1 and abs(doc.ifc.curtain_params(cws[0])["length"] - 3.0) < 1e-6
+    cw = cws[0] if cws else None
+    cut = made and doc.ifc.host_wall(cw) == wall and abs(doc.get(wall).mesh.volume() - (full - 3.0 * 2.8 * 0.2)) < 1e-4
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_selection({cw} if cw else set())
+    pump(300)
+    text = win.props.text()
+    shown = "Embutida na parede: True" in text and "Parede: Parede 1" in text
+    if made:
+        win._on_property_edit("from_start", cw, 1.0)
+        pump(300)
+    slid = made and abs(min(doc.ifc.curtain_params(cw)["start"][0], doc.ifc.curtain_params(cw)["end"][0]) - 1.0) < 1e-6
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("188_fachada_embutida.png")
+    box = win.props.editors.get("cw2_embed")
+    if box is not None:
+        box.setChecked(False)
+        pump(400)
+    out = made and doc.ifc.host_wall(cw) is None and abs(doc.get(wall).mesh.volume() - full) < 1e-4
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = made and doc.ifc.host_wall(cw) == wall
+    check("fachada_embutida_na_parede", "embutida" in tip and made and cut and shown and slid and out and back,
+          "dica={!r} feita={} vão={} propriedades={} deslizou={} fora={} desfeito={}".format(
+              tip[:60], made, cut, shown, slid, out, back))
+
+
+def curtain_panel_flow():
+    """0.181 — Curtain wall panels: a curtain wall 6 m long, 4,40 m high (transoms 2,20 m); the Curtain wall panel
+    tool with Glass door clicked on the second bottom cell, with Opaque on the third top one: the door and the
+    spandrel there; the Properties count them."""
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    cw = bim_actions.add_curtain_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), 4.4, 1.5, 2.2)
+    pump(300)
+    vp.look_from((0.0, -1.0, 0.15), animate=False)
+    vp.zoom_extents()
+    pump(500)
+    win.tool_actions["curtain_panel"].trigger()
+    pump(100)
+    for kind, point in (("door", (2.2, -0.02, 1.0)), ("solid", (3.8, -0.02, 3.3))):
+        win.tool.set_option("kind", kind)
+        move(near(point), 4)
+        pump(200)
+        click()
+        pump(500)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    panels = doc.ifc.curtain_params(cw)["panels"]
+    vp.set_selection({cw})
+    pump(300)
+    text = win.props.text()
+    vp.set_selection(set())
+    shot("181_paineis_fachada.png")
+    check("paineis_de_fachada", panels == {(1, 0): "door", (2, 1): "solid"} and "Painéis" in text,
+          "paineis={} painel_mostra={}".format(panels, "Painéis" in text))
+
+
+def attach_roof_flow():
+    """0.112: the four walls of a house and its gable roof selected — Attach top to slab (the roof): the end walls
+    become gables under it; Properties shows the top tied to the roof."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (8.0, 0.0)), ((8.0, 0.0), (8.0, 5.0)), ((8.0, 5.0), (0.0, 5.0)),
+                          ((0.0, 5.0), (0.0, 0.0)))]
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (8.1, -0.1), (8.1, 5.1), (-0.1, 5.1)], catalog.BY_KEY["laje_15"],
+                                "gable", 35.0, 0.4)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection(set(walls) | {roof})
+    win._refresh_context_bar()
+    pump(100)
+    offered = win.act_attach_top in win.context_bar.actions()
+    win.act_attach_top.trigger()
+    pump(400)
+    gables = sum(1 for w in walls if doc.ifc.wall_profile(w) is not None) == 2
+    vp.set_selection({walls[1]})
+    pump(200)
+    shown = "Cobertura" in win.props.text() and "face de baixo" in win.props.text()
+    vp.set_selection(set())
+    shot("102_paredes_sob_a_cobertura.png")
+    check("topo_ligado_a_cobertura", offered and gables and shown,
+          "oferece={} empenas={} painel={}".format(offered, gables, shown))
+
+
+def roof_parts_flow():
+    """0.113: the Roof tool From a slab — a click on a slab: a flat roof on it; the Drain tool — a click on the
+    roof: a drain on its top; the Opening tool — two corners on the roof: a hole right through it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = bim_actions.add_slab_outline(doc, [(0, 0), (8, 0), (8, 5), (0, 5)], 3.0, catalog.BY_KEY["laje_15"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("iso", center=(4.0, 2.5, 3.0), radius=7.0)
+    pump(300)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win._context_option("shape", "face")
+    win._context_option("form", "flat")
+    win._context_option("overhang", 0.0)
+    pump(60)
+    move(near((2.0, 2.0, 3.15)), 4)
+    pump(150)
+    click()
+    pump(400)
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    made = len(roofs) == 1 and roofs[0].PredefinedType == "FLAT_ROOF"
+    roof = roofs[0].GlobalId if roofs else None
+    on_top = made and abs(doc.get(roof).mesh.verts.min(axis=0)[2] - 3.15) < 1e-6      # (resting on the slab)
+    win._context_option("shape", "wand")
+    win._context_option("form", "hip")
+    win._context_option("overhang", 0.5)
+    win.tool_actions["drain"].trigger()
+    pump(100)
+    move(near((6.0, 3.5, 3.30)), 4)
+    pump(150)
+    click()
+    pump(300)
+    drains = doc.ifc.file.by_type("IfcWasteTerminal")
+    drained = len(drains) == 1
+    win.tool_actions["roof_opening"].trigger()
+    pump(100)
+    move(near((2.0, 1.0, 3.30)), 4)
+    click()
+    move(near((3.0, 2.0, 3.30)), 4)
+    pump(100)
+    click()
+    pump(300)
+    holes = [o for o in doc.ifc.file.by_type("IfcOpeningElement")
+             if o.VoidsElements and o.VoidsElements[0].RelatingBuildingElement.GlobalId == roof]
+    holed = len(holes) == 1
+    key(Qt.Key.Key_Escape)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("103_cobertura_ralo_abertura.png")
+    del slab
+    check("cobertura_plana_ralo_abertura", made and on_top and drained and holed,
+          "plana={} no_topo={} ralo={} abertura={}".format(made, on_top, drained, holed))
+
+
+def stairs_flow():
+    """0.114: a storey 3,00 m above; the Stair tool in L — its foot clicked, then the way up: 17 risers of 17,6 cm
+    up to the storey (IfcStair QUARTER_TURN_STAIR); Properties shows the risers; made a U there."""
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_storey(doc, "Piso 1", 3.0)
+    win.set_active_storey(doc.ifc.storeys()[0][0])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=6.0)
+    pump(300)
+    win.tool_actions["stair"].trigger()
+    pump(100)
+    win._context_option("form", "l")
+    pump(60)
+    move(near((1.0, 1.0, 0.0)), 4)
+    click()
+    move(near((3.0, 1.0, 0.0)), 4)
+    pump(100)
+    preview = vp._lines.visible
+    click()
+    pump(400)
+    stairs = doc.ifc.file.by_type("IfcStair")
+    made = len(stairs) == 1 and stairs[0].PredefinedType == "QUARTER_TURN_STAIR"
+    guid = stairs[0].GlobalId if stairs else None
+    risers = made and ue_psets(stairs[0])["Pset_StairCommon"]["NumberOfRiser"] == 17
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    if guid:
+        vp.set_selection({guid})
+        pump(200)
+    shown = "Espelhos: 17" in win.props.text()
+    if guid:
+        win._on_property_edit("stair_form", guid, "u")
+        pump(300)
+    u = guid is not None and doc.ifc.by_guid(guid).PredefinedType == "HALF_TURN_STAIR"
+    vp.set_selection(set())
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("104_escada.png")
+    check("escadas", preview and made and risers and shown and u,
+          "previa={} feita={} espelhos={} painel={} em_U={}".format(preview, made, risers, shown, u))
+
+
+def stair_waist_flow():
+    """0.256 — The slab under the steps: a straight stair rising 2,80 (16 risers, 15 cm waist) and an L beside it;
+    their volume the steps and the slab 15 cm thick under the inner corners (not steps alone); seen from the side and
+    from below (the L's flights and landing one slab)."""
+    from arqbim.core import stairs as core_stairs
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = catalog.BY_KEY["laje_15"]
+    straight = bim_actions.add_stair(doc, np.array((0.0, 0.0, 0.0)), (1.0, 0.0), slab, "straight", 2.8)
+    bim_actions.add_stair(doc, np.array((8.0, 0.0, 0.0)), (1.0, 0.0), slab, "l", 2.8)
+    pump(300)
+    steps = 15 * 0.175 * 0.28 / 2                                  # (the steps alone: their triangles)
+    slab_part = 0.15 * math.hypot(15 * 0.28, 15 * 0.175)           # (the waist along the flight)
+    volume = doc.get(straight).mesh.volume()
+    thick = volume > (steps + 0.9 * slab_part) * 1.0
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_camera((1.6, -3.2, 0.9), (0.25, 1.0, 0.08))              # (from its side, close)
+    pump(500)
+    shot("256_escada_laje_lado.png")
+    vp.set_camera((12.6, -2.6, 0.35), (-0.55, 0.8, 0.42))           # (the L from below: its landing)
+    pump(500)
+    shot("256b_escada_L_por_baixo.png")
+    vp.set_camera((7.0, -2.6, 2.4), (0.9, 0.75, -0.38))             # (0.257: the landing from the first flight)
+    pump(500)
+    shot("257_patamar_limpo.png")
+    del core_stairs
+    check("escada_com_laje", thick, "volume={:.3f} m3 (degraus {:.3f} + laje {:.3f})".format(volume, steps, slab_part))
+
+
+def railing_types_flow():
+    """0.258 — The railing types: the Railing tool's Type list has the program's types; a railing of each, 2,4 m
+    long, in a row; the Properties show its type; seen in 3D, from near."""
+    from arqbim.core import railing_types as core_rail
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["railing"].trigger()
+    pump(100)
+    listed = [k for k, _n in doc.ifc.railing_type_choices()]
+    in_tool = listed[:len(core_rail.PRESETS)] == list(core_rail.PRESETS)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    made = {}
+    for k, name in enumerate(core_rail.PRESETS):
+        y = -6.0 * k
+        made[name] = bim_actions.add_railing(doc, [(0.0, y, 0.0), (2.4, y, 0.0), (2.4, y + 1.2, 0.0)], None, name)
+    pump(300)
+    first = made["vidro_grampos"]
+    vp.set_selection({first})
+    pump(200)
+    shown = core_rail.PRESETS["vidro_grampos"].name in win.props.text()
+    vp.set_selection(set())
+    win.open_view("3d", None)
+    pump(200)
+    for k, name in enumerate(core_rail.PRESETS):                     # (each from the front, near)
+        y = -6.0 * k
+        vp.set_camera((0.3, y - 2.9, 1.25), (0.25, 1.0, -0.22))
+        pump(400)
+        shot("258_guarda_{}.png".format(name))
+    vp.set_camera((-7.0, 6.0, 9.0), (0.6, -0.75, -0.55))
+    pump(400)
+    shot("258_guardas_todos.png")
+    check("tipos_de_guarda", in_tool and shown and len(made) == len(core_rail.PRESETS),
+          "na_ferramenta={} propriedades={} feitos={}".format(in_tool, shown, len(made)))
+
+
+def railing_type_editor_flow():
+    """0.260 — The railing type editor: Architecture ▸ Railing types… — the steel cables duplicated (a copy of the
+    project's), its cables 12 cm apart and its posts round, the sample drawn again, renamed; Apply: a type of the
+    project's, a railing of it drawn; the program's Upright bars changed (round bars) and applied: the railing of it
+    made again with round bars; a railing's Properties ▸ Edit type… opens the editor on its type."""
+    from arqbim.core import railing_types as core_rail
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bars = bim_actions.add_railing(doc, [(0.0, 0.0, 0.0), (2.4, 0.0, 0.0)], None, "barras")
+    pump(300)
+    in_ribbon = win.ribbon_item("railing_types") is not None
+    seen = {}
+
+    def work():
+        d = getattr(win, "_railing_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["listed"] = d.list.count()
+        d.select("cabos")
+        d.duplicate_current()
+        _kind, w = d.editors["gap"]
+        w.setText("0,12")
+        w.editingFinished.emit()
+        _kind, w = d.editors["post"]
+        w.setCurrentIndex(w.findData("round"))
+        d.name.setText("Cabos largos")
+        d._changed()
+        seen["preview"] = d.preview.rtype is not None and abs(d.preview.rtype.gap - 0.12) < 1e-9
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "260_editor_tipos_guarda.png"))
+        seen["saved"] = d.save()
+        d.select("barras")
+        _kind, w = d.editors["bar"]
+        w.setCurrentIndex(w.findData("round"))
+        seen["bars"] = d.save()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.act_railing_types.trigger()
+    pump(300)
+    own = {k: rt for k, rt in doc.ifc.railing_types().items() if k not in core_rail.PRESETS}
+    mine = next(iter(own.values()), None)
+    made = len(own) == 1 and mine.gap == 0.12 and mine.post == "round" and mine.name == "Cabos largos"
+    drawn = mine is not None and bim_actions.add_railing(doc, [(0.0, 3.0, 0.0), (2.4, 3.0, 0.0)], None, mine.key)
+    items = doc.ifc.by_guid(bars).Representation.Representations[0].Items
+    rounds = sum(1 for i in items if i.SweptArea.is_a("IfcCircleProfileDef"))
+    vp.set_selection({bars})
+    pump(300)
+    opened = {}
+
+    def peek():
+        d = getattr(win, "_railing_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, peek)
+            return
+        opened["key"] = d.current.key
+        d.reject()
+
+    button = win.props.editors.get("edit_railing_type")
+    if button is not None:
+        QtCore.QTimer.singleShot(100, peek)
+        button.click()
+        pump(600)
+    vp.set_selection(set())
+    check("editor_tipos_guarda", in_ribbon and seen.get("preview") and seen.get("saved") and seen.get("bars")
+          and made and bool(drawn) and rounds > 5 and opened.get("key") == "barras",
+          "faixa={} lista={} amostra={} guardado={} proprio={} desenhado={} barras_redondas={} editar={}".format(
+              in_ribbon, seen.get("listed"), seen.get("preview"), seen.get("saved"), made, bool(drawn), rounds,
+              opened.get("key")))
+
+
+def stair_railings_flow():
+    """0.261 — A stair's railings, one each side all the way up: an L with upright bars and a U with steel cables
+    (the Railing tool, On a stair's sides, a click on each): two railings each, level at the landing; seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = catalog.BY_KEY["laje_15"]
+    el = bim_actions.add_stair(doc, np.array((0.0, 0.0, 0.0)), (1.0, 0.0), slab, "l", 2.8)
+    u = bim_actions.add_stair(doc, np.array((8.0, 0.0, 0.0)), (1.0, 0.0), slab, "u", 2.8)
+    pump(300)
+    made = {}
+    for stair, kind in ((el, "barras"), (u, "cabos")):
+        made[stair] = bim_actions.stair_railings(doc, stair, 0.90, kind)
+    pump(300)
+    two = all(len(v) == 2 for v in made.values())
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_camera((-2.5, -4.5, 4.2), (0.62, 0.62, -0.48))
+    pump(500)
+    shot("261_guardas_escada_L.png")
+    vp.set_camera((15.5, -4.0, 4.6), (-0.62, 0.66, -0.42))
+    pump(500)
+    shot("261b_guardas_escada_U.png")
+    check("guardas_de_escada_continuos", two, "guardas={}".format({k[:6]: len(v) for k, v in made.items()}))
+
+
+def railing_extensions_flow():
+    """0.282 — Handrail extensions (DL 163/2006): a straight stair's wall handrails on its sides — a going on past the
+    first nosing and 0,30 m past the last, down to the floor; one selected: «Prolongamento na base» and «no topo» in
+    its Properties; the foot's set to 0: it ends at the first nosing."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    stair = bim_actions.add_stair(doc, np.array((0.0, 0.0, 0.0)), (1.0, 0.0), catalog.BY_KEY["laje_15"], "straight",
+                                  2.8, going=0.28)
+    rails = bim_actions.stair_railings(doc, stair, 0.90, "corrimao")
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_camera((-1.6, -2.4, 1.6), (0.55, 0.72, -0.42))            # (by the stair's foot)
+    pump(500)
+    shot("282_prolongamentos_base.png")
+    vp.set_camera((6.3, -2.3, 5.2), (-0.55, 0.55, -0.63))            # (at its top, from over it)
+    pump(500)
+    shot("282_prolongamentos_topo.png")
+    win.set_tool("select")
+    vp.set_selection({rails[0]})
+    pump(300)
+    editors = win.props.editors
+    shown = "railing_ext_base" in editors and "railing_ext_top" in editors
+    if "railing_ext_base" in editors:
+        field = editors["railing_ext_base"]
+        field.setText("0")
+        field.editingFinished.emit()
+        pump(500)
+    off = doc.ifc.railing_params(rails[0])["extend"] == (0.0, 0.30)
+    lo = np.asarray(doc.get(rails[1]).mesh.verts).min(axis=0)
+    vp.set_selection(set())
+    check("prolongamentos_dos_corrimaos", len(rails) == 2 and shown and off and abs(lo[2]) < 1e-6
+          and lo[0] < -0.28 + 0.03, "guardas={} propriedades={} base_tirada={} pe={}".format(len(rails), shown, off,
+                                                                                            np.round(lo, 3)))
+
+
+def block_roof_flow():
+    """0.262 — A roof by blocks over an L of walls: the Roof tool, By blocks; a hip block clicked over the main body
+    (its two corners) — a new roof —, then a gable block over the wing: it goes into the same roof (2 blocks,
+    FREEFORM, a valley between them); a lower shed block (a porch) added; seen in 3D."""
+    from arqbim.core import roof_blocks as rb
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (6.0, 10.0), (6.0, 6.0), (0.0, 6.0)]
+    for k in range(len(pts)):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % len(pts)] + (0.0,)), spec)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(5.0, 5.0, 0.0), radius=8.0)
+    pump(300)
+    win.tool_actions["roof"].trigger()
+    pump(100)
+    win._context_option("shape", "blocks")
+    win._context_option("block_form", "hip")
+    pump(60)
+    for a, b in (((-0.1, -0.1), (10.1, 6.1)),):
+        move(near(a + (0.0,)), 4)
+        click()
+        move(near(b + (0.0,)), 4)
+        pump(80)
+        click()
+        pump(400)
+    win._context_option("block_form", "gable")
+    pump(60)
+    tip = win.hint_label.text()
+    move(near((5.9, 4.0, 0.0)), 4)
+    click()
+    move(near((10.1, 10.1, 0.0)), 4)
+    pump(80)
+    click()
+    pump(400)
+    key(Qt.Key.Key_Escape)
+    win._context_option("shape", "wand")                    # (the tool as the other flows expect it)
+    win.set_tool("select")
+    roofs = doc.ifc.file.by_type("IfcRoof")
+    one = len(roofs) == 1
+    roof = roofs[0].GlobalId if roofs else None
+    blocks = doc.ifc.roof_params(roof)["blocks"] if roof else []
+    two = len(blocks) == 2 and roofs[0].PredefinedType == "FREEFORM"
+    if roof:
+        porch = rb.replace(rb.make(3.0, -1.35, 0.0, 6.0, 2.5, "shed", 10.0, 0.3), eave=(-0.8,) * 4)
+        bim_actions.add_roof_block(doc, roof, porch, on_walls=False)        # (against the wall, under the eave)
+        pump(300)
+    three = roof is not None and len(doc.ifc.roof_params(roof)["blocks"]) == 3
+    # (the clicks held on the walls' axes or faces: the blocks taken out to their outer faces)
+    sizes = [(round(b.width, 3), round(b.depth, 3)) for b in blocks]
+    fits = len(sizes) == 2 and sizes[0] == (10.2, 6.2) and sizes[1][0] == 4.2
+    vp.set_camera((-7.0, -9.0, 9.0), (0.55, 0.62, -0.5))
+    pump(500)
+    shot("262_cobertura_por_blocos.png")
+    vp.set_camera((16.0, 16.0, 9.0), (-0.6, -0.6, -0.45))
+    pump(500)
+    shot("262b_cobertura_por_blocos_tras.png")
+    check("cobertura_por_blocos", "junta-se" in tip and one and two and three and fits,
+          "dica={!r} uma={} dois_blocos={} tres={} faces={}".format(tip[:60], one, two, three, sizes))
+
+
+def roof_block_editor_flow():
+    """0.263 — The roof block editor: a roof by blocks over an L (a hip block and a gable wing); Properties ▸ Edit
+    blocks…: two blocks listed; a click in the plan on the wing chooses it; its north side's letter clicked — a water
+    there (its form now custom), that water 45°; the main block duplicated and the copy removed; Apply: the roof
+    made again, the wing with three waters; Ctrl+Z: as it was; seen in 3D."""
+    from arqbim.core import roof_blocks as rb
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (6.0, 10.0), (6.0, 6.0), (0.0, 6.0)]
+    for k in range(len(pts)):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % len(pts)] + (0.0,)), spec)
+    roof = bim_actions.add_block_roof(doc, rb.make(5.0, 3.0, 0.0, 10.2, 6.2, "hip", 30.0, 0.5),
+                                      catalog.BY_KEY["laje_15"])
+    bim_actions.add_roof_block(doc, roof, rb.make(8.0, 7.05, 0.0, 4.2, 6.1, "gable", 30.0, 0.5))
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_selection({roof})
+    pump(300)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_roof_block_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["listed"] = d.list.count()
+        QtWidgets.QApplication.processEvents()
+        at = d.plan.to_screen(8.0, 9.0)                              # (the wing, out of the main block)
+        QtTest.QTest.mouseClick(d.plan, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                                QtCore.QPoint(int(at.x()), int(at.y())))
+        seen["picked"] = d.current
+        QtWidgets.QApplication.processEvents()
+        letter = next((p for p, k in d.plan.letters if k == 0), None)       # (its N)
+        if letter is not None:
+            QtTest.QTest.mouseClick(d.plan, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                                    QtCore.QPoint(int(letter.x()), int(letter.y())))
+        seen["custom"] = d.form.currentData() == "custom"
+        d.sides[0][1].setText("45")
+        d.sides[0][1].editingFinished.emit()
+        d.choose(0)
+        d.duplicate_current()
+        seen["three"] = d.list.count() == 3
+        seen["removed"] = d.remove_current() and d.list.count() == 2
+        d.choose(1)
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "263_editor_blocos.png"))
+        seen["saved"] = d.save()
+        d.accept()
+
+    button = win.props.editors.get("edit_roof_blocks")
+    if button is not None:
+        QtCore.QTimer.singleShot(100, work)
+        button.click()
+        pump(600)
+    blocks = doc.ifc.roof_params(roof)["blocks"]
+    wing = blocks[1] if len(blocks) == 2 else None
+    changed = wing is not None and wing.water == (True, True, False, True) and abs(wing.slope[0] - 45.0) < 1e-9
+    vp.set_selection(set())
+    vp.set_camera((16.0, 16.0, 9.0), (-0.6, -0.6, -0.45))
+    pump(500)
+    shot("263b_cobertura_blocos_editada.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = doc.ifc.roof_params(roof)["blocks"]
+    undone = len(back) == 2 and back[1].water == (False, True, False, True)
+    check("editor_blocos", button is not None and seen.get("listed") == 2 and seen.get("picked") == 1
+          and seen.get("custom") and seen.get("three") and seen.get("removed") and seen.get("saved") and changed
+          and undone, "botao={} lista={} escolhido={} personalizada={} tres={} apagado={} aplicado={} ala={} "
+          "desfeito={}".format(button is not None, seen.get("listed"), seen.get("picked"), seen.get("custom"),
+                               seen.get("three"), seen.get("removed"), seen.get("saved"), changed, undone))
+
+
+def roof_block_grips_flow():
+    """0.264 — The roof blocks' grips: a roof by blocks over an L, its main block drawn 90 cm short of the east wall;
+    selected: a square in the middle of each block's sides, a diamond in each block's middle; the main block's east
+    grip dragged onto the east wall — the side out to the wall's outer face (10,10), the west side where it was; the
+    wing's middle grip clicked, the mouse moved east and 1 typed: the wing 1 m east; Ctrl+Z: back."""
+    from arqbim.core import roof_blocks as rb
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (6.0, 10.0), (6.0, 6.0), (0.0, 6.0)]
+    for k in range(len(pts)):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % len(pts)] + (0.0,)), spec)
+    roof = bim_actions.add_block_roof(doc, rb.make(4.5, 3.0, 0.0, 9.2, 6.2, "hip", 30.0, 0.5),
+                                      catalog.BY_KEY["laje_15"])
+    bim_actions.add_roof_block(doc, roof, rb.make(8.0, 7.05, 0.0, 4.2, 6.1, "gable", 30.0, 0.5))
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_view("top", center=(5.0, 5.0, 0.0), radius=9.0)
+    pump(300)
+    vp.set_selection({roof})
+    pump(300)
+    grips = win.tool._block_grips
+    shown = grips is not None and len(vp.grips[0]) == 8 and len(vp.grips[1]) == 2
+    east = next((p for i, k, p in grips[3] if i == 0 and k == 1), None) if grips else None
+    wide = None
+    if east is not None:
+        drag([at(east), near((10.0, 3.0, float(east[2])))])
+        pump(400)
+        main = doc.ifc.roof_blocks_world(roof)[0]
+        wide = (round(main.cx - main.width / 2, 3), round(main.cx + main.width / 2, 3))
+    grips = win.tool._block_grips
+    moved = None
+    if grips is not None and len(grips[4]) == 2:
+        middle = grips[4][1]
+        move(at(middle), 3)
+        click()                                       # (0.382) a click: nothing moves, the mouse taken away
+        move(near(middle, 60.0, 30.0), 4)
+        pump(200)
+        clicked_stays = win.tool._move is None and round(doc.ifc.roof_blocks_world(roof)[1].cx, 3) == 8.0
+        move(at(middle), 3)
+        press()                                       # (dragged, a distance typed meanwhile)
+        move(near(middle, 40.0, 0.0), 4)
+        pump(100)
+        type_text("1")
+        key(Qt.Key.Key_Return)
+        pump(400)
+        release()
+        pump(200)
+        moved = round(doc.ifc.roof_blocks_world(roof)[1].cx, 3) if clicked_stays else None
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("264_pegas_dos_blocos.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = round(doc.ifc.roof_blocks_world(roof)[1].cx, 3)
+    vp.set_selection(set())
+    check("pegas_dos_blocos", shown and wide == (-0.1, 10.1) and moved == 9.0 and back == 8.0,
+          "pegas={} lados={} ala={} desfeito={}".format(shown, wide, moved, back))
+
+
+def roof_edges_flow():
+    """0.265 — A roof by blocks' edges measured: a hip block over a house and a gable wing across it; selected, its
+    Properties list its eaves, ridges, hips and valleys (m); Schedules (Ctrl+T) ▸ Roofs: one row, its sloped and
+    plan areas and its edges' lengths."""
+    from arqbim.core import roof_blocks as rb
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.i18n import t as tr
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    roof = bim_actions.add_block_roof(doc, rb.make(5.0, 3.0, 0.0, 10.2, 6.2, "hip", 30.0, 0.5),
+                                      catalog.BY_KEY["laje_15"])
+    bim_actions.add_roof_block(doc, roof, rb.make(7.5, 7.0, 0.0, 3.2, 6.0, "gable", 30.0, 0.5))
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({roof})
+    pump(400)
+    texts = []
+    it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+    while it.value():
+        texts.append(it.value().text(0))
+        it += 1
+    listed = all(tr("props.edge." + k) in texts for k in ("eave", "ridge", "hip", "valley"))
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("roofs"))
+    pump(400)
+    cols = list(panel._columns)
+    row = panel.table.rowCount() == 1 and all(c in cols for c in ("area", "projected", "eaves", "valleys"))
+    eaves = panel.table.item(0, cols.index("eaves")).text() if row else ""
+    shot("265_arestas_da_cobertura.png")
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    vp.set_selection(set())
+    check("arestas_da_cobertura", listed and row and eaves.endswith(" m"),
+          "propriedades={} tabela={} beirados={!r}".format(listed, row, eaves))
+
+
+def ifc_data_flow():
+    """0.266 — Each element with its standard IFC set: a wall drawn and selected — the Properties show «Dados IFC —
+    Pset_WallCommon» with every property: its Reference (its type, by the program), the fire rating empty; «EI 60»
+    typed in it: written, the user's; a door in it: its Pset_DoorCommon listed too."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.i18n import t as tr
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    pump(400)
+    texts = []
+    it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+    while it.value():
+        texts.append(it.value().text(0))
+        it += 1
+    group = tr("props.ifc_data", pset="Pset_WallCommon") in texts
+    reference = win.props.editors.get(("ifc", "Reference"))
+    fire = win.props.editors.get(("ifc", "FireRating"))
+    shown = reference is not None and reference.text() == "Parede alvenaria 20 cm" and fire is not None \
+        and fire.text() == ""
+    if fire is not None:
+        fire.setText("EI 60")
+        fire.editingFinished.emit()
+        pump(400)
+    written = _psets_of(wall).get("Pset_WallCommon", {}).get("FireRating") == "EI 60"
+    manual = "Pset_WallCommon.FireRating" in doc.ifc.manual_data(doc.ifc.by_guid(wall))
+    it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+    while it.value():
+        if it.value().text(0) == tr("props.ifc_data", pset="Pset_WallCommon"):
+            win.props.tree.scrollToItem(it.value(), QtWidgets.QAbstractItemView.ScrollHint.PositionAtTop)
+            break
+        it += 1
+    pump(200)
+    shot("266_dados_ifc.png")
+    vp.set_selection(set())
+    check("dados_ifc", group and shown and written and manual,
+          "grupo={} referencia_e_fogo={} escrito={} manual={}".format(group, shown, written, manual))
+
+
+def external_flow():
+    """0.267 — Outside or inside worked out: a house of four walls and a partition across; the front wall
+    selected: «Exterior: Sim» (in blue, the program's), the partition: «Não»; a door in the front wall: «Sim»."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    walls = [bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+             for k in range(4)]
+    partition = bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 6.0, 0.0)), spec)
+    door = bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"],
+                                   bim_actions.wall_frame(doc, walls[0]), 1.0, -1)
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    seen = {}
+    for name, g in (("frente", walls[0]), ("divisoria", partition), ("porta", door)):
+        vp.set_selection({g})
+        pump(300)
+        combo = win.props.editors.get(("ifc", "IsExternal"))
+        seen[name] = combo.currentData() if combo is not None else "?"
+    vp.set_selection({walls[0]})
+    pump(300)
+    shot("267_exterior.png")
+    vp.set_selection(set())
+    check("exterior_calculado", seen == {"frente": True, "divisoria": False, "porta": True}, str(seen))
+
+
+def ai_link_flow():
+    """0.269 — The AI's link to the window: Manage ▸ Ligação à IA on — the link's file written (this computer, a
+    key); an MCP server started apart (python -m arqbim.mcp --live) asked through its stdin for a house of four walls
+    and to show them: the walls made in the window's model, selected, the status bar saying what the AI did; Ctrl+Z:
+    gone; the link off: its file gone."""
+    import queue
+    import subprocess
+    import threading
+    from arqbim.mcp import link
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    in_ribbon = win.ribbon_item("ai_link") is not None
+    win.act_ai_link.trigger()
+    pump(200)
+    found = link.read()
+    on = win.act_ai_link.isChecked() and found is not None
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    proc = subprocess.Popen([sys.executable, "-m", "arqbim.mcp", "--live"], cwd=root, stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
+    answers = queue.Queue()
+    threading.Thread(target=lambda: [answers.put(line) for line in proc.stdout], daemon=True).start()
+
+    def ask(mid, method, params=None):
+        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": mid, "method": method, "params": params or {}}) + "\n")
+        proc.stdin.flush()
+        end = time.time() + 60
+        while time.time() < end:
+            pump(50)                                       # (the window answers the server's calls meanwhile)
+            try:
+                return json.loads(answers.get_nowait())
+            except queue.Empty:
+                continue
+        return None
+
+    tools_listed = []
+    made = shown = False
+    if on:
+        ask(1, "initialize", {"protocolVersion": "2025-06-18"})
+        listed = ask(2, "tools/list")
+        tools_listed = [t["name"] for t in (listed or {}).get("result", {}).get("tools", [])]
+        answer = ask(3, "tools/call", {"name": "create", "arguments": {"kind": "walls", "params": {
+            "points": [[0, 0], [8, 0], [8, 5], [0, 5]], "closed": True}}})
+        text = ((answer or {}).get("result") or {}).get("content", [{}])[0].get("text", "")
+        made = len(doc.ifc.file.by_type("IfcWall")) == 4
+        ids = [w for w in text.replace(",", " ").split() if w.startswith("#")]
+        answer = ask(4, "tools/call", {"name": "show", "arguments": {"ids": ids}})
+        shown = len(vp.selection) == 4
+    said = "IA:" in win.last_message
+    pump(300)
+    shot("269_ligacao_ia.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = len(doc.ifc.file.by_type("IfcWall")) == 0
+    proc.stdin.close()
+    proc.wait(timeout=30)
+    win.act_ai_link.trigger()
+    pump(200)
+    off = not win.act_ai_link.isChecked() and link.read() is None
+    vp.set_selection(set())
+    check("ligacao_ia", in_ribbon and on and "show" in tools_listed and made and shown and said and undone and off,
+          "faixa={} ligada={} ferramentas={} paredes={} mostradas={} rodape={} desfeito={} desligada={}".format(
+              in_ribbon, on, len(tools_listed), made, shown, said, undone, off))
+
+
+def ai_install_flow():
+    """0.270 — Manage ▸ Ligar um assistente de IA…: the line for Claude Code and the JSON shown; «Pôr no Claude
+    Desktop» on a config file of a test folder: the server put in it, the dialog says so."""
+    import tempfile
+    seen = {}
+
+    def work():
+        d = getattr(win, "_ai_install_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["line"] = d.code_line.text().startswith("claude mcp add ")
+        seen["json"] = "arqsynth-bim" in json.loads(d.json.toPlainText())["mcpServers"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "claude_desktop_config.json")
+            seen["put"] = d.install_desktop(path)
+            if seen["put"]:
+                with open(path, encoding="utf-8") as f:
+                    seen["put"] = "arqsynth-bim" in json.load(f)["mcpServers"]
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "270_ligar_assistente_ia.png"))
+        d.reject()
+
+    in_ribbon = win.ribbon_item("ai_install") is not None
+    QtCore.QTimer.singleShot(100, work)
+    win.act_ai_install.trigger()
+    pump(300)
+    check("ligar_assistente_ia", in_ribbon and seen.get("line") and seen.get("json") and seen.get("put"),
+          "faixa={} {}".format(in_ribbon, seen))
+
+
+def type_data_flow():
+    """0.271 — A type's IFC data: a wall of the 20 cm type; the type editor on it — «Dados IFC do tipo —
+    Pset_WallCommon» with its properties; EI 60 typed as its fire rating, Apply: the wall has it, the type's (grey in
+    its Properties)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["shown"] = d.data_box.isVisible() and "Pset_WallCommon" in d.data_box.title()
+        kind, widget, _old = d.data_editors.get("FireRating", (None, None, None))
+        if widget is not None:
+            widget.setText("EI 60")
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "271_dados_ifc_do_tipo.png"))
+        seen["applied"] = d.apply_changes() is not None
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_types("wall", "parede_alv_20")
+    pump(400)
+    fire = _psets_of(wall).get("Pset_WallCommon", {}).get("FireRating")
+    rows = {r[0]: r for r in doc.ifc.ifc_data(wall)[1]}
+    check("dados_ifc_do_tipo", seen.get("shown") and seen.get("applied") and fire == "EI 60"
+          and rows["FireRating"][4] == "type", "{} fogo={} como={}".format(seen, fire, rows["FireRating"][4]))
+
+
+def missing_data_flow():
+    """0.273 — Collaborate ▸ Dados IFC em falta…: two walls — IfcWall listed with its properties and how many lack
+    each; «Preencher o que o programa sabe»: values written; the fire rating's line chosen and «Selecionar os que
+    faltam»: the two walls selected."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui.missing_data_dialog import GUIDS
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array((0.0, y, 0.0)), np.array((5.0, y, 0.0)), spec) for y in (0.0, 3.0)]
+    win.open_view("3d", None)
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_missing_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        top = d.tree.topLevelItem(0)
+        seen["listed"] = top is not None and top.text(0).startswith("IfcWall")
+        seen["filled"] = d.fill_known() >= 0
+        top = d.tree.topLevelItem(0)
+        top.setExpanded(True)
+        fire = next((top.child(k) for k in range(top.childCount())
+                     if top.child(k).toolTip(0) == "Pset_WallCommon.FireRating"), None)
+        seen["fire"] = fire is not None and len(fire.data(0, GUIDS)) == 2
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "273_dados_ifc_em_falta.png"))
+        if fire is not None:
+            d.tree.setCurrentItem(fire)
+            d.select.click()
+
+    in_ribbon = win.ribbon_item("missing_data") is not None
+    QtCore.QTimer.singleShot(100, work)
+    win.act_missing_data.trigger()
+    pump(400)
+    selected = vp.selection == set(walls)
+    vp.set_selection(set())
+    check("dados_ifc_em_falta", in_ribbon and seen.get("listed") and seen.get("filled") and seen.get("fire")
+          and selected, "faixa={} {} selecionadas={}".format(in_ribbon, seen, selected))
+
+
+def carpentry_flow():
+    """0.276 — A roof's carpentry: a 10 × 6 m house and its hip roof; selected, «Fazer madeiramento» in its
+    Properties — an assembly of plates, ridge board, hip rafters, purlins, rafters and battens, the roof raised
+    onto it, its pieces listed in the Properties; seen with the roof's cover hidden; «Tirar»: gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.i18n import t as tr
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)],
+                                catalog.BY_KEY["laje_12"], "hip", 30.0, 0.5)
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({roof})
+    pump(300)
+    button = win.props.editors.get("roof_carpentry")
+    if button is not None:
+        button.click()
+        pump(1500)
+    made = doc.ifc.carpentry_of(roof) is not None
+    texts = []
+    it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+    while it.value():
+        texts.append(it.value().text(0))
+        it += 1
+    listed = all(tr("carp." + r) in texts for r in ("frechal", "caibro", "ripa", "terca", "rincao"))
+    vp.set_selection(set())
+    vp.set_camera((1.0, 1.0, 1.7), (0.62, 0.42, 0.66))              # (from inside the house, looking up)
+    pump(600)
+    shot("276_madeiramento.png")
+    vp.set_selection({roof})
+    pump(300)
+    seen = {}                                                       # (0.277) its sizes: rafters 0,60 m apart
+
+    def sizes():
+        d = getattr(win, "_carpentry_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, sizes)
+            return
+        d.spacing.setText("0,60")
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "277_medidas_madeiramento.png"))
+        seen["applied"] = d.apply()
+
+    count = (doc.ifc.carpentry_summary(roof) or {}).get("caibro", (0,))[0]
+    button = win.props.editors.get("roof_carpentry_sizes")
+    if button is not None:
+        QtCore.QTimer.singleShot(100, sizes)
+        button.click()
+        pump(1500)
+    fewer = 0 < (doc.ifc.carpentry_summary(roof) or {}).get("caibro", (0,))[0] < count
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("carpentry"))
+    pump(400)
+    table = panel.table.rowCount() >= 5
+    shot("277_tabela_madeiramento.png")
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    vp.set_selection({roof})
+    pump(300)
+    check("medidas_madeiramento", seen.get("applied") and fewer and table,
+          "aplicado={} menos_caibros={} tabela={}".format(seen.get("applied"), fewer, table))
+    off = win.props.editors.get("roof_carpentry_off")
+    if off is not None:
+        off.click()
+        pump(800)
+    gone = doc.ifc.carpentry_of(roof) is None and not doc.ifc.file.by_type("IfcMember")
+    vp.set_selection(set())
+    check("madeiramento", button is not None and made and listed and gone,
+          "botao={} feito={} listado={} tirado={}".format(button is not None, made, listed, gone))
+
+
+def tiles_flow():
+    """0.279 — A roof's tiles: a 10 × 6 m house's hip roof selected, «Telha marselha» and «Assentar telhas» in its
+    Properties — the tiles laid (an IfcCovering ROOFING), their count, the ridge tiles and the weight listed; seen
+    from outside and close by the hip; the Tiles schedule; the plain tile chosen: laid again with it; «Tirar»:
+    gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)],
+                                catalog.BY_KEY["cobertura_12"], "hip", 30.0, 0.5)
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({roof})
+    pump(300)
+    button = win.props.editors.get("roof_tiles")
+    if button is not None:
+        button.click()
+        pump(1500)
+    found = doc.ifc.tiles_summary(roof) or {}
+    laid = found.get("tile") == "marselha" and found.get("tiles", 0) > 1000 and found.get("caps", 0) > 30
+    texts = []
+    it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+    while it.value():
+        texts.append(it.value().text(1))
+        it += 1
+    listed = any(t_.endswith("kg") for t_ in texts)
+    vp.set_selection(set())
+    vp.set_camera((-6.0, -9.0, 7.0), (0.62, 0.62, -0.42))
+    pump(600)
+    shot("279_telhado_marselha.png")
+    vp.set_camera((-0.9, -1.4, 3.6), (0.55, 0.62, -0.55))              # (close by the hip at the front left)
+    pump(600)
+    shot("279_telhas_de_perto.png")
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("tiles"))
+    pump(400)
+    table = panel.table.rowCount() == 1
+    shot("279_tabela_telhas.png")
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    vp.set_selection({roof})
+    pump(300)
+    combo = win.props.editors.get("roof_tiles_kind")
+    if combo is not None:
+        i = combo.findData("plana")
+        combo.setCurrentIndex(i)
+        combo.activated.emit(i)
+        pump(1200)
+    plain = (doc.ifc.tiles_summary(roof) or {}).get("tile") == "plana"
+    vp.set_selection({roof})
+    pump(300)
+    off = win.props.editors.get("roof_tiles_off")
+    if off is not None:
+        off.click()
+        pump(800)
+    gone = doc.ifc.tiles_of(roof) is None
+    vp.set_selection(set())
+    check("telhas", button is not None and laid and listed and table and plain and gone,
+          "botao={} assentes={} {} listado={} tabela={} plana={} tirado={}".format(
+              button is not None, laid, found.get("tiles"), listed, table, plain, gone))
+
+
+def joinery_flow():
+    """0.288 — The door and window generator: a 16 m wall with every door and window of the catalogue (one leaf, a
+    fanlight, double doors, sliding, a glazed French door; casement, sliding, hopper, tilt and turn windows) — each made
+    of its frame, leaves and glass in their colours, its IFC operation its design's, the IFC valid; seen from in front
+    and close by; the plan: each door's leaves open with their swing, a sliding one's arrow; the door with the fanlight
+    hinged on the other jamb: its fanlight kept."""
+    import ifcopenshell.util.element as ue
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((18.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    made, s = {}, 0.4
+    for o in catalog.OPENINGS:
+        made[o.key] = bim_actions.add_opening(doc, wall, o, bim_actions.wall_frame(doc, wall), s, 1)
+        s += o.width + 0.35
+    from arqbim.core import joinery as core_joinery
+    colours = {k: len({tuple(np.round(c, 2)) for c in doc.get(g).mesh.colors})
+               if doc.get(g).mesh.colors is not None else 0 for k, g in made.items()}
+    wanted = {o.key: len(core_joinery.meshes(o.design, o.width, o.height, 0.0, 0.2)) for o in catalog.OPENINGS}
+    painted = colours == wanted and colours["janela_120"] >= 3
+    operations = {k: (doc.ifc.by_guid(g).OperationType if k.startswith("porta") else doc.ifc.by_guid(g).PartitioningType)
+                  for k, g in made.items()}
+    named = operations["porta_dupla_140"] == "DOUBLE_DOOR_SINGLE_SWING" and \
+        operations["porta_correr_90"] == "SLIDING_TO_LEFT" and operations["janela_120"] == "DOUBLE_PANEL_VERTICAL"
+    valid = doc.ifc.validate(express_rules=True) == []
+    win.open_view("3d", None)
+    pump(300)
+    vp.set_selection(set())
+    vp.set_camera((9.0, -14.5, 2.6), (0.0, 1.0, -0.08))
+    pump(600)
+    shot("288_portas_e_janelas.png")
+    vp.set_camera((11.5, -2.6, 1.7), (0.0, 1.0, -0.02))               # (close by the casement and sliding windows)
+    pump(600)
+    shot("288_janelas_de_perto.png")
+    win.open_view("plan", doc.active_storey)
+    pump(600)
+    vp.set_selection(set())
+    vp.zoom_box((np.array((0.0, -1.6, 0.0)), np.array((9.8, 0.4, 0.0))))     # (the doors)
+    pump(600)
+    symbols = doc.plan_symbols([made[k] for k in made if k.startswith("porta")])
+    shot("288_planta_portas.png")
+    vp.zoom_box((np.array((9.8, -0.8, 0.0)), np.array((17.0, 0.8, 0.0))))    # (the windows, cut)
+    pump(600)
+    shot("288_planta_janelas.png")
+    door = made["porta_80_bandeira"]
+    bim_actions.flip_door(doc, door, hinge=True)
+    pump(300)
+    type_ = ue.get_type(doc.ifc.by_guid(door))
+    kept = doc.ifc.by_guid(door).OperationType == "SINGLE_SWING_RIGHT" and \
+        abs(float(ue.get_psets(type_)["ArqSynth_Parametros"].get("Bandeira") or 0) - 0.5) < 1e-9 and \
+        doc.get(door).mesh.colors is not None and \
+        len({tuple(np.round(c, 2)) for c in doc.get(door).mesh.colors}) == wanted["porta_80_bandeira"]
+    doors = sum(1 for o in catalog.OPENINGS if o.kind == "door")
+    check("motor_portas_janelas", painted and named and valid and len(symbols) == doors and kept,
+          "cores={} operacoes={} valido={} simbolos={} bandeira_mantida={}".format(
+              colours, operations, valid, len(symbols), kept))
+
+
+def joinery_generator_flow():
+    """0.289 — The door and window generator: a window 120×120 selected, «Gerador de portas e janelas…» in its
+    Properties — its two leaves drawn; the layout «Batente + oscilobatente» chosen; its second cell clicked (the tilt
+    and turn one); split: a fixed light beside it, 30 cm wide; a fanlight row over them; OK: the type saved, the window
+    made again so (three lights under a fanlight: USERDEFINED «3×1» in the IFC); seen in 3D; the type editor on it:
+    its design drawn small, with the generator's button."""
+    from arqbim.core import joinery as core_joinery
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    window = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["janela_120"], bim_actions.wall_frame(doc, wall),
+                                     2.0, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({window})
+    pump(400)
+    seen = {}
+
+    def work(d):                            # (0.307: the Caixilho Studio — its two leaves, two columns)
+        from arqbim.core import caixilho as cx
+        seen["drawn"] = [len(c.panels) for c in d.op.cols] == [1, 1]
+        d.select((1, 0))
+        d.set_op("tilt_right")
+        seen["tilt"] = d.op.cols[1].panels[0].op == "tilt_right"
+        d.split_v()                                          # (the second column in two, 30 cm each)
+        d.edit(lambda op: cx.insert_row(op, 400))           # (a fanlight over them all: linked)
+        seen["ok"] = d.save_button.isEnabled() and d.warning.text() == ""
+
+    seen.update({k: v for k, v in studio_on(window, work, "289_gerador.png").items() if k == "button"})
+    e = doc.ifc.by_guid(window)
+    design = doc.ifc.opening_design(e)
+    made = design.columns and [len(c.cells) for c in design.rows] == [2, 2, 2] and \
+        e.PartitioningType == "USERDEFINED" and [c.cells[-1].operation for c in design.rows] == \
+        ["left", "tilt_right", "tilt_right"] and abs(core_joinery._sizes([c.height for c in design.rows], 1.2)[2] - 0.30) < 1e-9
+    vp.set_selection(set())
+    vp.set_camera((2.6, -2.4, 1.6), (0.0, 1.0, -0.05))
+    pump(600)
+    shot("289_janela_gerada.png")
+
+    def peek():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, peek)
+            return
+        seen["preview"] = d.design_preview.isVisible() and d.design_button.isVisible() and \
+            d.design_preview.design == design
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "289_editor_tipos_janela.png"))
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, peek)
+    win.edit_types("window", "janela_120")
+    pump(300)
+    check("gerador_portas_janelas", seen.get("button") and seen.get("drawn") and seen.get("tilt") and seen.get("ok")
+          and made and seen.get("preview"),
+          "vistos={} feito={} {}".format(seen, made, [[c.operation for c in r.cells] for r in design.rows]))
+
+
+def caixilho_studio_flow():
+    """0.307 — The Caixilho Studio (the owner's prototype), from Arquitetura › Vãos: a new window J0x; a mullion dragged
+    in from the strip over it (to the middle of its first column); the first mullion dragged 100 mm right by its grip;
+    the first column's width typed as «1200/3»; a panel clicked — its card: «Oscilo» and «Vidro fosco»; the transoms
+    unlinked, a transom dragged in from the left strip into one column only; seen from inside; «+ › Porta com bandeira
+    e lateral»: a second tab; «Inserir no modelo»: both saved as types, the Door tool on with the door's."""
+    from arqbim.core import caixilho as cx
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_tool("select")
+    win.set_discipline("architecture")
+    pump(100)
+    in_ribbon = win.act_caixilho in win.ribbon_actions()
+    seen = {}
+    press_at = studio_press
+
+    def work():
+        d = getattr(win, "_studio", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        try:
+            steps(d)
+        except Exception:                       # (the studio closed whatever happens: the run goes on)
+            traceback.print_exc()
+            d.reject()
+
+    def steps(d):
+        c = d.canvas
+        seen["new"] = d.op.name.startswith("J") and len(d.items) == 1
+        s, L, T, sw, sh = c.frame()
+        n = len(d.op.cols)
+        first = d.op.cols[0].w
+        press_at(c, QtCore.QPointF(L + sw / 2, T - 22), QtCore.QPointF(L + first * s / 2, T + sh / 2))
+        seen["mullion_in"] = len(d.op.cols) == n + 1 and abs(d.op.cols[0].w - first / 2) <= 10
+        s, L, T, sw, sh = c.frame()
+        (_i, mx), = c.mullions()[:1]
+        before = d.op.cols[0].w
+        press_at(c, QtCore.QPointF(mx, T + sh / 2 + 40), QtCore.QPointF(mx + 100 * s, T + sh / 2 + 40))
+        seen["dragged"] = d.op.cols[0].w == before + 100
+        c.inputs["c0"].setText("1200/3")
+        c.inputs["c0"].editingFinished.emit()
+        seen["typed"] = d.op.cols[0].w == 400
+        rect = next(r for cc, rr, r in c.panel_rects() if (cc, rr) == (1, 1))
+        press_at(c, rect.center())
+        d.card.op_buttons["tilt_left"].click()
+        d.card.fill_buttons["frosted"].click()
+        seen["card"] = d.card.isVisible() and (d.op.cols[1].panels[1].op, d.op.cols[1].panels[1].fill) == \
+            ("tilt_left", "frosted")
+        d.link_button.click()
+        s, L, T, sw, sh = c.frame()
+        rows_before = [len(col.panels) for col in d.op.cols]
+        x_last = L + sw - d.op.cols[-1].w * s / 2
+        press_at(c, QtCore.QPointF(L - 22, T + sh / 2), QtCore.QPointF(x_last, T + sh * 0.75))
+        rows_after = [len(col.panels) for col in d.op.cols]
+        seen["one_transom"] = rows_after[-1] == rows_before[-1] + 1 and rows_after[:-1] == rows_before[:-1]
+        d.view_buttons["interior"].click()
+        QtWidgets.QApplication.processEvents()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "307_caixilho_interior.png"))
+        d.view_buttons["exterior"].click()
+        act = next(a for a in d.presets_menu.actions() if a.objectName() == "preset_door_side")
+        act.trigger()
+        seen["tabs"] = len(d.items) == 2 and d.op.kind == "door" and d.active == 1
+        QtWidgets.QApplication.processEvents()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "307_caixilho_porta.png"))
+        seen["names"] = [it.name for it in d.items]
+        d.insert_button.click()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.act_caixilho.trigger()
+    pump(800)
+    names = seen.get("names", [])
+    specs = {s.name_pt: s for s in cx_specs()}
+    saved = all(n in specs for n in names)
+    door_tool = win.tool.name == "door" and getattr(win.tool, "spec", None) is not None and \
+        win.tool.spec.name_pt == (names[1] if len(names) > 1 else None)
+    design = specs[names[0]].design if names and names[0] in specs else None
+    by_columns = design is not None and design.columns and cx.from_design(design, 2.4, 1.5) is not None
+    key(Qt.Key.Key_Escape)
+    check("caixilho_studio", in_ribbon and seen.get("new") and seen.get("mullion_in") and seen.get("dragged")
+          and seen.get("typed") and seen.get("card") and seen.get("one_transom") and seen.get("tabs") and saved
+          and door_tool and by_columns, "fita={} vistos={} guardados={} porta={} colunas={}".format(
+              in_ribbon, seen, saved, door_tool, by_columns))
+
+
+def studio_press(widget, point, release_at=None):
+    """(0.307) A left press at `point` on the studio's drawing, moved to release_at (or not), released there."""
+    target = QtCore.QPointF(point)
+    event = QtGui.QMouseEvent(QtCore.QEvent.Type.MouseButtonPress, target, widget.mapToGlobal(target),
+                              Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    QtWidgets.QApplication.sendEvent(widget, event)
+    end = QtCore.QPointF(release_at if release_at is not None else point)
+    for k in range(1, 6):
+        q = target + (end - target) * (k / 5.0)
+        move_event(widget, q.toPoint(), Qt.MouseButton.LeftButton)
+        QtWidgets.QApplication.processEvents()
+    event = QtGui.QMouseEvent(QtCore.QEvent.Type.MouseButtonRelease, end, widget.mapToGlobal(end),
+                              Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier)
+    QtWidgets.QApplication.sendEvent(widget, event)
+    QtWidgets.QApplication.processEvents()
+
+
+def caixilho_equal_flow():
+    """0.309 — Every division equal in the Caixilho Studio: a new window J0x, its first column made 700 wide;
+    «Igualar tudo»: «● Larguras iguais» and «● Alturas iguais», its columns as wide, each column's panels as high; a
+    mullion dragged in: four columns as wide; a transom dragged in: each column's panels as high; its width typed
+    «3000»: still as wide; the first mullion dragged by hand: «Larguras iguais» off (a word says so), «Alturas iguais»
+    on; «Larguras iguais» clicked: on again. «Inserir no modelo»: its type's design with every column and every panel
+    of size 0 (sharing equally whatever size the type is made). In Gerenciar › Tipos its width made 3,60 (Aplicar):
+    four columns of 900; its «Caixilho Studio…» there: both parameters on."""
+    from arqbim.core import caixilho as cx
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_tool("select")
+    win.set_discipline("architecture")
+    pump(100)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_studio", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        try:
+            steps(d)
+        except Exception:                       # (the studio closed whatever happens: the run goes on)
+            traceback.print_exc()
+            d.reject()
+
+    def steps(d):
+        c = d.canvas
+        c.inputs["c0"].setText("700")
+        c.inputs["c0"].editingFinished.emit()
+        seen["unequal"] = len(set(cx.widths(d.op))) > 1
+        d.overlay.findChild(QtWidgets.QPushButton, "eq_all").click()
+        op = d.op
+        seen["all"] = op.eq_cols and op.eq_rows and len(set(cx.widths(op))) == 1 and \
+            all(len(set(cx.heights(col))) == 1 for col in op.cols) and \
+            all(b.text().startswith("●") for b in d.eq_buttons.values())
+        s, L, T, sw, sh = c.frame()
+        n = len(d.op.cols)
+        studio_press(c, QtCore.QPointF(L + sw / 2, T - 22), QtCore.QPointF(L + d.op.cols[0].w * s / 3, T + sh / 2))
+        seen["mullion"] = len(d.op.cols) == n + 1 and len(set(cx.widths(d.op))) == 1
+        s, L, T, sw, sh = c.frame()
+        rows = [len(col.panels) for col in d.op.cols]
+        studio_press(c, QtCore.QPointF(L - 22, T + sh / 2), QtCore.QPointF(L + sw / 2, T + sh * 0.85))
+        seen["transom"] = sum(len(col.panels) for col in d.op.cols) > sum(rows) and \
+            all(max(cx.heights(col)) - min(cx.heights(col)) <= 1 for col in d.op.cols)
+        c.inputs["W"].setText("3000")
+        c.inputs["W"].editingFinished.emit()
+        seen["width"] = d.op.W == 3000 and len(set(cx.widths(d.op))) == 1
+        QtWidgets.QApplication.processEvents()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "309_caixilho_iguais.png"))
+        s, L, T, sw, sh = c.frame()
+        (_i, mx), = c.mullions()[:1]
+        studio_press(c, QtCore.QPointF(mx, T + sh / 2 + 40), QtCore.QPointF(mx + 100 * s, T + sh / 2 + 40))
+        seen["by_hand"] = not d.op.eq_cols and d.op.eq_rows and len(set(cx.widths(d.op))) > 1 and \
+            d.toast.isVisible() and "desligado" in d.toast.text()
+        d.eq_buttons["eq_cols"].click()
+        seen["again"] = d.op.eq_cols and len(set(cx.widths(d.op))) == 1
+        seen["name"] = d.op.name
+        d.insert_button.click()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.act_caixilho.trigger()
+    pump(800)
+    spec = {s.name_pt: s for s in cx_specs()}.get(seen.get("name"))
+    design = spec.design if spec is not None else None
+    zeros = design is not None and {c.height for c in design.rows} == {0.0} and \
+        {cell.width for c in design.rows for cell in c.cells} == {0.0}
+    key(Qt.Key.Key_Escape)
+
+    def in_types():                         # (Gerenciar › Tipos: its width 3,60, Aplicar; its Caixilho Studio…)
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, in_types)
+            return
+
+        def look():
+            s = getattr(d, "_studio", None)
+            if s is None or not s.isVisible():
+                QtCore.QTimer.singleShot(100, look)
+                return
+            seen["reopened"] = (s.op.eq_cols, s.op.eq_rows, cx.widths(s.op))
+            s.reject()
+
+        try:
+            d.width.setText("3,60")
+            d.width.editingFinished.emit()
+            seen["applied"] = d.apply_changes() is not None
+            QtCore.QTimer.singleShot(100, look)
+            d.design_button.click()
+        except Exception:
+            traceback.print_exc()
+        d.reject()
+
+    if spec is not None:
+        QtCore.QTimer.singleShot(100, in_types)
+        win.edit_types("window", spec.key)
+        pump(300)
+    after = next((s for s in cx_specs() if spec is not None and s.name_pt == spec.name_pt), None)
+    wide = cx.widths(cx.from_design(after.design, after.width, after.height)) if after is not None else []
+    check("caixilho_equal", all(seen.get(k) for k in ("unequal", "all", "mullion", "transom", "width", "by_hand",
+                                                      "again", "applied")) and zeros and wide == [900] * 4
+          and seen.get("reopened") == (True, True, [900] * 4),
+          "vistos={} zeros={} largo={}".format(seen, zeros, wide))
+
+
+def cx_specs():
+    from arqbim.ifc import catalog
+    return catalog.openings()
+
+
+def studio_on(element, change, picture=None, accept=True):
+    """(0.307) The Caixilho Studio opened from the Properties' «Editar desenho» of `element` (selected): change(d) on it,
+    its picture kept, Guardar (or Cancelar). {"button", "ok": Guardar on, "warning"}."""
+    found = {}
+
+    def work():
+        d = getattr(win, "_studio", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        try:
+            change(d)
+        except Exception:                       # (the studio closed whatever happens: the run goes on)
+            traceback.print_exc()
+            d.reject()
+            return
+        QtWidgets.QApplication.processEvents()
+        if picture and not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, picture))
+        found["ok"], found["warning"] = d.save_button.isEnabled(), d.warning.text()
+        if accept and d.save_button.isEnabled():
+            d.finish(False)
+        else:
+            d.reject()
+
+    vp.set_selection({element})
+    pump(400)
+    button = win.props.editors.get("joinery")
+    found["button"] = button is not None
+    if button is not None:
+        QtCore.QTimer.singleShot(100, work)
+        button.click()
+        pump(1500)
+    return found
+
+
+def studio_more(d, **values):
+    """(0.307) What the studio's «Mais opções» changes: the opening's design with these values."""
+    import dataclasses
+    from arqbim.core import caixilho as cx
+    d.edit(lambda op: setattr(op, "base", dataclasses.replace(cx.to_design(op), **values)))
+
+
+def joinery_finish_flow():
+    """0.290–0.291 — A window and an outside door placed from outside a wall: the window on its stone sill 3 cm out of
+    the wall (its drip groove under it), handles and hinges; the door on its stone threshold, its levers 1 m up; seen
+    from outside and from below. The window flipped in its Properties («Virar a janela», Lado): its sill on the other
+    face; undone. In the generator: a roller shutter (its box 20 cm, let down half way), an insect screen and a grille
+    — OK: the window made so, its IFC GlazingAreaFraction and HasSillExternal on its type."""
+    import ifcopenshell.util.element as ue
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    frame = bim_actions.wall_frame(doc, wall)
+    window = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["janela_120"], frame, 3.5, -1)
+    door = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_exterior_90"], frame, 1.0, -1)
+    sill_out = abs(float(doc.get(window).mesh.verts[:, 1].min()) - (-0.13)) < 1e-6        # (3 cm out of y = −0.10)
+    threshold = abs(float(doc.get(door).mesh.verts[:, 1].min()) - (-0.13)) < 1e-3 or \
+        float(doc.get(door).mesh.verts[:, 1].min()) < -0.12
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection(set())
+    vp.set_camera((2.8, -3.2, 1.6), (0.05, 1.0, -0.12))
+    pump(600)
+    shot("290_peitoril_soleira.png")
+    vp.set_camera((4.1, -0.42, 0.82), (0.0, 0.85, 0.53))              # (from below: the drip groove)
+    pump(600)
+    shot("290_pingadeira.png")
+    vp.set_selection({window})
+    pump(400)
+    side = win.props.editors.get("flip_side")
+    flipped = False
+    if side is not None:
+        side.click()
+        pump(800)
+        flipped = abs(float(doc.get(window).mesh.verts[:, 1].max()) - 0.13) < 1e-6
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(800)
+    back = abs(float(doc.get(window).mesh.verts[:, 1].min()) - (-0.13)) < 1e-6
+    vp.set_selection({window})
+    pump(400)
+    seen = {}
+
+    def work(d):                                                # (0.307: the Caixilho Studio, «Mais opções»)
+        studio_more(d, shutter=0.2, shutter_closed=0.5, screen=True, grille=True)
+
+    seen.update(studio_on(window, work, "291_gerador_estore.png"))
+    e = doc.ifc.by_guid(window)
+    design = doc.ifc.opening_design(e)
+    made = (design.shutter, design.shutter_closed, design.screen, design.grille) == (0.2, 0.5, True, True)
+    common = ue.get_psets(ue.get_type(e)).get("Pset_WindowCommon", {})
+    data = common.get("HasSillExternal") is True and 0.2 < (common.get("GlazingAreaFraction") or 0) < 0.9
+    vp.set_selection(set())
+    vp.set_camera((4.1, -2.6, 1.7), (0.0, 1.0, -0.08))
+    pump(600)
+    shot("291_estore_mosquiteiro_grade.png")
+    check("acabamentos_portas_janelas", sill_out and threshold and flipped and back and seen.get("ok") and made
+          and data, "peitoril={} soleira={} virada={} desfeita={} gerador={} feito={} ifc={}".format(
+              sill_out, threshold, flipped, back, seen, made, common))
+
+
+def joinery_drawings_flow():
+    """0.292–0.293 — A wall with two doors and two windows placed from outside: the South elevation (the face they are
+    pushed from) — each leaf's lines meeting at its hinges, the sliding window's arrow —; the North one: seen from
+    inside, the lines the other way; the Project panel: «Mapa de vãos», put on a new sheet — its types drawn at 1:50
+    with their dimensions, names, sizes, sills, openings, counts and marks; printed."""
+    import shutil
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((9.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    for k, s in (("porta_80", 0.6), ("porta_dupla_140", 2.0), ("janela_120", 4.4), ("janela_150", 6.4)):
+        bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY[k], bim_actions.wall_frame(doc, wall), s, -1)
+    win.open_view("elevation", "S")
+    pump(800)
+    vp.set_selection(set())
+    pump(300)
+    south = len(vp._symbol_segments)
+    shot("292_alcado_sul_aberturas.png")
+    win.open_view("elevation", "N")
+    pump(800)
+    north = len(vp._symbol_segments)
+    shot("292_alcado_norte_aberturas.png")
+    win.tree_panel.raise_()
+    pump(400)
+    listed = "Mapa de vãos" in win.tree_panel.text()
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "openings", "")
+    pump(600)
+    sheet = doc.sheets[-1] if len(doc.sheets) > before else None
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawing, frame, label = pages[0][1][0] if pages and pages[0][1] else (None, None, "")
+    paths = pdf_out.write_images(OUT, pages, "png") if drawing is not None else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "293_mapa_de_vaos.png"))
+    texts = [a[3] for a in drawing.annotations if a[0] == "text"] if drawing is not None else []
+    check("aberturas_alcados_mapa_vaos", south > 20 and north > 20 and listed and label == "Mapa de vãos"
+          and frame is not None and frame.scale == 50 and "Porta de 2 folhas 140×210" in texts and bool(paths),
+          "sul={} norte={} listado={} rotulo={!r} escala={} textos={}".format(
+              south, north, listed, label, frame.scale if frame is not None else None, texts[:6]))
+
+
+def joinery_arch_flow():
+    """0.294 — Arches: the arched window of the catalogue (100×150, a round arch over two leaves) in a wall — its
+    opening cut to the arch; a door 90×210 given a segmental arch (rise 25 cm) in the generator — its arch a fixed
+    fanlight over the leaf, no warning; OK: the door and its opening arched; seen in 3D; the IFC valid."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    window = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["janela_arco_100"],
+                                     bim_actions.wall_frame(doc, wall), 3.0, -1)
+    door = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, wall),
+                                   0.8, -1)
+    profile = lambda g: doc.ifc.by_guid(g).FillsVoids[0].RelatingOpeningElement.Representation \
+        .Representations[0].Items[0]                                                     # noqa: E731
+    arched_window = profile(window).is_a("IfcExtrudedAreaSolid") and \
+        profile(window).SweptArea.is_a("IfcArbitraryClosedProfileDef")
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({door})
+    pump(400)
+    seen = {}
+
+    def arch(d):                                                # (0.307: the Caixilho Studio, «Mais opções»)
+        from arqbim.core import caixilho as cx
+        from arqbim.core import joinery as core_joinery
+        d.edit(lambda op: setattr(op, "base", core_joinery.with_arch(cx.to_design(op), "segmental", op.W / 1000.0,
+                                                                     0.25)))
+        seen["rows"] = [len(c.cells) for c in cx.to_design(d.op).rows]
+
+    found = studio_on(door, arch, "294_gerador_arco.png")
+    seen["ok"] = found.get("ok") and found.get("warning") == ""
+    design = doc.ifc.opening_design(doc.ifc.by_guid(door))
+    arched_door = design.arch == "segmental" and abs(design.arch_rise - 0.25) < 1e-9 and \
+        profile(door).SweptArea.is_a("IfcArbitraryClosedProfileDef")
+    vp.set_selection(set())
+    vp.set_camera((2.5, -4.6, 1.6), (0.0, 1.0, -0.05))
+    pump(600)
+    shot("294_arcos.png")
+    valid = doc.ifc.validate(express_rules=True) == []
+    check("vaos_em_arco", arched_window and seen.get("ok") and seen.get("rows") == [1] and arched_door and valid,
+          "janela={} gerador={} porta={} valido={}".format(arched_window, seen, arched_door, valid))
+
+
+def joinery_louvres_flow():
+    """0.295 — Portadas de lâminas: a window 120×120 placed from outside a wall; in the generator, «2 folhas» — drawn
+    over the window, no warning; OK: the window with its wooden portadas shut in the opening, flush with the wall's
+    outer face, seen in 3D from outside and close up; in the generator again, «abertas» — turned back on the wall
+    beside it; the IFC valid."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    window = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["janela_120"],
+                                     bim_actions.wall_frame(doc, wall), 1.9, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    seen = {}
+
+    def generator(change, picture):                             # (0.307: the Caixilho Studio)
+        found = studio_on(window, change, picture)
+        seen[picture] = found.get("ok") and found.get("warning") == ""
+
+    def pair(d):
+        studio_more(d, louvres="pair")
+
+    generator(pair, "295_gerador_portadas.png")
+    design = doc.ifc.opening_design(doc.ifc.by_guid(window))
+    y = doc.get(window).mesh.verts[:, 1]
+    shut = design.louvres == "pair" and not design.louvres_open and abs(float(y.min()) - (-0.13)) < 1e-6
+    vp.set_selection(set())
+    vp.set_camera((2.5, -3.4, 1.7), (0.0, 1.0, -0.1))
+    pump(600)
+    shot("295_portadas_fechadas.png")
+    vp.set_camera((3.15, -0.85, 1.55), (-0.45, 0.88, -0.1))
+    pump(600)
+    shot("295_portadas_laminas.png")
+    generator(lambda d: studio_more(d, louvres_open=True), "295_gerador_portadas_abertas.png")
+    x = doc.get(window).mesh.verts[:, 0]
+    opened = doc.ifc.opening_design(doc.ifc.by_guid(window)).louvres_open and float(x.min()) < 1.9 - 0.5 and \
+        float(x.max()) > 3.1 + 0.5
+    vp.set_selection(set())
+    vp.set_camera((2.5, -3.4, 1.7), (0.0, 1.0, -0.1))
+    pump(600)
+    shot("295_portadas_abertas.png")
+    valid = doc.ifc.validate(express_rules=True) == []
+    check("portadas_de_laminas", seen.get("295_gerador_portadas.png") and shut and
+          seen.get("295_gerador_portadas_abertas.png") and opened and valid,
+          "gerador={} fechadas={} abertas={} valido={}".format(seen, shut, opened, valid))
+
+
+def joinery_arch_leaves_flow():
+    """0.296 — Leaves under an arch: the arched window of the catalogue (100×150) in a wall; in the generator, its
+    arch's fixed row taken away — its two side-hung leaves now reach into the arch, their heads along the curve, no
+    warning; OK: seen in 3D close up; in the generator again, a leaf made sliding — refused under the arch (OK off),
+    cancelled; the IFC valid."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    window = bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["janela_arco_100"],
+                                     bim_actions.wall_frame(doc, wall), 2.0, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    seen = {}
+
+    def generator(change, picture, accept=True):                # (0.307: the Caixilho Studio)
+        found = studio_on(window, change, picture, accept)
+        seen[picture] = (found.get("ok"), found.get("warning", ""))
+
+    def no_fanlight(d):                     # (the arch's fanlight, a light over each leaf in the studio: taken out)
+        from arqbim.core import caixilho as cx
+        d.edit(lambda op: cx.merge_row(op, 0, 0, True))
+
+    generator(no_fanlight, "296_gerador_folhas_arco.png")
+    design = doc.ifc.opening_design(doc.ifc.by_guid(window))
+    reached = design.columns and [[c.operation for c in col.cells] for col in design.rows] == [["left"], ["right"]]
+    vp.set_selection(set())
+    vp.set_camera((2.5, -3.0, 1.9), (0.0, 1.0, -0.12))
+    pump(600)
+    shot("296_folhas_em_arco.png")
+    vp.set_camera((2.75, -0.95, 2.05), (-0.25, 0.95, 0.12))
+    pump(600)
+    shot("296_folhas_em_arco_perto.png")
+
+    def sliding(d):
+        d.select((0, 0))
+        d.set_op("slide_left")
+
+    generator(sliding, "296_gerador_correr_no_arco.png", accept=False)
+    kept = [col.cells[0].operation for col in doc.ifc.opening_design(doc.ifc.by_guid(window)).rows] == \
+        ["left", "right"]
+    valid = doc.ifc.validate(express_rules=True) == []
+    first, refused = seen.get("296_gerador_folhas_arco.png"), seen.get("296_gerador_correr_no_arco.png")
+    check("folhas_em_arco", reached and first == (True, "") and refused is not None and not refused[0]
+          and "arco" in refused[1] and kept and valid,
+          "chegam={} gerador={} recusada={} mantida={} valido={}".format(reached, first, refused, kept, valid))
+
+
+def windows_outward_flow():
+    """0.297 — The peitoril to the outside by itself: a 8 × 5 m house; a window 120×120 placed from inside its south
+    wall — turned at once, its peitoril out of the house; seen from outside. In its Properties, «Virar a janela →
+    Lado»: turned back in by hand; a wall added inside the house: it stays in."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (8.0, 0.0), (8.0, 5.0), (0.0, 5.0)]
+    walls = [bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+             for k in range(4)]
+    window = bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"],
+                                     bim_actions.wall_frame(doc, walls[0]), 3.4, 1)          # (from inside)
+    out = abs(float(doc.get(window).mesh.verts[:, 1].min()) - (-0.13)) < 1e-6
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection(set())
+    vp.set_camera((4.0, -4.2, 2.4), (0.0, 1.0, -0.22))
+    pump(600)
+    shot("297_peitoril_para_fora.png")
+    vp.set_selection({window})
+    pump(400)
+    side = win.props.editors.get("flip_side")
+    by_hand = False
+    if side is not None:
+        side.click()
+        pump(800)
+        by_hand = abs(float(doc.get(window).mesh.verts[:, 1].max()) - 0.13) < 1e-6
+    bim_actions.add_wall(doc, np.array((2.0, 0.1, 0.0)), np.array((2.0, 3.0, 0.0)), spec)
+    pump(400)
+    kept = abs(float(doc.get(window).mesh.verts[:, 1].max()) - 0.13) < 1e-6
+    check("peitoril_para_fora_sozinho", out and by_hand and kept,
+          "para_fora={} virada_a_mao={} mantida={}".format(out, by_hand, kept))
+
+
+def ribbon_wall_modifiers_flow():
+    """0.298 — The ribbon by disciplines and the tab Modify | Walls: in Structure (Ctrl+6), a wall attached to a slab
+    selected — the green tab «Modificar | Paredes» comes at the end and is shown, every tab's name whole; its button
+    «Desligar o topo» clicked: the wall no longer follows the slab; a profile drawn, «Repor perfil»: plain again;
+    the Architecture tab clicked — its panels, the contextual tab still there; Esc: the tab goes, Architecture
+    stays. The window made narrow: the panels on the right fold into a button each, their tools in its menu."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    slab = bim_actions.add_slab_outline(doc, [(-1, -1), (7, -1), (7, 2), (-1, 2)], 3.0, catalog.BY_KEY["laje_12"])
+    bim_actions.attach_top(doc, [wall], slab)
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection(set())
+    key(Qt.Key.Key_6, Qt.KeyboardModifier.ControlModifier)
+    structure = win.discipline == "structure" and win.ribbon_tab == "structure"
+    tabs = win.header.tabs
+    vp.set_selection({wall})
+    pump(300)
+    n = len(ribbon.DISCIPLINES)
+    came = (win.ribbon_tab == "ctx:walls" and tabs.count() == n + 1 and tabs.currentIndex() == n
+            and tabs.tabText(n) == "Modificar | Paredes" and win.discipline == "structure")
+    whole = all(tabs.tabRect(i).width() >= tabs.tabSizeHint(i).width() - 1 for i in range(tabs.count()))
+    buttons = {b.objectName(): b for b in win.ribbon.findChildren(ribbon.RibbonButton)}
+    vp.set_camera((3.0, -7.0, 3.0), (0.0, 1.0, -0.25))
+    pump(500)
+    shot("298_modificar_paredes.png")
+    detached = False
+    if "detach_top" in buttons and buttons["detach_top"].isVisible():
+        buttons["detach_top"].click()
+        pump(300)
+        detached = doc.ifc.top_tied(wall) is None
+    bim_actions.set_wall_profile(doc, wall, [(0.0, 0.0), (6.0, 0.0), (6.0, 3.0), (3.0, 4.0), (0.0, 3.0)])
+    vp.set_selection({wall})
+    pump(300)
+    buttons = {b.objectName(): b for b in win.ribbon.findChildren(ribbon.RibbonButton)}
+    reset = False
+    if "reset_profile" in buttons:
+        buttons["reset_profile"].click()
+        pump(300)
+        reset = doc.ifc.wall_profile(wall) is None and abs(doc.ifc.wall_params(wall)[1] - 4.0) < 1e-6
+    tabs.setCurrentIndex(ribbon.DISCIPLINES.index("architecture"))      # (as a click on its tab)
+    pump(200)
+    other = (win.ribbon_tab == "architecture" and tabs.count() == n + 1
+             and win.tool_actions["wall"] in win.ribbon_actions())
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    gone = (not vp.selection and tabs.count() == n and win.ribbon_tab == "architecture"
+            and win.discipline == "architecture")
+    win.resize(1000, 740)
+    pump(400)
+    panels = win.ribbon.panels
+    folded = [p for p in panels if p.is_folded()]
+    menus = all(len(p.folded.menu().actions()) > 0 for p in folded)
+    every = {win.tool_actions[k] for k in ("stair", "room", "kitchen")} <= set(win.ribbon_actions())
+    shot("298_fita_estreita.png")
+    win.resize(1280, 740)
+    pump(400)
+    opened = sum(p.is_folded() for p in win.ribbon.panels) < len(folded)
+    check("fita_modificar_paredes", structure and came and whole and detached and reset and other and gone
+          and bool(folded) and menus and every and opened,
+          "estrutura={} separador={} nomes_inteiros={} desligado={} perfil_reposto={} arquitetura={} saiu={} "
+          "recolhidos={} menus={} todas={} reaberto={}".format(structure, came, whole, detached, reset, other, gone,
+                                                               len(folded), menus, every, opened))
+
+
+def wall_flip_join_flow():
+    """0.299 — Flip wall and Allow joins, on the tab Modify | Walls: a 5 m wall with its insulation on one face,
+    selected in plan — «Virar a parede» clicked: the insulation on the other face; two walls in a corner let go
+    («Soltar ligações»), then «Ligar as pontas»: joined again, the corner as it was."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    etics = catalog.TypeSpec("parede_etics_gui", "wall", "Parede com ETICS", "Wall with ETICS",
+                             layers=(("reboco", 0.02), ("bloco", 0.20), ("la", 0.06), ("reboco", 0.01)))
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), etics)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 2.0, 0.0)), np.array((4.0, 2.0, 0.0)), spec)
+    b = bim_actions.add_wall(doc, np.array((4.0, 2.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec,
+                             prev=(a, np.array((1.0, 0.0, 0.0))))
+
+    def ends():
+        return [np.round(np.concatenate(doc.ifc.wall_axis(g)[:2]), 6).tolist() + list(doc.ifc.wall_cuts(g))
+                for g in (a, b)]
+
+    corner = ends()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    win.set_tool("select")
+    vp.set_selection({wall})
+    pump(400)
+
+    def button(name):
+        found = [b_ for b_ in win.ribbon.findChildren(ribbon.RibbonButton) if b_.objectName() == name]
+        return found[0] if found else None
+
+    flipped = False
+    if button("flip_walls") is not None:
+        button("flip_walls").click()
+        pump(400)
+        flipped = doc.ifc.layer_sense(wall) == "NEGATIVE"
+    shot("299_parede_virada.png")
+    vp.set_selection({a, b})
+    pump(300)
+    win.act_unjoin_walls.trigger()
+    pump(200)
+    let_go = doc.ifc.joined_walls([a]) == []
+    joined = False
+    if button("join_wall_ends") is not None:
+        button("join_wall_ends").click()
+        pump(300)
+        joined = doc.ifc.joined_walls([a]) == [b] and ends() == corner
+    vp.set_selection(set())
+    check("virar_parede_e_ligar_pontas", flipped and let_go and joined,
+          "virada={} soltas={} ligadas={}".format(flipped, let_go, joined))
+
+
+def split_gap_trim_flow():
+    """0.300 — Split with gap and Trim / extend to a boundary (the tab Modify | Walls), seen from above: «Dividir com
+    folga» (2 cm) on the middle of a 6 m wall — two parts of 2,99 m, 2 cm apart, not joined; «Aparar a um limite»:
+    the boundary clicked, then a wall short of it and one through it — both stop at its face, joined in T."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    wall = bim_actions.add_wall(doc, np.array((0.0, -3.0, 0.0)), np.array((6.0, -3.0, 0.0)), spec)
+    boundary = bim_actions.add_wall(doc, np.array((9.0, -1.0, 0.0)), np.array((9.0, 6.0, 0.0)), spec)
+    short = bim_actions.add_wall(doc, np.array((0.0, 3.0, 0.0)), np.array((5.0, 3.0, 0.0)), spec)
+    long_ = bim_actions.add_wall(doc, np.array((0.0, 1.0, 0.0)), np.array((12.0, 1.0, 0.0)), spec)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(6.0, 1.0, 0.0), radius=9.0)
+    pump(400)
+    win.tool_actions["split_gap"].trigger()
+    pump(100)
+    move(near((3.02, -3.0, 2.8)), 4)
+    pump(150)
+    click()
+    pump(300)
+    parts = [g for g in (e.GlobalId for e in doc.ifc.file.by_type("IfcWall")) if g not in (boundary, short, long_)]
+    lengths = sorted(round(doc.ifc.wall_params(g)[0], 6) for g in parts)
+    gap_ok = (lengths == [2.99, 2.99] and len(parts) == 2 and parts[1] not in doc.ifc.joined_walls([parts[0]])
+              and win.tool.gap == 0.02)
+    win.tool_actions["trim_extend"].trigger()
+    pump(100)
+    move(near((9.0, 5.0, 2.8)), 4)
+    click()
+    pump(150)
+    first = vp.selection == {boundary}
+    move(near((2.0, 3.0, 2.8)), 4)
+    click()
+    pump(250)
+    move(near((2.0, 1.0, 2.8)), 4)
+    click()
+    pump(300)
+    ends = (round(doc.ifc.wall_axis(short)[1][0], 6), round(doc.ifc.wall_axis(long_)[1][0], 6))
+    joined = {short, long_} <= set(doc.ifc.joined_walls([boundary]))
+    shot("300_aparar_a_um_limite.png")
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Escape)
+    check("dividir_com_folga_e_aparar_a_um_limite", gap_ok and first and ends == (8.9, 8.9) and joined,
+          "partes={} folga={} limite={} pontas={} ligadas={}".format(lengths, gap_ok, first, ends, joined))
+
+
+def wall_joins_flow():
+    """0.301 — Wall joins, seen from above: an L drawn in a chain (the first wall runs through); «Junções de paredes»,
+    a click on the second wall near the corner — it runs through now, the first stops at its face; Tab (mitre) and a
+    click — both end at the crossing, cut at 45°."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), spec)
+    b = bim_actions.add_wall(doc, np.array((5.0, 0.0, 0.0)), np.array((5.0, 4.0, 0.0)), spec,
+                             prev=(a, np.array((1.0, 0.0, 0.0))))
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(4.0, 1.5, 0.0), radius=5.0)
+    pump(400)
+    win.tool_actions["wall_joins"].trigger()
+    pump(100)
+    move(near((5.0, 0.8, 2.8)), 4)
+    pump(150)
+    click()
+    pump(300)
+    swapped = (abs(doc.ifc.wall_axis(b)[0][1] + 0.1) < 1e-6 and abs(doc.ifc.wall_axis(a)[1][0] - 4.9) < 1e-6)
+    key(Qt.Key.Key_Tab)
+    mitre_on = win.tool.style == "mitre"
+    move(near((5.0, 0.9, 2.8)), 3)
+    click()
+    pump(300)
+    mitred = (abs(doc.ifc.wall_axis(a)[1][0] - 5.0) < 1e-6 and abs(abs(doc.ifc.wall_cuts(a)[1]) - 45.0) < 1e-6)
+    shot("301_juncao_meia_esquadria.png")
+    key(Qt.Key.Key_Escape)
+    check("juncoes_de_paredes", swapped and mitre_on and mitred,
+          "trocada={} tab={} meia_esquadria={}".format(swapped, mitre_on, mitred))
+
+
+def attach_base_flow():
+    """0.302 — Attach base, on the tab Modify | Walls: a wall on a storey at 0,00 and a ground slab under it (its top
+    at −0,18) selected together — «Ligar a base» clicked: the wall stands on the slab, its top still at 2,80;
+    «Desligar a base»: no longer tied."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    slab = bim_actions.add_slab_outline(doc, [(-1, -1), (6, -1), (6, 2), (-1, 2)], -0.3, catalog.BY_KEY["laje_12"])
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({wall, slab})
+    pump(300)
+
+    def button(name):
+        found = [b for b in win.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == name]
+        return found[0] if found and found[0].isVisible() else None
+
+    base = lambda: float(doc.ifc._placement_si(doc.ifc.by_guid(wall))[2, 3])    # noqa: E731
+    attached = False
+    if button("attach_base") is not None:
+        button("attach_base").click()
+        pump(300)
+        attached = (abs(base() + 0.18) < 1e-6 and abs(base() + doc.ifc.wall_params(wall)[1] - 2.8) < 1e-6
+                    and doc.ifc.base_tied(wall) == slab)
+    vp.set_view("front", center=(2.5, 0.0, 1.2), radius=4.0)
+    pump(400)
+    shot("302_base_na_laje.png")
+    vp.set_selection({wall})
+    pump(200)
+    detached = False
+    if button("detach_base") is not None:
+        button("detach_base").click()
+        pump(300)
+        detached = doc.ifc.base_tied(wall) is None and abs(base() + 0.18) < 1e-6
+    vp.set_selection(set())
+    check("ligar_a_base", attached and detached, "ligada={} desligada={}".format(attached, detached))
+
+
+def wall_opening_flow():
+    """0.303 — Wall opening, seen from the front: «Abertura na parede», a click on the face of a 6 m wall at 2,00 /
+    0,90, then «1,2;1» typed — a 1,20 × 1,00 hole through it, no door or window."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("front", center=(3.0, 0.0, 1.4), radius=4.0)
+    pump(400)
+    win.tool_actions["wall_opening"].trigger()
+    pump(100)
+    move(near((2.0, -0.1, 0.9)), 4)
+    click()
+    pump(100)
+    move(near((3.0, -0.1, 1.8)), 4)
+    pump(150)
+    type_text("1,2;1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    found = doc.ifc.opening_bounds(wall)
+    ok = False
+    if found is not None:
+        lo, hi = found
+        ok = (abs(hi[0] - lo[0] - 1.2) < 1e-6 and abs(hi[2] - lo[2] - 1.0) < 1e-6 and abs(lo[0] - 2.0) < 0.03
+              and abs(lo[2] - 0.9) < 0.03 and not doc.ifc.file.by_type("IfcWindow"))
+    shot("303_abertura_na_parede.png")
+    key(Qt.Key.Key_Escape)
+    check("abertura_na_parede", ok, "vao={}".format(None if found is None else np.round(found, 3).tolist()))
+
+
+def wall_sweep_flow():
+    """0.304 — Wall sweep: an 8 × 5 m house; «Rodapé / sanca na parede» with the skirting board, a click on the south
+    wall's inner face — a skirting board all round the room, closed, stopping at nothing (no doors)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [(0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 5.0, 0.0), (0.0, 5.0, 0.0)],
+                              catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_camera((4.0, 4.2, 2.2), (0.0, -1.0, -0.35))
+    pump(400)
+    win.tool_actions["wall_sweep"].trigger()
+    pump(100)
+    move(near((4.0, 0.1, 0.6)), 4)
+    pump(150)
+    click()
+    pump(400)
+    made = [e.GlobalId for e in doc.ifc.profiles()]
+    ok = (len(made) == 1 and doc.ifc.profile_params(made[0])["closed"]
+          and abs(doc.ifc.describe(made[0])["params"]["length"] - 2 * (7.8 + 4.8)) < 0.02)
+    vp.set_camera((4.0, 1.2, 1.6), (0.15, 1.0, -0.45))                     # (in the room, looking at the corner)
+    pump(500)
+    shot("304_rodape_na_parede.png")
+    key(Qt.Key.Key_Escape)
+    check("rodape_na_parede", ok, "perfis={} {}".format(
+        len(made), [doc.ifc.describe(g)["params"]["length"] for g in made]))
+
+
+def wall_reveal_flow():
+    """0.305 — Wall reveal, seen from the front: «Ranhura», a click on a 6 m wall's face at 1,00 — a level groove
+    along it; Tab (vertical) and a click at 4,00 — a vertical one."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("front", center=(3.0, 0.0, 1.4), radius=4.0)
+    pump(400)
+    win.tool_actions["wall_reveal"].trigger()
+    pump(100)
+    move(near((2.0, -0.1, 1.0)), 4)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Tab)
+    move(near((4.0, -0.1, 1.5)), 4)
+    click()
+    pump(300)
+    reveals = sorted((r["vertical"], round(r["at"], 1), r["side"]) for _o, r in doc.ifc.wall_reveals(wall))
+    vp.set_view("iso", center=(3.0, 0.0, 1.4), radius=4.0)
+    pump(400)
+    shot("305_ranhuras.png")
+    key(Qt.Key.Key_Escape)
+    check("ranhuras", reveals == [(False, 1.0, -1), (True, 4.0, -1)], "ranhuras={}".format(reveals))
+
+
+def panels_flow():
+    """0.280 — Sheets and panels: a 10 × 6 m house's hip roof; «Painel sanduíche» chosen as its tile in its
+    Properties — laid as panels, one a column, cut at the hips, «Painéis» listed; then «Chapa ondulada» — sheets in
+    rows, of fibre cement."""
+    import ifcopenshell.util.element
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.i18n import t as tr
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)],
+                                catalog.BY_KEY["cobertura_12"], "hip", 15.0, 0.5)
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    seen = {}
+    for kind, picture in (("sanduiche", "280_paineis_sanduiche.png"), ("ondulada", "280_chapa_ondulada.png")):
+        vp.set_selection({roof})
+        pump(300)
+        combo = win.props.editors.get("roof_tiles_kind")
+        if combo is not None:
+            i = combo.findData(kind)
+            combo.setCurrentIndex(i)
+            combo.activated.emit(i)
+            pump(1200)
+        vp.set_selection({roof})
+        pump(300)
+        texts = []
+        it = QtWidgets.QTreeWidgetItemIterator(win.props.tree)
+        while it.value():
+            texts.append(it.value().text(0))
+            it += 1
+        covering = doc.ifc.tiles_of(roof)
+        material = ifcopenshell.util.element.get_material(covering).Name if covering is not None else None
+        seen[kind] = ((doc.ifc.tiles_summary(roof) or {}).get("tile"), material,
+                      tr("props.noun." + ("panels" if kind == "sanduiche" else "sheets")) in texts)
+        vp.set_selection(set())
+        vp.set_camera((-6.0, -9.0, 6.0), (0.62, 0.62, -0.38))
+        pump(600)
+        shot(picture)
+    ok = seen.get("sanduiche") == ("sanduiche", "Aço galvanizado", True) and \
+        seen.get("ondulada") == ("ondulada", "Fibrocimento", True)
+    check("chapas_e_paineis", ok, str(seen))
+
+
+def own_tile_flow():
+    """0.281 — A tile of the user's own: a sketch box 30 × 45 × 2 cm made a component; selected, «Usar como telha…»
+    in its Properties — the window measures it (30 × 45 × 2 cm), proposes 90 % and 80 % of it; registered; a hip
+    roof's Tile list has it; chosen: the roof tiled with it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)],
+                                catalog.BY_KEY["cobertura_12"], "hip", 30.0, 0.5)
+    from arqbim.core import sketch_geometry as sg                    # (a box drawn as the Push/Pull tool leaves it)
+    from arqbim.model.document import AddObject, SketchObject
+    m = sg.rectangle_matrix(np.array((14.0, 0.0, 0.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0)))
+    mesh = sg.rectangle_mesh(0.30, 0.45)
+    sg.push_pull(mesh, 0, m, 0.02)
+    sketch = SketchObject("Esboço", m, mesh)
+    doc.execute(AddObject(sketch))
+    instance = bim_actions.make_component(doc, [sketch.id], "Telha da fábrica", "generic")
+    win.open_view("3d", None)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({instance} if instance else set())
+    pump(300)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_tile_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["proposed"] = (d.cover.text(), d.gauge.text())
+        d.weight.setText("3,1")
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "281_usar_como_telha.png"))
+        seen["applied"] = d.apply()
+
+    button = win.props.editors.get("register_tile")
+    if button is not None:
+        QtCore.QTimer.singleShot(100, work)
+        button.click()
+        pump(800)
+    keys = [k for k, _n in doc.ifc.tile_choices()]
+    own = next((k for k in keys if k.startswith("t:")), None)
+    vp.set_selection({roof})
+    pump(300)
+    combo = win.props.editors.get("roof_tiles_kind")
+    listed = combo is not None and own is not None and combo.findData(own) >= 0
+    if listed:
+        i = combo.findData(own)
+        combo.setCurrentIndex(i)
+        combo.activated.emit(i)
+        pump(1200)
+    laid = (doc.ifc.tiles_summary(roof) or {}).get("tile") == own and own is not None
+    vp.set_selection(set())
+    vp.set_camera((-6.0, -9.0, 7.0), (0.62, 0.62, -0.42))
+    pump(600)
+    shot("281_telha_propria.png")
+    check("telha_propria", button is not None and seen.get("applied") and listed and laid,
+          "{} lista={} assente={}".format(seen, listed, laid))
+
+
+def roof_type_flow():
+    """0.278 — Roof types: the Roof tool lists the roof types (IfcRoofType); a 10 × 6 m house's hip roof of
+    concrete selected, «Telhado de telha cerâmica» chosen as its type in its Properties — an IfcRoofType, thinner,
+    its underside still on the walls; «Editar tipo»: the type editor on «Coberturas», its tile layer."""
+    import ifcopenshell.util.element
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_tool("roof")
+    pump(200)
+    listed = [k for k, _n in win.tool.options()[0].choices]
+    tool_types = "telhado_ceramico" in listed and "laje_15" not in listed
+    win.set_tool("select")
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    roof = bim_actions.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)],
+                                catalog.BY_KEY["cobertura_15"], "hip", 30.0, 0.5)
+    eave = doc.ifc.roof_params(roof)["eave"]
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_selection({roof})
+    pump(300)
+    combo = win.props.editors.get("type")
+    tiles = catalog.BY_KEY["telhado_ceramico"]
+    if combo is not None:
+        i = combo.findText(tiles.name_pt)
+        combo.setCurrentIndex(i)
+        combo.activated.emit(i)
+        pump(600)
+    type_ = ifcopenshell.util.element.get_type(doc.ifc.by_guid(roof))
+    changed = type_ is not None and type_.is_a("IfcRoofType") and type_.Name == tiles.name_pt
+    from arqbim.core import roofs as core_roofs
+    seated = abs(doc.ifc.roof_params(roof)["eave"] - (eave - core_roofs.seat(30.0, 0.15, 0.2)
+                                                      + core_roofs.seat(30.0, tiles.thickness, 0.2))) < 1e-6
+    vp.set_selection(set())
+    pump(300)
+    shot("278_telhado_ceramico.png")
+    vp.set_selection({roof})
+    pump(300)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["kind"] = d.kind.currentData() == "roof"
+        seen["layers"] = d.layers.rowCount() == 1 and d.layers_box.isVisible()
+        QtWidgets.QApplication.processEvents()
+        d.grab().save(os.path.join(OUT, "278_tipos_de_cobertura.png"))
+        d.reject()
+
+    button = win.props.editors.get("edit_type")
+    if button is not None:
+        QtCore.QTimer.singleShot(100, work)
+        button.click()
+        pump(800)
+    vp.set_selection(set())
+    check("tipos_de_cobertura", tool_types and changed and seated and seen.get("kind") and seen.get("layers"),
+          "ferramenta={} mudado={} assente={} editor={}".format(tool_types, changed, seated, seen))
+
+
+def _psets_of(guid):
+    import ifcopenshell.util.element
+    return ifcopenshell.util.element.get_psets(doc.ifc.by_guid(guid))
+
+
+def railings_flow():
+    """0.115: the Railing tool — a path of three points and Enter: a railing (bars, 1,00); On a stair's sides: a
+    click on a stair, two railings sloping with it; Properties: its style made glass."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    stair = bim_actions.add_stair(doc, np.array((6.0, 0.0, 0.0)), (1.0, 0.0), catalog.BY_KEY["laje_15"],
+                                  "straight", 2.8)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(5.0, 1.0, 0.0), radius=7.0)
+    pump(300)
+    win.tool_actions["railing"].trigger()
+    pump(100)
+    for p in ((0.0, -1.0, 0.0), (4.0, -1.0, 0.0), (4.0, 2.0, 0.0)):
+        move(near(p), 4)
+        pump(60)
+        click()
+    key(Qt.Key.Key_Return)
+    pump(300)
+    path_ok = len(doc.ifc.file.by_type("IfcRailing")) == 1
+    win._context_option("shape", "stair")
+    pump(60)
+    move(near((8.0, 0.0, 1.5)), 4)
+    pump(100)
+    click()
+    pump(400)
+    stair_ok = len(doc.ifc.file.by_type("IfcRailing")) == 3
+    key(Qt.Key.Key_Escape)
+    win._context_option("shape", "path")
+    win.set_tool("select")
+    first = doc.ifc.file.by_type("IfcRailing")[0].GlobalId if path_ok else None
+    if first:
+        win._on_property_edit("railing_style", first, "vidro_grampos")
+        pump(300)
+    glass = first is not None and doc.ifc.railing_params(first)["type"] == "vidro_grampos"
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("105_guardas.png")
+    del stair
+    check("guardas", path_ok and stair_ok and glass, "caminho={} escada={} vidro={}".format(path_ok, stair_ok, glass))
+
+
+def spiral_stair_flow():
+    """0.116: the Stair tool made Spiral — its foot and its way clicked: a SPIRAL_STAIR round its column; its
+    railing along the outer edge with the Railing tool (On a stair's sides)."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(2.0, 1.0, 0.0), radius=5.0)
+    pump(300)
+    win.tool_actions["stair"].trigger()
+    pump(100)
+    win._context_option("form", "spiral")
+    pump(60)
+    move(near((1.0, 0.0, 0.0)), 4)
+    click()
+    move(near((2.0, 0.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(400)
+    stairs = doc.ifc.file.by_type("IfcStair")
+    made = len(stairs) == 1 and stairs[0].PredefinedType == "SPIRAL_STAIR"
+    win._context_option("form", "straight")
+    win.tool_actions["railing"].trigger()
+    pump(100)
+    win._context_option("shape", "stair")
+    if made:
+        hi = doc.get(stairs[0].GlobalId).mesh.verts
+        top = hi[hi[:, 2].argmax()]
+        move(at(top), 4)
+        pump(100)
+        click()
+        pump(400)
+    railed = len(doc.ifc.file.by_type("IfcRailing")) == 1
+    win._context_option("shape", "path")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("106_escada_caracol.png")
+    check("escada_circular", made and railed, "feita={} guarda={}".format(made, railed))
+
+
+def curtain_wall_flow():
+    """0.117: the Curtain wall tool — its start clicked and 6 typed: a 6 m facade, 2,80 high, its mullions and
+    transoms equally spaced; Properties: its mullions up to 1,00 now (6 bays)."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.0, 0.0, 0.0), radius=5.0)
+    pump(300)
+    win.tool_actions["curtain_wall"].trigger()
+    pump(100)
+    move(near((0.0, 0.0, 0.0)), 4)
+    click()
+    move(near((3.0, 0.0, 0.0)), 4)
+    pump(100)
+    type_text("6")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    walls = doc.ifc.file.by_type("IfcCurtainWall")
+    made = len(walls) == 1 and abs(doc.ifc.curtain_params(walls[0].GlobalId)["length"] - 6.0) < 1e-6
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    if made:
+        win._on_property_edit("cw2_mullions", walls[0].GlobalId, 1.0)
+        pump(300)
+    items = len(walls[0].Representation.Representations[0].Items) if made else 0
+    respaced = items == 7 + 4 + 18                    # (7 mullions, 4 transoms (≤ 1,00 over 2,80: 3 rows), 18 panes)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("107_fachada_vidro.png")
+    check("fachada_de_vidro", made and respaced, "feita={} reespacada={} itens={}".format(made, respaced, items))
+
+
+def ceiling_flow():
+    """0.118: a house; the Ceiling tool (by room) — a click inside: a ceiling at 2,60 between its walls; Properties:
+    made of 60 × 60 tiles."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)),
+                 ((0.0, 4.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["ceiling"].trigger()
+    pump(100)
+    move(near((2.0, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(400)
+    ceilings = doc.ifc.file.by_type("IfcCovering")
+    made = len(ceilings) == 1 and ceilings[0].PredefinedType == "CEILING"
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    if made:
+        win._on_property_edit("ceiling_style", ceilings[0].GlobalId, "tiles")
+        pump(300)
+    tiled = made and doc.ifc.ceiling_params(ceilings[0].GlobalId)["style"] == "tiles"
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("108_teto.png")
+    check("teto", made and tiled, "feito={} placas={}".format(made, tiled))
+
+
+def finishes_flow():
+    """0.119: a house with a ceiling; the Wall finish tool in the plan — a click on the inner side of the south
+    wall: tiles up to 2,10 on that face; the Light tool — a click in the room: a 60 × 60 panel set in the ceiling."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)),
+                          ((0.0, 4.0), (0.0, 0.0)))]
+    region = bim_actions.slab_wand(doc, (2.0, 2.0), "interior")
+    bim_actions.add_ceiling(doc, list(region.exterior.coords)[:-1], 2.6)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["wall_finish"].trigger()
+    pump(100)
+    move(near((3.0, 0.06, 0.0)), 4)
+    pump(150)
+    click()
+    pump(400)
+    found = doc.ifc.claddings_of([walls[0]])
+    tiled = len(found) == 1 and int(doc.ifc._params(doc.ifc.by_guid(next(iter(found)))).get("Lado")) == 1
+    key(Qt.Key.Key_Escape)
+    win.tool_actions["light"].trigger()
+    pump(100)
+    move(near((3.0, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(400)
+    lights = doc.ifc.file.by_type("IfcLightFixture")
+    lit = len(lights) == 1 and abs(float(doc.ifc._placement_si(lights[0])[2, 3]) - 2.595) < 1e-6
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("109_revestimento_luminaria.png")
+    check("revestimento_luminaria", tiled and lit, "azulejo={} luminaria={}".format(tiled, lit))
+
+
+def edit_drawings_flow():
+    """0.191 — Drawings in a plan changed: a line drawn (1,1)-(4,1) and a text; the line selected shows a grip on each
+    end, its end dragged to (4,2.5); its length typed 3 in the Properties; the text's words and angle (45°) there; the
+    line turned 90° with Rotate (its end straight up from its start); Ctrl+Z turns it back."""
+    from arqbim.ifc import catalog
+    from arqbim.model import annotations as notes2d
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)),
+                 ((0.0, 4.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["draft"].trigger()
+    pump(100)
+    win.tool.set_option("shape", "line")
+    for p in ((1.0, 1.0, 0.0), (4.0, 1.0, 0.0)):
+        move(near(p), 4)
+        pump(100)
+        click()
+        pump(150)
+    win.tool.set_option("shape", "text")
+    move(near((2.0, 3.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(150)
+    type_text("Nota")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    line = next((a for a in doc.annotations if a.kind == "line"), None)
+    text = next((a for a in doc.annotations if a.kind == "text"), None)
+    win.set_tool("select")
+    pump(100)
+    move(near((2.5, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(250)
+    grips = line is not None and line in vp.selected_annotations and len(vp.grips[0]) == 2
+    dragged = False
+    if grips:
+        end = vp.grips[0][1]
+        move(at(end), 4)
+        pump(80)
+        press(Qt.MouseButton.LeftButton)
+        move(near((4.0, 2.5, 0.0)), 6)
+        pump(80)
+        release(Qt.MouseButton.LeftButton)
+        pump(250)
+        dragged = abs(line.points[1][0] - 4.0) < 0.06 and abs(line.points[1][1] - 2.5) < 0.06
+    length = win.props.editors.get("ann_length")
+    typed = False
+    if length is not None:
+        length.setText("3")
+        length.editingFinished.emit()
+        pump(300)
+        typed = abs(float(np.linalg.norm((line.points[1] - line.points[0])[:2])) - 3.0) < 1e-6
+    vp.select_annotations({text} if text is not None else set())
+    pump(200)
+    words = win.props.editors.get("ann_text")
+    turned_text = False
+    if words is not None:
+        words.setText("Sala comum")
+        words.editingFinished.emit()
+        pump(300)
+        win.props.editors["ann_angle"].setText("45")
+        win.props.editors["ann_angle"].editingFinished.emit()
+        pump(300)
+        turned_text = text.text == "Sala comum" and abs(notes2d.angle(text) - 45.0) < 1e-9
+    shot("191_desenho_editado.png")
+    vp.select_annotations({line} if line is not None else set())
+    pump(150)
+    win.tool_actions["rotate"].trigger()
+    pump(100)
+    start = line.points[0].copy() if line is not None else np.zeros(3)
+    v0 = (line.points[1] - line.points[0]).copy() if line is not None else np.zeros(3)
+    move(near((1.0, 1.0, 0.0)), 4)
+    click()
+    move(near((3.0, 1.0, 0.0)), 4)
+    click()
+    pump(100)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    d = (line.points[1] - line.points[0]) if line is not None else np.zeros(3)
+    rotated = line is not None and np.allclose(d[:2], (-v0[1], v0[0]), atol=1e-6) and \
+        float(np.linalg.norm((line.points[0] - start)[:2])) < 0.1     # (about the point clicked, by its start)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = line is not None and np.allclose(line.points[1] - line.points[0], v0, atol=1e-6)
+    check("desenhos_2d_editar_pegas_propriedades_rodar",
+          grips and dragged and typed and turned_text and rotated and back,
+          "pegas={} arrastado={} comprimento={} texto={} rodado={} desfeito={}".format(
+              grips, dragged, typed, turned_text, rotated, back))
+
+
+def level_mark_flow():
+    """0.192 — A level mark in a plan: the 2D drawing tool's Level mark clicked on a slab — the mark there, its height
+    the slab's top (the model's); its two quarters filled on screen; the plan printed to PDF."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings, spots
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = bim_actions.add_slab_outline(doc, [(0, 0), (5, 0), (5, 4), (0, 4)], 0.3, catalog.BY_KEY["laje_12"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["draft"].trigger()
+    pump(100)
+    win.tool.set_option("shape", "level")
+    move(near((2.5, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(300)
+    marks = [a for a in doc.annotations if a.kind == "level"]
+    top = float(doc.get(slab).mesh.verts[:, 2].max())
+    made = len(marks) == 1 and spots.text(spots.spot_height(doc, marks[0])) == spots.text(top) and top > 0.2
+    shown = made and any(a is marks[0] for _at, a in vp._ann_texts) and \
+        sum(1 for o in vp._ann_objects if isinstance(o, __import__("pygfx").Mesh)) >= 2
+    win.set_tool("select")
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    out = os.path.join(tempfile.gettempdir(), "arqsynth_marca_nivel.pdf")
+    pdf_out.write(out, paper, win.title_block(title=paper.title), "teste")
+    printed = os.path.exists(out) and os.path.getsize(out) > 1000
+    shot("192_marca_de_nivel.png")
+    check("marca_de_nivel_em_planta", made and shown and printed,
+          "feita={} no_ecra={} pdf={}".format(made, shown, printed))
+
+
+def draft_flow():
+    """0.120: in a plan, the 2D drawing tool — a line (two clicks); Tab five times: a hatched region (four corners,
+    Enter); Tab: a text (a click, "Sala 1" typed, Enter); Select picks the line, Delete removes it; on paper (the
+    plan's drawing): the region and the text."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (6.0, 0.0)), ((6.0, 0.0), (6.0, 4.0)), ((6.0, 4.0), (0.0, 4.0)),
+                 ((0.0, 4.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["draft"].trigger()
+    pump(100)
+    for p in ((1.0, 1.0, 0.0), (5.0, 1.0, 0.0)):
+        move(near(p), 4)
+        pump(100)
+        click()
+        pump(150)
+    lines = [a for a in doc.annotations if a.kind == "line"]
+    for _ in range(5):
+        key(Qt.Key.Key_Tab)
+    for p in ((1.5, 1.6, 0.0), (3.0, 1.6, 0.0), (3.0, 3.0, 0.0), (1.5, 3.0, 0.0)):
+        move(near(p), 4)
+        pump(100)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Return)
+    pump(200)
+    regions = [a for a in doc.annotations if a.kind == "region"]
+    key(Qt.Key.Key_Tab)
+    move(near((4.0, 2.5, 0.0)), 4)
+    pump(100)
+    click()
+    pump(150)
+    type_text("Sala 1")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    texts = [a for a in doc.annotations if a.kind == "text"]
+    win.set_tool("select")
+    pump(100)
+    move(near((3.6, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    picked = bool(lines) and lines[0] in vp.selected_annotations
+    key(Qt.Key.Key_Delete)
+    pump(200)
+    gone = bool(lines) and lines[0] not in doc.annotations
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    on_paper = [a[0] for a in paper.annotations] == ["region", "text"]
+    import tempfile
+    from arqbim.ui import pdf as pdf_out
+    out = os.path.join(tempfile.gettempdir(), "arqsynth_desenho_2d.pdf")
+    pdf_out.write(out, paper, win.title_block(title=paper.title), "teste")
+    on_paper = on_paper and os.path.getsize(out) > 1000 and pdf_out.page_count(out) == 1
+    image = QtGui.QImage(840, 600, QtGui.QImage.Format.Format_RGB32)      # (the paper as the PDF paints it)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 50, (105.0, 75.0), 4.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "110b_desenho_2d_papel.png"))
+    shot("110_desenho_2d.png")
+    ok = len(lines) == 1 and len(regions) == 1 and len(texts) == 1 and texts[0].text == "Sala 1" and picked \
+        and gone and on_paper
+    check("desenho_2d", ok, "linha={} regiao={} texto={} selecionada={} apagada={} papel={}".format(
+        len(lines), len(regions), [a.text for a in texts], picked, gone, on_paper))
+
+
+def view_marks_flow():
+    """0.121: a 10 × 6 house with a section across it and a storey at 3 m: in its plan, the section's line with
+    a head at each end and the four elevation marks; a double click on the north mark opens the north elevation,
+    with its two levels."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0.0, 0.0), (10.0, 0.0)), ((10.0, 0.0), (10.0, 6.0)), ((10.0, 6.0), (0.0, 6.0)),
+                 ((0.0, 6.0), (0.0, 0.0))):
+        bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+    ground = doc.active_storey
+    bim_actions.add_storey(doc, "Piso 1", 3.0)
+    win.set_active_storey(ground)
+    pump(100)
+    doc.add_section((5.0, 3.0, 0.0), (0.0, -1.0, 0.0))
+    win.open_view("plan", ground)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    w, h = vp.logical_size()
+    vp.zoom_at(w / 2, h / 2, 90)
+    pump(300)
+    heads = len(vp._mark_heads)
+    shot("111a_marcas_planta.png")
+    win.set_tool("select")
+    pump(100)
+    move(near((5.0, 7.7, vp.cut_level())), 4)
+    pump(100)
+    click()
+    pump(150)
+    click()
+    pump(600)
+    opened = vp.section is not None and "N" == (vp.section_view or ("", ""))[1]
+    paper = drawings.plan(doc, ground, "Planta")
+    image = QtGui.QImage(1000, 700, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 100, (120.0, 85.0), 4.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "111b_marcas_papel.png"))
+    vp.zoom_extents()
+    pump(300)
+    shot("111_marcas_alcado.png")
+    levels = len(drawings.elevation(doc, "N", "Alçado").levels)
+    check("marcas_vistas", heads == 6 and opened and levels == 2,
+          "cabecas={} alcado_aberto={} niveis={}".format(heads, opened, levels))
+
+
+def chain_angle_dims_flow():
+    """0.122: in a plan, the Dimension tool — the south face's first 3 m, placed 0,9 m out, then one click on
+    the far corner: the chain's second dimension, on the same line; Esc; Tab: angular — the corner, a point on
+    each wall, a click inside the room: 90°."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import dimensions as dims_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]                  # (a closed loop: every corner joined)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    key(Qt.Key.Key_C)
+    pump(150)
+    win.tool.set_option("chain", True)              # (0.401: «Continuar a cadeia» — off by default, as Revit)
+    level = vp.cut_level()
+    for p in ((-0.1, -0.1), (3.0, -0.1), (1.5, -1.0), (6.1, -0.1)):
+        move(near((p[0], p[1], level)), 4)
+        pump(120)
+        click()
+        pump(200)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    linear = [d for d in doc.dimensions if d.vertex is None]
+    chained = len(linear) == 2 and abs(float(linear[1].a[0]) - 3.0) < 0.02 and abs(float(linear[1].b[0]) - 6.1) < 0.02 \
+        and abs(float(linear[1].at[1]) - float(linear[0].at[1])) < 0.02
+    win.tool.set_option("kind", "angular")          # (0.401: Tab goes to the next reference under the mouse)
+    pump(100)
+    for p in ((-0.1, -0.1), (3.0, -0.1), (-0.1, 2.0), (-0.8, -0.8)):
+        move(near((p[0], p[1], level)), 4)
+        pump(120)
+        click()
+        pump(200)
+    angular = [d for d in doc.dimensions if d.vertex is not None]
+    origin, u, v, _n = vp.view_plane()
+    from arqbim.model import annotations as notes2d
+    value = None
+    if angular:
+        d = angular[0]
+        a2, b2, v2, at2 = notes2d.to2([d.a, d.b, d.vertex, d.at], origin, u, v)
+        value = dims_model.angle_arc(a2, b2, v2, at2)[3]
+    shot("112_cotas_cadeia_angular.png")
+    pts = [[tuple(np.round(p, 3)) for p in (d.a, d.b, d.at)] for d in linear] + \
+        [[tuple(np.round(p, 3)) for p in (d.vertex, d.a, d.b, d.at)] for d in angular]
+    check("cotas_cadeia_angular", chained and value is not None and abs(value - 90.0) < 0.5,
+          "lineares={} cadeia={} angulo={} pontos={}".format(len(linear), chained, value, pts))
+    key(Qt.Key.Key_Escape)
+    win.tool.set_option("kind", "aligned")       # (back to aligned: the tool keeps the kind used last)
+    win.tool.set_option("chain", False)
+    pump(100)
+
+
+def auto_dims_flow():
+    """0.123: a 10 × 6 house with a door and a window in its south wall and a room; View ▸ Dimension the
+    façades: 9 dimensions round it (south 6); again: replaced, not doubled; View ▸ Dimension the rooms: 2."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0),
+                                                                   (10.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                                      catalog.BY_KEY["parede_alv_20"])
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 2.0, -1)
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"], frame, frame.x0 + 6.0, -1)
+    bim_actions.add_room(doc, (5.0, 3.0), "Sala")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.act_dimension_facades.trigger()
+    pump(300)
+    # (0.399: round the building as the Outside dimensions tool does — south: openings 5, walls 3, overall 1; north,
+    # east, west: walls 3, overall 1)
+    facades = [d for d in doc.dimensions if (d.tag or "").startswith("ext:")]
+    win.act_dimension_facades.trigger()
+    pump(300)
+    again = [d for d in doc.dimensions if (d.tag or "").startswith("ext:")]
+    win.act_dimension_rooms.trigger()
+    pump(300)
+    rooms = [d for d in doc.dimensions if (d.tag or "").startswith("int:size:")]      # (0.400)
+    vp.zoom_extents()
+    w, h = vp.logical_size()
+    vp.zoom_at(w / 2, h / 2, 60)
+    pump(300)
+    shot("113_cotas_fachadas_salas.png")
+    check("cotas_fachadas_salas", len(facades) == 21 and len(again) == 21 and len(rooms) == 2,
+          "fachadas={} outra_vez={} salas={}".format(len(facades), len(again), len(rooms)))
+
+
+def interior_dims_flow():
+    """0.400 — (in exterior_dims_flow's L-shaped house, no Room made) Anotar ▸ Cotas interiores: the mouse in the left
+    room lights it with its width and depth in blue; a click: 7,80 and 3,80 through the point; another click in it:
+    moved, not doubled; «Corrida»: a click — across the building, each room and wall (0,20 | 3,80 | 0,20 | 5,80 |
+    0,20); «Ao longo das paredes» in the right room: its walls (the setback's 4,00), the window (1,20); «Todos»: every
+    room's width and depth."""
+    from arqbim.model import drawings
+    win.tool_actions["dim_interior"].trigger()
+    pump(300)
+    level = vp.cut_level()
+    move(near((2.0, 3.0, level)), 4)
+    pump(200)
+    lit = bool(vp._fill.visible) or bool(vp._lines.visible)
+    click()
+    pump(400)
+    size = [d for d in doc.dimensions if (d.tag or "").startswith("int:size:")]
+    move(near((2.0, 5.0, level)), 4)
+    pump(150)
+    click()
+    pump(400)
+    moved = [d for d in doc.dimensions if (d.tag or "").startswith("int:size:")]
+    texts = sorted(p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims
+                   if p[6]["chain"] in {d.chain for d in moved})
+    # (0.408) Ctrl+click: another pair beside them (an L-shaped room's other wing); a click without Ctrl: one pair again
+    move(near((2.0, 1.5, level)), 4)
+    pump(150)
+    press(modifiers=Qt.KeyboardModifier.ControlModifier)
+    release(modifiers=Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    added = len([d for d in doc.dimensions if (d.tag or "").startswith("int:size:")])
+    click()
+    pump(400)
+    again = len([d for d in doc.dimensions if (d.tag or "").startswith("int:size:")])
+    win.tool.set_option("mode", "run")
+    move(near((2.0, 3.0, level)), 4)
+    pump(150)
+    click()
+    pump(400)
+    runs = [d for d in doc.dimensions if (d.tag or "").startswith("run:")]
+    run_texts = [dims_text(d) for d in runs]
+    win.tool.set_option("mode", "walls")
+    move(near((7.0, 2.0, level)), 4)
+    pump(150)
+    click()
+    pump(400)
+    along = [dims_text(d) for d in doc.dimensions if (d.tag or "").startswith("int:walls:")]
+    win.tool.set_option("mode", "size")
+    win.tool.set_option("which", "all")
+    move(near((7.0, 2.0, level)), 4)
+    pump(150)
+    click()
+    pump(400)
+    every = [d for d in doc.dimensions if (d.tag or "").startswith("int:size:")]
+    shot("400_cotas_interiores.png")
+    win.tool.set_option("which", "one")                # (kept by the tool: back as it was)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    check("cotas_interiores", lit and len(size) == 2 and len(moved) == 2 and texts == ["3,80", "7,80"]
+          and added == 4 and again == 2
+          and run_texts.count("0,20") >= 4 and "3,80" in run_texts and "5,80" in run_texts and "4,00" in along
+          and "1,20" in along and len({d.chain for d in every}) == 4,
+          "acesa={} cotas={} movidas={} {} ctrl={} sem_ctrl={} corrida={} paredes={} todas={}".format(
+              lit, len(size), len(moved), texts, added, again, run_texts, along, len({d.chain for d in every})))
+
+
+def revit_dims_flow():
+    """0.401 — The Dimension tool as Revit's: two parallel walls 4 m apart (a door in the first); the mouse on the first's
+    inner face: that face lit and named, Tab goes to the next reference there; a click on it, one on the other's facing
+    face, one in an empty place: 3,80 face to face, its ends on the faces; «Eixos das paredes»: axis to axis, 4,00;
+    «Paredes inteiras»: a click on the first wall — its ends and the door's jambs — and one beside: a string with 0,80;
+    the second wall given a thicker type: the face-to-face one follows its face (3,78)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import dimensions as dims_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    first = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), spec)
+    second = bim_actions.add_wall(doc, np.array((0.0, 4.0, 0.0)), np.array((6.0, 4.0, 0.0)), spec)
+    frame = bim_actions.wall_frame(doc, first)
+    bim_actions.add_opening(doc, first, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 3.5, -1)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    key(Qt.Key.Key_C)
+    pump(150)
+    level = vp.cut_level()
+    move(near((1.3, 0.1, level)), 4)
+    pump(200)
+    tool = win.tool
+    lit = bool(tool._cands) and tool._cands[0].kind in ("face_lo", "face_hi") and bool(vp._lines.visible) and \
+        "Face" in (vp.tip_text or "")
+    before = tool._cands[tool._k].kind if tool._cands else None
+    key(Qt.Key.Key_Tab)
+    pump(100)
+    tabbed = bool(tool._cands) and tool._cands[tool._k].kind != before
+    key(Qt.Key.Key_Tab)
+    key(Qt.Key.Key_Tab)
+    key(Qt.Key.Key_Tab)
+    pump(100)
+    tool._k = 0                                                # (back to the face)
+    click()
+    pump(150)
+    move(near((1.3, 3.9, level)), 4)
+    pump(150)
+    click()
+    pump(150)
+    move(near((-1.5, 2.0, level)), 4)
+    pump(150)
+    click()
+    pump(300)
+    faces = [d for d in doc.dimensions if d.refs[0] is not None and len(d.refs[0]) > 3]
+    face_value = dims_text(faces[0]) if faces else None
+    win.tool.set_option("preference", "axis")
+    for p in ((1.3, 0.04), (1.3, 3.96), (-2.5, 2.0)):
+        move(near((p[0], p[1], level)), 4)
+        pump(150)
+        click()
+        pump(200)
+    axes = [d for d in doc.dimensions if d.refs[0] is not None and len(d.refs[0]) > 3 and d.refs[0][3] == "axis"]
+    axis_value = dims_text(axes[0]) if axes else None
+    win.tool.set_option("preference", "faces")
+    win.tool.set_option("pick", "walls")
+    for p in ((5.0, -0.1), (3.0, -1.6)):
+        move(near((p[0], p[1], level)), 4)
+        pump(150)
+        click()
+        pump(250)
+    along = [dims_text(d) for d in doc.dimensions if d.direction is not None and abs(d.direction[0]) > 0.9]
+    shot("401_cota_como_revit.png")
+    win.tool.set_option("pick", "single")             # (kept by the tool, as Revit's: back as it was)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    thicker = catalog.BY_KEY.get("parede_alv_25") or catalog.BY_KEY["parede_betao_25"]
+    bim_actions.set_type(doc, second, thicker)
+    pump(300)
+    followed = dims_text(faces[0]) if faces else None
+    check("cota_como_revit", lit and tabbed and face_value == "3,80" and axis_value == "4,00" and "0,80" in along
+          and followed == "3,78",
+          "acesa={} tab={} faces={} eixos={} inteiras={} seguiu={}".format(lit, tabbed, face_value, axis_value, along,
+                                                                           followed))
+
+
+def edit_dims_flow():
+    """0.402 — (after revit_dims_flow: two walls 4 m apart) a string of three walls' axes (a third wall 3 m further):
+    a click on one piece chooses the whole string, its grips shown; its line's diamond dragged: the line moves off;
+    right button ▸ IG: the middle wall moved, «IG» written, Ctrl+Z back; the middle witness's square right-clicked ▸
+    Apagar linha de chamada: one piece of 7,00; Ctrl+Z; a double click on a value: «Texto da cota», «VAR» written over
+    it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import dim_refs
+    from arqbim.model import dimensions as dims_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array((0.0, y, 0.0)), np.array((6.0, y, 0.0)), spec) for y in (0.0, 3.0, 7.0)]
+    chain = dims_model.new_chain()
+    string = []
+    for (g0, y0), (g1, y1) in zip(zip(walls, (0.0, 3.0, 7.0)), list(zip(walls, (0.0, 3.0, 7.0)))[1:]):
+        a, b = np.array((2.0, y0, 0.0)), np.array((2.0, y1, 0.0))
+        refs = [dim_refs.hang(doc, g0, a, "axis"), dim_refs.hang(doc, g1, b, "axis")]
+        string.append(dims_model.Dimension(("plan", doc.active_storey), a, b, np.array((-1.0, 3.5, 0.0)), refs,
+                                           direction=np.array((0.0, 1.0, 0.0)), chain=chain))
+    doc.execute(dims_model.ReplaceDimensions([], string, "Cotar"))
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    level = vp.cut_level()
+    owner = vp._dim_owner.index(string[0])
+    a, b = vp._dim_lines[owner]
+    move(vp.project(a + (b - a) * 0.3), 3)
+    pump(100)
+    click()
+    pump(300)
+    whole = vp.selected_dims == set(string)
+    grips = len(vp.grips[0]) == 3 and len(vp.grips[1]) >= 2
+    line_grip = vp.project(vp.grips[1][0])
+    before = float(dims_model.line_point(doc, string[0])[0])
+    drag([line_grip, vp.project(vp.grips[1][0] + np.array((-0.5, 0.0, 0.0))),
+          vp.project(vp.grips[1][0] + np.array((-1.0, 0.0, 0.0)))])
+    pump(400)
+    after = float(dims_model.line_point(doc, string[0])[0])
+    moved_line = abs((after - before) + 1.0) < 0.05
+    vp.select_dimensions(set(string))
+    pump(200)
+    win.act_dim_eq.trigger()
+    pump(400)
+    equal = all(d.eq for d in string) and abs(float(doc.ifc.wall_axis(walls[1])[0][1]) - 3.5) < 1e-6
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = not any(d.eq for d in string) and abs(float(doc.ifc.wall_axis(walls[1])[0][1]) - 3.0) < 1e-6
+    vp.select_dimensions(set(string))
+    pump(300)
+    middle = next(k for k, p in enumerate(vp.grips[0]) if abs(float(p[1]) - 3.0) < 0.05)
+    x, y = vp.project(vp.grips[0][middle])
+    select = win.tools["select"]
+    win._witness_clicked = select.witness_at(x, y)
+    win.act_dim_witness.trigger()
+    pump(300)
+    merged = [dims_text(d) for d in doc.dimensions] == ["7,00"]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    restored = sorted(dims_text(d) for d in doc.dimensions) == ["3,00", "4,00"]
+
+    def fill():
+        d = getattr(win, "_dim_text_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.over.setChecked(True)
+        d.override.setText("VAR")
+        d.fields["below"].setText("osso")
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "402_texto_da_cota.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, fill)
+    win.edit_dimension_text(string[1])
+    pump(400)
+    from arqbim.model import drawings
+    texts = [p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims]
+    words = "VAR" in texts and (string[1].note or {}).get("below") == "osso"
+    vp.select_dimensions(set(string))
+    pump(300)
+    shot("402_editar_cotas.png")
+    vp.select_dimensions(set())
+    check("editar_cotas", whole and grips and moved_line and equal and back and merged and restored and words,
+          "cadeia={} pegas={} linha={} ig={} desfeito={} junta={} reposta={} texto={}".format(
+              whole, grips, moved_line, equal, back, merged, restored, words))
+
+
+def dim_drag_flow():
+    """0.405 — (the owner: «quando largo as cotas numa posição ele não fica como queria… seria bom ter snap de
+    alinhamento… esperava o editor na barra de propriedade») three walls, a string 3,00 | 4,00 at x −1 and one of 7,00
+    at x −2,5: the string chosen — the Properties show its type on top, «Editar tipo…», IG and its words; a value
+    dragged by itself: it stays where it was dropped; another dropped near its height: lined up with it; the string's
+    line dragged near the other one: in line with it; a prefix typed in the Properties: written."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import dim_refs
+    from arqbim.model import dimensions as dims_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    ys = (0.0, 3.0, 7.0)
+    walls = [bim_actions.add_wall(doc, np.array((0.0, y, 0.0)), np.array((6.0, y, 0.0)), spec) for y in ys]
+
+    def string(pairs, x):
+        chain, out = dims_model.new_chain(), []
+        for (g0, y0), (g1, y1) in pairs:
+            a, b = np.array((2.0, y0, 0.0)), np.array((2.0, y1, 0.0))
+            refs = [dim_refs.hang(doc, g0, a, "axis"), dim_refs.hang(doc, g1, b, "axis")]
+            out.append(dims_model.Dimension(("plan", doc.active_storey), a, b, np.array((x, 3.5, 0.0)), refs,
+                                            direction=np.array((0.0, 1.0, 0.0)), chain=chain))
+        return out
+
+    marks = list(zip(walls, ys))
+    first = string(list(zip(marks, marks[1:])), -1.0)
+    other = string([(marks[0], marks[2])], -2.5)
+    doc.execute(dims_model.ReplaceDimensions([], first + other, "Cotar"))
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    owner = vp._dim_owner.index(first[0])
+    a, b = vp._dim_lines[owner]
+    move(vp.project(a + (b - a) * 0.3), 3)
+    click()
+    pump(400)
+    combo = win.props.type_combo
+    props = combo is not None and combo.currentText() == "Estilo do projeto" and \
+        "dim_edit_type" in win.props.editors and "dim_eq" in win.props.editors and \
+        "dim_note_prefix" in win.props.editors
+
+    def centre(dim):
+        return next(np.asarray(c, dtype=float) for c, _a, _b, _h, o in vp._dim_texts if o is dim)
+
+    c0 = centre(first[0])
+    target = c0 + np.array((-0.6, 0.4, 0.0))
+    drag([vp.project(c0), vp.project(c0 + (target - c0) * 0.5), vp.project(target)])
+    pump(400)
+    stayed = float(np.linalg.norm(centre(first[0])[:2] - target[:2])) < 0.03
+    c1 = centre(first[1])
+    near = np.array((target[0] + 0.04, c1[1], c1[2]))
+    drag([vp.project(c1), vp.project((c1 + near) / 2), vp.project(near)])
+    pump(400)
+    lined = abs(float(centre(first[1])[0] - centre(first[0])[0])) < 1e-6
+    vp.select_dimensions(set(first))
+    pump(300)
+    grip = vp.grips[1][0]
+    drag([vp.project(grip), vp.project(grip + np.array((-0.7, 0.0, 0.0))),
+          vp.project(np.array((-2.46, grip[1], grip[2])))])
+    pump(400)
+    in_line = abs(float(dims_model.line_point(doc, first[0])[0]) + 2.5) < 1e-6
+    vp.select_dimensions(set(first))
+    pump(300)
+    edit = win.props.editors.get("dim_note_prefix")
+    if edit is not None:
+        edit.setText("≈")
+        edit.editingFinished.emit()
+        pump(400)
+    from arqbim.model import drawings
+    texts = [p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims]
+    prefixed = "≈3,00" in texts and "≈4,00" in texts
+    vp.select_dimensions(set(first))
+    pump(300)
+    shot("405_cota_arrastar_propriedades.png")
+    vp.select_dimensions(set())
+    check("cota_arrastar_e_propriedades", props and stayed and lined and in_line and prefixed,
+          "propriedades={} ficou={} alinhado={} linha={} prefixo={} {}".format(props, stayed, lined, in_line,
+                                                                             prefixed, texts))
+
+
+def dims_text(d):
+    """(0.400) A dimension's value as written now (its view's 2D frame: a plan's)."""
+    from arqbim.model import dimensions as dims_model
+    o, u, v = np.zeros(3), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+    return dims_model.text(dims_model.placed(*dims_model.ends(doc, d), dims_model.line_point(doc, d), o, u, v,
+                                             d.direction)[4])
+
+
+def exterior_dims_flow():
+    """0.399 — Outside dimensions with one click: an L-shaped house (an inner wall, a door, windows); Anotar ▸ Cotas
+    exteriores: the plan opens, the rows are shown in blue while the mouse moves, a click places them (every side, its
+    strings); on the bar «Eixos das paredes» and a click: made again, axis to axis (10,00 overall); Ctrl+Z: the finish
+    faces' again (10,20); «A mais perto do rato» near the south side: only its rows made again."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = bim_actions.add_wall_loop(doc, [np.array((x, y, 0.0)) for x, y in ((0, 0), (10, 0), (10, 5), (6, 5),
+                                                                                  (6, 8), (0, 8))], spec)
+    inner = bim_actions.add_wall(doc, np.array((4.0, 0.1, 0.0)), np.array((4.0, 7.9, 0.0)), spec)
+    bim_actions.join_wall_ends(doc, [inner])
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 1.5, -1)
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"], frame, frame.x0 + 6.5, -1)
+    win.tool_actions["dim_exterior"].trigger()
+    pump(400)
+    opened = vp.plan
+    vp.zoom_extents()
+    pump(300)
+    level = vp.cut_level()
+    move(near((5.0, -3.0, level)), 4)
+    pump(200)
+    previewed = bool(vp._lines.visible)
+    click()
+    pump(400)
+    placed = [d for d in doc.dimensions if (d.tag or "").startswith("ext:")]
+    sides = {d.tag for d in placed}
+    strings = {d.chain for d in placed}
+    texts = [p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims]
+    faces = texts.count("10,20") == 2 and "6,20" in texts
+    shot("399_cotas_exteriores.png")
+    win.tool.set_option("preference", "axis")
+    pump(100)
+    move(near((5.0, -3.2, level)), 4)
+    pump(200)
+    click()
+    pump(400)
+    texts = [p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims]
+    axes = texts.count("10,00") == 2 and "10,20" not in texts and "6,00" in texts
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    texts = [p[4] for p in drawings.plan(doc, doc.active_storey, "Planta").dims]
+    undone = texts.count("10,20") == 2
+    win.tool.set_option("which", "near")
+    win.tool.set_option("openings", "centres")
+    move(near((5.0, -2.0, level)), 4)
+    pump(200)
+    click()
+    pump(400)
+    south = [d for d in doc.dimensions if d.tag == "ext:270"]
+    near_ok = len({d.tag for d in doc.dimensions if (d.tag or "").startswith("ext:")}) == 4 and bool(south) and \
+        len(south) < len([d for d in placed if d.tag == "ext:270"])
+    for k, value in (("preference", "faces"), ("which", "all"), ("openings", "jambs")):
+        win.tool.set_option(k, value)                  # (the tool keeps them, as Revit's: back as they were)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    interior_dims_flow()
+    check("cotas_exteriores", opened and previewed and len(sides) == 4 and len(strings) >= 10 and faces and axes
+          and undone and near_ok,
+          "planta={} previsao={} lados={} fiadas={} faces={} eixos={} desfeito={} perto={}".format(
+              opened, previewed, len(sides), len(strings), faces, axes, undone, near_ok))
+
+
+def keynotes_flow():
+    """0.194 — Keynotes: a wall selected, "02.03 — Alvenaria de tijolo cerâmico 20 cm" chosen in its Properties (its
+    type's: the other wall of that type has it); in the plan, the 2D drawing tool's Keynote — a click on the wall,
+    one beside — a tag with its box writing "02.03"; the schedule "Notas-chave": one row, 02.03, two walls; the plan
+    printed to PDF."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), spec)
+    other = bim_actions.add_wall(doc, np.array((0.0, 4.0, 0.0)), np.array((5.0, 4.0, 0.0)), spec)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    vp.set_selection({wall})
+    pump(300)
+    combo = win.props.editors.get("keynote")
+    chosen = False
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData("02.03"))
+        combo.activated.emit(combo.currentIndex())
+        pump(400)
+        chosen = (doc.ifc.keynote_of(wall) or ("",))[0] == "02.03" and (doc.ifc.keynote_of(other) or ("",))[0] == "02.03"
+    vp.set_selection(set())
+    win.tool_actions["draft"].trigger()
+    pump(100)
+    win.tool.set_option("shape", "keynote")
+    level = vp.cut_level()
+    for p in ((2.5, 0.0), (3.5, 1.5)):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(200)
+    tags = [a for a in doc.annotations if a.kind == "keynote"]
+    tagged = len(tags) == 1 and tags[0].extra.get("element") == wall and \
+        any(a is tags[0] for _at, a in vp._ann_texts)
+    win.set_tool("select")
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("keynotes"))
+    pump(300)
+    cols = list(panel._columns)
+    legend = panel.table.rowCount() == 1 and panel.table.item(0, cols.index("code")).text() == "02.03" and \
+        panel.table.item(0, cols.index("count")).text() == "2"
+    shot("194_notas_chave.png")
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    out = os.path.join(tempfile.gettempdir(), "arqsynth_notas_chave.pdf")
+    pdf_out.write(out, paper, win.title_block(title=paper.title), "teste")
+    printed = os.path.exists(out) and os.path.getsize(out) > 1000 and \
+        [a[3] for a in paper.annotations if a[0] == "keynote"] == ["02.03"]
+    check("notas_chave", chosen and tagged and legend and printed,
+          "propriedades={} etiqueta={} legenda={} pdf={}".format(chosen, tagged, legend, printed))
+
+
+def dim_types_flow():
+    """0.193 — Dimension types: Annotate ▸ Dimension style… — a new type "Pormenor" (centimetres) added; the
+    Dimension tool with that type: a dimension of 4,00 m written "400"; selected, its type in the Properties, made
+    the project's style there ("4,00"); Ctrl+Z: "Pormenor" again."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import dimensions as dims_model
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+
+    def fill():
+        d = getattr(win, "_dim_style_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.duplicate("Pormenor")                         # (0.398: Duplicar… from the project's style)
+        d.set_value("unit", "cm")
+        d.accept()
+
+    win._dim_style_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.act_dimension_style.trigger()
+    pump(400)
+    typed = dims_model.type_names(doc.dim_style) == ["Pormenor"] and \
+        doc.dim_style["types"]["Pormenor"]["unit"] == "cm" and doc.dim_style["unit"] == "m"
+    win.tool_actions["dimension"].trigger()
+    pump(100)
+    win.tool.set_option("chain", False)
+    win.tool.set_option("style", "Pormenor")
+    level = vp.cut_level()
+    for p in ((0.0, -0.1), (4.0, -0.1), (2.0, -1.2)):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(150)
+    made = [d for d in doc.dimensions if d.style == "Pormenor"]
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    written = "400" in [d[4] for d in paper.dims]
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.select_dimensions(set(made[:1]))
+    pump(250)
+    combo = win.props.editors.get("dim_type")
+    shown = combo is not None and combo.currentText() == "Pormenor"
+    if shown:
+        combo.setCurrentIndex(combo.findData(""))
+        combo.activated.emit(combo.currentIndex())
+        pump(300)
+    plain = bool(made) and made[0].style is None
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = bool(made) and made[0].style == "Pormenor"
+    shot("193_tipos_de_cota.png")
+    check("tipos_de_cota", typed and len(made) == 1 and written and shown and plain and back,
+          "tipo={} cota={} papel={} propriedades={} projeto={} desfeito={}".format(
+              typed, len(made), written, shown, plain, back))
+
+
+def dim_style_flow():
+    """0.124: (after auto_dims_flow: the house with its façades dimensioned) View ▸ Dimension style… —
+    centimetres, arrows, 3,5 mm: the dimensions on screen say 1020, on paper with arrows; Ctrl+Z: back."""
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+
+    def fill():
+        d = getattr(win, "_dim_style_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.fields["unit"].setCurrentIndex(d.fields["unit"].findData("cm"))     # (0.398: the types' editor)
+        d.fields["mark"].setCurrentIndex(d.fields["mark"].findData("arrow"))
+        d.fields["text"].setValue(3.5)
+        pump(150)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "398_tipos_de_cota.png"))
+        d.accept()
+
+    win._dim_style_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.act_dimension_style.trigger()
+    pump(400)
+    styled = (doc.dim_style["text"], doc.dim_style["mark"], doc.dim_style["unit"], doc.dim_style["decimals"]) == \
+        (3.5, "arrow", "cm", 0)
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    image = QtGui.QImage(1000, 700, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 100, (120.0, 85.0), 4.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "114b_estilo_cotas_papel.png"))
+    shot("114_estilo_cotas.png")
+    texts = {d[4] for d in paper.dims}
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = doc.dim_style["unit"] == "m"
+    check("estilo_cotas", styled and "1020" in texts and back,
+          "estilo={} papel={} desfeito={}".format(styled, sorted(texts)[:4], back))
+
+
+def room_schedules_flow():
+    """0.125: a house split in two rooms; Schedules (Ctrl+T) ▸ Rooms: areas — 2 rows, "2 salas"; Rooms:
+    finishes — "Mosaico" typed in a room's floor cell: its floor finish, Ctrl+Z: gone; the plan on paper with the
+    rooms' labels."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    from arqbim.ui.schedules import GUID
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], spec)
+    bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 6.0, 0.0)), spec)
+    bim_actions.add_room(doc, (7.0, 3.0), "Sala")
+    bim_actions.add_room(doc, (2.0, 3.0), "Quarto")
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("rooms"))
+    pump(300)
+    areas = panel.table.rowCount() == 2 and panel.totals.text().startswith("2 ambientes")
+    panel.category.setCurrentIndex(panel.category.findData("finishes"))
+    pump(300)
+    col = list(panel._columns).index("floor")
+    item = panel.table.item(0, col)
+    guid = item.data(GUID)
+    item.setText("Mosaico")
+    pump(400)
+    floor = doc.ifc.space_info(guid)["finishes"]["FloorCovering"]
+    shot("115_quadro_acabamentos.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    undone = doc.ifc.space_info(guid)["finishes"]["FloorCovering"]
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    image = QtGui.QImage(1000, 700, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 100, (120.0, 85.0), 4.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "115b_salas_papel.png"))
+    check("quadros_salas", areas and floor == "Mosaico" and undone == "" and len(paper.rooms) == 2,
+          "areas={} piso={!r} desfeito={!r} etiquetas={}".format(areas, floor, undone, len(paper.rooms)))
+
+
+def graphic_styles_flow():
+    """0.126: (after room_schedules_flow: the house in two rooms) View ▸ Graphic styles… — masonry crossed and red,
+    the cut pen 0,70: the project's style; the 2D drawing tool with a dashed 0,35 line; on paper with them;
+    Ctrl+Z twice: back to the usual ones."""
+    from arqbim.model import drawings
+    from arqbim.model import graphic_styles as gs
+    from arqbim.ui import pdf as pdf_out
+
+    def fill():
+        d = getattr(win, "_graphic_styles_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        row = d.rows["masonry"]
+        row.pattern.setCurrentIndex(row.pattern.findData("cross"))
+        row.set_fill("#ffd0d0")
+        d.pens["cut"].setValue(0.70)
+        d.accept()
+
+    win._graphic_styles_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.act_graphic_styles.trigger()
+    pump(400)
+    styled = gs.hatch(doc.graphic_style, "masonry") == ("#ffd0d0", (45.0, -45.0), 1.0) and \
+        gs.pen(doc.graphic_style, "cut") == 0.70
+    win.tool_actions["draft"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("shape", "line")                 # (the tool keeps what it drew last: a text, in draft_flow)
+    tool.set_option("line", "dashed")
+    tool.set_option("width", 0.35)
+    pump(100)
+    level = vp.cut_level()
+    for p in ((1.0, 1.0), (9.0, 1.0)):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(150)
+    dashed = [a for a in doc.annotations if a.extra.get("line") == "dashed"]
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    paper = drawings.plan(doc, doc.active_storey, "Planta")
+    image = QtGui.QImage(1000, 700, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 50, (120.0, 85.0), 4.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "116b_estilos_papel.png"))
+    shot("116_estilos_graficos.png")
+    for _ in range(2):
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(200)
+    back = doc.graphic_style == gs.DEFAULTS
+    check("estilos_graficos", styled and len(dashed) == 1 and dashed[0].extra.get("width") == 0.35 and back,
+          "estilo={} tracejada={} desfeito={}".format(styled, len(dashed), back))
+
+
+def view_styles_flow():
+    """0.315: a house of stone-faced walls (a type of the project's: stone, block, plaster) with a window and a slab;
+    the 3D view given the «Realista» style from the footer — each wall in its materials' colours (the stone outside),
+    the stone's courses drawn on its faces, the window's glass in a batch drawn after the others, the sun's shadows on
+    a ground under the house; View ▸ View styles… — a style of the project's made from «Cores consistentes», named,
+    with shadows: given to the 3D view; the plan given «Cores consistentes» (its own); Ctrl+Z; back to «Sombreado»:
+    none of it left."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.render.batches import physical
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    stone = catalog.TypeSpec("t:new", "wall", "Parede de pedra 23", "Parede de pedra 23",
+                             layers=(("pedra", 0.03), ("bloco", 0.18), ("reboco", 0.02)))
+    guid = bim_actions.save_type(doc, stone)
+    win._refresh_types()
+    spec = catalog.BY_KEY.get("t:" + guid) or stone
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 5.0, 0.0),
+                                                                   (0.0, 5.0, 0.0))], spec)
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_150"], bim_actions.wall_frame(doc, walls[0]),
+                            3.0, -1)
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, 0.0)), 8.0, 5.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    vp.set_view("iso")
+    pump(300)
+
+    def footer_style(uid):
+        win._fill_style_menu()
+        act = next(a for a in win.style_button.menu().actions() if a.data() == uid)
+        act.trigger()
+        pump(500)
+
+    footer_style("realistic")
+    batches = vp.bim.batches
+    wall = doc.get(walls[0])
+    piece = vp.bim.where[walls[0]].pieces[walls[0]]
+    stone_rgb = physical(np.array(catalog.MATERIALS["pedra"].color))
+    outside = np.any(np.all(np.abs(np.asarray(piece.face_color)[:, :3] - stone_rgb) < 2e-3, axis=1)) \
+        if np.ndim(piece.face_color) == 2 else False
+    courses = any(b.patterns is not None and b.patterns.visible for b in batches)
+    glass = any(b.clear for b in batches)
+    sun = vp.bim.shadows and vp.sun.cast_shadow and vp._shadow_ground is not None and vp._shadow_ground.visible
+    shot("320_estilo_realista.png")
+    check("estilo_realista_3d", vp.vstyle.uid == "realistic" and vp.bim.style == "shaded" and outside and courses
+          and glass and sun and wall is not None,
+          "estilo={} pedra_fora={} fiadas={} vidro={} sol={}".format(vp.vstyle.uid, outside, courses, glass, sun))
+
+    def make():
+        d = getattr(win, "_view_styles_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, make)
+            return
+        d.select("consistent")
+        d.duplicate_style()
+        d.name.setText("Apresentação")
+        d.name.textEdited.emit("Apresentação")
+        d.shadows.setChecked(True)
+        d.width.setCurrentIndex(d.width.findData(2.0))
+        d.width.activated.emit(d.width.currentIndex())
+        # (0.316) its sun over the site (Lisbon) on the longest day at four in the afternoon, summer time
+        from datetime import datetime
+        seen["sun"] = d.sun_from_site(datetime(2026, 6, 21, 16, 0), 1.0)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "321_estilos_de_vista.png"))
+        d.accept()
+
+    seen = {}
+    doc.ifc.set_site_location(38.72, -9.14)              # (Lisbon: the style's sun worked out over it)
+    QtCore.QTimer.singleShot(100, make)
+    win.act_view_styles.trigger()
+    pump(400)
+    made = [s for s in doc.view_styles if s.name == "Apresentação"]
+    sun_set = bool(seen.get("sun")) and bool(made) and 220.0 < made[0].sun_azimuth < 290.0 and \
+        30.0 < made[0].sun_altitude < 70.0
+    if made:
+        footer_style(made[0].uid)
+    own = bool(made) and vp.vstyle == made[0] and vp.bim.style == "consistent" and vp.bim.shadows and \
+        abs(vp.bim.line_material.thickness - 2.0) < 1e-9 and made[0].faces == "consistent"
+    shot("322_estilo_do_projeto.png")
+    plan = ("plan", doc.active_storey)
+    doc.set_view_props(plan, style="consistent")
+    win.set_plan(True)
+    pump(500)
+    in_plan = vp.cut_style == "consistent" and vp.bim.style == "consistent" and not vp.bim.shadows
+    shot("323_planta_cores_consistentes.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    undone = doc.view_settings(plan).drawn_style is None and vp.cut_style is None and vp.bim.style == "shaded"
+    win.set_plan(False)
+    pump(300)
+    footer_style("shaded")
+    plain = vp.bim.style == "shaded" and not vp.bim.shadows and not vp.sun.cast_shadow and \
+        not any(b.clear for b in vp.bim.batches)            # (0.317: the stone's courses stay: Shaded shows them)
+    check("estilos_de_vista_do_projeto", own and in_plan and undone and plain and sun_set,
+          "do_projeto={} planta={} desfeito={} sombreado={} sol={}".format(own, in_plan, undone, plain,
+                                                                          made[0].sun_azimuth if made else None))
+    # on paper: the south elevation in «Realista» — its faces painted, the stone's courses on them
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    doc.set_view_props(("elevation", "S"), style="realistic")
+    paper = drawings.elevation(doc, "S", "Alçado Sul")
+    image = QtGui.QImage(1400, 640, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 50, (117.0, 50.0), 6.0, "Alçado Sul")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "324_alcado_realista.png"))
+    shadows = sum(isinstance(f[0], list) for f in paper.faces)        # (0.316: in its window's reveal)
+    check("alcado_com_estilo", len(paper.faces) > 10 and len(paper.surface_lines) > 0 and shadows > 0,
+          "faces={} padroes={} sombras={}".format(len(paper.faces), len(paper.surface_lines), shadows))
+    doc.modified = False
+
+
+def screen_hatches_flow():
+    """0.317: the plan on screen hatched as on paper — the block cut with its own pink and diagonal, the plaster in its
+    category's grey, the floor's tiles seen from above; a click on a wall's cut still picks it, and its hatch turns the
+    selection's colour; a section shows its cut hatched too."""
+    import dataclasses
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    block = catalog.MATERIALS["bloco"]
+    bim_actions.save_material(doc, dataclasses.replace(block, cut_fg=("diagonal", "#3a2a22"),
+                                                       cut_bg=("solid", "#f3d9cc")), block)
+    floor = catalog.TypeSpec("t:new", "slab", "Laje com azulejo", "Laje com azulejo",
+                             layers=(("concreto", 0.15), ("azulejo", 0.01)))
+    guid = bim_actions.save_type(doc, floor)
+    win._refresh_types()
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                                   (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, 0.0)), 6.0, 4.0, catalog.BY_KEY["t:" + guid])
+    pump(300)
+    win.set_plan(True)
+    pump(600)
+    parts = dict(vp._hatch_parts)
+    pink = any(np.any(np.all(np.abs(np.round(p[1] * 255) - (0xf3, 0xd9, 0xcc)) < 1, axis=1)) for p in parts.values())
+    tiles = any(b.patterns is not None and b.patterns.visible for b in vp.bim.batches)
+    shot("330_planta_tramas.png")
+    win.set_tool("select")
+    move(at((3.0, 0.0, vp.cut_level())), 4)
+    pump(200)
+    click()
+    pump(400)
+    picked = walls[0] in vp.selection
+    fill = next((w for w in vp._hatch_objects if isinstance(w, type(vp.bim.batches[0].mesh))), None)
+    shot("331_planta_tramas_escolhida.png")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    check("tramas_no_ecra", len(parts) >= 4 and pink and tiles and picked and fill is not None,
+          "elementos={} rosa={} azulejo={} clique={} ({})".format(len(parts), pink, tiles, picked, vp.selection))
+    win.set_plan(False)
+    pump(300)
+    doc.modified = False
+
+
+def pattern_buttons_flow():
+    """0.319: BIM ▸ Materials… — the plaster chosen; its cut's foreground clicked: the window with every pattern opens
+    (drafting first, «New…» and «Edit…» there); «Areia (pontos)» chosen; its background a solid light colour; its
+    surface's foreground, from its sample clicked: tiles 20×20; applied — the material has them (in its IFC too)."""
+    from PySide6 import QtTest
+    from arqbim.ifc import catalog
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    seen = {}
+
+    def answer(button, act):
+        def go():
+            picker = getattr(button, "_picker", None)
+            if picker is None or not picker.isVisible():
+                QtCore.QTimer.singleShot(80, go)
+                return
+            pump(150)
+            act(picker)
+        QtCore.QTimer.singleShot(80, go)
+
+    def work():
+        d = getattr(win, "_material_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("reboco")
+        pump(150)
+        fg = d.cut.combos[0]
+
+        def sand(picker):
+            seen["drafting_first"] = picker.drafting.isChecked()
+            seen["new_there"] = picker.new.isVisible() and picker.edit.isVisible()
+            if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+                picker.grab().save(os.path.join(OUT, "341_escolher_padrao.png"))
+            picker.choose("sand")
+            picker.accept()
+        answer(fg, sand)
+        QtTest.QTest.mouseClick(fg, Qt.MouseButton.LeftButton)
+        pump(150)
+        answer(d.cut.combos[1], lambda picker: (picker.choose("solid"), picker.accept()))
+        QtTest.QTest.mouseClick(d.cut.combos[1], Qt.MouseButton.LeftButton)
+        d.cut.colours[1].set_colour("#f4f1ea")
+        pump(150)
+        answer(d.surface.combos[0], lambda picker: (picker.choose("tile_20"), picker.accept()))
+        QtTest.QTest.mouseClick(d.surface_sample, Qt.MouseButton.LeftButton)
+        pump(150)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "340_materiais_botoes.png"))
+        seen["saved"] = d.apply_changes()
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_materials()
+    pump(300)
+    plaster = catalog.MATERIALS.get("reboco")
+    has = plaster is not None and plaster.cut_fg == ("sand", "#2b2f36") and plaster.cut_bg == ("solid", "#f4f1ea") \
+        and plaster.surface_fg is not None and plaster.surface_fg[0] == "tile_20"
+    check("padroes_por_botao", seen.get("saved") == "reboco" and has and seen.get("drafting_first")
+          and seen.get("new_there"),
+          "gravado={} reboco={} desenho_primeiro={} novo={}".format(seen.get("saved"), plaster and plaster.graphics(),
+                                                                    seen.get("drafting_first"), seen.get("new_there")))
+    doc.modified = False
+
+
+def joins_flow():
+    """0.320: two walls of a type in a row and one across: in 3D no edge where the two meet (the first's seams left
+    out; deleted, the second takes them away, undone they are back); in the plan (F4) the cut joined — no line across
+    the walls where they meet, the one across with its block into theirs; on paper the same."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    w20 = catalog.BY_KEY["parede_alv_20"]
+    first = bim_actions.add_wall(doc, (0.0, 0.0, 0.0), (4.0, 0.0, 0.0), w20)
+    pump(200)
+    alone = len(vp.bim.where[first].pieces[first].edges)
+    second = bim_actions.add_wall(doc, (4.0, 0.0, 0.0), (8.0, 0.0, 0.0), w20)
+    bim_actions.add_wall(doc, (4.0, 0.0, 0.0), (4.0, 3.0, 0.0), w20)
+    pump(300)
+    joined = len(vp.bim.where[first].pieces[first].edges)
+    vp.look_from((0.5, -1.0, 0.4), animate=False)
+    pump(400)
+    shot("350_juntas_3d.png")
+    bim_actions.delete(doc, [second])
+    pump(200)
+    apart = len(vp.bim.where[first].pieces[first].edges)
+    doc.undo()
+    pump(300)
+    again = len(vp.bim.where[first].pieces[first].edges)
+    check("juntas_3d", joined < alone and apart == alone and again == joined,
+          "arestas da 1.ª: sozinha={} junta={} sem a 2.ª={} desfeito={}".format(alone, joined, apart, again))
+    win.set_plan(True)
+    pump(600)
+    outline = vp._hatch_parts.get(None)
+    segs = outline[2] if outline is not None else np.zeros((0, 2, 3))
+    across = [s for s in segs if abs(s[0][0] - 4.0) < 0.12 and abs(s[1][0] - 4.0) < 0.12
+              and abs(s[0][1] - s[1][1]) > 0.05 and min(s[0][1], s[1][1]) < -0.05]
+    shot("351_juntas_planta.png")
+    from arqbim.model import drawings
+    plan = drawings.plan(doc, doc.active_storey, "P")
+    check("juntas_planta", outline is not None and not across and len(plan.outline) == 1,
+          "contornos={} linhas_através={} papel={}".format(len(segs), len(across), len(plan.outline)))
+    win.set_plan(False)
+    pump(300)
+    doc.modified = False
+
+
+def sheets_wizard_flow():
+    """0.127: a house with two storeys; File ▸ Sheets by storey… — both plans and the elevations: 3 sheets; the
+    first sheet's title block — prefix A-, a field of its own, a revision (A, today, "Licenciamento"): its
+    number A-01 · A, the rows over the title block (painted as on paper)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import sheets as sheets_model
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_storey(doc, "Piso 1", 3.0)
+    pump(200)
+
+    def fill_wizard():
+        d = getattr(win, "_sheets_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill_wizard)
+            return
+        d.elevations.setChecked(True)
+        d.accept()
+
+    win._sheets_dialog = None
+    QtCore.QTimer.singleShot(100, fill_wizard)
+    win.act_sheets_by_storey.trigger()
+    pump(500)
+    made = [s.name for s in doc.sheets]
+
+    def fill_block():
+        d = getattr(win, "_title_block_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill_block)
+            return
+        d.prefix.setText("A-")
+        d.extra.insertRow(0)
+        d.extra.setItem(0, 0, QtWidgets.QTableWidgetItem("Processo"))
+        d.extra.setItem(0, 1, QtWidgets.QTableWidgetItem("123/2026"))
+        d.new_revision("Licenciamento")
+        d.accept()
+
+    win._title_block_dialog = None
+    QtCore.QTimer.singleShot(100, fill_block)
+    win.sheet_action("title_block", 0)
+    pump(400)
+    sheet = doc.sheets[0] if doc.sheets else None
+    block = win.title_block(sheet) if sheet is not None else {}
+    image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)        # (A3 at 2 pixels a mm)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_sheet(painter, 2.0, sheets_model.PAPERS["A3"], block, [])
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "117_carimbo_revisoes.png"))
+    ok = len(made) == 3 and made[-1] == "Alçados" and block.get("number") == "A-01" \
+        and [r["code"] for r in block.get("revisions", [])] == ["A"] \
+        and block.get(sheets_model.EXTRA_KEY) == [("Processo", "123/2026")]
+    check("folhas_por_pavimento_revisoes", ok, "folhas={} numero={} revisoes={} campos={}".format(
+        made, block.get("number"), block.get("revisions"), block.get(sheets_model.EXTRA_KEY)))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def sheet_sets_flow():
+    """0.128: a house, Sheets by storey with the elevations (2 sheets); the plan sheet put in a new set
+    «Licenciamento» (its Sets… dialog): Publish the set — a PDF of 1 page; all the sheets as PNG and as SVG (a
+    file each); printed (to a PDF printer) — 2 pages."""
+    import tempfile
+    from PySide6 import QtPrintSupport
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    pages = [("Planta", [("plan", doc.active_storey)]), ("Alçados", [("elevation", s) for s in "NSEW"])]
+    doc.make_sheets(pages)
+    pump(200)
+
+    def fill():
+        d = getattr(win, "_sets_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.new.setText("Licenciamento")
+        d.accept()
+
+    win._sets_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.sheet_action("sets", 0)
+    pump(300)
+    in_set = doc.sheets[0].sets == ["Licenciamento"]
+    folder = tempfile.mkdtemp(prefix="arqsynth_folhas_")
+    published = os.path.join(folder, "Licenciamento.pdf")
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (published, ""))
+    QtWidgets.QFileDialog.getExistingDirectory = staticmethod(lambda *a, **k: folder)
+    win.sheet_action("publish", "Licenciamento")
+    pump(600)
+    win.sheet_action("export_png", None)
+    pump(600)
+    win.sheet_action("export_svg", None)
+    pump(600)
+    files = sorted(os.listdir(folder))
+    printed = os.path.join(folder, "impressora.pdf")
+    printer = QtPrintSupport.QPrinter(QtPrintSupport.QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QtPrintSupport.QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(printed)
+    pdf_out.print_sheets(printer, win._sheet_pages(list(doc.sheets)))
+    pump(200)
+    png = [f for f in files if f.endswith(".png")]
+    svg = [f for f in files if f.endswith(".svg")]
+    if png and not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        import shutil
+        shutil.copy(os.path.join(folder, png[0]), os.path.join(OUT, "118_folha_png.png"))
+    ok = in_set and os.path.exists(published) and pdf_out.page_count(published) == 1 and len(png) == 2 \
+        and len(svg) == 2 and os.path.exists(printed) and pdf_out.page_count(printed) == 2
+    check("conjuntos_publicar_png_svg_imprimir", ok, "conjunto={} ficheiros={} impressas={}".format(
+        in_set, files, pdf_out.page_count(printed) if os.path.exists(printed) else None))
+    import shutil
+    shutil.rmtree(folder, ignore_errors=True)          # (0.347: not left in the temporary folder)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def dxf_flow():
+    """0.129: a house with a door and its façades dimensioned, in its plan: File ▸ Export view as DXF… — a DXF
+    R12 file with the walls cut, the dimensions and their values (painted back from the file, to be looked at)."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0),
+                                                                   (10.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                                      catalog.BY_KEY["parede_alv_20"])
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 2.0, -1)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    win.act_dimension_facades.trigger()
+    pump(300)
+    path = os.path.join(tempfile.mkdtemp(prefix="arqsynth_dxf_"), "planta.dxf")
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+    win.act_dxf.trigger()
+    pump(600)
+    ok = os.path.exists(path)
+    text = open(path, encoding="cp1252").read() if ok else ""
+    rows = text.split("\n")
+    pairs = [(rows[k].strip(), rows[k + 1].strip()) for k in range(0, len(rows) - 1, 2)]
+    values = {v for c, v in pairs if c == "1"}
+    lines = []                                       # (the LINEs back from the file, painted)
+    current = {}
+    for c, v in pairs:
+        if c == "0":
+            if current.get("type") == "LINE" and {"10", "20", "11", "21"} <= set(current):
+                lines.append([float(current[k]) for k in ("10", "20", "11", "21")])
+            current = {"type": v}
+        elif c in ("10", "20", "11", "21"):
+            current[c] = v
+    if lines and not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        arr = np.array(lines)
+        lo, hi = arr.reshape(-1, 2).min(axis=0), arr.reshape(-1, 2).max(axis=0)
+        k = 900.0 / max(float((hi - lo).max()), 1e-6)
+        image = QtGui.QImage(1000, 700, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setPen(QtGui.QPen(QtGui.QColor("black"), 1.0))
+        for x0, y0, x1, y1 in arr:
+            painter.drawLine(QtCore.QPointF(50 + (x0 - lo[0]) * k, 650 - (y0 - lo[1]) * k),
+                             QtCore.QPointF(50 + (x1 - lo[0]) * k, 650 - (y1 - lo[1]) * k))
+        painter.end()
+        image.save(os.path.join(OUT, "119_dxf_linhas.png"))
+    ok = ok and text.startswith("0\nSECTION") and "AC1009" in text and "CORTE" in text and "10,20" in values \
+        and len(lines) > 20
+    check("exportar_dxf", ok, "ficheiro={} linhas={} textos={}".format(os.path.exists(path), len(lines),
+                                                                      sorted(values)[:6]))
+    import shutil
+    shutil.rmtree(os.path.dirname(path), ignore_errors=True)  # (0.347: not left in the temporary folder)
+
+
+def view_formats_flow():
+    """0.369 — (after dxf_flow: the house in its plan, its façades dimensioned) the view in SVG and in DWG, from the
+    same command (Home ▸ Export ▸ Export view): the SVG at the view's scale in millimetres, the walls cut filled, the
+    dimensions' values as texts (painted back, to be looked at: 369_vista_svg.png); typed without an extension with
+    the DWG type chosen, a DWG (AutoCAD 2018) by the ODA File Converter, read back: the cut walls' layer and the
+    dimensions there. The house is left as it was (title_templates_flow goes on with it)."""
+    import shutil
+    import tempfile
+    import xml.etree.ElementTree as ElementTree
+    from arqbim.core import dwg
+    from arqbim.ui import ribbon
+    from PySide6 import QtSvg
+    folder = tempfile.mkdtemp(prefix="arqsynth_vista_")
+    on_ribbon = "dxf" in ribbon.items_of("home") and "DWG" in win.act_dxf.text() and "SVG" in win.act_dxf.text()
+    steps = len(doc._undo)
+    svg_path = win.export_dxf(os.path.join(folder, "planta.svg"))
+    told_svg = "Vista exportada em SVG" in win.last_message and "1:" in win.last_message
+    root = ElementTree.parse(svg_path).getroot() if svg_path else None
+    tags = [e.tag.rsplit("}", 1)[-1] for e in root.iter()] if root is not None else []
+    texts = {(e.text or "").strip() for e in root.iter() if e.tag.endswith("text")} if root is not None else set()
+    drawn = sum(tags.count(k) for k in ("path", "polyline", "polygon", "line"))
+    width = root.get("width", "") if root is not None else ""
+    svg_ok = svg_path is not None and width.endswith("mm") and 100.0 < float(width[:-2] or 0) < 400.0 \
+        and drawn > 20 and "10,20" in texts and told_svg
+    if svg_ok and not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        renderer = QtSvg.QSvgRenderer(svg_path)
+        size = renderer.defaultSize().scaled(1000, 700, Qt.AspectRatioMode.KeepAspectRatio)
+        image = QtGui.QImage(size, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        renderer.render(painter)
+        painter.end()
+        image.save(os.path.join(OUT, "369_vista_svg.png"))
+    plain = os.path.join(folder, "planta")
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (plain, "Desenho DWG do AutoCAD (*.dwg)"))
+    win.act_dxf.trigger()
+    pump(600)
+    if dwg.converter() is None:
+        dwg_ok, detail = "ODA File Converter" in win.last_message, "conversor por instalar: recusado"
+    else:
+        made = plain + ".dwg"
+        head = open(made, "rb").read(6) if os.path.exists(made) else b""
+        back = open(dwg.to_dxf(made), encoding="cp1252", errors="replace").read() if head else ""
+        dwg_ok = head.startswith(b"AC10") and "CORTE" in back and "10,20" in back and \
+            "Vista exportada em DWG" in win.last_message
+        detail = "cabeçalho={} camada_corte={} cota={}".format(head, "CORTE" in back, "10,20" in back)
+    unchanged = len(doc._undo) == steps
+    shutil.rmtree(folder, ignore_errors=True)
+    check("vista_em_svg_e_dwg", on_ribbon and svg_ok and dwg_ok and unchanged,
+          "fita={} svg={} largura={} desenhados={} textos={} dwg={} {} balao={!r}".format(
+              on_ribbon, svg_ok, width, drawn, sorted(texts)[:6], dwg_ok, detail, win.last_message))
+
+
+def title_templates_flow():
+    """0.130: (after dxf_flow: a house) Sheets by storey with the side strip: a sheet whose title block is the
+    strip (painted as on paper, with a revision and a field of its own); the sheet's tab shows it, its
+    "Title block" list changed to compact."""
+    from arqbim.model import sheets as sheets_model
+    from arqbim.ui import pdf as pdf_out
+
+    def fill():
+        d = getattr(win, "_sheets_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.template.setCurrentIndex(d.template.findData("strip"))
+        d.accept()
+
+    before = len(doc.sheets)
+    win._sheets_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.act_sheets_by_storey.trigger()
+    pump(600)
+    made = doc.sheets[before:]
+    strip = bool(made) and made[0].template == "strip"
+    if made:
+        k = doc.sheets.index(made[0])
+        doc.set_title_block({"project": "Casa", sheets_model.EXTRA_KEY: [["Processo", "123/2026"]]}, k, None, None,
+                            [{"code": "A", "date": "23/10/2026", "text": "Licenciamento"}])
+        pump(300)
+        sheet = doc.sheets[k]
+        pages = win._sheet_pages([sheet])
+        image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pdf_out.paint_sheet(painter, 2.0, sheet.size(), pages[0][2], pages[0][1], template=sheet.template)
+        painter.end()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            image.save(os.path.join(OUT, "120_carimbo_faixa.png"))
+        win.open_sheet(k)
+        pump(600)
+        page = win.sheet_window if hasattr(win, "sheet_window") else None
+        if page is not None and hasattr(page, "template"):
+            page.template.setCurrentIndex(page.template.findData("compact"))
+            page.template.activated.emit(page.template.currentIndex())
+            pump(400)
+        shot("120b_folha_compacto.png")
+        compact = doc.sheets[k].template == "compact"
+    else:
+        compact = False
+    check("modelos_de_carimbo", strip and compact, "faixa={} compacto={}".format(strip, compact))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def own_schedules_flow():
+    """0.131: three walls (5, 3 and 8 m); Schedules ▸ New schedule… — "Paredes compridas": a formula column
+    (length × height), only those of 4 m or more, the longest first: 2 rows, 8 m first, its formula 22,40;
+    Ctrl+Z: gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0, 0, 0), (5, 0, 0)), ((0, 2, 0), (3, 2, 0)), ((0, 4, 0), (8, 4, 0))):
+        bim_actions.add_wall(doc, np.array(a, float), np.array(b, float), spec)
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("walls"))
+    pump(200)
+
+    def fill():
+        d = getattr(panel, "_editor", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.name.setText("Paredes compridas")
+        d.add_formula("Área bruta", "length * height")
+        d.add_filter("length", "≥", "4")
+        d.sort.setCurrentIndex(d.sort.findData("length"))
+        d.descending.setChecked(True)
+        d.accept()
+
+    panel._editor = None
+    QtCore.QTimer.singleShot(100, fill)
+    panel.new_def.click()
+    pump(400)
+    own = (panel.category.currentData() or "").startswith("def:")
+    rows = panel.table.rowCount()
+    text = panel.text()
+    first = panel.table.item(0, list(panel._columns).index("length")).text() if rows else ""
+    formula = panel.table.item(0, list(panel._columns).index("formula:0")).text() if rows else ""
+    shot("121_tabela_propria.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = doc.schedule_defs == []
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("tabelas_proprias", own and rows == 2 and first == "8,00 m" and formula == "22,40" and "Área bruta" in text
+          and undone, "propria={} linhas={} primeira={!r} formula={!r} desfeito={}".format(
+              own, rows, first, formula, undone))
+
+
+def schedule_on_sheet_flow():
+    """0.132: (after own_schedules_flow: the three walls) a schedule of the project's own; Schedules ▸ Put on a
+    sheet ▸ new sheet: a sheet with its table (painted as on paper), and the walls' schedule put on it too."""
+    from arqbim.model import schedules as schedules_model
+    from arqbim.ui import pdf as pdf_out
+    defn = schedules_model.ScheduleDef("Paredes", "walls", ["name", "length", "height"],
+                                       formulas=[("Área bruta", "length * height")])
+    doc.execute(schedules_model.SetScheduleDefs([], [defn], "Tabela"))
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("def:" + defn.uid))
+    pump(200)
+    before = len(doc.sheets)
+    panel.put_on(None)
+    pump(800)
+    made = len(doc.sheets) == before + 1
+    k = len(doc.sheets) - 1
+    if made:
+        win.schedules_panel.category.setCurrentIndex(panel.category.findData("walls"))
+        pump(200)
+        panel.put_on(k)
+        pump(800)
+    sheet = doc.sheets[k] if made else None
+    kinds = [(v.kind, v.ref) for v in sheet.views] if sheet is not None else []
+    if sheet is not None:
+        pages = win._sheet_pages([sheet])
+        image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pdf_out.paint_sheet(painter, 2.0, sheet.size(), pages[0][2], pages[0][1], template=sheet.template)
+        painter.end()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            image.save(os.path.join(OUT, "122_tabela_na_folha.png"))
+        placed = len(pages[0][1])
+    else:
+        placed = 0
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    check("tabela_na_folha", made and kinds == [("schedule", "def:" + defn.uid), ("schedule", "walls")]
+          and placed == 2, "folha={} vistas={} postas={}".format(made, kinds, placed))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def detail_views_flow():
+    """0.133: a house in its plan; the Detail view tool — two corners round its south-west corner: «Pormenor 1»
+    at 1:20, its callout in the plan; a double click on its bubble: that piece fills the view; put on a new sheet
+    (painted as on paper)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0),
+                                                                   (10.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                                      catalog.BY_KEY["parede_alv_20"])
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 0.6, -1)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["detail"].trigger()
+    pump(100)
+    level = vp.cut_level()
+    for p in ((-1.2, -1.3), (2.2, 1.6)):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(200)
+    made = len(doc.details) == 1
+    uid = doc.details[0].uid if made else None
+    heads = [h for h in vp._mark_heads if h[2] == ("detail", uid)]
+    win.set_tool("select")
+    pump(100)
+    zoomed = False
+    if heads:
+        before = vp.ortho_height()
+        centre = heads[0][0]
+        move(vp.project(centre), 4)
+        pump(100)
+        click()
+        pump(150)
+        click()
+        pump(500)
+        zoomed = vp.ortho_height() < before * 0.6
+    shot("123_pormenor_chamada.png")
+    placed = 0
+    if made:
+        win.sheet_action("put", None, "detail", uid)
+        pump(800)
+        sheet = doc.sheets[-1]
+        pages = win._sheet_pages([sheet])
+        placed = len(pages[0][1])
+        image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pdf_out.paint_sheet(painter, 2.0, sheet.size(), pages[0][2], pages[0][1], template=sheet.template)
+        painter.end()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            image.save(os.path.join(OUT, "123b_pormenor_folha.png"))
+    check("vistas_de_pormenor", made and bool(heads) and zoomed and placed == 1,
+          "feito={} chamada={} aproximou={} na_folha={}".format(made, bool(heads), zoomed, placed))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def view3d_on_sheet_flow():
+    """0.134: a house with a door and a roof-less storey; the 3D view put on a new sheet (Project panel ▸ 3D view
+    ▸ Put on a sheet ▸ new sheet): drawn in lines from the south-west (painted as on paper)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0),
+                                                                   (10.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                                      catalog.BY_KEY["parede_alv_20"])
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 2.0, -1)
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"], frame, frame.x0 + 6.0, -1)
+    pump(300)
+    win.sheet_action("put", None, "3d", "")
+    pump(1200)
+    sheet = doc.sheets[-1] if doc.sheets else None
+    ok = sheet is not None and [(v.kind, v.ref) for v in sheet.views] == [("3d", "")]
+    lines = 0
+    if ok:
+        pages = win._sheet_pages([sheet])
+        placed = pages[0][1]
+        lines = len(placed[0][0].lines) if placed else 0
+        image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pdf_out.paint_sheet(painter, 2.0, sheet.size(), pages[0][2], placed, template=sheet.template)
+        painter.end()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            image.save(os.path.join(OUT, "124_vista_3d_folha.png"))
+    check("vista_3d_na_folha", ok and lines > 20, "folha={} linhas={}".format(ok, lines))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+
+
+def duct_in_plan_flow():
+    """0.135 — the owner's test (2026-10-22: «testei o duto, mas ele não apareceu»): in a plan, the Duct tool,
+    two clicks: the duct is made 2,50 m up, above the 1,20 m cut — and now it is there, its outline dashed; a click
+    on that outline selects it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["duct"].trigger()
+    pump(100)
+    level = vp.cut_level()
+    for p in ((2.0, 3.0), (8.0, 3.0)):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(300)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    ducts = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcDuctSegment"]
+    shown = bool(ducts) and any(g == ducts[0] for g, _p in vp._above_shapes)
+    win.set_tool("select")
+    pump(100)
+    move(near((5.0, 3.0 + 0.15, level)), 4)
+    pump(100)
+    click()
+    pump(300)
+    picked = bool(ducts) and vp.selection == {ducts[0]}
+    shot("125_conduta_na_planta.png")
+    check("conduta_na_planta", len(ducts) == 1 and shown and picked,
+          "condutas={} tracejada={} selecionada={}".format(len(ducts), shown, picked))
+
+
+def drainage_flow():
+    """0.136 — water and drainage, with the Pipe tool in a plan: Ø100 at 1 %, two clicks (it falls 4 cm; "1 %"
+    on the plan); the axis height changed while drawing makes a riser (two bends), and it goes on up there; a
+    stack (one click, vertical); a click on its foot goes on from it, at its height — the collector, joined by a
+    bend."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("type", "tubo_100")
+    tool.set_option("slope", 0.01)
+    pump(100)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    def pipes():
+        return [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcPipeSegment"]
+
+    at(2.0, 3.0)
+    at(6.0, 3.0)
+    first = pipes()
+    falls = len(first) == 1 and abs(doc.ifc.describe(first[0])["params"]["slope"] - 0.01) < 1e-6 and \
+        abs(doc.ifc.describe(first[0])["params"]["z"] - 0.30) < 1e-6
+    labelled = len(drawings.slope_labels(doc, doc.active_storey)) == 1
+    tool.set_option("slope", 0.0)
+    tool.set_option("top", 1.00)                     # (while drawing: a riser there)
+    pump(200)
+    at(6.0, 5.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    run = pipes()
+    up = [g for g in run if doc.ifc.describe(g)["params"].get("vertical")]
+    on_top = [g for g in run if abs(doc.ifc.describe(g)["params"]["z"] - 1.0) < 1e-6 and g not in up]
+    riser = len(run) == 3 and len(up) == 1 and len(on_top) == 1 and doc.ifc.count("IfcPipeFitting") == 2
+    tool.set_option("form", "stack")
+    pump(100)
+    at(8.0, 1.5)
+    stacks = [g for g in pipes() if g not in run]
+    stack = stacks[0] if len(stacks) == 1 else None
+    p = doc.ifc.describe(stack)["params"] if stack else {}
+    vertical = bool(p.get("vertical")) and abs(p["z"] - 2.80) < 1e-6 and abs(p["end_z"] + 0.30) < 1e-6
+    tool.set_option("form", "run")
+    tool.set_option("slope", 0.02)
+    pump(100)
+    at(8.02, 1.5)                                    # (on its foot, from above: it goes on from it, at -0,30)
+    at(8.0, 4.5)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    collector = [g for g in pipes() if g not in run and g != stack]
+    joined = len(collector) == 1 and doc.ifc.count("IfcPipeFitting") == 3 and \
+        doc.ifc.connected(doc.ifc.ports(stack)[1]) is not None and \
+        abs(doc.ifc.describe(collector[0])["params"]["z"] + 0.30) < 0.01
+    win.set_tool("select")
+    pump(100)
+    shot("126_esgoto.png")
+    check("esgoto", falls and labelled and riser and vertical and joined,
+          "inclinado={} legenda={} subida={} queda={} coletor={}".format(falls, labelled, riser, vertical, joined))
+
+
+def tees_flow():
+    """0.137 — branches and the collector, with the Pipe tool in a plan: a Ø100 collector at 1 %; a Ø50 branch
+    drawn to its middle ends there with a tee (the run ends); another started on its middle (a tee there too);
+    a run whose type changes to Ø50 while drawing gets a reducer."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    import ifcopenshell.util.element as ue
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("type", "tubo_100")
+    tool.set_option("slope", 0.01)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    def fittings(kind):
+        return [e for e in doc.ifc.file.by_type("IfcPipeFitting") if ue.get_predefined_type(e) == kind]
+
+    at(1.0, 3.0)
+    at(9.0, 3.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    tool.set_option("type", "tubo_50")
+    tool.set_option("slope", 0.02)
+    at(4.0, 5.5)
+    at(4.0, 3.0)                                     # (on the collector's axis: a tee, the run ends)
+    ended = tool._start is None
+    first = len(fittings("JUNCTION")) == 1 and len(doc.ifc.file.by_type("IfcPipeSegment")) == 3
+    tool.set_option("slope", 0.0)
+    at(7.0, 3.0)                                     # (starts on it: a tee there)
+    at(7.0, 5.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    second = len(fittings("JUNCTION")) == 2
+    tool.set_option("type", "tubo_100")
+    at(1.0, 1.0)
+    at(4.0, 1.0)
+    tool.set_option("type", "tubo_50")               # (another size while drawing: a reducer)
+    pump(100)
+    at(7.0, 1.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    reducer = len(fittings("TRANSITION")) == 1
+    connected = all(doc.ifc.connected(p) is not None for e in fittings("JUNCTION") for p in doc.ifc.ports(e.GlobalId))
+    win.set_tool("select")
+    pump(100)
+    shot("127_tes_e_reducoes.png")
+    check("tes_e_reducoes", ended and first and second and reducer and connected,
+          "fim={} te1={} te2={} reducao={} ligados={}".format(ended, first, second, reducer, connected))
+
+
+def pipe_drop_flow():
+    """0.195 — A branch drawn at another height to a pipe: the Pipe tool, a Ø100 pipe at 0,50 m; then at 2,50 m a
+    Ø50 run drawn over its middle — it stays at 2,50 m up to over it, goes straight down to it (a vertical piece, a
+    bend at its top) and is joined by a tee; the run ends; one undo step takes it all back."""
+    from arqbim.model import bim as bim_actions  # noqa: F401
+    import ifcopenshell.util.element as ue
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.set_view("top", center=(5.0, 3.0, 0.0), radius=6.0)
+    pump(300)
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("type", "tubo_100")
+    tool.set_option("slope", 0.0)
+    tool.top = 0.5
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    at(1.0, 3.0)
+    at(9.0, 3.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    steps = len(doc._undo)
+    tool.set_option("type", "tubo_50")
+    tool.top = 2.5
+    at(4.0, 5.5)
+    move(near((4.0, 3.0, level)), 4)
+    pump(150)
+    tip = vp.tip_text if hasattr(vp, "tip_text") else ""
+    click()
+    pump(400)
+    segments = doc.ifc.file.by_type("IfcPipeSegment")
+    upright = []
+    for e in segments:
+        s, end, _z = doc.ifc.segment_params(e.GlobalId)
+        if np.linalg.norm((end - s)[:2]) < 1e-6 and abs(end[2] - s[2]) > 1.0:
+            upright.append((float(min(s[2], end[2])), float(max(s[2], end[2]))))
+    tees = [e for e in doc.ifc.file.by_type("IfcPipeFitting") if ue.get_predefined_type(e) == "JUNCTION"]
+    dropped = len(upright) == 1 and upright[0][0] < 0.6 and upright[0][1] > 2.3 and len(tees) == 1
+    ended = tool._start is None
+    one_step = len(doc._undo) == steps + 1
+    connected = all(doc.ifc.connected(p) is not None for e in tees for p in doc.ifc.ports(e.GlobalId))
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("195_ramal_desce.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = len(doc.ifc.file.by_type("IfcPipeSegment")) == 1 and not doc.ifc.file.by_type("IfcPipeFitting")
+    check("ramal_desce_ao_tubo", dropped and ended and one_step and connected and back,
+          "desce={} fim={} um_passo={} ligado={} desfeito={} ({} {})".format(
+              dropped, ended, one_step, connected, back, upright, tip))
+
+
+def air_terminals_flow():
+    """0.138 — HVAC in a plan: the Grille / diffuser tool puts a 60 × 60 diffuser and a return grille (one click
+    each); the Duct tool, round Ø200 at 3,00 m: drawn to the diffuser, it comes down to it and is connected (the run
+    ends); started on the grille, it rises from it and goes on."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["air_terminal"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "diffuser_60")
+    at(3.0, 3.0)
+    win.tool.set_option("kind", "grille_60x30")
+    at(7.0, 3.0)
+    terminals = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcAirTerminal"]
+    placed = len(terminals) == 2
+    diffuser, grille = (sorted(terminals, key=lambda g: doc.ifc.terminal_params(g)["port"][0]) + [None, None])[:2]
+    win.tool_actions["duct"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("type", "conduta_d200")
+    tool.set_option("top", 3.00)
+    at(1.0, 3.0)
+    at(3.0, 3.0)                                     # (over the diffuser: down to it, the run ends)
+    down = placed and doc.ifc.free_port(diffuser) is None and tool._start is None
+    at(7.0, 3.0)                                     # (on the grille: up from it)
+    at(9.0, 3.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    up = placed and doc.ifc.free_port(grille) is None
+    ducts = len(doc.ifc.file.by_type("IfcDuctSegment"))
+    win.set_tool("select")
+    pump(100)
+    shot("128_difusores.png")
+    check("difusores", placed and down and up and ducts == 4,
+          "terminais={} desce={} sobe={} condutas={}".format(placed, down, up, ducts))
+
+
+def hvac_units_flow():
+    """0.139 — HVAC units in a plan: the HVAC unit tool puts a ducted unit (one click, its base at 2,60 m) and,
+    turned with R, an AHU; the Duct tool: started on the unit's supply it goes out level at its height; drawn to
+    the AHU's top it comes down to it; both connected."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), (12.0, 8.0, 0.0),
+                                                           (0.0, 8.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["equipment"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "ducted_unit")
+    at(3.0, 4.0)
+    win.tool.set_option("kind", "ahu")
+    key(Qt.Key.Key_R)                               # (turned 90°)
+    pump(100)
+    at(9.0, 4.0)
+    units = sorted((o.id for o in objects() if o.is_bim and o.ifc_class == "IfcUnitaryEquipment"),
+                   key=lambda g: doc.ifc.equipment_params(g)["base"][0])
+    placed = len(units) == 2 and abs(doc.ifc.equipment_params(units[1])["angle"] - 90.0) < 1e-6
+    unit, ahu = (units + [None, None])[:2]
+    supply = next((p for p in doc.ifc.ports(unit) if p.Name == "supply"), None) if unit else None
+    out = doc.ifc._placement_si(supply)[:3, 3] if supply is not None else np.zeros(3)
+    win.tool_actions["duct"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("type", "conduta_30x20")
+    tool.set_option("top", 2.90)
+    at(float(out[0]) + 0.05, float(out[1]))         # (on its supply: from it, level, at its height)
+    at(6.0, float(out[1]))
+    level_out = tool._z is not None and abs(tool._z - float(out[2])) < 1e-6
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    ahu_supply = next((p for p in doc.ifc.ports(ahu) if p.Name == "supply"), None) if ahu else None
+    top = doc.ifc._placement_si(ahu_supply)[:3, 3] if ahu_supply is not None else np.zeros(3)
+    at(9.0, 7.0)
+    at(float(top[0]), float(top[1]))                # (over the AHU's supply: down to it)
+    joined = supply is not None and doc.ifc.connected(supply) is not None and ahu_supply is not None and \
+        doc.ifc.connected(ahu_supply) is not None
+    win.set_tool("select")
+    pump(100)
+    shot("129_equipamentos.png")
+    check("equipamentos_avac", placed and level_out and joined,
+          "postos={} nivelada={} ligadas={}".format(placed, level_out, joined))
+
+
+def branch_obstacle_flow():
+    """0.199 — A branch round a column: a cold water pipe, a column, a WC behind it; the WC selected, "Ligar à rede":
+    its cold water branch connected, none of its pipes through the column, square bends round it."""
+    import ifcopenshell.util.element as ue
+    from arqbim.core import routing
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_segment(doc, np.array((0.0, -1.5)), np.array((6.0, -1.5)), catalog.BY_KEY["tubo_25"], 0.40,
+                            storey=doc.active_storey, system="cold")
+    bim_actions.add_column(doc, np.array((2.0, -0.8, 0.0)), catalog.BY_KEY["pilar_30"], height=3.0)
+    wc = bim_actions.add_fixture(doc, (2.0, 0.1), "wc", 0.0)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    vp.set_selection({wc})
+    pump(150)
+    win.act_connect_network.trigger()
+    pump(400)
+    cold = next(p for p in doc.ifc.ports(wc) if p.Name == "cold")
+    joined = doc.ifc.connected(cold) is not None
+    column = [np.array(((1.85, -0.95), (2.15, -0.95), (2.15, -0.65), (1.85, -0.65)))]
+    through = [e.Name for e in doc.ifc.file.by_type("IfcPipeSegment")
+               if routing.blocked(*doc.ifc.segment_params(e.GlobalId)[:2], column)]
+    bends = sum(1 for e in doc.ifc.file.by_type("IfcPipeFitting") if ue.get_predefined_type(e) == "BEND")
+    vp.set_selection(set())
+    shot("199_ramal_contorna_pilar.png")
+    check("ramal_contorna_pilar", joined and not through and bends >= 4,
+          "ligado={} atravessam={} curvas={}".format(joined, through, bends))
+
+
+def wye_flow():
+    """0.200 — Wyes on the drains: a sewage collector falling to +x, a WC; the WC selected, "Ligar à rede": its drain
+    meets the collector at 45° downstream, by a «Forquilha»; selected, Properties names it."""
+    import ifcopenshell.util.element as ue
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_segment(doc, np.array((0.0, -0.6)), np.array((6.0, -0.6)), catalog.BY_KEY["tubo_100"], -0.30,
+                            storey=doc.active_storey, end_z=-0.36, system="sewage")
+    wc = bim_actions.add_fixture(doc, (2.0, 0.1), "wc", 0.0)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    vp.set_selection({wc})
+    pump(150)
+    win.act_connect_network.trigger()
+    pump(400)
+    wye = next((e for e in doc.ifc.file.by_type("IfcPipeFitting")
+                if ue.get_predefined_type(e) == "JUNCTION" and e.Name.startswith("Forquilha")), None)
+    x = float(doc.ifc.placement(wye.GlobalId)[0, 3]) if wye is not None else None
+    named = False
+    if wye is not None:
+        vp.set_selection({wye.GlobalId})
+        pump(300)
+        named = "Forquilha" in win.props.text()
+    shot("200_forquilha.png")
+    vp.set_selection(set())
+    check("forquilha_45", wye is not None and x is not None and x > 2.15 and named,
+          "forquilha={} x={} painel={}".format(wye.Name if wye is not None else None, x, named))
+
+
+def slope_paper_flow():
+    """0.201 — Slope colours on paper: a terrain with a hill; in its plan, View ▸ Terrain slopes: the plan's own
+    property (Properties ticks it), its drawing has the colours by band, painted on paper with the legend, to PDF;
+    the 3D view has its own (off), the plan keeps them when opened again."""
+    import tempfile
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    points = [(x, y, 0.1 * x + 0.05 * y) for x in (0.0, 10.0, 20.0, 30.0) for y in (0.0, 10.0, 20.0)]
+    bim_actions.add_terrain(doc, points + [(15.0, 10.0, 6.0)])
+    storey = doc.active_storey
+    doc.set_view_props(("plan", storey), cut_height=5.0)
+    win.open_view("plan", storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.set_show_slopes(True)
+    pump(400)
+    own = doc.view_settings(("plan", storey)).slopes and vp.show_slopes and win.act_slopes.isChecked()
+    vp.set_selection(set())
+    pump(200)
+    box = win.props.editors.get("view_slopes")
+    ticked = box is not None and box.isChecked()
+    paper = drawings.plan(doc, storey, "Planta")
+    bands = [b for b, _p in paper.slope_fills]
+    image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    pdf_out.paint_drawing(painter, paper, 200, (210.0, 148.0), 2.0, "Planta")
+    painter.end()
+    coloured = 0
+    for x in range(0, 840, 4):
+        for y in range(0, 594, 4):
+            c = image.pixelColor(x, y)
+            coloured += max(c.red(), c.green(), c.blue()) - min(c.red(), c.green(), c.blue()) > 30
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "201b_inclinacoes_papel.png"))
+    out = os.path.join(tempfile.gettempdir(), "arqsynth_inclinacoes.pdf")
+    pdf_out.write(out, paper, win.title_block(title=paper.title), "teste")
+    printed = os.path.getsize(out) > 1000 and pdf_out.page_count(out) == 1
+    shot("201_inclinacoes_planta.png")
+    win.open_view("3d", None)
+    pump(300)
+    three_d = not vp.show_slopes
+    win.open_view("plan", storey)
+    pump(300)
+    again = vp.show_slopes
+    check("inclinacoes_no_papel", own and ticked and len(bands) > 1 and coloured > 300 and printed and three_d and again,
+          "propria={} painel={} faixas={} pintado={} pdf={} 3d_desligado={} planta_outra_vez={}".format(
+              own, ticked, bands, coloured, printed, three_d, again))
+
+
+def contour_labels_flow():
+    """0.202 — The major contour lines' heights: a terrain with a hill (0 to 8 m); on screen the major ones' heights
+    («5») over them; its plan on paper with them along the lines (painted, no error)."""
+    import pygfx as gfx
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    points = [(x, y, 0.1 * x + 0.05 * y) for x in (0.0, 10.0, 20.0, 30.0) for y in (0.0, 10.0, 20.0)]
+    guid = bim_actions.add_terrain(doc, points + [(15.0, 10.0, 8.0)])
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    words = sorted({w for _p, w in vp.terrain_labels(doc.get(guid))})
+    shown = sum(isinstance(w, gfx.Text) for w in vp._contour_objects)
+    shot("202_curvas_mestras_3d.png")
+    storey = doc.active_storey
+    doc.set_view_props(("plan", storey), cut_height=10.0)
+    paper = drawings.plan(doc, storey, "Planta")
+    majors = [h for _s, major, h in paper.contours if major]
+    image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 200, (210.0, 148.0), 2.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "202b_curvas_mestras_papel.png"))
+    check("curvas_mestras_cotadas", "5" in words and shown >= 1 and 5.0 in [round(h, 3) for h in majors],
+          "textos={} no_ecra={} mestras_no_papel={}".format(words, shown, majors))
+
+
+def batters_flow():
+    """0.203 — A platform's slopes in plan: a terrain rising to the east and a platform half in it; its plan shows
+    where the slopes meet the ground and their ticks (on screen and on paper)."""
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    points = [(x, y, 0.1 * x + 0.05 * y) for x in (0.0, 10.0, 20.0, 30.0) for y in (0.0, 10.0, 20.0)]
+    guid = bim_actions.add_terrain(doc, points)
+    bim_actions.add_platform(doc, guid, [(12.0, 8.0), (18.0, 8.0), (18.0, 12.0), (12.0, 12.0)], 2.0)
+    storey = doc.active_storey
+    doc.set_view_props(("plan", storey), cut_height=5.0)
+    win.open_view("plan", storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    on_screen = sum(len(s) for s in vp.terrain_batters(doc.get(guid)))
+    shot("203_taludes_planta.png")
+    paper = drawings.plan(doc, storey, "Planta")
+    image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf_out.paint_drawing(painter, paper, 100, (210.0, 148.0), 2.0, "Planta")
+    painter.end()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        image.save(os.path.join(OUT, "203b_taludes_papel.png"))
+    check("taludes_na_planta", on_screen > 10 and len(paper.batters) > 10,
+          "no_ecra={} no_papel={}".format(on_screen, len(paper.batters)))
+
+
+def edit_platform_flow():
+    """0.204 — Edit a platform: a terrain with a platform, selected; "Editar plataforma" on the contextual bar: its
+    four corners as grips; one corner picked and put 3 m east: the platform's outline changed, the ground flat there;
+    Esc: Select."""
+    from arqbim.core import terrain as terrain_geo
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    points = [(x, y, 0.1 * x + 0.05 * y) for x in (0.0, 10.0, 20.0, 30.0) for y in (0.0, 10.0, 20.0)]
+    guid = bim_actions.add_terrain(doc, points)
+    bim_actions.add_platform(doc, guid, [(12.0, 8.0), (18.0, 8.0), (18.0, 12.0), (12.0, 12.0)], 2.0)
+    storey = doc.active_storey
+    doc.set_view_props(("plan", storey), cut_height=5.0)
+    win.open_view("plan", storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    vp.set_selection({guid})
+    win._refresh_context_bar()
+    offered = win.act_edit_platform in win._selection_actions(win._categories({guid}, set()))
+    win.act_edit_platform.trigger()
+    pump(300)
+    editing = win.tool.name == "platform_outline" and len(vp.grips[0]) == 4
+    move(near((18.0, 12.0, 2.0)), 3)
+    press()                                               # (0.382: dragged)
+    move(near((21.0, 12.0, 2.0)), 4)
+    pump(60)
+    release()
+    pump(600)
+    outline = doc.ifc.terrain_platforms(guid)[0].outline
+    moved = any(abs(x - 21.0) < 0.2 and abs(y - 12.0) < 0.2 for x, y in outline)
+    verts, tris = doc.ifc.terrain_surface(guid)
+    flat = abs(terrain_geo.height_at(verts, tris, (19.0, 11.0)) - 2.0) < 1e-3
+    shot("204_editar_plataforma.png")
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    back = win.tool.name == "select"
+    check("editar_plataforma", offered and editing and moved and flat and back,
+          "oferecido={} a_editar={} contorno={} plano={} esc={}".format(offered, editing, outline, flat, back))
+
+
+def terrain_ramp_flow():
+    """0.205 — An access ramp: a terrain with two platforms (at 1,0 and 3,0 m); the Access ramp tool, width 3 m:
+    a click on the first platform's edge, the hint telling its heights and slope, a click on the other's: the ramp
+    made, from 1,00 to 3,00, the ground at 2,00 half way."""
+    from arqbim.core import terrain as terrain_geo
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    points = [(x, y, 0.1 * x + 0.05 * y) for x in (0.0, 10.0, 20.0, 30.0) for y in (0.0, 10.0, 20.0)]
+    guid = bim_actions.add_terrain(doc, points)
+    bim_actions.add_platform(doc, guid, [(2.0, 8.0), (8.0, 8.0), (8.0, 12.0), (2.0, 12.0)], 1.0)
+    bim_actions.add_platform(doc, guid, [(20.0, 8.0), (26.0, 8.0), (26.0, 12.0), (20.0, 12.0)], 3.0)
+    storey = doc.active_storey
+    doc.set_view_props(("plan", storey), cut_height=5.0)
+    win.open_view("plan", storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.tool_actions["terrain_ramp"].trigger()
+    pump(200)
+    win.tool.set_option("width", 3.0)
+    move(near((8.0, 10.0, 1.0)), 3)
+    click()
+    move(near((20.0, 10.0, 3.0)), 4)
+    pump(100)
+    told = "%" in win.tool.hint()
+    click()
+    pump(800)
+    plats = doc.ifc.terrain_platforms(guid)
+    ramp = plats[-1] if len(plats) == 3 and plats[-1].is_ramp() else None
+    ends = ramp is not None and abs(ramp.z - 1.0) < 0.05 and abs(ramp.z_end - 3.0) < 0.05
+    verts, tris = doc.ifc.terrain_surface(guid)
+    middle = terrain_geo.height_at(verts, tris, (14.0, 10.0))
+    shot("205_rampa_de_acesso.png")
+    win.set_tool("select")
+    check("rampa_de_acesso", told and ends and middle is not None and abs(middle - 2.0) < 0.05,
+          "dita={} pontas={} meio={}".format(told, (ramp.z, ramp.z_end) if ramp else None, middle))
+
+
+def appliance_network_flow():
+    """0.198 — Appliances' gas and power: a gas pipe and a gas hob; the hob selected, "Ligar à rede": its branch to the
+    gas pipe, connected; an oven selected, "Novo circuito com a seleção": an appliance circuit of 3500 W."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_segment(doc, np.array((0.0, 0.6)), np.array((6.0, 0.6)), catalog.BY_KEY["gas_cobre_22"], 0.4,
+                            storey=doc.active_storey, system="gas")
+    hob = bim_actions.add_appliance(doc, np.array((2.0, 0.0, 0.0)), "gas_hob", 180.0)
+    oven = bim_actions.add_appliance(doc, np.array((4.0, 3.0, 0.0)), "oven", 0.0)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    vp.set_selection({hob})
+    pump(150)
+    win.act_connect_network.trigger()
+    pump(400)
+    gas = doc.ifc.connected(doc.ifc.ports(hob)[0]) is not None
+    vp.set_selection({oven})
+    pump(150)
+    win.new_circuit()
+    pump(400)
+    circuits = doc.ifc.circuits()
+    report = doc.ifc.circuit_report(circuits[0][0]) if circuits else {}
+    power = report.get("kind") == "appliance" and report.get("power") == 3500.0
+    vp.set_selection(set())
+    shot("198_gas_e_circuito.png")
+    check("aparelhos_gas_e_eletricidade", gas and power, "gas_ligado={} circuito={}".format(gas, report.get("power")))
+
+
+def duct_s_flow():
+    """0.197 — A duct to a unit's side port with little height between: a ducted unit (its return at 2,735 m); the
+    Duct tool at 3,00 m drawn to the unit's return side — along, down at 45° (an S), in to the port, connected."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), (12.0, 8.0, 0.0),
+                                                           (0.0, 8.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    unit = bim_actions.add_equipment(doc, (7.0, 4.0), "ducted_unit")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+    ret = next(p for p in doc.ifc.ports(unit) if p.Name == "return")
+    at3 = doc.ifc._placement_si(ret)[:3, 3]
+    win.tool_actions["duct"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("type", "conduta_30x20")
+    tool.set_option("top", 3.0)
+    for p in ((2.0, float(at3[1])), (float(at3[0]) + 0.1, float(at3[1]))):
+        move(near((p[0], p[1], level)), 4)
+        pump(100)
+        click()
+        pump(300)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    sloped = 0
+    for e in doc.ifc.file.by_type("IfcDuctSegment"):
+        s, end, _z = doc.ifc.segment_params(e.GlobalId)
+        run, rise = float(np.linalg.norm((end - s)[:2])), float(end[2] - s[2])
+        if run > 1e-6 and abs(rise) > 1e-6 and abs(abs(rise) - run) < 1e-6:
+            sloped += 1
+    joined = doc.ifc.connected(ret) is not None
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("197_conduta_em_s.png")
+    check("conduta_em_s", sloped == 1 and joined, "inclinado={} ligada={}".format(sloped, joined))
+
+
+def refrigerant_flow():
+    """0.196 — A split system's refrigerant line: the HVAC unit tool puts a wall split and an outdoor unit; the
+    Pipe tool, copper 1/4", system "Refrigerante — líquido": started on the split (on its liquid port: the line takes
+    its system), drawn to the outdoor unit — ends on its liquid port; both connected, the gas ports free."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), (12.0, 8.0, 0.0),
+                                                           (0.0, 8.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["equipment"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "split_wall")
+    at(3.0, 4.0)
+    win.tool.set_option("kind", "outdoor_unit")
+    at(9.0, 4.0)
+    units = sorted((o.id for o in objects() if o.is_bim and o.ifc_class == "IfcUnitaryEquipment"),
+                   key=lambda g: doc.ifc.equipment_params(g)["base"][0])
+    indoor, outdoor = (units + [None, None])[:2]
+    port = lambda unit, name: next((p for p in doc.ifc.ports(unit) if p.Name == name), None) if unit else None  # noqa
+    liquid_in, liquid_out, gas_out = port(indoor, "liquid"), port(outdoor, "liquid"), port(outdoor, "gas")
+    start = doc.ifc._placement_si(liquid_in)[:3, 3] if liquid_in is not None else np.zeros(3)
+    end = doc.ifc._placement_si(liquid_out)[:3, 3] if liquid_out is not None else np.zeros(3)
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("type", "cobre_14")
+    tool.set_option("slope", 0.0)
+    tool.set_option("system", "refrigerant_liquid")
+    at(float(start[0]), float(start[1]))            # (on the split: from its liquid port)
+    took = tool.system == "refrigerant_liquid"
+    at(float(end[0]) - 0.03, float(end[1]))         # (on the outdoor unit: to its liquid port)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    joined = liquid_in is not None and doc.ifc.connected(liquid_in) is not None and liquid_out is not None and \
+        doc.ifc.connected(liquid_out) is not None and gas_out is not None and doc.ifc.connected(gas_out) is None
+    pipes = [e.GlobalId for e in doc.ifc.file.by_type("IfcPipeSegment")]
+    system = bool(pipes) and all(doc.ifc.system_of(g) == "refrigerant_liquid" for g in pipes)
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("196_linha_de_refrigerante.png")
+    check("linha_de_refrigerante", len(units) == 2 and took and joined and system,
+          "unidades={} sistema_tomado={} ligada={} sistema={}".format(len(units), took, joined, system))
+
+
+def fixtures_flow():
+    """0.140 — sanitary fixtures in a plan: the Sanitary fixture tool over a wall's inner face puts a WC with its
+    back against it, facing the room, and a washbasin beside it; their free zones are drawn dashed; the Pipe tool
+    started on the WC's drain goes out from it at its height (connected)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["fixture"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "wc")
+    at(2.0, 0.05)                                    # (over the wall's inner half: against its inner face)
+    win.tool.set_option("kind", "basin")
+    at(3.5, 0.05)
+    fixtures = sorted((o.id for o in objects() if o.is_bim and o.ifc_class == "IfcSanitaryTerminal"),
+                      key=lambda g: doc.ifc.fixture_params(g)["back"][0])
+    wc = fixtures[0] if fixtures else None
+    p = doc.ifc.fixture_params(wc) if wc else {"back": np.zeros(3), "angle": -1.0}
+    against = len(fixtures) == 2 and abs(float(p["back"][1]) - 0.1) < 1e-6 and abs(p["angle"]) < 1e-6
+    zones = len(drawings.free_zones(doc, doc.active_storey)) == 2
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("type", "tubo_100")
+    tool.set_option("system", "sewage")              # (0.141: a drain — its outlet is the one taken)
+    tool.set_option("slope", 0.0)
+    at(2.0, 0.25)                                    # (on the WC: from its drain, at its height)
+    started = tool._z is not None and abs(tool._z - 0.18) < 1e-6
+    at(2.0, -0.6)
+    at(5.0, -0.6)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    drain = next((q for q in doc.ifc.ports(wc) if q.Name == "drain"), None) if wc else None
+    joined = drain is not None and doc.ifc.connected(drain) is not None
+    win.set_tool("select")
+    pump(100)
+    shot("130_loucas.png")
+    check("loucas", against and zones and started and joined,
+          "encostada={} zonas={} comeca={} ligada={}".format(against, zones, started, joined))
+
+
+def systems_flow():
+    """0.141 — systems: the Pipe tool in Sewage (it then falls 2 %) draws a pipe in that system, in its colour;
+    the Properties panel puts its whole run into Waste water; started on a WC's drain the run takes the WC's
+    system (Sewage)."""
+    from arqbim.ifc import catalog
+    from arqbim.ifc.systems import SYSTEMS
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 5.0, 0.0),
+                                                           (0.0, 5.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("form", "run")
+    tool.set_option("slope", 0.0)
+    tool.set_option("system", "sewage")
+    falls = abs(tool.slope - 0.02) < 1e-9
+    at(1.0, 2.5)
+    at(4.0, 2.5)
+    at(4.0, 4.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    pipes = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcPipeSegment"]
+    bends = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcPipeFitting"]
+    inside = len(pipes) == 2 and all(doc.system_of(g) == "sewage" for g in pipes + bends)
+    coloured = bool(pipes) and vp._system_colour(doc.get(pipes[0])) == SYSTEMS["sewage"][3]
+    win.set_tool("select")
+    pump(100)
+    vp.set_selection({pipes[0]} if pipes else set())
+    pump(300)
+    combo = win.props.editors.get("system")
+    if combo is not None:
+        k = combo.findData("waste")
+        combo.setCurrentIndex(k)
+        combo.activated.emit(k)
+        pump(400)
+    moved = bool(pipes) and all(doc.system_of(g) == "waste" for g in pipes + bends)
+    vp.set_selection(set())
+    wc = bim_actions.add_fixture(doc, (6.0, 0.1), "wc", 0.0)
+    pump(300)
+    win.tool_actions["pipe"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("system", "cold")
+    at(6.0, 0.25)                                    # (in cold water, on the WC: its cold water inlet)
+    cold_inlet = tool.system == "cold" and tool._z is not None and abs(tool._z - 0.65) < 1e-6
+    tool.cancel()                                    # (as Esc: the keys go to the Properties panel's list now)
+    pump(100)
+    tool.set_option("system", "waste")
+    pump(100)
+    at(6.0, 0.25)                                    # (in a drain system: its drain, and its system — sewage)
+    adopted = tool.system == "sewage" and tool._z is not None and abs(tool._z - 0.18) < 1e-6 and cold_inlet
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    win.set_tool("select")
+    pump(100)
+    shot("131_sistemas.png")
+    connected = connect_network_check()
+    check("sistemas", falls and inside and coloured and combo is not None and moved and adopted,
+          "desce={} no_sistema={} cor={} propriedades={} adota={}".format(falls, inside, coloured, moved, adopted))
+    check("ligar_a_rede", connected[0], connected[1])
+
+
+def electrical_flow():
+    """0.143 — electrical points in a plan: the Electrical point tool over a wall's inner face puts an outlet (at
+    0,30 m) and, chosen on the bar, a switch (at 1,10 m) and the board; each against the wall, with its cable's
+    port; their symbols on the plan."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["electrical"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("kind", "outlet")
+    at(1.5, 0.05)
+    tool.set_option("kind", "switch")
+    at(3.0, 0.05)
+    tool.set_option("kind", "board")
+    at(4.5, 0.05)
+    points = [o.id for o in objects() if o.is_bim and o.ifc_class in ("IfcOutlet", "IfcSwitchingDevice",
+                                                                         "IfcElectricDistributionBoard")]
+    params = [doc.ifc.point_params(g) for g in points]
+    against = len(points) == 3 and all(abs(float(p["back"][1]) - 0.1) < 1e-6 for p in params)
+    heights = sorted(round(p["height"], 2) for p in params) == [0.3, 1.1, 1.5]
+    symbols = len(drawings.plan(doc, doc.active_storey, "Planta").points) == 3
+    win.set_tool("select")
+    pump(100)
+    shot("133_eletricidade.png")
+    check("pontos_eletricos", against and heights and symbols,
+          "encostados={} alturas={} simbolos={}".format(against, heights, symbols))
+
+
+def circuits_flow():
+    """0.144 — circuits: three outlets selected, «Novo circuito com a seleção» (in the selection bar): C1, outlets;
+    Tables ▸ Circuits: its row (900 W, 16 A, OK); 10 typed in its breaker cell: changed (Ctrl+Z: back)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui.schedules import GUID
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_point(doc, (5.5, 0.1), "board", 0.0)
+    outlets = [bim_actions.add_point(doc, (0.5 + k, 0.1), "outlet", 0.0) for k in range(3)]
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.set_selection(set(outlets))
+    pump(300)
+    in_bar = win.act_new_circuit in win._selection_actions({"IfcOutlet": 3})
+    win.act_new_circuit.trigger()
+    pump(300)
+    circuits = doc.ifc.circuits()
+    made = len(circuits) == 1 and circuits[0][1] == "C1"
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("circuits"))
+    pump(300)
+    columns = list(panel._columns)
+    row_ok = panel.table.rowCount() == 1 and panel.table.item(0, columns.index("power")).text() == "900 W" and \
+        panel.table.item(0, columns.index("check")).text() == "OK"
+    item = panel.table.item(0, columns.index("breaker"))
+    guid = item.data(GUID)
+    item.setText("10")
+    pump(400)
+    edited = bool(circuits) and doc.ifc.circuit_report(circuits[0][0])["breaker"] == 10.0
+    shot("134_quadro_de_cargas.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    undone = bool(circuits) and doc.ifc.circuit_report(circuits[0][0])["breaker"] == 16.0
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("circuitos", in_bar and made and row_ok and edited and undone and guid == (circuits[0][0] if circuits else None),
+          "barra={} c1={} linha={} disjuntor={} desfeito={}".format(in_bar, made, row_ok, edited, undone))
+
+
+def electrical_proposal_flow():
+    """0.145 — BIM ▸ Propor pontos elétricos…: a bedroom with a door; the dialog says «Quarto» (its profile from
+    its name); its outlets set to 2, Pré-visualizar (6 drawn on the plan: 1 light, 1 switch, 2 outlets, 1 data… as
+    asked), Aplicar: made; BIM ▸ Retirar a proposta elétrica: gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0),
+                                                           (0.0, 3.0, 0.0))], spec)
+    wall = next(o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"
+                and abs(float(o.mesh.bounds()[0][1]) + 0.1) < 1e-6 and abs(float(o.mesh.bounds()[1][1]) - 0.1) < 1e-6)
+    frame = bim_actions.wall_frame(doc, wall)
+    bim_actions.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 1.0, 1)
+    bim_actions.add_room(doc, (2.0, 1.5), "Quarto")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    seen = {}
+
+    def fill():
+        d = getattr(win, "_elprop_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        guid = d.rooms[0][0]
+        seen["profile"] = d.profiles[guid].currentData()
+        d.spins[(guid, "outlet")].setValue(2)
+        d.preview_button.click()
+        pump(300)
+        seen["preview"] = getattr(win, "_elprop_preview", 0)
+        shot("135_proposta_eletrica.png")
+        d.apply_button.click()
+
+    QtCore.QTimer.singleShot(100, fill)
+    win.act_electrical_proposal.trigger()
+    pump(400)
+    made = doc.ifc.count("IfcOutlet") == 3 and doc.ifc.count("IfcSwitchingDevice") == 1 and \
+        doc.ifc.count("IfcLightFixture") == 1
+    win.act_remove_electrical_proposal.trigger()
+    pump(300)
+    gone = doc.ifc.count("IfcOutlet") + doc.ifc.count("IfcSwitchingDevice") + doc.ifc.count("IfcLightFixture") == 0
+    check("proposta_eletrica", seen.get("profile") == "bedroom" and seen.get("preview") == 5 and made and gone,
+          "perfil={} vista={} feitos={} retirados={}".format(seen.get("profile"), seen.get("preview"), made, gone))
+
+
+def conduits_flow():
+    """0.146 — conduits: the Conduit tool started on an outlet rises from it to 2,75 m and goes on (connected);
+    BIM ▸ Ligar ao quadro: a circuit of two outlets wired from the board (its conduits, every point connected, their
+    length in the message)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    board = bim_actions.add_point(doc, (5.5, 0.1), "board", 0.0)
+    a = bim_actions.add_point(doc, (1.0, 0.1), "outlet", 0.0)
+    b = bim_actions.add_point(doc, (2.5, 0.1), "outlet", 0.0)
+    lone = bim_actions.add_point(doc, (0.1, 2.0), "outlet", -90.0)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["conduit"].trigger()
+    pump(100)
+    tool = win.tool
+    at(0.15, 2.0)                                    # (on the outlet: up from it)
+    rose = tool._z is not None and abs(tool._z - 2.75) < 1e-6
+    at(3.0, 2.0)
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    started = doc.ifc.connected(doc.ifc.ports(lone)[0]) is not None
+    win.set_tool("select")
+    pump(100)
+    circuit = bim_actions.add_circuit(doc, [a, b])
+    pump(200)
+    win.act_route_circuits.trigger()
+    pump(400)
+    wired = all(doc.ifc.connected(doc.ifc.ports(g)[0]) is not None for g in (a, b, board)) and \
+        bool(doc.ifc.circuit_conduits(circuit))
+    told = "tubo vd" in win.last_message.lower()
+    shot("136_canalizacoes.png")
+    check("canalizacoes", rose and started and wired and told,
+          "sobe={} ligada={} quadro={} mensagem={}".format(rose, started, wired, told))
+
+
+def electrical_check_flow():
+    """0.147 — BIM ▸ Verificar a instalação elétrica…: two outlets on a storey with no board and in no circuit: the
+    list says so; a double-click on «2 pontos…» selects them; Tables ▸ Elétrica: quantidades shows «Tomada 2»."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    outlets = {bim_actions.add_point(doc, (float(x), 0.1), "outlet", 0.0) for x in (1, 2)}
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_elcheck_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["n"] = d.list.count()
+        item = next((d.list.item(k) for k in range(d.list.count()) if "nenhum circuito" in d.list.item(k).text()), None)
+        if item is not None:
+            d._chosen(item)
+            pump(200)
+            seen["selected"] = set(vp.selection)
+        shot("137_verificar_eletrica.png")
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.act_electrical_check.trigger()
+    pump(300)
+    panel = win.schedules_panel
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    panel.category.setCurrentIndex(panel.category.findData("electrical"))
+    pump(300)
+    texts = [[panel.table.item(r, c).text() for c in range(panel.table.columnCount())]
+             for r in range(panel.table.rowCount())]
+    counted = ["Tomada", "2", ""] in texts
+    panel.category.setCurrentIndex(0)
+    key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("verificar_eletrica", seen.get("n") == 2 and seen.get("selected") == outlets and counted,
+          "problemas={} selecionados={} quantidades={}".format(seen.get("n"), seen.get("selected") == outlets, texts))
+
+
+def water_proposal_flow():
+    """0.148 — BIM ▸ Propor águas e esgotos: a WC with a WC and a washbasin: a stack, the water pipes and every
+    outlet connected; BIM ▸ Retirar a proposta…: gone (the fixtures stay)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0),
+                                                           (0.0, 3.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_room(doc, (2.0, 1.5), "WC")
+    wc = bim_actions.add_fixture(doc, (1.0, 0.1), "wc", 0.0)
+    basin = bim_actions.add_fixture(doc, (2.5, 0.1), "basin", 0.0)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    vp.zoom_extents()
+    win.act_water_proposal.trigger()
+    pump(500)
+    joined = all(doc.ifc.connected(q) is not None for g in (wc, basin) for q in doc.ifc.ports(g))
+    pipes = doc.ifc.count("IfcPipeSegment")
+    shot("138_proposta_aguas.png")
+    win.act_remove_water_proposal.trigger()
+    pump(400)
+    gone = doc.ifc.count("IfcPipeSegment") == 0 and doc.ifc.count("IfcSanitaryTerminal") == 2
+    check("proposta_aguas", joined and pipes > 3 and gone,
+          "ligadas={} tubos={} retirada={}".format(joined, pipes, gone))
+
+
+def clashes_flow():
+    """0.149–0.150 — BIM ▸ Detetar conflitos…: a pipe through a beam; Procurar: one clash, «Novo»; «Ver» selects the
+    two; «Aprovar»: «Aprovado»; «Criar nota BCF»: a note with the two elements; «Relatório…»: the HTML page."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    beam = bim_actions.add_beam(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["viga_20x40"],
+                                2.80)
+    pipe = bim_actions.add_segment(doc, np.array((2.0, -2.0)), np.array((2.0, 2.0)), catalog.BY_KEY["tubo_100"], 2.60,
+                                   storey=doc.active_storey)
+    pump(300)
+    seen = {}
+    report = os.path.join(tempfile.mkdtemp(), "conflitos.html")
+    notes_before = len(doc.notes)
+
+    def act():
+        d = getattr(win, "_clash_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, act)
+            return
+        d.search()
+        seen["rows"] = d.tree.topLevelItemCount()
+        item = d.tree.topLevelItem(0)
+        seen["status"] = item.text(4) if item else ""
+        d.tree.setCurrentItem(item)
+        d.show_button.click()
+        pump(200)
+        seen["selected"] = set(vp.selection)
+        d.approve_button.click()
+        seen["approved"] = d.tree.topLevelItem(0).text(4) if d.tree.topLevelItemCount() else ""
+        d.tree.setCurrentItem(d.tree.topLevelItem(0))
+        d.note_button.click()
+        d.report_button.click()
+        shot("139_conflitos.png")
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, act)
+    win.clashes(report_path=report)
+    pump(300)
+    noted = len(doc.notes) == notes_before + 1 and sorted(doc.notes[-1].selected) == sorted([beam, pipe])
+    written = os.path.exists(report) and "<table>" in open(report, encoding="utf-8").read()
+    check("conflitos", seen.get("rows") == 1 and seen.get("status") == "Novo" and seen.get("selected") == {beam, pipe}
+          and seen.get("approved") == "Aprovado" and noted and written,
+          "linhas={} estado={} ver={} aprovado={} nota={} relatorio={}".format(
+              seen.get("rows"), seen.get("status"), seen.get("selected") == {beam, pipe}, seen.get("approved"), noted,
+              written))
+
+
+def circle_flow():
+    """0.150 — the Circle tool (Concept): a click on the ground, «1,5» + Enter: a circle of 24 sides; «2» + Enter right
+    after: its radius corrected; Push/Pull on it, «2,5» + Enter: a closed cylinder whose sides are smooth."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_environment("concept", remember=False)
+    pump(100)
+    win.tool_actions["circle"].trigger()
+    pump(100)
+    move(near((3.0, 3.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("1,5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    made = [o for o in objects() if not o.is_bim]
+    first = len(made) == 1 and len(made[0].mesh.verts) == 24
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    made = [o for o in objects() if not o.is_bim]
+    corrected = len(made) == 1 and abs(np.linalg.norm(made[0].mesh.verts[0]) - 2.0) < 1e-6
+    centre = made[0].matrix[:3, 3] if made else np.zeros(3)
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    move(near(centre + np.array((0.3, 0.2, 0.0))), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("2,5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    solid = obj is not None and obj.mesh.is_closed() and len(obj.mesh.hidden) == 24
+    win.set_tool("select")
+    pump(100)
+    shot("140_circulo.png")
+    win.set_environment("bim", remember=False)
+    check("circulo", first and corrected and solid,
+          "circulo={} corrigido={} cilindro={}".format(first, corrected, solid))
+
+
+def arc_flow():
+    """0.151 — the Line tool's arcs: Tab, a click and another: a half circle; Tab, back to the start with a straight
+    line (a D shape) — the outline closes into a face; Push/Pull: a solid with its curved side smooth."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["line"].trigger()
+    pump(100)
+    tool = win.tool
+    tool.set_option("shape", "line")
+    key(Qt.Key.Key_Tab)
+    arc_on = tool.arc
+    for p in ((1.0, 3.0, 0.0), (5.0, 3.0, 0.0)):
+        move(near(p), 4)
+        pump(100)
+        click()
+        pump(200)
+    key(Qt.Key.Key_Tab)                              # (straight again)
+    move(near((1.0, 3.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(300)
+    faces = [o for o in objects() if not o.is_bim and len(o.mesh.faces) == 1]
+    closed = len(faces) == 1 and len(faces[0].mesh.verts) > 8
+    tool.set_option("shape", "line")
+    centre = faces[0].matrix[:3, :3] @ np.mean(faces[0].mesh.verts, axis=0) + faces[0].matrix[:3, 3] if faces else None
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    if centre is not None:
+        move(near(centre), 4)
+        pump(100)
+        click()
+        pump(200)
+        type_text("1")
+        key(Qt.Key.Key_Return)
+        pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    smooth = obj is not None and obj.mesh.is_closed() and len(obj.mesh.hidden) >= 8
+    win.set_tool("select")
+    pump(100)
+    shot("141_arco.png")
+    check("arco", arc_on and closed and smooth, "arco={} face={} liso={}".format(arc_on, closed, smooth))
+
+
+def offset_flow():
+    """0.152 — Offset: a 3 × 2 rectangle (the Rectangle tool); the Offset tool, a click on it, «0,2» + Enter: the face
+    divided along a 2,6 × 1,6 outline inside it; Push/Pull on the inner part: only it moves."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["rectangle"].trigger()
+    pump(100)
+    move(near((1.0, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("3;2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    win.tool_actions["offset"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("0,2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    divided = obj is not None and len(obj.mesh.faces) == 5
+    inner = None
+    if divided:
+        areas = [obj.mesh.face_area(k) for k in range(len(obj.mesh.faces))]
+        inner = int(np.argmax(areas))
+    sized = inner is not None and abs(obj.mesh.face_area(inner) - 2.6 * 1.6) < 1e-6
+    win.set_tool("select")
+    pump(100)
+    shot("142_offset.png")
+    check("offset", divided and sized, "dividida={} medida={}".format(divided, sized))
+
+
+def faces_alone_flow():
+    """0.310 — As SketchUp: a 3 × 2 rectangle, Offset 0,2 inside. Selecionar: a click on the middle picks just it,
+    one on the frame just the frame (its four strips), a second click its edges too, a third the whole sketch;
+    Delete on the middle takes it out (Ctrl+Z back). Push/Pull −0,3 on the middle: a tray open on top; Ctrl tapped
+    («criar sólido») and again: a closed box under the frame. The middle picked and moved 0,1: the frame follows."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["rectangle"].trigger()
+    pump(100)
+    move(near((1.0, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("3;2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    win.tool_actions["offset"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("0,2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    if obj is None or len(obj.mesh.faces) != 5:
+        check("faces_sozinhas", False, "sem offset: {}".format(None if obj is None else len(obj.mesh.faces)))
+        return
+    inner = max(range(5), key=obj.mesh.face_area)
+    frame = frozenset(k for k in range(5) if k != inner)
+    c0 = np.mean([transform_point(obj.matrix, p) for p in obj.mesh.face_points(inner)], axis=0)
+    win.set_tool("select")
+    pump(100)
+    vp.zoom_extents()                                    # (close: the face picked is seen in the captures)
+    pump(300)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    middle = vp.face_selection == {obj.id: (frozenset({inner}), False)} and not vp.selection
+    said = "4,16" in win.last_message
+    shot("310_face_selecionada.png")
+    pump(700)                                            # (a new click, not a double one)
+    move(near((1.1, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(120)
+    ring = vp.face_selection == {obj.id: (frame, False)}
+    click()
+    pump(120)
+    edges = vp.face_selection == {obj.id: (frame, True)}
+    click()
+    pump(200)
+    whole = vp.selection == {obj.id} and not vp.face_selection
+    key(Qt.Key.Key_Escape)
+    pump(700)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    obj = doc.get(obj.id)
+    deleted = len(obj.mesh.faces) == 4 and not obj.mesh.lines and not vp.face_selection
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = len(doc.get(obj.id).mesh.faces) == 5
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    type_text("-0,3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    mesh = doc.get(obj.id).mesh
+    top = [k for k in range(len(mesh.faces)) if np.allclose(mesh.face_points(k)[:, 2], 0.0)]
+    tray = len(mesh.faces) == 9 and not mesh.is_closed() and abs(sum(map(mesh.face_area, top)) - (6.0 - 4.16)) < 1e-6
+    shot("310_rebaixo_aberto.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    off = not win.tools["push_pull"].solid               # (0.310: Ctrl+Z's Ctrl is not a tap)
+    key(Qt.Key.Key_Control)                              # (tapped alone: «criar sólido» on)
+    pump(100)
+    on = off and win.tools["push_pull"].solid and win.tool.name == "push_pull" \
+        and win.context_bar.fields["solid"][0].isChecked()
+    move(near((2.5, 2.1, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    type_text("-0,3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    mesh = doc.get(obj.id).mesh
+    top = [k for k in range(len(mesh.faces)) if np.allclose(mesh.face_points(k)[:, 2], 0.0)]
+    solid = len(mesh.faces) == 10 and abs(sum(map(mesh.face_area, top)) - 6.0) < 1e-6
+    shot("310_solido_ctrl.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.set_tool("select")
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    win.tool_actions["move"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    move(near((2.5, 2.6, 0.0)), 4)
+    pump(100)
+    type_text("0,1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    o = doc.get(obj.id)
+    mesh = o.mesh
+    pts = np.array([transform_point(o.matrix, p) for p in mesh.face_points(inner)]) if len(mesh.faces) > inner \
+        else np.zeros((1, 3))
+    moved = len(mesh.faces) == 5 and abs(np.linalg.norm(pts.mean(axis=0) - c0) - 0.1) < 1e-6 \
+        and abs(o.mesh.face_area(inner) - 4.16) < 1e-6 and vp.face_selection == {obj.id: (frozenset({inner}), False)}
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)          # (with Move: its Ctrl does not turn copying on)
+    pump(300)
+    moved = moved and win.tool.name == "move" and not win.tool.copy and \
+        np.allclose(np.mean([transform_point(o.matrix, p) for p in doc.get(obj.id).mesh.face_points(inner)], axis=0), c0)
+    win.set_tool("select")
+    pump(100)
+    check("faces_sozinhas", middle and said and ring and edges and whole and deleted and back and tray and on
+          and solid and moved,
+          "meio={} área={} moldura={} arestas={} todo={} apagada={} volta={} rebaixo={} ctrl={} sólido={} "
+          "movida={}".format(middle, said, ring, edges, whole, deleted, back, tray, on, solid, moved))
+
+
+def many_faces_flow():
+    """0.311 — Push/Pull on several faces at once: a 3 × 2 rectangle with an Offset 0,2 inside, and a 2 × 2 rectangle
+    beside it. A click on one strip of the frame takes the whole frame up 0,3 (no walls between the strips). The
+    middle picked and the other rectangle picked too (Shift): Push/Pull on the rectangle, 1 + Enter — both go up 1 (one
+    undo step), the middle stays picked; 0,5 + Enter corrects both."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    for at, size in (((1.0, 1.0, 0.0), "3;2"), ((6.0, 1.0, 0.0), "2;2")):
+        win.tool_actions["rectangle"].trigger()
+        pump(100)
+        move(near(at), 4)
+        pump(100)
+        click()
+        pump(200)
+        type_text(size)
+        key(Qt.Key.Key_Return)
+        pump(300)
+    win.tool_actions["offset"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("0,2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    sk = sorted((o for o in objects() if not o.is_bim), key=lambda o: len(o.mesh.faces))
+    if len(sk) != 2 or (len(sk[0].mesh.faces), len(sk[1].mesh.faces)) != (1, 5):
+        check("varias_faces", False, "esboços: {}".format([len(o.mesh.faces) for o in sk]))
+        return
+    rect, sheet = sk
+    inner = max(range(5), key=sheet.mesh.face_area)
+    frame = [k for k in range(5) if k != inner]
+    vp.zoom_extents()
+    pump(300)
+
+    def z_of(obj_id, k):
+        o = doc.get(obj_id)
+        return [round(float(transform_point(o.matrix, p)[2]), 6) for p in o.mesh.face_points(k)]
+
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    move(near((1.1, 2.0, 0.0)), 3)                       # (one strip of the frame)
+    pump(100)
+    click()
+    pump(200)
+    type_text("0,3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    mesh = doc.get(sheet.id).mesh
+    whole_frame = len(mesh.faces) == 1 + 4 + 8 and all(set(z_of(sheet.id, k)) == {0.3} for k in frame) \
+        and set(z_of(sheet.id, inner)) == {0.0}
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.set_tool("select")
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(700)
+    move(near((7.0, 2.0, 0.0)), 3)
+    pump(100)
+    press(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    release(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    pump(200)
+    picked = vp.face_selection == {sheet.id: (frozenset({inner}), False)} and vp.selection == {rect.id}
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    move(near((7.0, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    box = doc.get(rect.id).mesh
+    together = set(z_of(sheet.id, inner)) == {1.0} and box.is_closed() and abs(box.volume() - 4.0) < 1e-6 \
+        and vp.face_selection == {sheet.id: (frozenset({inner}), False)} and vp.selection == {rect.id}
+    shot("311_varias_faces.png")
+    type_text("0,5")                                     # (typed right after: corrects both)
+    key(Qt.Key.Key_Return)
+    pump(300)
+    corrected = set(z_of(sheet.id, inner)) == {0.5} and abs(doc.get(rect.id).mesh.volume() - 2.0) < 1e-6
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    one_step = len(doc.get(sheet.id).mesh.faces) == 5 and len(doc.get(rect.id).mesh.faces) == 1
+    # two rooms of a plan (a 4 × 3 rectangle divided in the middle), both picked: one volume, then storeys with Ctrl
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.model.document import AddObject, SketchObject
+    plan = sg.rectangle_mesh(4.0, 3.0)
+    sg.split_by_segment(plan, np.array((2.0, 0.0, 0.0)), np.array((2.0, 3.0, 0.0)))
+    at = np.eye(4)
+    at[1, 3] = 5.0
+    rooms = SketchObject("Planta", at, plan)
+    doc.execute(AddObject(rooms))
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    pump(100)
+    key(Qt.Key.Key_Escape)
+    pump(700)
+    move(near((1.0, 6.5, 0.0)), 3)
+    pump(100)
+    click()
+    pump(700)
+    move(near((3.0, 6.5, 0.0)), 3)
+    pump(100)
+    press(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    release(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    pump(200)
+    both = vp.face_selection.get(rooms.id, (frozenset(),))[0] == frozenset({0, 1})
+    win.tool_actions["push_pull"].trigger()
+    pump(100)
+    move(near((1.0, 6.5, 0.0)), 3)
+    pump(100)
+    click()
+    pump(200)
+    type_text("2,8")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    mesh = doc.get(rooms.id).mesh
+    ceiling = vp.face_selection.get(rooms.id, (frozenset(),))[0]
+    one_volume = mesh.is_closed() and abs(mesh.volume() - 4.0 * 3.0 * 2.8) < 1e-6 and len(mesh.faces) == 2 + 2 + 6 \
+        and len(ceiling) == 2 and all(set(z_of(rooms.id, k)) == {2.8} for k in ceiling)
+    key(Qt.Key.Key_Control)                              # (Criar sólido: a storey on top, its ceiling picked)
+    pump(100)
+    move(near((1.0, 6.5, 2.8)), 3)
+    pump(100)
+    click()
+    pump(200)
+    type_text("2,8")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    ceiling = vp.face_selection.get(rooms.id, (frozenset(),))[0]
+    storeys = len(ceiling) == 2 and all(set(z_of(rooms.id, k)) == {5.6} for k in ceiling)
+    shot("311_pisos.png")
+    if win.tools["push_pull"].solid:
+        key(Qt.Key.Key_Control)
+        pump(100)
+    win.set_tool("select")
+    pump(100)
+    check("varias_faces", whole_frame and picked and together and corrected and one_step and both and one_volume
+          and storeys,
+          "moldura={} escolhidas={} juntas={} corrigidas={} um_passo={} divisões={} um_volume={} pisos={}".format(
+              whole_frame, picked, together, corrected, one_step, both, one_volume, storeys))
+
+
+def offset_l_flow():
+    """0.206 — Offset of an L: an L face (4 × 3 less a 2 × 1,5 corner) on the ground; the Offset tool, a click on it,
+    «0,25» + Enter: divided in its inner L and a frame of six faces; Push/Pull on the inner L: only it moves."""
+    from arqbim.core.sketch_geometry import polygon_mesh
+    from arqbim.model.document import AddObject, SketchObject
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    ell = SketchObject("L", np.eye(4), polygon_mesh([(0, 0), (4, 0), (4, 1.5), (2, 1.5), (2, 3), (0, 3)]))
+    doc.execute(AddObject(ell))
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["offset"].trigger()
+    pump(100)
+    move(near((1.0, 2.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    move(near((1.0, 1.7, 0.0)), 3)
+    pump(100)
+    type_text("0,25")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = doc.get(ell.id)
+    divided = obj is not None and len(obj.mesh.faces) == 7
+    areas = [obj.mesh.face_area(k) for k in range(len(obj.mesh.faces))] if obj is not None else []
+    inner = int(np.argmax(areas)) if areas else None
+    sized = inner is not None and abs(areas[inner] - (3.5 * 1.0 + 1.5 * 1.5)) < 1e-6      # (the inner L: 5,75 m²)
+    win.set_tool("select")
+    pump(100)
+    shot("206_offset_em_l.png")
+    check("offset_em_l", divided and sized,
+          "dividida={} faces={} interior={}".format(divided, len(areas), round(areas[inner], 3) if areas else None))
+
+
+def images_paper_flow():
+    """0.207 — A background image on paper: a red picture laid on the ground floor under a 6 m wall; the plan painted
+    on paper has it (reddish, at its opacity), cut to the drawing; to PDF; hidden in the Images dialog, gone."""
+    import dataclasses
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings, images
+    from arqbim.model.document import ImagesChange
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    picture = os.path.join(tempfile.gettempdir(), "arqsynth_fundo_vermelho.png")
+    red = QtGui.QImage(200, 100, QtGui.QImage.Format.Format_RGB32)
+    red.fill(QtGui.QColor(255, 0, 0))
+    red.save(picture)
+    storey = doc.active_storey
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((0.0, 3.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    image = dataclasses.replace(images.placed("fundo", picture, (200, 100), (3.0, 1.5), storey=storey), width=6.0)
+    doc.execute(ImagesChange(doc.images, doc.images + [image], "Imagem"))
+    pump(300)
+
+    def reds(paper):
+        page = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        page.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(page)
+        pdf_out.paint_drawing(painter, paper, 50, (210.0, 148.0), 2.0, "Planta")
+        painter.end()
+        n = 0
+        for x in range(0, 840, 4):
+            for y in range(0, 594, 4):
+                c = page.pixelColor(x, y)
+                n += c.red() > 200 and c.green() < 140 and c.blue() < 140
+        return n, page
+
+    paper = drawings.plan(doc, storey, "Planta")
+    shown, page = reds(paper)
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        page.save(os.path.join(OUT, "207_imagem_no_papel.png"))
+    out = os.path.join(tempfile.gettempdir(), "arqsynth_imagem.pdf")
+    pdf_out.write(out, paper, win.title_block(title=paper.title), "teste")
+    printed = os.path.getsize(out) > 2000 and pdf_out.page_count(out) == 1
+    doc.execute(ImagesChange(doc.images, [dataclasses.replace(i, visible=False) for i in doc.images], "Esconder"))
+    gone, _page = reds(drawings.plan(doc, storey, "Planta"))
+    check("imagem_no_papel", shown > 200 and printed and gone == 0,
+          "pintada={} pdf={} escondida={}".format(shown, printed, gone))
+
+
+def facade_image_flow():
+    """0.208 — A photo on a facade: a 10 m wall, a picture imported; "Pôr numa fachada" (the tool): seen from the
+    south, a click on the wall's face at 2 m, another at 8 m: the picture stands there, 6 m wide, read from the
+    south; in the south elevation's drawing too."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings, images
+    from arqbim.model.document import ImagesChange
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    picture = os.path.join(tempfile.gettempdir(), "arqsynth_fachada.png")
+    page = QtGui.QImage(200, 100, QtGui.QImage.Format.Format_RGB32)
+    page.fill(QtGui.QColor(40, 120, 220))
+    page.save(picture)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((10.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    image = images.placed("fachada", picture, (200, 100), (5.0, -5.0), storey=doc.active_storey)
+    doc.execute(ImagesChange(doc.images, doc.images + [image], "Imagem"))
+    pump(300)
+    win.set_view("front")
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    win.stand_image(image.uid)
+    pump(200)
+    started = win.tool.name == "facade_image"
+    move(near((2.0, -0.1, 1.0)), 4)
+    click()
+    pump(200)
+    move(near((8.0, -0.1, 1.0)), 4)
+    pump(100)
+    click()
+    pump(500)
+    done = next((i for i in doc.images if i.uid == image.uid), None)
+    stood = done is not None and done.vertical and abs(done.width - 6.0) < 0.3 and done.front()[1] < -0.99
+    shot("208_imagem_na_fachada.png")
+    south = drawings.elevation(doc, "S", "Alçado Sul")
+    check("imagem_na_fachada", started and stood and len(south.images) == 1,
+          "ferramenta={} de_pe={} largura={} alcado={}".format(started, done.vertical if done else None,
+                                                              round(done.width, 3) if done else None,
+                                                              len(south.images)))
+
+
+def crop_image_flow():
+    """0.209 — Crop an image: a 10 × 5 picture laid on the ground floor, seen from above; "Recortar" (the tool): a
+    click at 2 m / 1 m on it, another at 7 m / 4 m: only that part kept (on screen; on paper cut to it)."""
+    import tempfile
+    from arqbim.model import drawings, images
+    from arqbim.model.document import ImagesChange
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    picture = os.path.join(tempfile.gettempdir(), "arqsynth_recorte.png")
+    page = QtGui.QImage(200, 100, QtGui.QImage.Format.Format_RGB32)
+    page.fill(QtGui.QColor(60, 160, 90))
+    page.save(picture)
+    storey = doc.active_storey
+    image = images.placed("recorte", picture, (1000, 500), (5.0, 2.5), storey=storey)
+    doc.execute(ImagesChange(doc.images, doc.images + [image], "Imagem"))
+    win.open_view("plan", storey)
+    pump(400)
+    vp.set_view("top", center=(5.0, 2.5, 0.0), radius=8.0)
+    pump(300)
+    win.crop_image(image.uid)
+    pump(200)
+    started = win.tool.name == "crop_image"
+    move(near((2.0, 1.0, 0.0)), 4)
+    click()
+    pump(100)
+    move(near((7.0, 4.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(400)
+    done = next((i for i in doc.images if i.uid == image.uid), None)
+    kept = done.kept() if done is not None else None
+    near_ok = kept is not None and np.allclose(kept, (0.2, 0.2, 0.7, 0.8), atol=0.02)
+    shot("209_imagem_recortada.png")
+    paper = drawings.plan(doc, storey, "Planta")
+    on_paper = bool(paper.images) and abs(float(np.ptp(paper.images[0][3][:, 0])) - 5.0) < 0.2
+    check("imagem_recortada", started and near_ok and on_paper,
+          "ferramenta={} parte={} papel={}".format(started, kept, on_paper))
+
+
+def scale_centre_flow():
+    """0.206 — Scale about the centre: a 3 × 2 rectangle selected; the Scale tool, Ctrl tapped (the bar's box ticked),
+    «2» + Enter: 6 × 4 about its middle (its middle where it was); Ctrl tapped again: back to a base point."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["rectangle"].trigger()
+    pump(100)
+    move(near((1.0, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("3;2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    if obj is None:
+        check("escala_do_centro", False, "sem retângulo")
+        return
+
+    def extent():
+        o = doc.get(obj.id)
+        m = np.asarray(o.matrix, float)
+        w = np.array([m[:3, :3] @ v + m[:3, 3] for v in o.mesh.verts])
+        return w.min(axis=0), w.max(axis=0)
+
+    lo0, hi0 = extent()
+    win.set_tool("select")
+    vp.set_selection({obj.id})
+    pump(200)
+    win.tool_actions["scale"].trigger()
+    pump(100)
+    key(Qt.Key.Key_Control)                                # (tapped alone: about the centre)
+    pump(100)
+    on = win.tool.centre
+    if not on:                                             # (the bar's box does the same)
+        win.tool.set_option("centre", True)
+        pump(100)
+    ticked = win.tool.centre and "centro" in win.tool.hint()
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    lo, hi = extent()
+    kept = np.allclose((lo + hi) / 2, (lo0 + hi0) / 2, atol=1e-6) and np.allclose(hi - lo, 2 * (hi0 - lo0), atol=1e-6)
+    win.tool.set_option("centre", False)
+    off = not win.tool.centre and "base" in win.tool.hint()
+    win.set_tool("select")
+    pump(100)
+    check("escala_do_centro", ticked and kept and off,
+          "ctrl={} centro={} meio_igual={} desligado={}".format(on, ticked, kept, off))
+
+
+def scale_flow():
+    """0.153 — Scale: a 3 × 2 rectangle at (1, 1) selected; the Scale tool, a click on its corner (1, 1) — the base —
+    «2» + Enter: a 6 × 4 rectangle from the same corner; Ctrl+Z: 3 × 2 again."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.tool_actions["rectangle"].trigger()
+    pump(100)
+    move(near((1.0, 1.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("3;2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    obj = next((o for o in objects() if not o.is_bim), None)
+    if obj is None:
+        check("scale", False, "sem retângulo")
+        return
+    def extent():
+        o = doc.get(obj.id)
+        m = np.asarray(o.matrix, float)
+        w = np.array([m[:3, :3] @ v + m[:3, 3] for v in o.mesh.verts])
+        return w.min(axis=0), w.max(axis=0)
+
+    lo0, hi0 = extent()                                    # (the first corner is where the click fell, near (1, 1))
+    win.set_tool("select")
+    vp.set_selection({obj.id})
+    pump(200)
+    win.tool_actions["scale"].trigger()
+    pump(100)
+    move(near(tuple(lo0)), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    lo, hi = extent()
+    scaled = np.allclose(lo, lo0, atol=1e-6) and np.allclose(hi - lo, 2 * (hi0 - lo0), atol=1e-6)
+    shot("143_escala.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    lo, hi = extent()
+    undone = np.allclose(hi, hi0, atol=1e-6)
+    win.set_tool("select")
+    pump(100)
+    check("scale", scaled and undone, "escalada={} desfeita={} ({})".format(scaled, undone, np.round(hi, 3)))
+
+
+def terrain_flow():
+    """0.155 — Terrain: a survey's CSV (a header, «número;x;y;z;código», a 6 × 5 grid with a mound, in survey
+    coordinates 150 km away) imported in an empty project: a terrain of 30 points, the project in those coordinates
+    (the IFC far, the program near its origin), selected; its contour lines drawn in 3D and in the ground floor's
+    plan. Then the Terrain from points tool on it: «3» + Enter, a click in the middle, Enter: 31 points, its top 3 m."""
+    path = os.path.join(OUT, "levantamento.csv")
+    x0, y0 = 150000.0, 400000.0
+    rows = ["numero;x;y;z;codigo"]
+    k = 0
+    for i in range(6):
+        for j in range(5):
+            k += 1
+            x, y = i * 8.0, j * 8.0
+            z = -0.5 + 0.03 * x + 2.0 * math.exp(-((x - 20.0) ** 2 + (y - 16.0) ** 2) / 120.0)
+            rows.append("{};{};{};{};terreno".format(k, "{:.3f}".format(x0 + x).replace(".", ","),
+                                                     "{:.3f}".format(y0 + y).replace(".", ","),
+                                                     "{:.3f}".format(z).replace(".", ",")))
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows) + "\n")
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    guid = win.import_terrain_points(path)
+    pump(600)
+    made = guid is not None and doc.ifc.terrain_info(guid)["points"] == 30
+    origin_ok = made and abs(doc.ifc.origin[0] - 150020.0) < 1.0 and abs(doc.ifc.origin[1] - 400016.0) < 1.0
+    near_ok = made and float(np.abs(doc.ifc.terrain_points(guid)[:, :2]).max()) < 30.0
+    selected = guid in vp.selection if guid else False
+    lines_3d = len(vp._contour_objects) > 0
+    shot("145_terreno_3d.png")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    lines_plan = len(vp._contour_objects) > 0
+    shot("146_terreno_planta.png")
+    vp.set_selection({guid} if guid else set())
+    win.set_tool("terrain")
+    pump(100)
+    on_it = win.tool._target == guid
+    type_text("3")
+    key(Qt.Key.Key_Return)
+    pump(100)
+    move(near((0.0, 0.0, doc.work_level())), 4)
+    pump(100)
+    click()
+    pump(200)
+    win.tool.enter()
+    pump(500)
+    info = doc.ifc.terrain_info(guid) if guid else {"points": 0, "high": 0}
+    added = info["points"] == 31 and abs(info["high"] - 3.0) < 1e-6
+    win.set_tool("select")
+    pump(100)
+    check("terreno", made and origin_ok and near_ok and selected and lines_3d and lines_plan and on_it and added,
+          "feito={} origem={} ({}) perto={} selecionado={} curvas_3d={} curvas_planta={} no_terreno={} "
+          "acrescentado={} ({} pontos, topo {:.2f})".format(made, origin_ok, np.round(doc.ifc.origin, 1), near_ok,
+                                                           selected, lines_3d, lines_plan, on_it, added,
+                                                           info["points"], info["high"]))
+
+
+def terrain_dxf_flow():
+    """0.156 — Terrain from a DXF: a survey drawing with points (layer PONTOS, a 5 × 5 grid rising 12 % towards +X),
+    spot heights written (COTAS) and walls in 2D (PAREDES): the layers with heights listed and ticked (not the
+    walls'), OK: a terrain of 27 points. View ▸ Terrain slopes: its surface coloured (10–15 %: yellow). In the
+    ground floor's plan, the 2D drawing tool's spot height clicked on it: the height there written, the model's."""
+    from arqbim.core import terrain as terrain_geo
+    from arqbim.model import spots
+    rows = ["0", "SECTION", "2", "ENTITIES"]
+    for i in range(5):
+        for j in range(5):
+            rows += ["0", "POINT", "8", "PONTOS", "10", str(i * 5.0), "20", str(j * 5.0), "30", str(0.12 * i * 5.0)]
+    for x, y, z in ((12.5, 2.5, 1.5), (7.5, 17.5, 0.9)):
+        rows += ["0", "TEXT", "8", "COTAS", "10", str(x), "20", str(y), "30", "0.0", "1",
+                 "{:.2f}".format(z).replace(".", ",")]
+    rows += ["0", "LINE", "8", "PAREDES", "10", "0", "20", "0", "30", "0", "11", "20", "21", "0", "31", "0",
+             "0", "ENDSEC", "0", "EOF"]
+    path = os.path.join(OUT, "levantamento.dxf")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows) + "\n")
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_dxf_points_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["listed"] = sorted(d.list.item(k).data(QtCore.Qt.ItemDataRole.UserRole) for k in range(d.list.count()))
+        seen["ticked"] = sorted(d.chosen())
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    guid = win.import_terrain_dxf(path)
+    pump(500)
+    made = guid is not None and doc.ifc.terrain_info(guid)["points"] == 27
+    listed = seen.get("listed") == ["COTAS", "PONTOS"] and seen.get("ticked") == ["COTAS", "PONTOS"]
+    win.set_show_slopes(True)
+    pump(300)
+    coloured = any(isinstance(w, gfx_mesh_type()) for w in vp._contour_objects)
+    shot("147_inclinacoes.png")
+    win.set_show_slopes(False)
+    pump(200)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("draft")
+    win.tool.set_option("shape", "spot")
+    pump(100)
+    move(near((10.0, 10.0, doc.work_level())), 4)
+    pump(100)
+    click()
+    pump(300)
+    ann = doc.annotations[-1] if doc.annotations else None
+    expected = terrain_geo.height_at(*doc.ifc.terrain_surface(guid), (10.0, 10.0)) if guid else None
+    spot_ok = ann is not None and ann.kind == "spot" and expected is not None \
+        and abs(spots.spot_height(doc, ann) - expected) < 0.05
+    shot("148_cota_de_nivel.png")
+    win.set_tool("select")
+    pump(100)
+    check("terreno_dxf", made and listed and coloured and spot_ok,
+          "feito={} camadas={} cores={} cota={} ({} / {})".format(
+              made, seen, coloured, spot_ok, None if ann is None else round(spots.spot_height(doc, ann), 3),
+              None if expected is None else round(expected, 3)))
+
+
+def platform_flow():
+    """0.157 — Platform: a terrain rising 10 % towards +X (30 × 20 m); in the ground floor's plan the Platform tool,
+    «1,5» + Enter, two corners (10, 5) and (20, 15): a 10 × 10 m platform at +1,50 (the ground under it from 1 to
+    2 m), the ground flat there, its outline and height drawn, earth cut (where the ground is higher) and filled
+    (lower). View ▸ Cut and fill…: the platform listed, the totals told."""
+    from arqbim.core import terrain as terrain_geo
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    guid = bim_actions.add_terrain(doc, [(x, y, 0.1 * x) for x in range(0, 35, 5) for y in range(0, 25, 5)])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("platform")
+    pump(100)
+    found = win.tool.terrain() == guid
+    type_text("1,5")
+    key(Qt.Key.Key_Return)
+    pump(100)
+    for corner in ((10.0, 5.0), (20.0, 15.0)):
+        move(near((corner[0], corner[1], doc.work_level())), 4)
+        pump(100)
+        click()
+        pump(300)
+    plats = doc.ifc.terrain_platforms(guid)
+    made = len(plats) == 1 and abs(plats[0].z - 1.5) < 1e-6
+    verts, tris = doc.ifc.terrain_surface(guid)
+    flat = made and abs(terrain_geo.height_at(verts, tris, (15.0, 10.0)) - plats[0].z) < 1e-6
+    cut, fill = doc.ifc.terrain_volumes(guid)
+    earth = cut > 1.0 and fill > 1.0
+    import pygfx
+    drawn = any(isinstance(w, pygfx.Text) for w in vp._contour_objects)        # (its height written)
+    shot("149_plataforma_planta.png")
+    seen = {}
+
+    def look():
+        d = getattr(win, "_earthworks_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        seen["totals"] = d.totals.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.earthworks()
+    pump(200)
+    listed = seen.get("rows") == 1 and "aterro" in seen.get("totals", "")
+    win.set_tool("select")
+    win.views.close_current()
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("150_plataforma_3d.png")
+    check("plataforma", found and made and flat and earth and drawn and listed,
+          "terreno={} feita={} plana={} terras={} (escavação {:.1f}, aterro {:.1f}) desenhada={} lista={}".format(
+              found, made, flat, earth, cut, fill, drawn, seen))
+
+
+def plan_dxf(path):
+    """A small plan in a DXF, in millimetres: a 10 × 8 m room's walls as double lines 20 cm apart (PAREDES), a door
+    block (PORTAS), a text (TEXTOS) and a dimension's lines (COTAS)."""
+    rows = ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "0", "ENDSEC",
+            "0", "SECTION", "2", "BLOCKS", "0", "BLOCK", "8", "0", "2", "PORTA90", "10", "0", "20", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "0", "11", "0", "21", "900",
+            "0", "ARC", "8", "0", "10", "0", "20", "0", "40", "900", "50", "0", "51", "90",
+            "0", "ENDBLK", "0", "ENDSEC", "0", "SECTION", "2", "ENTITIES"]
+
+    def poly(layer, pts):
+        out = ["0", "LWPOLYLINE", "8", layer, "90", str(len(pts)), "70", "1"]
+        for x, y in pts:
+            out += ["10", str(x), "20", str(y)]
+        return out
+
+    rows += poly("PAREDES", [(0, 0), (10000, 0), (10000, 8000), (0, 8000)])
+    rows += poly("PAREDES", [(200, 200), (9800, 200), (9800, 7800), (200, 7800)])
+    rows += ["0", "INSERT", "8", "PORTAS", "2", "PORTA90", "10", "4000", "20", "200", "50", "0"]
+    rows += ["0", "TEXT", "8", "TEXTOS", "10", "4500", "20", "4000", "40", "300", "1", "SALA"]
+    rows += ["0", "LINE", "8", "COTAS", "10", "0", "20", "-1000", "11", "10000", "21", "-1000"]
+    rows += ["0", "ENDSEC", "0", "EOF"]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows) + "\n")
+
+
+def plan_dxf_full(path):
+    """A 10 × 8 m room's DXF (mm) with a door's gap and a door block (PORTAS), a 1,20 m window block in the top wall
+    (JANELAS) and two tables (MOBILIARIO, one block twice)."""
+    lines = [((0, 0), (4000, 0)), ((4900, 0), (10000, 0)), ((10000, 0), (10000, 8000)), ((10000, 8000), (0, 8000)),
+             ((0, 8000), (0, 0)), ((200, 200), (4000, 200)), ((4900, 200), (9800, 200)), ((9800, 200), (9800, 7800)),
+             ((9800, 7800), (200, 7800)), ((200, 7800), (200, 200)), ((4000, 0), (4000, 200)), ((4900, 0), (4900, 200))]
+    rows = ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "0", "ENDSEC", "0", "SECTION", "2", "BLOCKS",
+            "0", "BLOCK", "8", "0", "2", "PORTA90", "10", "0", "20", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "0", "11", "0", "21", "900",
+            "0", "ARC", "8", "0", "10", "0", "20", "0", "40", "900", "50", "0", "51", "90", "0", "ENDBLK",
+            "0", "BLOCK", "8", "0", "2", "JANELA120", "10", "0", "20", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "0", "11", "1200", "21", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "200", "11", "1200", "21", "200",
+            "0", "LINE", "8", "0", "10", "0", "20", "100", "11", "1200", "21", "100", "0", "ENDBLK",
+            "0", "BLOCK", "8", "0", "2", "MESA160", "10", "0", "20", "0",
+            "0", "LWPOLYLINE", "8", "0", "90", "4", "70", "1", "10", "0", "20", "0", "10", "1600", "20", "0",
+            "10", "1600", "20", "900", "10", "0", "20", "900", "0", "ENDBLK", "0", "ENDSEC",
+            "0", "SECTION", "2", "ENTITIES"]
+    for (x0, y0), (x1, y1) in lines:
+        rows += ["0", "LINE", "8", "PAREDES", "10", str(x0), "20", str(y0), "11", str(x1), "21", str(y1)]
+    rows += ["0", "INSERT", "8", "PORTAS", "2", "PORTA90", "10", "4000", "20", "200",
+             "0", "INSERT", "8", "JANELAS", "2", "JANELA120", "10", "6000", "20", "7800",
+             "0", "INSERT", "8", "MOBILIARIO", "2", "MESA160", "10", "2000", "20", "3000",
+             "0", "INSERT", "8", "MOBILIARIO", "2", "MESA160", "10", "6000", "20", "3000", "50", "90",
+             "0", "ENDSEC", "0", "EOF"]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows) + "\n")
+
+
+def cad_model_flow():
+    """0.160 — Model from the drawing: a room's DXF (walls with a door's gap, a door, a window, two tables) linked;
+    BIM ▸ Model from the drawing…: the walls', openings' and furniture's layers ticked by their names, 4 walls, a
+    door, a window and 2 tables found; OK: all made in one step; the layers chosen kept for next time."""
+    path = os.path.join(OUT, "planta_cad_completa.dxf")
+    plan_dxf_full(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.link_cad(path)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_cad_walls_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["walls"], seen["openings"], seen["furniture"] = d.chosen("walls"), d.chosen("openings"), \
+            d.chosen("furniture")
+        seen["found"] = (len(d.axes), sorted(k for _b, k in d.openings), len(d.furniture))
+        d._accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.walls_from_cad()
+    pump(600)
+    report = getattr(win, "_last_cad_model", None) or {}
+    made = (len(report.get("walls", ())), len(report.get("doors", ())), len(report.get("windows", ())),
+            len(report.get("furniture", ())), report.get("left"))
+    listed = seen.get("walls") == ["PAREDES"] and seen.get("openings") == ["JANELAS", "PORTAS"] \
+        and seen.get("furniture") == ["MOBILIARIO"] and seen.get("found") == (4, ["door", "window"], 2)
+    from arqbim.ui import cad_walls_dialog
+    kept = cad_walls_dialog.load_profile().get("openings") == ["JANELAS", "PORTAS"]
+    win.views.close_current()
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("154_modelo_do_dxf.png")
+    check("modelo_do_dxf", made == (4, 1, 1, 2, 0) and listed and kept,
+          "feito={} janela={} perfil={}".format(made, seen, kept))
+
+
+def scan_ply(path, size=(6.0, 4.0), height=2.8, step=0.05, inner_wall=None, door=None):
+    """A room scanned from inside, as a binary PLY: points every `step` on its walls' inner faces, its floor and its
+    ceiling (a little noise; grey), and — inner_wall=(x, t) — a wall across it at x, t thick (both its faces); door
+    (0.213): (from y, to y, its top) — a door's gap in that wall."""
+    rng = np.random.default_rng(7)
+    w, d = size
+    pts = []
+    zs = np.arange(0.0, height + 1e-9, step)
+    for x in np.arange(0.0, w + 1e-9, step):
+        for y in (0.0, d):
+            pts += [(x, y, z) for z in zs]
+    for y in np.arange(0.0, d + 1e-9, step):
+        for x in (0.0, w):
+            pts += [(x, y, z) for z in zs]
+        if inner_wall is not None:
+            x0, t = inner_wall
+            kept = [z for z in zs if door is None or not (door[0] < y < door[1] and z < door[2])]
+            pts += [(x0 - t / 2, y, z) for z in kept] + [(x0 + t / 2, y, z) for z in kept]
+    for x in np.arange(0.0, w + 1e-9, step * 2):
+        for y in np.arange(0.0, d + 1e-9, step * 2):
+            pts += [(x, y, 0.0), (x, y, height)]
+    p = np.array(pts) + rng.normal(0.0, 0.003, (len(pts), 3))
+    head = ("ply\nformat binary_little_endian 1.0\nelement vertex {}\nproperty float x\nproperty float y\n"
+            "property float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n").format(len(p))
+    rows = np.zeros(len(p), dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("r", "u1"), ("g", "u1"), ("b", "u1")])
+    rows["x"], rows["y"], rows["z"] = p[:, 0], p[:, 1], p[:, 2]
+    rows["r"] = rows["g"] = rows["b"] = 180
+    with open(path, "wb") as f:
+        f.write(head.encode() + rows.tobytes())
+    return len(p)
+
+
+def cloud_link_flow():
+    """0.161 — Link a point cloud: a room scanned (PLY, 6 × 4 × 2,8 m) linked in an empty project: as it is (near
+    the origin), all its points shown; in the ground floor's plan, still there (its slice under the cut); in View ▸
+    Linked point clouds… its points drawn bigger; saved and opened again: there, drawn."""
+    path = os.path.join(OUT, "sala_digitalizada.ply")
+    n = scan_ply(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    link = win.link_cloud(path)
+    pump(600)
+    linked = link is not None and len(doc.cloud_links) == 1 and tuple(link.origin) == (0.0, 0.0, 0.0)
+    drawn = len(vp._cloud_objects) == 1 and len(next(iter(vp._cloud_objects.values()))[1].geometry.positions.data) == n
+    shot("155_nuvem_3d.png")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    in_plan = len(vp._cloud_objects) == 1
+    shot("156_nuvem_planta.png")
+
+    def bigger():
+        d = getattr(win, "_cloud_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, bigger)
+            return
+        d.size.setValue(3.0)
+        d.size.editingFinished.emit()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, bigger)
+    win.cloud_links()
+    pump(300)
+    sized = bool(doc.cloud_links) and abs(doc.cloud_links[0].size - 3.0) < 1e-9
+    saved = os.path.join(OUT, "nuvem_ligada.ifc")
+    win.save_to(saved)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.open_path(saved)
+    pump(800)
+    back = len(doc.cloud_links) == 1 and abs(doc.cloud_links[0].size - 3.0) < 1e-9 and len(vp._cloud_objects) == 1
+    check("nuvem_ligada", linked and drawn and in_plan and sized and back,
+          "ligada={} desenhada={} ({} pontos) na_planta={} maior={} reaberta={}".format(
+              linked, drawn, n, in_plan, sized, back))
+
+
+def structure_check_flow():
+    """0.163 — Analytical model and check: a 6 × 4 m frame (four columns on footings, four beams) and a column
+    standing on nothing at 3 m; Structure ▸ Analytical model and check…: the model made (in the IFC), drawn over the
+    model; one error (the hanging column) — a double-click on it selects it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_20"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_actions.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    hanging = bim_actions.add_column(doc, np.array((10.0, 0.0, 3.0)), catalog.BY_KEY["pilar_20"], 3.0)
+    win.set_environment("structure")
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_structure_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.list.count()
+        seen["first"] = d.list.item(0).data(QtCore.Qt.ItemDataRole.UserRole) if d.list.count() else None
+        if d.list.count():
+            d._chosen(d.list.item(0))
+        seen["selected"] = set(vp.selection)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    model = win.structure_check()
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    shot("158_modelo_analitico.png")
+    made = len(doc.ifc.analysis_models()) == 1 and len(vp._analytical_objects) >= 3
+    errors = [i for i in model.issues if i.severity == "erro"]
+    told = len(errors) == 1 and errors[0].guids == (hanging,) and seen.get("first") == [hanging] \
+        and seen.get("selected") == {hanging}
+    win.set_show_analytical(False)
+    win.set_environment("bim")
+    pump(200)
+    check("modelo_analitico", made and told,
+          "feito={} ({} barras, {} apoios) erros={} janela={}".format(
+              made, len(model.members), len(model.supports), [i.code for i in errors], seen))
+
+
+def moments_flow():
+    """0.220 — Moment diagrams: a frame (four columns, four beams, a slab); Structure ▸ Moment diagrams: the diagrams
+    drawn over the model (lines and the largest values), the message with the combination; off: gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_actions.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    win.set_discipline("structure")
+    pump(100)
+    in_ribbon = win.act_moments in win.ribbon_actions()
+    analysis = win.show_moments(True)
+    pump(400)
+    drawn = len(getattr(vp, "_diagram_objects", []))
+    said = "momentos" in win.last_message.lower()
+    shot("220_diagramas_de_momentos.png")
+    win.show_moments(False)
+    pump(200)
+    gone = not getattr(vp, "_diagram_objects", [])
+    check("diagramas_de_momentos", analysis is not None and len(analysis.diagrams) == 8 and drawn > 2 and said
+          and gone and in_ribbon, "barras={} desenhados={} mensagem={} desligado={}".format(
+              len(analysis.diagrams) if analysis else None, drawn, said, gone))
+
+
+def results_ifc_flow():
+    """0.221 — The analysis's results in the IFC: the frame; Structure ▸ Analyse the structure…, «Save the results
+    in the IFC»: a result group in the IFC (its combination, the 4 reactions), the window saying so; Ctrl+Z: gone."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_actions.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def save():
+        d = getattr(win, "_analysis_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, save)
+            return
+        d.save_button.click()
+        pump(300)
+        seen["said"] = d.summary.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, save)
+    win.analyse_structure()
+    pump(300)
+    groups = doc.ifc.file.by_type("IfcStructuralResultGroup")
+    reactions = doc.ifc.file.by_type("IfcStructuralPointReaction")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    gone = not doc.ifc.file.by_type("IfcStructuralResultGroup")
+    check("resultados_no_ifc", len(groups) == 1 and len(reactions) == 4 and "guardados" in seen.get("said", "")
+          and gone, "grupos={} reacoes={} janela={} desfeito={}".format(len(groups), len(reactions),
+                                                                     "guardados" in seen.get("said", ""), gone))
+
+
+def second_order_flow():
+    """0.222 — The second order: a tower of three storeys on slender 20 cm columns (footings under the ground floor's
+    only); Structure ▸ Analyse the structure…: the storeys' table (three a way, wind and earthquake in X and Y: 12),
+    θ the largest at the bottom, the summary telling the second order and the actions multiplied (θ above 0,10);
+    the footings the only supports."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_20"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for z in (3.0, 6.0, 9.0):
+        if z < 9.0:
+            for x, y in corners:
+                bim_actions.add_column(doc, np.array((x, y, z)), catalog.BY_KEY["pilar_20"], 3.0)
+        for k in range(4):
+            a, b = corners[k], corners[(k + 1) % 4]
+            bim_actions.add_beam(doc, np.array((*a, z)), np.array((*b, z)), catalog.BY_KEY["viga_20x40"], z)
+        bim_actions.add_slab(doc, np.array((0.0, 0.0, z)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_analysis_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.sways.rowCount()
+        seen["visible"] = d.sways.isVisible()
+        seen["summary"] = d.summary.text()
+        seen["first"] = [d.sways.item(0, c).text() for c in range(8)] if d.sways.rowCount() else []
+        d.resize(1100, 720)
+        pump(300)
+        seen["shot"] = d.grab().save(os.path.join(OUT, "222_segunda_ordem.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    result = win.analyse_structure()
+    pump(300)
+    model = bim_actions.analyse_structure(doc)[0]
+    ex = [s for s in result.sways if s.case == "EX"]
+    lowest = bool(ex) and max(ex, key=lambda s: s.theta) is ex[0]
+    told = "2.ª ordem" in seen.get("summary", "") and "×" in seen.get("summary", "")
+    check("segunda_ordem", not result.error and seen.get("rows") == 12 and seen.get("visible") and lowest and told
+          and bool(result.amplification) and len(model.supports) == 4,
+          "linhas={} visivel={} piso_de_baixo_pior={} resumo={} ampliacao={} apoios={} primeira={}".format(
+              seen.get("rows"), seen.get("visible"), lowest, told,
+              {k: round(v, 3) for k, v in result.amplification.items()}, len(model.supports), seen.get("first")))
+
+
+def two_layers_flow():
+    """0.226 — A beam's bars in two layers: an 8 × 5 m frame of 20 × 50 beams, its slab for storage (7,5 kN/m²);
+    Structure ▸ EC2 check and reinforcement…: the long beams' bars «6 Ø16 (3 + 3)», their notes telling the second
+    layer (EC2 8.2(3)); Put the reinforcement in the model: their bottom bars at two heights, 3 over 3."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_layers
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (8.0, 0.0), (8.0, 5.0), (0.0, 5.0))
+    for x, y in corners:
+        bim_layers.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_layers.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    beams = []
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        beams.append(bim_layers.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)),
+                                         catalog.BY_KEY["viga_20x50"], 3.0))
+    slab = bim_layers.add_slab(doc, np.array((0.0, 0.0, 3.0)), 8.0, 5.0, catalog.BY_KEY["laje_15"])
+    bim_layers.set_slab_use(doc, [slab], "E1")
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = {d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole): r for r in range(d.table.rowCount())}
+        seen["bars"] = {g: d.table.item(rows[g], 3).text() for g in beams if g in rows}
+        layered = next((g for g, text in seen["bars"].items() if "(3 + 3)" in text), None)
+        if layered is not None:
+            d.table.selectRow(rows[layered])
+            pump(100)
+            seen["notes"] = d.details.toPlainText()
+        seen["layered"] = layered
+        d.make_button.click()
+        pump(300)
+        d.grab().save(os.path.join(OUT, "226_duas_camadas.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    layered = seen.get("layered")
+    levels = set()
+    if layered is not None:
+        for g in doc.ifc.rebars_of([layered]).get(layered, []):
+            if doc.ifc._params(doc.ifc.by_guid(g))["Funcao"] == "bottom":
+                levels |= {round(float(min(p[2] for p in bar)), 3) for bar in doc.ifc.rebar_bars(g)}
+    check("viga_duas_camadas", layered is not None and "não cabem numa camada" in seen.get("notes", "")
+          and len(levels) == 2, "varoes={} camadas={}".format(seen.get("bars"), sorted(levels)))
+
+
+def shaped_columns_flow():
+    """0.227 — Round, L and T columns as they are: a frame with a round, an L, a T and a square column; Structure ▸
+    EC2 check and reinforcement…: the three verified with their section told («secção circular»…); Put the
+    reinforcement in the model: the round one's bars round its axis, the L's ties round each leg."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_cols
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    kinds = ("pilar_circ_30", "pilar_L_40", "pilar_T_50", "pilar_30")
+    columns = [bim_cols.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY[k], 3.0)
+               for (x, y), k in zip(corners, kinds)]
+    bim_cols.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_cols.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_cols.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = {d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole): r for r in range(d.table.rowCount())}
+        seen["status"] = [d.table.item(rows[g], 1).text() for g in columns if g in rows]
+        notes = []
+        for g in columns[:3]:
+            if g in rows:
+                d.table.selectRow(rows[g])
+                pump(80)
+                notes.append(d.details.toPlainText())
+        seen["told"] = [any(w in text for w in ("circular", "em L", "em T")) for text in notes]
+        d.make_button.click()
+        pump(300)
+        d.grab().save(os.path.join(OUT, "227_pilares_com_forma.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    radii, legs = set(), None
+    centre = doc.ifc.column_box(columns[0])[0]
+    for r in doc.ifc.rebars_of([columns[0]]).get(columns[0], []):
+        if doc.ifc._params(doc.ifc.by_guid(r))["Funcao"] == "main":
+            radii |= {round(float(np.hypot(*(np.asarray(bar)[-1][:2] - centre))), 4) for bar in doc.ifc.rebar_bars(r)}
+    ties = [bar for r in doc.ifc.rebars_of([columns[1]]).get(columns[1], [])
+            if doc.ifc._params(doc.ifc.by_guid(r))["Funcao"] == "ties" for bar in doc.ifc.rebar_bars(r)]
+    if ties:
+        levels = {round(float(np.mean(np.asarray(b)[:, 2])), 2) for b in ties}
+        legs = len(ties) / len(levels)
+    check("pilares_com_forma", len(seen.get("status", [])) == 4 and "Falha" not in seen.get("status", [])
+          and seen.get("told") == [True, True, True] and len(radii) == 1 and legs == 2,
+          "estado={} forma_dita={} raios={} lacos_por_nivel={}".format(seen.get("status"), seen.get("told"),
+                                                                       sorted(radii), legs))
+
+
+def foundations_flow():
+    """0.228 — Pile caps and strip footings: a frame on caps of 2 and of 4 piles, a wall on a strip footing;
+    Structure ▸ EC2 check and reinforcement…: a cap's notes its struts and ties (the tie, the nodes), the strip's its
+    wall's weight on the soil; Put the reinforcement in the model: their bars made."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_found
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    cols = [bim_found.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0) for x, y in corners]
+    made = bim_found.footings_under(doc, cols[:2], catalog.BY_KEY["bloco_2e"])
+    made += bim_found.footings_under(doc, cols[2:], catalog.BY_KEY["bloco_4e"])
+    caps = [g for g in made if doc.ifc.by_guid(g).is_a("IfcFooting")]
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_found.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_found.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    wall = bim_found.add_wall(doc, np.array((10.0, 0.0, 0.0)), np.array((10.0, 5.0, 0.0)),
+                              catalog.BY_KEY["parede_alv_20"])
+    spec = catalog.BY_KEY["sapata_corrida_50"]
+    strip = bim_found.add_footing(doc, bim_found.footing_place(doc, wall, spec), spec, under=wall)
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = {d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole): r for r in range(d.table.rowCount())}
+        for name, g in (("cap2", caps[0]), ("cap4", caps[-1]), ("strip", strip)):
+            if g in rows:
+                d.table.selectRow(rows[g])
+                pump(80)
+                seen[name] = d.details.toPlainText()
+                seen[name + "_status"] = d.table.item(rows[g], 1).text()
+        d.make_button.click()
+        pump(300)
+        d.grab().save(os.path.join(OUT, "228_macicos_e_sapatas_corridas.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    bars = doc.ifc.rebars_of(caps + [strip])
+    told = "bielas e tirantes" in seen.get("cap2", "") and "tirante" in seen.get("cap4", "") \
+        and "nó sob o pilar" in seen.get("cap2", "") and "sapata corrida" in seen.get("strip", "")
+    check("macicos_sapatas_corridas", told and all(bars.get(g) for g in caps + [strip])
+          and "Falha" not in (seen.get("cap2_status"), seen.get("cap4_status"), seen.get("strip_status")),
+          "estados={} notas={} armaduras={}".format(
+              [seen.get(k + "_status") for k in ("cap2", "cap4", "strip")], told,
+              {g[:6]: len(v) for g, v in bars.items()}))
+
+
+def curtailment_flow():
+    """0.229 — Bars that stop where they are not needed: an 8 × 5 m frame of 20 × 50 beams, its slab a hall;
+    Structure ▸ EC2 check and reinforcement…: a long beam's notes tell its bars stopped («dispensa…», where); Put
+    the reinforcement in the model: its bottom bars of two lengths, its top bars over each support from its end."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_cut
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (8.0, 0.0), (8.0, 5.0), (0.0, 5.0))
+    for x, y in corners:
+        bim_cut.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_cut.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    beams = [bim_cut.add_beam(doc, np.array((*corners[k], 3.0)), np.array((*corners[(k + 1) % 4], 3.0)),
+                              catalog.BY_KEY["viga_20x50"], 3.0) for k in range(4)]
+    slab = bim_cut.add_slab(doc, np.array((0.0, 0.0, 3.0)), 8.0, 5.0, catalog.BY_KEY["laje_15"])
+    bim_cut.set_slab_use(doc, [slab], "C3")
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = {d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole): r for r in range(d.table.rowCount())}
+        if beams[0] in rows:
+            d.table.selectRow(rows[beams[0]])
+            pump(80)
+            seen["notes"] = d.details.toPlainText()
+        d.make_button.click()
+        pump(300)
+        d.grab().save(os.path.join(OUT, "229_dispensa_de_varoes.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    lengths = {}
+    for g in doc.ifc.rebars_of([beams[0]]).get(beams[0], []):
+        e = doc.ifc.by_guid(g)
+        lengths.setdefault(doc.ifc._params(e)["Funcao"], set()).add(round(e.BarLength))
+    check("dispensa_de_varoes", "dispensa" in seen.get("notes", "") and len(lengths.get("bottom", ())) == 2
+          and len(lengths.get("top", ())) >= 2, "comprimentos={}".format(lengths))
+
+
+def splices_flow():
+    """0.230 — Long bars spliced: a 15 m wall on a strip footing, no frame; Structure ▸ EC2 check and
+    reinforcement…: the strip verified by itself (its wall's weight); Put the reinforcement in the model: its bars
+    along it in pieces no longer than 12 m, lapped."""
+    from arqbim.core import rebar as rb_s
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_sp
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_sp.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((15.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    spec = catalog.BY_KEY["sapata_corrida_50"]
+    strip = bim_sp.add_footing(doc, bim_sp.footing_place(doc, wall, spec), spec, under=wall)
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        d.make_button.click()
+        pump(300)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    along = [bar for g in doc.ifc.rebars_of([strip]).get(strip, [])
+             if doc.ifc._params(doc.ifc.by_guid(g))["Funcao"] == "mesh_x" for bar in doc.ifc.rebar_bars(g)]
+    longest = max((rb_s.BarSet.length_of(b) for b in along), default=0.0)
+    # (two lines: the strip, and — 0.345 — the wall alone, outside: its bending by the wind)
+    check("emendas_de_varoes", seen.get("rows") == 2 and along and longest <= rb_s.STOCK + 1e-6
+          and len(along) > 2, "linhas={} varoes={} maior={:.2f} m".format(seen.get("rows"), len(along), longest))
+
+
+def typical_rebars_flow():
+    """0.231 — The same reinforcement on typical floors: a three-storey frame, its two upper floors typical;
+    Structure ▸ EC2 check and reinforcement…: a typical floor's column told «piso tipo», the same bars as its equal
+    on the other floor; Put the reinforcement in the model: both with as many bars."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_typ
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    ground = doc.ifc.storeys()[0][0]
+    first = bim_typ.add_storey(doc, "Piso 1", 3.0)
+    second = bim_typ.add_storey(doc, "Piso 2", 6.0)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    upper = []
+    for storey, z in ((ground, 0.0), (first, 3.0)):
+        for x, y in corners:
+            g = bim_typ.add_column(doc, np.array((x, y, z)), catalog.BY_KEY["pilar_30"], 3.0, storey=storey)
+            if storey == first:
+                upper.append(g)
+        for k in range(4):
+            a, b = corners[k], corners[(k + 1) % 4]
+            bim_typ.add_beam(doc, np.array((*a, z + 3.0)), np.array((*b, z + 3.0)), catalog.BY_KEY["viga_20x40"],
+                             z + 3.0, storey=storey)
+        bim_typ.add_slab(doc, np.array((0.0, 0.0, z + 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"], storey=storey)
+    doc.set_active_storey(ground)
+    bim_typ.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    bim_typ.make_typical(doc, [first, second], first, "Piso tipo")
+    pump(300)
+    column = upper[0]
+    twin = (doc.ifc.counterparts(column) or [None])[0]
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = {d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole): r for r in range(d.table.rowCount())}
+        if column in rows:
+            d.table.selectRow(rows[column])
+            pump(80)
+            seen["notes"] = d.details.toPlainText()
+            seen["bars"] = d.table.item(rows[column], 3).text()
+        if twin in rows:
+            seen["twin"] = d.table.item(rows[twin], 3).text()
+        d.make_button.click()
+        pump(300)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+
+    def count(g):
+        return sum(len(doc.ifc.rebar_bars(r)) for r in doc.ifc.rebars_of([g]).get(g, []))
+
+    check("armaduras_piso_tipo", twin is not None and "piso tipo" in seen.get("notes", "")
+          and seen.get("bars") == seen.get("twin") and count(column) == count(twin) > 0,
+          "varoes={} / {} contagem={} / {}".format(seen.get("bars"), seen.get("twin"), count(column),
+                                                   count(twin) if twin else None))
+
+
+def context_bar_steady_flow():
+    """0.225 — The contextual bar keeps its height: through Select, Wall, Door, Column, Slab, Pipe, Dimension and
+    back, with nothing selected and with a wall selected, the bar as tall as ever and the view under it not moving
+    (it went from 31 to 41 px, and the view jumped with it)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_bar
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_bar.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    seen = []
+    for name in ("select", "wall", "door", "column", "slab", "pipe", "dimension", "select"):
+        win.set_tool(name)
+        pump(150)
+        seen.append((name, win.context_bar.height(), canvas.mapTo(win, QtCore.QPoint(0, 0)).y()))
+    vp.set_selection({wall})
+    pump(250)
+    seen.append(("parede", win.context_bar.height(), canvas.mapTo(win, QtCore.QPoint(0, 0)).y()))
+    vp.set_selection(set())
+    pump(150)
+    heights, tops = {h for _n, h, _y in seen}, {y for _n, _h, y in seen}
+    # (the point is that it does not change; since the minimalist interface the bar is 33 px — at least 30 kept)
+    check("barra_contextual_fixa", len(heights) == 1 and len(tops) == 1 and min(heights) >= 30,
+          "alturas={} topo_da_vista={} ({})".format(sorted(heights), sorted(tops), seen))
+
+
+def slab_top_bars_flow():
+    """0.224 — A slab's top bars over its beams: the frame with its slab; Structure ▸ EC2 check and
+    reinforcement…: the slab's line tells its top bars («sup.»), its notes the top mesh each way; Put the
+    reinforcement in the model: the slab's top bars made both ways, bent down into the edge beams; its
+    reinforcement drawing tells them."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_design
+    from arqbim.model import drawings as drawings_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_design.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_design.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_design.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    slab = bim_design.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        row = next((r for r in range(d.table.rowCount())
+                    if d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole) == slab), None)
+        seen["bars"] = d.table.item(row, 3).text() if row is not None else ""
+        if row is not None:
+            d.table.selectRow(row)
+            pump(100)
+            seen["notes"] = d.details.toPlainText()
+        d.make_button.click()
+        pump(300)
+        d.grab().save(os.path.join(OUT, "224_laje_armadura_superior.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    mine = [doc.ifc.by_guid(g) for g in doc.ifc.rebars_of([slab]).get(slab, [])]
+    roles = sorted({doc.ifc._params(r)["Funcao"] for r in mine})
+    bent = any(doc.ifc._params(r)["Funcao"].startswith("top_")
+               and len(doc.ifc._params(r)["Dobragem"].split(";")) == 2 for r in mine)
+    drawing = drawings_model.of_view(doc, "rebar", slab, "Laje")
+    told = drawing is not None and any("sup." in a[3] for a in drawing.annotations if a[0] == "text")
+    check("laje_armadura_superior", "sup." in seen.get("bars", "") and "armadura superior sobre os apoios"
+          in seen.get("notes", "") and roles == ["mesh_x", "mesh_y", "top_x", "top_y"] and bent and told,
+          "varoes={} funcoes={} dobrados={} desenho={}".format(seen.get("bars"), roles, bent, told))
+
+
+def shells_flow():
+    """0.223 — The slabs as shells: the frame with its slab; Structure ▸ Actions and materials…: «Slabs in the
+    analysis» shells (the default) or areas; Analyse the structure…: the slab listed with its moments both ways
+    (x … / y …) and its deflection, its tooltip telling the mesh; by areas chosen: no slab listed."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_actions.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    slab = bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def actions(choice):
+        def go():
+            d = getattr(win, "_actions_dialog", None)
+            if d is None or not d.isVisible():
+                QtCore.QTimer.singleShot(100, go)
+                return
+            box = d.fields.get("slabs")
+            seen.setdefault("options", [box.itemData(k) for k in range(box.count())] if box else None)
+            seen.setdefault("default", box.currentData() if box else None)
+            if box is not None:
+                box.setCurrentIndex(box.findData(choice))
+            d.accept()
+        return go
+
+    def look(tag):
+        def go():
+            d = getattr(win, "_analysis_dialog", None)
+            if d is None or not d.isVisible():
+                QtCore.QTimer.singleShot(100, go)
+                return
+            rows = [[d.table.item(r, c).text() if d.table.item(r, c) else "" for c in range(9)]
+                    for r in range(d.table.rowCount())]
+            seen[tag] = [r for r in rows if r[5].startswith("x ")]
+            guids = [d.table.item(r, 0).data(QtCore.Qt.ItemDataRole.UserRole) for r in range(d.table.rowCount())]
+            seen[tag + "_guid"] = slab in guids
+            seen[tag + "_tip"] = "DKT" in (d.table.item(d.table.rowCount() - 1, 5).toolTip() or "")
+            if tag == "cascas":
+                d.resize(1100, 640)
+                pump(200)
+                d.grab().save(os.path.join(OUT, "223_lajes_cascas.png"))
+            d.accept()
+        return go
+
+    QtCore.QTimer.singleShot(100, actions("shells"))
+    win.structure_actions()
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("cascas"))
+    shells = win.analyse_structure()
+    pump(300)
+    QtCore.QTimer.singleShot(100, actions("areas"))
+    win.structure_actions()
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("areas"))
+    areas = win.analyse_structure()
+    pump(300)
+    kept = doc.ifc.structural_settings().slabs
+    told = len(seen.get("cascas", [])) == 1 and seen.get("cascas_guid") and seen.get("cascas_tip") \
+        and "/ y" in seen["cascas"][0][5] and "mm" in seen["cascas"][0][7]
+    check("lajes_cascas", seen.get("options") == ["shells", "areas"] and seen.get("default") == "shells" and told
+          and len(shells.panels) == 1 and not areas.panels and seen.get("areas") == [] and kept == "areas",
+          "opcoes={} omissao={} linha={} paineis={}/{} guardado={}".format(
+              seen.get("options"), seen.get("default"), seen.get("cascas"), len(shells.panels), len(areas.panels),
+              kept))
+
+
+def slab_use_flow():
+    """0.218 — A slab's own use: a slab selected; Properties ▸ Use (imposed load): «E — storage»: kept on it; its
+    load in Actions worked out with 7,5 kN/m²; back to the project's."""
+    from arqbim.core import actions as act
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(200)
+    vp.set_selection({slab})
+    pump(300)
+    combo = win.props.editors.get("slab_use")
+    shown = combo is not None and combo.currentData() == ""
+    if combo is not None:
+        k = combo.findData("E1")
+        combo.setCurrentIndex(k)
+        combo.activated.emit(k)                            # (as a click on it does)
+        pump(400)
+    kept = doc.ifc.slab_use(slab) == "E1"
+    _m, loads = bim_actions.actions_of(doc, act.Settings())
+    loaded = abs(loads.panel_q.get(slab, 0.0) - 7.5) < 1e-9
+    vp.set_selection({slab})
+    pump(300)
+    combo = win.props.editors.get("slab_use")
+    if combo is not None:
+        k = combo.findData("")
+        combo.setCurrentIndex(k)
+        combo.activated.emit(k)
+        pump(400)
+    back = doc.ifc.slab_use(slab) == ""
+    check("uso_da_laje", shown and kept and loaded and back,
+          "no_painel={} guardado={} carga={} de_volta={}".format(shown, kept, loads.panel_q.get(slab), back))
+
+
+def structure_actions_flow():
+    """0.164 — Actions and materials: the frame of 0.163 with a slab; Structure ▸ Actions and materials…: C30/37
+    chosen and seismic zone 1.3; one storey listed with its loads, wind and earthquake; OK: the settings kept in the
+    IFC, the analytical model loaded with the cases G and Q."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_actions.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_20"], 3.0)
+    bim_actions.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_actions.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    seen = {}
+
+    def choose():
+        d = getattr(win, "_actions_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, choose)
+            return
+        d.fields["concrete"].setCurrentIndex(d.fields["concrete"].findData("C30/37"))
+        d.fields["seismic_zone_1"].setCurrentIndex(d.fields["seismic_zone_1"].findData("1.3"))
+        d.fields["altitude"].setValue(1000.0)                # (0.217: the snow — 1,2 kN/m² on the roof)
+        seen["snow"] = "Neve" in d.summary.text()
+        seen["terrains"] = [d.fields["terrain"].itemData(k) for k in range(d.fields["terrain"].count())]   # (0.219)
+        seen["q"] = round(d.loads.storeys[0].q, 1) if d.loads.storeys else 0
+        seen["rows"] = d.table.rowCount()
+        seen["weight"] = d.loads.storeys[0].weight if d.loads.storeys else 0
+        seen["base"] = d.loads.base_1
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, choose)
+    loads = win.structure_actions()
+    pump(400)
+    settings = doc.ifc.structural_settings()
+    analysis = doc.ifc.analysis_models()
+    cases = sorted(c.Name for c in analysis[0].LoadedBy) if analysis else []
+    ok = loads is not None and seen.get("rows") == 1 and seen.get("weight", 0) > 100 and seen.get("base", 0) > 0 \
+        and settings.concrete == "C30/37" and settings.seismic_zone_1 == "1.3" and cases == ["G", "Q"] \
+        and seen.get("snow") and seen.get("q") == 28.8 and settings.altitude == 1000.0 \
+        and seen.get("terrains") == ["I", "II", "III", "IV"]
+    shot("159_acoes.png")
+    win.set_show_analytical(False)
+    check("acoes_estrutura", ok, "janela={} definicoes=({}, {}) casos={}".format(
+        seen, settings.concrete, settings.seismic_zone_1, cases))
+
+
+def structure_analysis_flow():
+    """0.165 — Analyse the structure: the frame with its slab (and the actions of 0.164 kept); Structure ▸ Analyse
+    the structure…: every column and beam listed with its forces, the load path closed (what goes in comes down), a
+    double-click selecting a beam."""
+    seen = {}
+
+    def look():
+        d = getattr(win, "_analysis_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        last = d.table.rowCount() - 1
+        seen["guid"] = d.table.item(last, 0).data(QtCore.Qt.ItemDataRole.UserRole) if last >= 0 else None
+        if last >= 0:
+            d._chosen(last, 0)
+        seen["selected"] = set(vp.selection)
+        shot("160_analise.png")
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    result = win.analyse_structure()
+    pump(300)
+    closed = result is not None and not result.error \
+        and abs(result.reactions_up - result.loads_in) <= max(result.loads_in, 1.0) * 1e-6
+    listed = seen.get("rows") == len(result.members) + len(result.panels) if result is not None else False
+    chosen = seen.get("guid") is not None and seen.get("selected") == {seen.get("guid")}
+    check("analise_estrutura", closed and listed and chosen and len(result.members) >= 8,
+          "fechado={} ({:.1f} / {:.1f} kN) linhas={} escolhido={}".format(
+              closed, result.loads_in if result else 0, result.reactions_up if result else 0, seen.get("rows"),
+              chosen))
+
+
+def structure_design_flow():
+    """0.166 — EC2 check and reinforcement: a frame of 30 × 30 columns on footings, 20 × 40 beams and a slab;
+    Structure ▸ EC2 check and reinforcement…: 13 members, all OK, each with its bars; a line's notes below; Put the
+    reinforcement in the model: the bars made (the window then says these are the model's); the bar schedule listed
+    and exported to CSV; seen in x-ray; Ctrl+Z takes them away."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_design
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+    for x, y in corners:
+        bim_design.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    bim_design.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        bim_design.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+    bim_design.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    csv_path = os.path.join(OUT, "lista_armaduras.csv")
+    if os.path.exists(csv_path):
+        os.remove(csv_path)
+    seen = {}
+
+    def schedule():
+        s = getattr(win, "_schedule_dialog", None)
+        if s is None or not s.isVisible():
+            QtCore.QTimer.singleShot(100, schedule)
+            return
+        seen["schedule_rows"] = s.table.rowCount()
+        seen["totals"] = s.totals.text()
+        s.grab().save(os.path.join(OUT, "162_lista_armaduras.png"))
+        win.export_rebar_schedule(csv_path)
+        s.accept()
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        seen["status"] = sorted({d.table.item(r, 1).text() for r in range(d.table.rowCount())})
+        seen["bars"] = [d.table.item(r, 3).text() for r in range(d.table.rowCount())]
+        d.table.selectRow(0)
+        seen["notes"] = d.details.toPlainText().count("\n")
+        d.make_button.click()
+        pump(300)
+        seen["model"] = sorted({d.table.item(r, 4).text() for r in range(d.table.rowCount())})
+        d.table.selectRow(4)                                   # (a beam: its notes below)
+        pump(100)
+        seen["first"] = d.table.item(0, 0).text()
+        d.grab().save(os.path.join(OUT, "161_verificacao_ec2.png"))
+        QtCore.QTimer.singleShot(100, schedule)
+        d.on_schedule()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    designs = win.verify_structure()
+    pump(400)
+    rebars = doc.ifc.file.by_type("IfcReinforcingBar")
+    shown = sum(1 for o in objects() if o.is_bim and o.ifc_class == "IfcReinforcingBar")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    undone = len(doc.ifc.file.by_type("IfcReinforcingBar")) == 0 and \
+        not any(o.is_bim and o.ifc_class == "IfcReinforcingBar" for o in objects())
+    doc.redo()
+    pump(500)
+    bars_set = next((r.GlobalId for r in doc.ifc.file.by_type("IfcReinforcingBar") if r.PredefinedType == "SHEAR"),
+                    None)
+    vp.set_selection({bars_set} if bars_set else set())
+    pump(300)
+    described = "Armadura de" in win.props.text() and "Viga" in win.props.text()
+    vp.set_selection(set())
+    pump(200)
+
+    def style(value):
+        combo = win.props.editors.get("view_style")          # (the panel is made again after each change)
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+
+    style("xray")
+    vp.zoom_extents()
+    pump(400)
+    shot("163_armaduras_raio_x.png")
+    style("shaded")
+    exported = os.path.exists(csv_path) and "Pos." in open(csv_path, encoding="utf-8-sig").read()
+    # (0.370) as an Excel workbook: the counts and lengths numbers (they were written as text), the totals after them
+    import openpyxl
+    book = win.export_rebar_schedule(csv_path[:-4] + ".xlsx")
+    sheet = openpyxl.load_workbook(book).active if book else None
+    if sheet is not None:
+        head = [c.value for c in sheet[1]]
+        counts = [sheet.cell(row=r, column=head.index("Quant.") + 1).value for r in range(2, len(rebars) + 2)] \
+            if "Quant." in head else []
+        last = sheet.cell(row=sheet.max_row, column=1).value or ""
+        exported = exported and len(counts) == len(rebars) and all(isinstance(n, int) for n in counts) and \
+            "kg" in last and sheet.title == "Lista de armaduras"
+    else:
+        exported = False
+    verified = seen.get("rows") == 13 == len(designs) and seen.get("status") == ["OK"] and seen.get("notes", 0) >= 3 \
+        and all(b != "—" for b in seen.get("bars", ["—"])) and seen.get("first") == "Pilar 1"
+    made = len(rebars) >= 20 and shown == len(rebars) and seen.get("model") == ["estas"] and described
+    listed = seen.get("schedule_rows") == len(rebars) and "kg" in seen.get("totals", "")
+    check("verificacao_ec2_armaduras", verified and made and listed and exported and undone,
+          "verificado={} feito={} ({} conjuntos, {} vistos) lista={} csv={} desfeito={} janela={}".format(
+              verified, made, len(rebars), shown, listed, exported, undone,
+              {k: v for k, v in seen.items() if k != "bars"}))
+
+
+def structure_report_flow():
+    """0.167 — Structure quantities and the calculation report: the frame of 0.166 with its reinforcement (the
+    flow before leaves it); Structure ▸ Structure quantities…: 13 members with their concrete, formwork and steel, a
+    line per kind and the total; exported to CSV; Structure ▸ Calculation report… to PDF and to HTML."""
+    if not doc.ifc.file.by_type("IfcReinforcingBar"):           # (run alone: the frame and its bars made here)
+        from arqbim.ifc import catalog
+        from arqbim.model import bim as bim_q
+        key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+        pump(400)
+        corners = ((0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0))
+        for x, y in corners:
+            bim_q.add_column(doc, np.array((x, y, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+        bim_q.footings_under(doc, None, catalog.BY_KEY["sapata_120"])
+        for k in range(4):
+            a, b = corners[k], corners[(k + 1) % 4]
+            bim_q.add_beam(doc, np.array((*a, 3.0)), np.array((*b, 3.0)), catalog.BY_KEY["viga_20x40"], 3.0)
+        bim_q.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+        bim_q.make_rebars(doc, bim_q.design_structure(doc)[3])
+        pump(400)
+    csv_path = os.path.join(OUT, "quantidades_estrutura.csv")
+    pdf_path = os.path.join(OUT, "memoria_calculo.pdf")
+    html_path = os.path.join(OUT, "memoria_calculo.html")
+    for p in (csv_path, pdf_path, html_path):
+        if os.path.exists(p):
+            os.remove(p)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_quantities_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        seen["last"] = d.table.item(d.table.rowCount() - 1, 0).text() if d.table.rowCount() else ""
+        seen["summary"] = d.summary.text()
+        d.grab().save(os.path.join(OUT, "164_quantidades_estrutura.png"))
+        win.export_structure_quantities(csv_path)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    rows = win.structure_quantities()
+    pump(300)
+    win.calc_report(pdf_path)
+    win.calc_report(html_path)
+    pump(300)
+    listed = len(rows) == 13 and seen.get("rows") == 13 + 4 + 1 and seen.get("last") == "Total" \
+        and "kg de aço" in seen.get("summary", "")
+    exported = os.path.exists(csv_path) and "Betão (m³)" in open(csv_path, encoding="utf-8-sig").read()
+    pdf = os.path.exists(pdf_path) and open(pdf_path, "rb").read(5) == b"%PDF-" and os.path.getsize(pdf_path) > 5000
+    page = open(html_path, encoding="utf-8").read() if os.path.exists(html_path) else ""
+    html_ok = "<h2>9. " in page and "assina" in page and page.count("<svg") == 26      # (0.233: its drawings;
+    pictures = open(pdf_path, "rb").read().count(b"/Subtype /Image") if pdf else 0      # 0.234: their sections;
+    check("quantidades_memoria", listed and exported and pdf and html_ok and pictures >= 26,  # 0.237: the details)
+          "lista={} csv={} pdf={} ({} B, {} imagens) html={} janela={}".format(
+              listed, exported, pdf, os.path.getsize(pdf_path) if os.path.exists(pdf_path) else 0, pictures,
+              html_ok, seen))
+
+
+def rebar_drawings_flow():
+    """0.168 — Structural drawings: the frame with its bars (the flows before leave it); the Project panel lists the
+    storey's structure plan and the reinforced members (Views ▸ Structure plans, Reinforcement); the structure plan
+    put on a new sheet, and a beam's and a column's reinforcement drawings on another (right click ▸ Put on a
+    sheet): each sheet drawn, and written as a picture."""
+    from arqbim.ui import pdf as pdf_out
+    if not doc.ifc.file.by_type("IfcReinforcingBar"):
+        structure_report_flow()                                       # (its frame and bars, when run alone)
+    win.tree_panel.raise_()
+    pump(400)
+    text = win.tree_panel.text()
+    beam = sorted((o for o in objects() if o.is_bim and o.ifc_class == "IfcBeam"), key=lambda o: o.name)[0]
+    column = sorted((o for o in objects() if o.is_bim and o.ifc_class == "IfcColumn"), key=lambda o: o.name)[0]
+    before = len(doc.sheets)
+    storey = doc.ifc.storeys()[0][0]
+    win.sheet_action("put", None, "structure", storey)
+    pump(500)
+    index = len(doc.sheets) - 1
+    structure_png = []
+    if len(doc.sheets) > before:
+        plan_pages = win._sheet_pages([doc.sheets[index]])
+        structure_png = pdf_out.write_images(OUT, plan_pages, "png") if plan_pages else []
+        if structure_png:
+            shutil.copyfile(structure_png[0], os.path.join(OUT, "166_planta_estrutura.png"))
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "rebar", beam.id)
+    pump(500)
+    index = len(doc.sheets) - 1
+    win.sheet_action("put", index, "rebar", column.id)
+    pump(800)
+    sheet = doc.sheets[index] if len(doc.sheets) > before else None
+    placed = [(v.kind, v.ref) for v in sheet.views] if sheet else []
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawn = bool(pages) and len(pages[0][1]) == 4 and all(d is not None for d, _f, _l in pages[0][1])
+    paths = pdf_out.write_images(OUT, pages, "png") if drawn else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "165_folha_armaduras.png"))
+    listed = "Armaduras (13)" in text and "Armaduras — {}".format(beam.name) in win.view_label("rebar", beam.id) \
+        and "Plantas de estrutura (1)" in text
+    dims = [len(d.dims) for d, _f, _l in pages[0][1]] if drawn else []          # (0.232: their dimensions)
+    # (0.234) each member's section beside it, a view of its own: at 1:20, the elevation at 1:50
+    scales = [f.scale for _d, f, _l in pages[0][1]] if drawn else []
+    labels = [label for _d, _f, label in pages[0][1]] if drawn else []
+    check("desenhos_armaduras", listed and placed == [("rebar", beam.id), ("rebar_cut", beam.id), ("rebar", column.id),
+                                                      ("rebar_cut", column.id)] and drawn
+          and bool(paths) and bool(structure_png) and len(dims) == 4 and min(dims) >= 1 and sum(dims) >= 7
+          and scales == [50, 20, 50, 20] and labels[1] == "Corte A–A — {}".format(beam.name)
+          and labels[3] == "Corte B–B — {}".format(column.name),
+          "arvore={} folha={} desenhos={} png={} planta={} cotas={} escalas={} nomes={}".format(
+              listed, placed, drawn, paths, structure_png, dims, scales, labels))
+
+
+def formwork_below_flow():
+    """0.235 — The formwork seen from below: the Project panel lists it under the storey's structure plan; put on a
+    new sheet (right click ▸ Put on a sheet), it is drawn — the columns cut, the beams seen from under them —, named
+    so, and written as a picture."""
+    from arqbim.ui import pdf as pdf_out
+    if not doc.ifc.file.by_type("IfcReinforcingBar"):
+        structure_report_flow()                                       # (its frame, when run alone)
+    win.tree_panel.raise_()
+    pump(400)
+    text = win.tree_panel.text()
+    storey, name = win._structural_storeys()[0]
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "structure_below", storey)
+    pump(500)
+    sheet = doc.sheets[-1] if len(doc.sheets) > before else None
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawing = pages[0][1][0][0] if pages and pages[0][1] else None
+    label = pages[0][1][0][2] if drawing is not None else ""
+    paths = pdf_out.write_images(OUT, pages, "png") if drawing is not None else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "235_cofragem_vista_de_baixo.png"))
+    cut = len(drawing.cut) if drawing is not None else 0
+    tags = [a[3] for a in drawing.annotations if a[0] == "text"] if drawing is not None else []
+    check("cofragem_vista_de_baixo", "{} — cofragem vista de baixo".format(name) in text and cut >= 4
+          and any(x.startswith("V") for x in tags) and label == "Cofragem vista de baixo — {}".format(name)
+          and bool(paths), "arvore={} cortados={} etiquetas={} nome={} png={}".format(
+              "cofragem vista de baixo" in text, cut, tags[:4], label, paths))
+
+
+def rebar_details_flow():
+    """0.237 — The typical details: the Project panel lists them first under Reinforcement; put on a new sheet
+    (right click ▸ Put on a sheet), drawn at 1:20 — the beam-column joint and a lap splice of each main diameter —,
+    named so, and written as a picture."""
+    from arqbim.ui import pdf as pdf_out
+    if not doc.ifc.file.by_type("IfcReinforcingBar"):
+        structure_report_flow()                                       # (its frame and bars, when run alone)
+    win.tree_panel.raise_()
+    pump(400)
+    text = win.tree_panel.text()
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "rebar_details", "")
+    pump(500)
+    sheet = doc.sheets[-1] if len(doc.sheets) > before else None
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawing, frame, label = pages[0][1][0] if pages and pages[0][1] else (None, None, "")
+    paths = pdf_out.write_images(OUT, pages, "png") if drawing is not None else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "237_pormenores_tipo.png"))
+    texts = [a[3] for a in drawing.annotations if a[0] == "text"] if drawing is not None else []
+    joint = any(x.startswith("Nó viga-pilar") for x in texts)
+    splices = [x for x in texts if "l0 = 1,5 × lb,rqd" in x]
+    check("pormenores_tipo", "Pormenores tipo" in text and joint and len(splices) >= 1
+          and label == "Pormenores tipo de armaduras" and frame is not None and frame.scale == 20 and bool(paths),
+          "arvore={} no={} emendas={} nome={} escala={} png={}".format(
+              "Pormenores tipo" in text, joint, splices, label, frame.scale if frame else None, paths))
+
+
+def labels_by_hand_flow():
+    """0.238 — Labels moved by hand: a beam's reinforcement on a new sheet; a label dragged with the mouse stays
+    where it is let go (the view's own property, that far in metres at its scale), the view not moved with it;
+    Ctrl+Z takes it back; a double click on a moved one puts it back in its place."""
+    if not doc.ifc.file.by_type("IfcReinforcingBar"):
+        structure_report_flow()                                       # (its frame and bars, when run alone)
+    beam = sorted((o for o in objects() if o.is_bim and o.ifc_class == "IfcBeam"), key=lambda o: o.name)[0]
+    win.sheet_action("put", None, "rebar", beam.id)
+    pump(800)
+    sw = win.sheet_window
+    view = ("rebar", beam.id)
+    drawing = sw._drawings[0] if sw is not None and sw._drawings else None
+    i, label_key = drawing.movable[0] if drawing is not None and drawing.movable else (None, None)
+    spot = sw.label_spot(0, i) if i is not None else None
+    canvas_ = sw.canvas
+    s, x0, y0 = canvas_.fit()
+    centre = sw.frames[0].centre if sw.frames and sw.frames[0] else None
+    moved = back = undone = False
+    offset = None
+    if spot is not None:
+        start = QtCore.QPoint(int(x0 + (spot[0] + 1.5) * s), int(y0 + (spot[1] - 1.0) * s))
+        end = start + QtCore.QPoint(30, 20)
+        QtTest.QTest.mousePress(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        for k in range(1, 6):
+            move_event(canvas_, start + QtCore.QPoint(6 * k, 4 * k), Qt.MouseButton.LeftButton)
+            pump(30)
+        QtTest.QTest.mouseRelease(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+        pump(600)
+        offset = (doc.view_settings(view).labels or {}).get(label_key)
+        scale = sw.frames[0].scale
+        want = (30 / s * scale / 1000.0, -20 / s * scale / 1000.0)
+        moved = offset is not None and abs(offset[0] - want[0]) < 0.02 and abs(offset[1] - want[1]) < 0.02 \
+            and doc.sheets[-1].views[0].at is None and sw.frames[0].centre == centre
+        sw.grab().save(os.path.join(OUT, "238_etiqueta_mudada.png"))
+        _active()
+        QtTest.QTest.keyClick(sw.canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(400)
+        undone = not doc.view_settings(view).labels
+        QtTest.QTest.keyClick(sw.canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+        pump(600)
+        QtTest.QTest.mouseDClick(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+        pump(600)
+        back = bool(offset) and not doc.view_settings(view).labels
+    check("etiqueta_a_mao", moved and undone and back, "etiqueta={} desvio={} desfeito={} de_volta={} centro={}->{}"
+          .format(label_key, offset, undone, back, centre, sw.frames[0].centre if sw.frames else None))
+
+
+def cabinets_flow():
+    """0.169 — Cabinets: in a room's plan, the Cabinet tool over a wall's inner face puts a 60 cm base unit with its
+    back against it; a second one clicked 5 cm from its side goes flush against it; a wall unit over them; the
+    Properties panel gives the first drawers (its body made again); (0.172) a wardrobe given three compartments, the
+    middle one of inner drawers; the cut list of the four, exported to CSV; the kitchen seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["cabinet"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "base")
+    win.tool.set_option("width", 0.60)
+    win.tool.set_option("fronts", "doors")           # (the tool keeps the last choice)
+    at(1.0, 0.05)                                    # (over the wall's inner half: against its inner face)
+    at(1.65, 0.05)                                   # (5 cm from the first one's side: flush against it)
+    win.tool.set_option("kind", "wall")
+    at(1.0, 0.05)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    cabs = doc.ifc.cabinets()
+    base = sorted((g for g, c in cabs.items() if c.kind == "base"), key=lambda g: doc.ifc.placement(g)[0, 3])
+    corners = [tuple(np.round(doc.ifc.placement(g)[:2, 3], 4)) for g in base]
+    against = len(base) == 2 and all(abs(c[1] - 0.1) < 1e-6 for c in corners) \
+        and abs(corners[0][0] - 0.7) <= 0.011 and abs(corners[1][0] - corners[0][0] - 0.60) < 1e-6   # (flush)
+    walls_unit = [g for g, c in cabs.items() if c.kind == "wall"]
+    hung = len(walls_unit) == 1 and abs(doc.get(walls_unit[0]).mesh.bounds()[0][2] - 1.45) < 1e-6
+    vp.set_selection({base[0]} if base else set())
+    pump(300)
+    combo = win.props.editors.get("cab_fronts")
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData("drawers"))
+        combo.activated.emit(combo.currentIndex())
+        pump(400)
+    drawers = bool(base) and doc.ifc.cabinet_params(base[0]).fronts == "drawers"
+    # (0.172) a wardrobe on the right wall: three compartments, the middle one of inner drawers
+    from arqbim.core import cabinets as core_cab
+    wardrobe = bim_actions.add_cabinet(doc, np.array((4.9, 2.0, 0.0)), 90.0, core_cab.Cabinet.of("wardrobe", width=1.2))
+    vp.set_selection({wardrobe})
+    pump(300)
+
+    def choose(editor, value):
+        combo = win.props.editors.get(editor)            # (the panel is made again after each change)
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(400)
+
+    choose("cab_compartments", 3)
+    choose("cab_fill_1", "drawers")
+    compartments = doc.ifc.cabinet_params(wardrobe).compartments == ["rail", "drawers", "shelves"]
+    vp.set_selection(set())
+    pump(200)
+    csv_path = os.path.join(OUT, "lista_corte.csv")
+    if os.path.exists(csv_path):
+        os.remove(csv_path)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_cut_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["rows"] = d.table.rowCount()
+        seen["summary"] = d.summary.text()
+        d.grab().save(os.path.join(OUT, "168_lista_corte.png"))
+        win.export_cut_list(None, csv_path)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    rows = win.cut_list()
+    pump(300)
+    listed = len(rows) >= 8 and seen.get("rows") == len(rows) and "4 móveis" in seen.get("summary", "")
+    exported = os.path.exists(csv_path) and "Lateral" in open(csv_path, encoding="utf-8-sig").read()
+    win.set_tool("select")
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.set_selection(set(cabs) | {wardrobe})
+    pump(200)
+    key(Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier)            # (framed on the cabinets)
+    pump(400)
+    vp.set_selection(set())
+    pump(200)
+
+    def style(value):
+        combo_s = win.props.editors.get("view_style")
+        if combo_s is not None:
+            combo_s.setCurrentIndex(combo_s.findData(value))
+            combo_s.activated.emit(combo_s.currentIndex())
+            pump(500)
+
+    style("xray")
+    shot("167_moveis.png")
+    style("shaded")
+    check("moveis", against and hung and drawers and compartments and listed and exported,
+          "encostados={} ({}) suspenso={} gavetas={} compartimentos={} lista={} csv={} janela={}".format(
+              against, corners, hung, drawers, compartments, listed, exported, seen))
+
+
+def kitchen_flow():
+    """0.170 — Kitchen: in a 5 × 4 m room's plan, the Kitchen tool clicked on the bottom wall's inner face, at the
+    corner with the right one, and up it; Enter: a kitchen in L — 6 + 4 base units, 6 + 4 wall units (0.239: the
+    first run's last a blind corner, below and above), the worktop over the base units (at 90 cm); one Ctrl+Z takes
+    it all away."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["kitchen"].trigger()
+    pump(100)
+    win.tool.set_option("corner", "blind")            # (0.239: blind corners — the tool keeps the last choice)
+    at(1.0, 0.05)                                    # (the bottom wall's inner face)
+    at(4.95, 0.15)                                   # (the right wall's, at the corner: squared to (4,9; 0,1))
+    at(4.95, 3.0)                                    # (up the right wall)
+    win.tool.enter()                                 # (Enter: made)
+    pump(600)
+    cabs = doc.ifc.cabinets()
+    base = [g for g, c in cabs.items() if c.kind == "base"]
+    wall = [g for g, c in cabs.items() if c.kind == "wall"]
+    tops = doc.ifc.worktops()
+    top_z = max((float(doc.get(g).mesh.bounds()[1][2]) for g in tops if doc.get(g) is not None), default=0.0)
+    blinds = sorted(round(c.blind, 3) for c in cabs.values() if c.blind > 0)
+    made = (len(base), len(wall), len(tops)) == (10, 10, 1) and abs(top_z - 0.90) < 1e-6 and blinds == [0.401, 0.631]
+    win.set_tool("select")
+    pump(200)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(600)
+    undone = not doc.ifc.cabinets() and not doc.ifc.worktops()
+    doc.redo()
+    pump(600)
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.set_selection(set(base + wall + list(tops)))
+    pump(200)
+    key(Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier)
+    pump(400)
+    vp.set_selection(set())
+    pump(200)
+
+    def style(value):
+        combo = win.props.editors.get("view_style")      # (the panel is made again after each change)
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+
+    style("xray")
+    shot("169_cozinha.png")
+    style("shaded")
+    check("cozinha", made and undone, "inferiores={} superiores={} bancadas={} topo={:.3f} desfeito={} cegos={}".format(
+        len(base), len(wall), len(tops), top_z, undone, blinds))
+
+
+def _xray_shot(name):
+    """(0.240) A picture in X-ray (what the walls hide seen through them), then back to shaded."""
+    def style(value):
+        combo = win.props.editors.get("view_style")
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+
+    style("xray")
+    shot(name)
+    style("shaded")
+
+
+def kitchen_corners_flow():
+    """0.240 — Kitchen corners: the Kitchen tool given Corners: L-shaped with carousel (its option), clicked as in
+    kitchen_flow; Enter: the corner base unit an L of 90 cm with its carousel, the wall one an L of 65 cm, the worktop
+    an L over both runs; seen in 3D from inside the room."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    win.tool_actions["kitchen"].trigger()
+    pump(100)
+    win.tool.set_option("corner", "carousel")         # (Corners: L-shaped with carousel, in the context bar)
+    pump(100)
+    at(1.0, 0.05)
+    at(4.95, 0.15)
+    at(4.95, 3.0)
+    win.tool.enter()
+    pump(600)
+    cabs = doc.ifc.cabinets()
+    l_units = sorted((c.kind, round(c.arm, 2), c.interior) for c in cabs.values() if c.arm > 0)
+    tops = doc.ifc.worktops()
+    outline = next(iter(tops.values()))[0] if tops else []
+    made = l_units == [("base", 0.9, "carousel"), ("wall", 0.65, "")] and len(outline) == 6
+    win.set_tool("select")
+    pump(200)
+    key(Qt.Key.Key_F4)
+    pump(500)
+    corner = [g for g, c in cabs.items() if c.arm > 0]
+    vp.set_selection(set(corner))
+    pump(200)
+    key(Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier)
+    pump(400)
+    vp.set_selection(set())
+    pump(200)
+    _xray_shot("240_canto_em_l.png")
+    check("cozinha_canto_em_l", made, "cantos={} bancada={} pontos".format(l_units, len(outline)))
+
+
+def sliding_doors_flow():
+    """0.241 — Sliding doors: a wardrobe of 2,40 m given Fronts: Sliding doors in the Properties panel; its Doors
+    then 2 to 4 — chosen 3: three doors on two tracks; seen in 3D."""
+    from arqbim.core import cabinets as core_cab
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    g = bim_actions.add_cabinet(doc, np.array((1.2, 0.0, 0.0)), 0.0, core_cab.Cabinet.of("wardrobe", width=2.40))
+    pump(300)
+    vp.set_selection({g})
+    pump(400)
+
+    def choose(name, value):
+        combo = win.props.editors.get(name)            # (the panel is made again after each change)
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+        return combo is not None
+
+    fronts = choose("cab_fronts", "sliding")
+    doors_combo = win.props.editors.get("cab_doors")
+    choices = [doors_combo.itemData(k) for k in range(doors_combo.count())] if doors_combo is not None else []
+    three = choose("cab_doors", 3)
+    c = doc.ifc.cabinet_params(g)
+    lay = core_cab.layout(c)
+    made = (c.fronts, c.doors) == ("sliding", 3) and sum(1 for p in lay.panels if p.role == "sliding_door") == 3
+    vp.set_selection(set())
+    win.open_view("3d", None)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    shot("241_portas_de_correr.png")
+    check("portas_de_correr", fronts and three and made and choices == [2, 3, 4],
+          "frentes={} portas={} escolhas={}".format(c.fronts, c.doors, choices))
+
+
+def oven_column_flow():
+    """0.242 — An oven in a tall unit: the Cabinet tool given Module: Tall unit and Fronts: Oven, clicked over a
+    wall's inner face; the tall unit and its oven put in one step (the oven tied to it, at 86 cm); the tall unit's
+    fronts made doors: the oven goes; Ctrl+Z: back; seen in 3D; the Appliance tool's list without it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+    win.tool_actions["cabinet"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "tall")
+    win.tool.set_option("fronts", "oven")
+    move(near((1.0, 0.05, level)), 4)
+    pump(100)
+    click()
+    pump(400)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+
+    def ovens():
+        return [e for e in doc.ifc.file.by_type("IfcElectricAppliance")
+                if doc.ifc._params(e).get("Aparelho") == "oven_column"]
+
+    units = [g for g, c in doc.ifc.cabinets().items() if c.fronts == "oven"]
+    found = ovens()
+    put = len(units) == 1 and len(found) == 1 and doc.ifc._params(found[0]).get("Hospedeiro") == units[0] \
+        and abs(doc.get(found[0].GlobalId).mesh.bounds()[0][2] - 0.86) < 1e-6
+    gone = back = False
+    if units:
+        bim_actions.set_cabinet(doc, units[0], fronts="doors")
+        pump(300)
+        gone = not ovens()
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(400)
+        back = len(ovens()) == 1
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.zoom_extents()
+    pump(300)
+    _xray_shot("242_forno_em_coluna.png")
+    win.tool_actions["appliance"].trigger()
+    pump(100)
+    listed = [o for o in win.tool.options() if o.key == "kind"]
+    kinds = [k for k, _label in listed[0].choices] if listed else []
+    key(Qt.Key.Key_Escape)
+    pump(100)
+    check("forno_em_coluna", put and gone and back and "oven" in kinds and "oven_column" not in kinds,
+          "colunas={} fornos={} sai={} volta={} lista={}".format(len(units), len(found), gone, back, kinds))
+
+
+def front_finish_flow():
+    """0.243 — Fronts' finish: a base unit given oak fronts in the Properties panel (Fronts' finish): shown in the
+    oak's colour in 3D, its fronts in the cut list as oak; back to melamine: the cabinets' usual colour."""
+    from arqbim.core import cabinets as core_cab
+    from arqbim.model import bim as bim_actions
+    from arqbim.render.viewport import BIM_COLORS, BIM_DEFAULT, _physical
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    g = bim_actions.add_cabinet(doc, np.array((0.3, 0.0, 0.0)), 0.0, core_cab.Cabinet.of("base", doors=2))
+    pump(300)
+    vp.set_selection({g})
+    pump(400)
+    combo = win.props.editors.get("cab_finish")
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData("oak"))
+        combo.activated.emit(combo.currentIndex())
+        pump(500)
+    vp.set_selection(set())
+    pump(300)
+    obj = doc.get(g)
+    oak = doc.ifc.cabinet_params(g).finish == "oak" and \
+        np.allclose(vp._bim_colors(obj)[0], _physical(doc.ifc.cabinet_colour(g)))
+    rows, _hw, _areas = bim_actions.cut_list(doc)
+    listed = any(r[1] == "front_oak" for r in rows)
+    win.open_view("3d", None)
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("243_frentes_de_carvalho.png")
+    bim_actions.set_cabinet(doc, g, finish="melamine")
+    pump(300)
+    plain = np.allclose(vp._bim_colors(doc.get(g))[0], _physical(BIM_COLORS.get("IfcFurniture", BIM_DEFAULT)))
+    check("frentes_acabamento", combo is not None and oak and listed and plain,
+          "carvalho={} lista={} melamina={}".format(oak, listed, plain))
+
+
+def division_drag_flow():
+    """0.244 — Compartments of different widths: a wardrobe of 1,20 m with two compartments, selected — a grip on
+    its division; the grip dragged 20 cm to the right: the division there (45 cm → its middle at 80 cm), the
+    compartments 77,1 and 37,1 cm; the Properties panel gives the first's width; Ctrl+Z: even again."""
+    from arqbim.core import cabinets as core_cab
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    g = bim_actions.add_cabinet(doc, np.array((0.6, 0.0, 0.0)), 0.0,
+                                core_cab.Cabinet.of("wardrobe", width=1.20, interior="shelves,rail"))
+    win.open_view("3d", None)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({g})
+    pump(400)
+    vp.zoom_extents()
+    pump(400)
+    grips = win.tool._cab_grips
+    moved = undone = shown = False
+    mids = []
+    if grips is not None:
+        base, x_dir = grips[1][0], grips[2]
+        move(near(base), 3)
+        press()
+        move(near(base + x_dir * 0.20), 6)
+        release()
+        pump(500)
+        mids = doc.ifc.cabinet_params(g).divisions
+        moved = len(mids) == 1 and abs(mids[0] - 0.80) < 0.01
+        vp.set_selection({g})
+        pump(400)
+        shown = "cab_cwidth_0" in win.props.editors
+        shot("244_divisoria_arrastada.png")
+        _active()
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        pump(400)
+        undone = abs(doc.ifc.cabinet_params(g).divisions[0] - 0.60) < 1e-9
+    check("divisoria_arrastada", grips is not None and moved and shown and undone,
+          "pega={} divisorias={} propriedades={} desfeito={}".format(grips is not None, mids, shown, undone))
+
+
+def own_profile_flow():
+    """0.245 — A profile drawn by the user: a flat L (4 × 6 cm) drawn upright, selected — Architecture ▸ Profile from
+    a face keeps it in the project («Friso L»); the Profile tool offers it; run along a wall's foot; its section in the
+    Properties panel's choice."""
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.model import bim as bim_actions
+    from arqbim.model.document import AddObject, SketchObject
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    m = sg.rectangle_matrix(np.array((0.0, -1.0, 0.0)), np.array((0.0, 1.0, 0.0)), np.array((0.0, 0.0, 1.0)))
+    flat = SketchObject("Secção", m, sg.polygon_mesh([(0.0, 0.0), (0.04, 0.0), (0.04, 0.01), (0.01, 0.01),
+                                                       (0.01, 0.06), (0.0, 0.06)]))
+    doc.execute(AddObject(flat))
+    pump(200)
+    vp.set_selection({flat.id})
+    pump(200)
+    in_ribbon = win.ribbon_item("profile_from_face") is not None
+    made = win.profile_from_face(name="Friso L")
+    pump(300)
+    win.tool_actions["profile"].trigger()
+    pump(200)
+    offered = [k for k, _n in next((o.choices for o in win.tool.options() if o.key == "profile"), ())]
+    win.tool.set_option("profile", "custom:Friso L")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    g = bim_actions.add_profile(doc, [(0.0, 0.0), (3.0, 0.0)], "custom:Friso L", side=1)
+    pump(300)
+    vp.set_selection({g})
+    pump(400)
+    combo = win.props.editors.get("profile_profile")
+    shown = combo is not None and combo.currentData() == "custom:Friso L"
+    vp.set_selection(set())
+    win.open_view("3d", None)
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("245_perfil_proprio.png")
+    check("perfil_proprio", in_ribbon and made == "custom:Friso L" and "custom:Friso L" in offered and shown,
+          "faixa={} feito={} na_ferramenta={} propriedades={}".format(in_ribbon, made, offered[-1:], shown))
+
+
+def combined_footing_flow():
+    """0.249 — A combined footing: two columns 3 m apart selected; Structure ▸ Combined footing: one footing under
+    both (4,20 long with the 1,20 pad type), selected, tied to both; seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    a = bim_actions.add_column(doc, np.array((0.0, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    b = bim_actions.add_column(doc, np.array((3.0, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+    pump(300)
+    win.tools["footing"].pad = catalog.BY_KEY["sapata_120"]
+    vp.set_selection({a, b})
+    pump(200)
+    in_ribbon = win.ribbon_item("combined_footing") is not None
+    win.act_combined_footing.trigger()
+    pump(400)
+    made = [e.GlobalId for e in doc.ifc.file.by_type("IfcFooting")]
+    length = doc.ifc.footing_params(made[0])[2] if made else 0.0
+    tied = made and doc.ifc._params(doc.ifc.by_guid(made[0])).get("Apoia2") in (a, b)
+    selected = set(vp.selection) == set(made)
+    win.open_view("3d", None)
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("249_sapata_combinada.png")
+    check("sapata_combinada", in_ribbon and len(made) == 1 and abs(length - 4.2) < 1e-6 and tied and selected,
+          "faixa={} sapatas={} comprimento={:.2f} presa={} selecionada={}".format(in_ribbon, len(made), length, tied,
+                                                                                 selected))
+
+
+def roof_profile_flow():
+    """0.251 — A roof by a drawn profile: a gable roof over 10 × 6 m and a section drawn upright (7 m wide), both
+    selected; Architecture ▸ Roof profile: the roof made with it (FREEFORM, its top 1,50 m over the eave); seen in
+    3D."""
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model.document import AddObject, SketchObject
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    roof = bim_actions.add_roof(doc, [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)], catalog.BY_KEY["laje_15"],
+                                "gable", 30.0, 0.5, eave=3.0)
+    m = sg.rectangle_matrix(np.array((0.0, -2.0, 0.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 0.0, 1.0)))
+    flat = SketchObject("Secção", m, sg.polygon_mesh([(0.0, 0.0), (7.0, 0.0), (7.0, 0.2), (5.0, 1.2), (3.5, 1.5),
+                                                       (2.0, 1.2), (0.0, 0.2)]))
+    doc.execute(AddObject(flat))
+    pump(300)
+    vp.set_selection({roof, flat.id})
+    pump(200)
+    in_ribbon = win.ribbon_item("roof_profile") is not None
+    win.act_roof_profile.trigger()
+    pump(500)
+    kind = doc.ifc.by_guid(roof).PredefinedType
+    top = doc.ifc.roof_height_at(roof, (5.0, 3.0))
+    vp.set_selection(set())
+    win.open_view("3d", None)
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("251_cobertura_perfil_desenhado.png")
+    check("cobertura_perfil_desenhado", in_ribbon and kind == "FREEFORM" and abs(top - 4.5) < 1e-6,
+          "faixa={} tipo={} topo={:.3f}".format(in_ribbon, kind, top))
+
+
+def cut_outline_flow():
+    """0.253 — The cut's thick outline on paper: a room of four walls with a column at each corner and a round wall
+    beside it, their plan painted as on a sheet (1:50): the outline is all that is cut joined — the corners where
+    the columns and the walls overlap inside it, the round room outside it (its inner line kept), the wall's ring
+    inside it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import drawings
+    from arqbim.ui import pdf
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec, corners = catalog.BY_KEY["parede_alv_20"], [(0.0, 0.0), (6.0, 0.0), (6.0, 4.0), (0.0, 4.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(corners[k] + (0.0,)), np.array(corners[(k + 1) % 4] + (0.0,)), spec)
+    column = next(s for s in catalog.BY_KEY.values() if s.kind == "column")
+    for c in corners:
+        bim_actions.add_column(doc, np.array(c + (0.0,)), column)
+    bim_actions.add_curved_wall(doc, np.array((12.0, 2.0, 0.0)), 3.0, 0.0, 2 * math.pi, spec)
+    pump(300)
+    drawing = drawings.plan(doc, doc.active_storey, "Planta")
+    outline = pdf._paths(drawing)[2]
+    inside = lambda x, y: outline.contains(QtCore.QPointF(x, y))       # noqa: E731
+    corners_in = all(inside(x, y) for x, y in corners)                  # (a column over two walls' ends)
+    room_out = not inside(12.0, 2.0) and not inside(3.0, 2.0)
+    ring_in = inside(15.0, 2.0) and inside(9.0, 2.0) and inside(3.0, 0.0)
+    image = QtGui.QImage(1300, 560, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    pdf.paint_drawing(painter, drawing, 50, (160.0, 68.0), 4.0)
+    painter.end()
+    image.save(os.path.join(OUT, "253_contorno_do_corte.png"))
+    image.copy(QtCore.QRect(20, 90, 60, 60)).scaled(480, 480).save(os.path.join(OUT, "254_canto_pilar.png"))
+    check("contorno_do_corte", corners_in and room_out and ring_in,
+          "cantos={} sala_fora={} anel={}".format(corners_in, room_out, ring_in))
+
+
+def curved_curtain_flow():
+    """0.252 — A curtain wall in a curved wall (5 m radius, a quarter circle, 20 cm): the Curtain wall tool, its start
+    clicked on the wall at 30° — the tip says it follows the wall's arc — the mouse round to 60°, a click: a curtain
+    wall on the arc (30°), in the wall (its opening cut); its Properties: 1 m from the wall's start (it slides round
+    there); the wall's radius made 6 m: it goes with it; seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_curved_wall(doc, np.zeros(3), 5.0, 0.0, math.pi / 2, catalog.BY_KEY["parede_alv_20"])
+    full = doc.get(wall).mesh.volume()
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.0, 3.0, 0.0), radius=4.0)
+    pump(300)
+    win.tool_actions["curtain_wall"].trigger()
+    pump(100)
+    at = lambda deg: (5.0 * math.cos(math.radians(deg)), 5.0 * math.sin(math.radians(deg)), 0.0)   # noqa: E731
+    move(near(at(30)), 4)
+    click()
+    pump(150)
+    tip = win.hint_label.text()
+    move(near(at(45)), 4)
+    move(near(at(60)), 4)
+    pump(150)
+    click()
+    pump(500)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    cws = [e.GlobalId for e in doc.ifc.file.by_type("IfcCurtainWall")]
+    cw = cws[0] if len(cws) == 1 else None
+    p = doc.ifc.curtain_params(cw) if cw else None
+    made = p is not None and p["radius"] is not None and abs(p["radius"] - 5.0) < 0.1 + 1e-6 and \
+        abs(abs(p["sweep"]) - math.radians(30)) < math.radians(1.5)
+    cut = made and doc.ifc.host_wall(cw) == wall and doc.get(wall).mesh.volume() < full - 0.5 * 2.8 * 0.2 * p["length"]
+    vp.set_selection({cw} if cw else set())
+    pump(300)
+    if made:
+        win._on_property_edit("from_start", cw, 1.0)
+        pump(300)
+    slid = made and abs(doc.ifc.filling_state(cw)["s"] - 1.0) < 1e-6
+    vp.set_selection(set())
+    if made:
+        bim_actions.set_curved_wall(doc, wall, radius=6.0)
+        pump(300)
+    p = doc.ifc.curtain_params(cw) if cw else None
+    follows = made and doc.ifc.host_wall(cw) == wall and abs(p["radius"] - 6.0) < 0.1 + 1e-6
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(500)
+    shot("252_fachada_parede_curva.png")
+    vp.set_camera((10.5, 2.0, 2.2), (-5.3, 0.6, -0.9))         # (outside it, close, looking at it)
+    pump(500)
+    shot("252b_fachada_parede_curva_perto.png")
+    check("fachada_em_parede_curva", "arco" in tip and made and cut and slid and follows,
+          "dica={!r} feita={} vão={} deslizou={} acompanha={} raio={}".format(
+              tip[:50], made, cut, slid, follows, round(p["radius"], 3) if p else None))
+
+
+def keynote_table_flow():
+    """0.248 — The project's keynote table: Annotate ▸ Project keynotes… — a row added (10.01 Painel acústico) and one
+    of the program's copied and changed (02.02); OK: the project's table; a wall's keynote chosen in the Properties
+    panel among them, with the project's text."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+
+    def fill():
+        d = getattr(win, "_keynote_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.add_row("10.01", "Painel acústico")
+        d.copy.setCurrentIndex(d.copy.findData("02.02"))
+        d.copy.activated.emit(d.copy.currentIndex())
+        last = d.table.rowCount() - 1
+        d.table.item(last, 1).setText("Tijolo de 15 (projeto)")
+        d.accept()
+
+    win._keynote_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    in_ribbon = win.ribbon_item("keynote_table") is not None
+    win.act_keynote_table.trigger()
+    pump(400)
+    table = doc.ifc.keynote_table()
+    vp.set_selection({wall})
+    pump(400)
+    combo = win.props.editors.get("keynote")
+    offered = [combo.itemText(k) for k in range(combo.count())] if combo is not None else []
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData("10.01"))
+        combo.activated.emit(combo.currentIndex())
+        pump(400)
+    check("notas_chave_do_projeto", in_ribbon and table == {"10.01": "Painel acústico",
+                                                             "02.02": "Tijolo de 15 (projeto)"}
+          and "10.01 — Painel acústico" in offered and "02.02 — Tijolo de 15 (projeto)" in offered
+          and doc.ifc.keynote_of(wall) == ("10.01", "Painel acústico"),
+          "faixa={} tabela={} nota={}".format(in_ribbon, table, doc.ifc.keynote_of(wall)))
+
+
+def appliances_flow():
+    """0.171 — Appliances: a straight kitchen of 3 m against a room's bottom wall; the Appliance tool puts a hob on
+    its worktop (the worktop cut for it), the Sanitary fixture tool a kitchen sink beside it (a second cut-out); a
+    dishwasher with its connections; Delete takes the hob away and its cut-out with it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                           (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    made = bim_actions.make_kitchen(doc, [(0.5, 0.1), (3.5, 0.1)], 1, wall_units=False)
+    top = made["worktop"]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    level = vp.cut_level()
+
+    def at(x, y):
+        move(near((x, y, level)), 4)
+        pump(100)
+        click()
+        pump(300)
+
+    def voids():
+        body = [r for r in doc.ifc.by_guid(top).Representation.Representations
+                if r.RepresentationIdentifier == "Body"][0]
+        profile = body.Items[0].SweptArea
+        return len(profile.InnerCurves) if profile.is_a("IfcArbitraryProfileDefWithVoids") else 0
+
+    win.tool_actions["appliance"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "hob")
+    at(1.4, 0.05)                                    # (the wall behind the worktop: the hob on it)
+    win.tool.set_option("kind", "dishwasher")
+    at(4.2, 0.05)
+    win.tool_actions["fixture"].trigger()
+    pump(100)
+    win.tool.set_option("kind", "kitchen_sink")
+    at(2.6, 0.05)
+    win.set_tool("select")
+    pump(200)
+    hobs = [e.GlobalId for e in doc.ifc.file.by_type("IfcElectricAppliance") if e.PredefinedType == "ELECTRICCOOKER"]
+    washers = [e.GlobalId for e in doc.ifc.file.by_type("IfcElectricAppliance") if e.PredefinedType == "DISHWASHER"]
+    cut = voids() == 2
+    ported = bool(washers) and sorted(p.Name for p in doc.ifc.ports(washers[0])) == ["cold", "drain", "power"]  # (0.198)
+    key(Qt.Key.Key_F4)
+    pump(500)
+    win.set_view("top")                              # (from above: the hob, the sink, the worktop cut for them)
+    pump(400)
+    vp.set_selection({top})
+    pump(200)
+    key(Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier)
+    pump(400)
+    vp.set_selection(set())
+    pump(300)
+    shot("170_eletrodomesticos.png")
+    vp.set_selection(set(hobs))
+    pump(200)
+    key(Qt.Key.Key_Delete)
+    pump(500)
+    uncut = voids() == 1
+    check("eletrodomesticos", len(hobs) == 1 and cut and ported and uncut,
+          "placa={} recortes={} maquina={} apagada={}".format(len(hobs), cut, ported, uncut))
+
+
+def patterns_flow():
+    """0.173 — Patterned finishes: in a room's plan, the Wall finish tool with Slats clicked on the south wall's
+    inner face, with Perforated panel on the east one's; the slats' gap made wider in the Properties (fewer pieces);
+    the cut list lists the slats and the panels, and writes the DXF for the CNC (each panel's outline and holes);
+    the room seen in x-ray."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (5.0, 0.0)), ((5.0, 0.0), (5.0, 4.0)), ((5.0, 4.0), (0.0, 4.0)),
+                          ((0.0, 4.0), (0.0, 0.0)))]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["wall_finish"].trigger()
+    pump(100)
+    win.tool.set_option("finish", "ripado")
+    move(near((2.5, 0.06, 0.0)), 4)
+    pump(150)
+    click()
+    pump(400)
+    win.tool.set_option("finish", "perfurado")
+    move(near((4.94, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(800)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    slats = next(iter(doc.ifc.claddings_of([walls[0]])), None)
+    panel = next(iter(doc.ifc.claddings_of([walls[1]])), None)
+    finishes = (doc.ifc._params(doc.ifc.by_guid(slats)).get("Acabamento") if slats else None,
+                doc.ifc._params(doc.ifc.by_guid(panel)).get("Acabamento") if panel else None)
+    before = doc.ifc.pattern_params(slats)["count"] if slats else 0
+    vp.set_selection({slats} if slats else set())
+    pump(300)
+    editor = win.props.editors.get("cladding_gap")
+    if editor is not None:
+        editor.setText("0,06")                      # (6 cm: a length without its unit is in metres)
+        editor.editingFinished.emit()
+        pump(500)
+    fewer = bool(slats) and 0 < doc.ifc.pattern_params(slats)["count"] < before
+    vp.set_selection(set())
+    pump(200)
+    dxf_path = os.path.join(OUT, "fabrico.dxf")
+    if os.path.exists(dxf_path):
+        os.remove(dxf_path)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_cut_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["roles"] = sorted({d.table.item(r, 0).text() for r in range(d.table.rowCount())})
+        seen["dxf"] = d.dxf_button.isEnabled()
+        d.grab().save(os.path.join(OUT, "172_lista_corte_padroes.png"))
+        win.export_fabrication(None, dxf_path)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.cut_list()
+    pump(300)
+    holes = doc.ifc.pattern_params(panel)["count"] if panel else 0
+    with open(dxf_path, encoding="cp1252") if os.path.exists(dxf_path) else open(os.devnull) as f:
+        text = f.read()
+    exported = holes > 0 and text.count("CIRCLE") == holes
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.zoom_extents()
+    pump(300)
+
+    def style(value):
+        combo = win.props.editors.get("view_style")
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+
+    style("xray")
+    shot("171_ripado_perfurado.png")
+    style("shaded")
+    bim_actions.delete(doc, [walls[2]])                   # (the north wall away: the room seen from there)
+    pump(400)
+    vp.look_from((-0.35, 1.0, 0.45), animate=False)
+    pump(600)
+    shot("171b_ripado.png")
+    listed = seen.get("roles") == ["Painel perfurado", "Ripa"] and seen.get("dxf")
+    check("padroes", finishes == ("ripado", "perfurado") and fewer and listed and exported,
+          "acabamentos={} menos_ripas={} lista={} dxf={} ({} furos)".format(finishes, fewer, seen, exported, holes))
+
+
+def perforated_panel_flow():
+    """0.389 (the owner: «não vi o comando de painel perfurado»): Arquitetura ▸ Acabamentos ▸ Painel perfurado — its
+    button on the ribbon; square holes on a 45° grid chosen on the bar; on a wall seen from the front a drag from
+    (1,0; 0,5) to (3,0; 2,0) makes a panel of that rectangle; a click on a second wall's face covers all of it; a click
+    on the first panel chooses it (its hole shape and grid in the Properties). Captured: 389_painel_perfurado.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    first = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), spec)
+    second = bim_actions.add_wall(doc, np.array((5.0, 0.0, 0.0)), np.array((8.0, 0.0, 0.0)), spec)
+    win.views.open(("3d",))
+    vp.set_view("front")
+    vp.zoom_extents()
+    pump(500)
+    on_ribbon = "perforated_panel" in ribbon.items_of("architecture")
+    win.tool_actions["perforated_panel"].trigger()
+    pump(200)
+    win._context_option("hole", "quadrado")
+    win._context_option("grid", "diagonal")
+    pump(100)
+    y = -0.101
+    drag([near((1.0, y, 0.5)), near((2.0, y, 1.2)), near((3.0, y, 2.0))])
+    pump(600)
+    panels = list(doc.ifc.claddings_of([first]))
+    rect = False
+    if len(panels) == 1:
+        info = doc.ifc.describe(panels[0])["params"]
+        d = info["pattern"]
+        rect = abs(info["start"] - 1.0) < 0.06 and abs(info["end"] - 3.0) < 0.06 and abs(info["base"] - 0.5) < 0.06 \
+            and abs(info["top"] - 2.0) < 0.06 and (d["hole"], d["grid"]) == ("quadrado", "diagonal") and d["count"] > 50
+    move(near((6.5, y, 1.4)), 3)
+    pump(150)
+    click()
+    pump(600)
+    whole = [g for g in doc.ifc.claddings_of([second])]
+    covers = len(whole) == 1 and doc.ifc.describe(whole[0])["params"]["whole"]
+    if panels:
+        move(near((2.0, y - 0.02, 1.2)), 3)
+        pump(150)
+        click()
+        pump(400)
+    chosen = bool(panels) and vp.selection == {panels[0]} and "cladding_hole" in win.props.editors and \
+        "cladding_mask" in win.props.editors
+    shot("389_painel_perfurado.png")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    check("painel_perfurado", on_ribbon and rect and covers and chosen,
+          "fita={} retangulo={} face_inteira={} escolhido={} paineis={}".format(on_ribbon, rect, covers, chosen,
+                                                                               len(panels)))
+    doc.modified = False
+
+
+def organic_roof_flow():
+    """0.390 (the owner: «não vi o comando de … cobertura orgânica»): Arquitetura ▸ Pisos e coberturas ▸ Cobertura
+    orgânica — on the ribbon; Retângulo, a glazed gridshell: two corners clicked on the floor (0,0 and 10,6) make an
+    organic roof there at 3 m, its body seen; Curvo, a shell vault: five points clicked and Enter — a second one, its
+    outline a smooth curve; the first chosen: its measures in the Properties. Captured: 390_cobertura_organica.png."""
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.views.open(("3d",))
+    vp.view_along((0.0, 1e-4, -1.0), np.array((9.0, 3.0, 0.0)), 13.0)
+    pump(400)
+    # (0.395: its tool replaced by the parametric surface — «não é isso que eu quero» —; the roofs already made still
+    # open and change: made here through the model, as an older file has them)
+    on_ribbon = "organic_roof" not in ribbon.items_of("architecture") and "param_surface" in ribbon.items_of("massing") \
+        and "organic_roof" not in win.tool_actions
+    from arqbim.core import organic_roof as core_or
+    from arqbim.model import bim as B
+    B.add_organic_roof(doc, [(0.0, 0.0), (10.0, 0.0), (10.0, 6.0), (0.0, 6.0)], 3.0, system="envidracada")
+    pump(500)
+    roofs = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "organic_roof"]
+    first = False
+    if len(roofs) == 1:
+        info = doc.ifc.describe(roofs[0])["params"]
+        first = info["system"] == "envidracada" and abs(info["base"] - 3.0) < 1e-6 and 55.0 < info["area"] < 90.0 \
+            and info["glass"] > 40.0 and len(doc.get(roofs[0]).mesh.tris) > 100
+    curve = core_or.smooth_outline([(12.0, 0.0), (17.0, -1.0), (19.0, 3.0), (16.0, 7.0), (12.5, 5.0)], 0.25)
+    B.add_organic_roof(doc, curve, 3.0, form="abobada", system="casca")
+    pump(800)
+    roofs = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "organic_roof"]
+    second = False
+    if len(roofs) == 2:
+        other = next(g for g in roofs if doc.ifc.describe(g)["params"]["system"] == "casca")
+        outline = doc.ifc.organic_params(other)["outline"]
+        second = doc.ifc.describe(other)["params"]["form"] == "abobada" and len(outline) > 20
+        win._on_property_edit("organic_system", other, "gridshell")      # (still changed in the Properties)
+        pump(500)
+        second = second and doc.ifc.describe(other)["params"]["system"] == "gridshell"
+    win.set_tool("select")
+    pump(200)
+    if roofs:
+        vp.set_selection({roofs[0]})
+        pump(400)
+    props = "organic_system" in win.props.editors and "organic_supports" in win.props.editors
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(600)
+    shot("390_cobertura_organica.png")
+    check("cobertura_organica", on_ribbon and first and second and props,
+          "fita={} retangulo_envidracado={} curva_casca={} propriedades={} coberturas={}".format(
+              on_ribbon, first, second, props, len(roofs)))
+    doc.modified = False
+
+
+def param_surface_flow():
+    """0.395 (the owner: «a cobertura orgânica que pedi é uma coisa mais complexa… estude o conceito da superfície
+    paramétrica… dá pra fazer cobertura e estrutura orgânica»; «não chamaria cobertura»): Modelação ▸ Formas livres ▸
+    Superfície paramétrica. Three rings drawn one above the other (3, 6 and 8 m): the tool, its curves clicked one by one
+    — a preview at each —, Enter: a loft, selected, its rows in the Properties; there a gridshell and an edge ring added,
+    a twist, the lattice made hexagonal; the middle ring lifted 1 m: the surface follows it in the same step (Ctrl+Z
+    takes both back). Four lines that touch, selected first: the tool makes a surface of 4 edges at once (Enter). A
+    formula surface on two corners, as a roof (IfcRoof). Its parts list as CSV. Captured: 395_superficie_parametrica.png,
+    395_superficie_propriedades.png."""
+    import tempfile
+    from arqbim.core import curves as cc
+    from arqbim.model.document import AddObject, ReplaceObjects, SketchObject
+    from arqbim.core.mesh import PolyMesh
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.views.open(("3d",))
+    pump(300)
+
+    def add_curve(curve=None, pts=None, name="c"):
+        pts = cc.curve_points(curve) if curve is not None else pts
+        closed = cc.is_closed(curve) if curve is not None else False
+        lines = [(k, k + 1) for k in range(len(pts) - 1)] + ([(len(pts) - 1, 0)] if closed else [])
+        sk = SketchObject(name, np.eye(4), PolyMesh(pts, [], lines=lines), curve=curve)
+        doc.execute(AddObject(sk, "add"))
+        return sk.id
+
+    def ring(r, z, cx=6.0, cy=6.0):
+        return {"kind": "arc", "centre": [cx, cy, z], "normal": [0, 0, 1], "start": [cx + r, cy, z],
+                "angle": 360.0, "segments": 32}
+    rings = [add_curve(ring(r, z), name="anel") for r, z in ((6.0, 3.0), (4.0, 6.0), (1.8, 8.0))]
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(500)
+    on_ribbon = "param_surface" in ribbon.items_of("massing") and "param_surface" in ribbon.items_of("structure")
+    win.tool_actions["param_surface"].trigger()
+    pump(200)
+    tool = win.tool
+    picked = []
+    for r, z in ((6.0, 3.0), (4.0, 6.0), (1.8, 8.0)):
+        move(near((6.0 - r * 0.7071, 6.0 - r * 0.7071, z)), 3)       # (a point on the ring, toward the viewer)
+        pump(150)
+        click()
+        pump(250)
+        picked.append(len(tool.picks))
+    preview = bool(vp._volume.visible)                                # (the surface shown as it will be)
+    key(Qt.Key.Key_Return)
+    pump(800)
+    surfaces = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "param_surface"]
+    loft = False
+    g = surfaces[0] if surfaces else None
+    if g:
+        d = doc.ifc.surface_definition(g)
+        loft = d["surface"]["op"] == "loft" and len(d["curves"]) == 3 and all(c.get("source") for c in d["curves"]) \
+            and g in vp.selection and doc.ifc.by_guid(g).is_a("IfcBuildingElementProxy")
+    pump(300)
+    props = all(k in win.props.editors for k in ("surface_u", "surface_mod_add", "surface_build_add", "surface_csv"))
+    built = False
+    if g:
+        win._on_property_edit("surface_build_add", g, "gridshell")
+        pump(300)
+        win._on_property_edit("surface_build_add", g, "edge")
+        pump(300)
+        win._on_property_edit("surface_mod_add", g, "twist")
+        pump(300)
+        win._on_property_edit("surface_build:gridshell:mode", g, "hex")
+        pump(500)
+        d = doc.ifc.surface_definition(g)
+        fam = doc.ifc.surface_summary(g)["families"]
+        built = d["build"]["gridshell"]["mode"] == "hex" and d["modifiers"][0]["op"] == "twist" and "barra" in fam \
+            and "bordo" in fam and doc.get(g).mesh.colors is not None
+    # the middle ring lifted 1 m: the surface follows it, in the same undo step
+    follows = False
+    if g:
+        sk = doc.get(rings[1])
+        moved = sk.copy()
+        lift = np.eye(4)
+        lift[2, 3] = 1.0
+        moved.matrix = lift @ sk.matrix
+        z0 = doc.ifc.surface_definition(g)["curves"][1]["points"][0][2]
+        doc.execute(ReplaceObjects([sk], [moved], "move"))
+        pump(400)
+        z1 = doc.ifc.surface_definition(g)["curves"][1]["points"][0][2]
+        win.undo()
+        pump(400)
+        z2 = doc.ifc.surface_definition(g)["curves"][1]["points"][0][2]
+        follows = abs(z1 - z0 - 1.0) < 1e-6 and abs(z2 - z0) < 1e-6 and abs(doc.get(rings[1]).matrix[2, 3]) < 1e-9
+    vp.zoom_extents()
+    pump(600)
+    shot("395_superficie_parametrica.png")
+    # four lines that touch, selected first: 4 edges at once
+    win.set_tool("select")
+    pump(100)
+    edges = [add_curve(pts=p, name="bordo") for p in (
+        [(20, 0, 3), (25, 0, 5), (30, 0, 3)], [(30, 0, 3), (30, 10, 2)], [(20, 10, 2), (25, 10, 0.5), (30, 10, 2)],
+        [(20, 0, 3), (20, 10, 2)])]
+    vp.set_selection(set(edges))
+    pump(200)
+    win.tool_actions["param_surface"].trigger()
+    pump(300)
+    key(Qt.Key.Key_Return)
+    pump(800)
+    surfaces = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "param_surface"]
+    coons = any(doc.ifc.surface_definition(s)["surface"]["op"] == "coons" for s in surfaces)
+    # the control ring (the addon's): a circle, twice the ring — a stack of three selected —, the tool: a loft
+    win.set_tool("select")
+    pump(100)
+    base = add_curve(ring(3.0, 0.0, 40.0, 0.0), name="base")
+    vp.set_selection({base})
+    pump(100)
+    win.control_ring()
+    pump(200)
+    win.control_ring()
+    pump(200)
+    stack = len(vp.selection)
+    top_z = max(doc.get(i).matrix[2, 3] for i in vp.selection)
+    win.tool_actions["param_surface"].trigger()
+    pump(300)
+    key(Qt.Key.Key_Return)
+    pump(800)
+    surfaces = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "param_surface"]
+    ringed = stack == 3 and abs(top_z - 2.0) < 1e-6 and any(
+        doc.ifc.surface_definition(s)["surface"]["op"] == "loft" and len(doc.ifc.surface_definition(s)["curves"]) == 3
+        and abs(max(c["points"][0][2] for c in doc.ifc.surface_definition(s)["curves"]) - 2.0) < 1e-6
+        for s in surfaces)
+    # a formula surface, as a roof
+    win.tool_actions["param_surface"].trigger()
+    pump(200)
+    win._context_option("op", "grid")
+    win._context_option("usage", "cobertura")
+    win._context_option("build", "shell")
+    pump(100)
+    for p in ((0.0, 20.0, 0.0), (12.0, 28.0, 0.0)):
+        move(near(p), 3)
+        pump(150)
+        click()
+        pump(300)
+    pump(600)
+    surfaces = [o.id for o in objects() if o.is_bim and doc.ifc.kind_of(o.id) == "param_surface"]
+    roof = any(doc.ifc.by_guid(s).is_a("IfcRoof") and doc.ifc.surface_definition(s)["surface"]["op"] == "grid"
+               and "shell" in doc.ifc.surface_definition(s)["build"] for s in surfaces)
+    csv_ok = False
+    if g:
+        path = os.path.join(tempfile.mkdtemp(), "pecas.csv")
+        win._surface_property("surface_csv", g, True, path=path)
+        csv_ok = os.path.exists(path) and "RESUMO" in open(path, encoding="utf-8-sig").read()
+        vp.set_selection({g})
+        pump(500)
+        shot("395_superficie_propriedades.png")
+    check("superficie_parametrica", on_ribbon and picked == [1, 2, 3] and preview and loft and props and built
+          and follows and coons and ringed and roof and csv_ok,
+          "fita={} escolhidas={} pre={} loft={} propriedades={} construcao={} segue={} quatro_bordos={} aneis={} "
+          "formula_cobertura={} csv={} superficies={}".format(on_ribbon, picked, preview, loft, props, built, follows,
+                                                              coons, ringed, roof, csv_ok, len(surfaces)))
+    doc.modified = False
+
+
+def properties_layout_flow():
+    """0.396 (the owner, with a capture of a stair's Properties: «melhorar a organização da propriedade e visibilidade
+    dos parâmetros»): a stair chosen — its groups in Revit's order (constraints and dimensions first, identification
+    after, the IFC data last, its set's name beside «Dados IFC»); no name cut: each row as tall as its name needs in
+    its column (two lines); the divider dragged: that share kept for the next element; a group folded by hand: folded
+    for the next element too (opened again: open). Captured: 396_propriedades_organizadas.png."""
+    from arqbim.i18n import t as t_
+    from arqbim.ifc import catalog as cat
+    from arqbim.model import bim as B
+    from arqbim.ui import properties as props_mod
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.views.open(("3d",))
+    stair = B.add_stair(doc, np.array((1.0, 1.0, 0.0)), (0.0, 1.0), cat.BY_KEY["laje_15"], "u", 2.8, width=1.0)
+    wall = B.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((9.0, 0.0, 0.0)), cat.BY_KEY["parede_alv_20"])
+    win.set_tool("select")
+    vp.set_selection({stair})
+    pump(500)
+    panel = win.props
+    tree = panel.tree
+    tops = [tree.topLevelItem(k).text(0) for k in range(tree.topLevelItemCount())]
+    order = tops[0] == t_("props.g.parameters") and tops.index(t_("props.g.identity")) < \
+        tops.index(t_("props.g.ifc"))
+    ifc_row = None
+    cut = []
+    it = QtWidgets.QTreeWidgetItemIterator(tree)
+    while it.value():
+        item = it.value()
+        it += 1
+        if item.text(0) == t_("props.ifc_data"):
+            ifc_row = item
+        if item.isFirstColumnSpanned() or not item.text(0) or item.isHidden():
+            continue
+        rect = tree.visualItemRect(item)
+        depth, up = 1, item.parent()
+        while up is not None:
+            depth, up = depth + 1, up.parent()
+        width = tree.columnWidth(0) - 10 - depth * tree.indentation()
+        need = QtGui.QFontMetrics(item.font(0)).boundingRect(QtCore.QRect(0, 0, max(width, 30), 10000),
+                                                             int(Qt.TextFlag.TextWordWrap), item.text(0)).height()
+        if rect.height() + 2 < need:
+            cut.append(item.text(0))
+    beside = ifc_row is not None and ifc_row.text(1).startswith("Pset_")
+    shot("396_propriedades_organizadas.png")
+    # the divider dragged to a third of the panel: kept for the wall
+    room = tree.viewport().width()
+    tree.header().resizeSection(0, int(room * 0.33))
+    pump(200)
+    vp.set_selection({wall})
+    pump(500)
+    kept = tree.columnWidth(0) <= int(room * 0.35) + 1
+    # a group folded by hand: folded for the next one, opened again: open
+    identity = next(tree.topLevelItem(k) for k in range(tree.topLevelItemCount())
+                    if tree.topLevelItem(k).text(0) == t_("props.g.identity"))
+    identity.setExpanded(False)
+    pump(100)
+    vp.set_selection({stair})
+    pump(500)
+    again = next(tree.topLevelItem(k) for k in range(tree.topLevelItemCount())
+                 if tree.topLevelItem(k).text(0) == t_("props.g.identity"))
+    folded = not again.isExpanded()
+    again.setExpanded(True)
+    pump(100)
+    vp.set_selection({wall})
+    pump(400)
+    reopened = all(tree.topLevelItem(k).isExpanded() for k in range(tree.topLevelItemCount()))
+    tree.header().resizeSection(0, int(room * props_mod.DIVIDER_DEFAULT))     # (as it was, for the flows after)
+    vp.set_selection(set())
+    check("propriedades_organizadas", order and not cut and beside and kept and folded and reopened,
+          "ordem={} cortados={} conjunto_ao_lado={} divisor={} fechado={} reaberto={}".format(
+              tops, cut, beside, kept, folded, reopened))
+    doc.modified = False
+
+
+def paint_flow():
+    """0.391 (the owner: «já tem o comando de pintura, quero que seja com fluxo como do SketchUp»): B — the Paint
+    bucket, the Materials Browser in front; Tinta terracota clicked in it (one click); the south wall's outer face
+    clicked: that face painted, seen in its colour; Ctrl + click on the east wall: all of it sage green; Alt + click on
+    the south face: the bucket takes the terracotta back; Esc: Select, the Properties back. Captured: 391_pintura.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import paint as paint_model
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [(0, 0, 0), (5, 0, 0), (5, 4, 0), (0, 4, 0)], catalog.BY_KEY["parede_alv_20"],
+                                      2.8, "axis", storey=doc.active_storey)
+    win.views.open(("3d",))
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(500)
+    canvas.setFocus()
+    key(Qt.Key.Key_B)
+    pump(300)
+    tool_on = win.tool is not None and win.tool.name == "paint" and win.props.tabs.currentIndex() == 1
+    items = [win.props.materials.item(k) for k in range(win.props.materials.count())]
+    first_none = bool(items) and (items[0].data(Qt.ItemDataRole.UserRole) or "") == ""
+    terracotta = next((i for i in items if i.data(Qt.ItemDataRole.UserRole) == "tinta_terracota"), None)
+    if terracotta is not None:
+        rect = win.props.materials.visualItemRect(terracotta)
+        win.props.materials.scrollToItem(terracotta)
+        pump(100)
+        rect = win.props.materials.visualItemRect(terracotta)
+        QtTest.QTest.mouseClick(win.props.materials.viewport(), Qt.MouseButton.LeftButton,
+                                Qt.KeyboardModifier.NoModifier, rect.center())
+        pump(200)
+    chosen = win.tool.material == "tinta_terracota"
+    south = next(g for g in walls if abs(doc.get(g).mesh.verts[:, 1].max() - 0.1) < 0.05 and
+                 doc.get(g).mesh.verts[:, 0].max() > 4.5 and doc.get(g).mesh.verts[:, 1].min() < -0.05)
+    east = next(g for g in walls if doc.get(g).mesh.verts[:, 0].min() > 4.8)
+    canvas.setFocus()
+    move(near((2.5, -0.1, 1.4)), 3)
+    pump(150)
+    click()
+    pump(500)
+    face_painted = [e[-1] for e in paint_model.entries(doc.ifc, south)] == ["tinta_terracota"]
+    seen = south in vp._shown_dressed
+    win._context_option("material", "tinta_verde")
+    move(near((5.1, 2.0, 1.4)), 3)
+    pump(150)
+    press(modifiers=Qt.KeyboardModifier.ControlModifier)
+    release(modifiers=Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    whole = paint_model.entries(doc.ifc, east) == [["*", "tinta_verde"]]
+    move(near((2.5, -0.1, 1.2)), 3)
+    pump(150)
+    press(modifiers=Qt.KeyboardModifier.AltModifier)
+    release(modifiers=Qt.KeyboardModifier.AltModifier)
+    pump(300)
+    picked = win.tool.material == "tinta_terracota"
+    shot("391_pintura.png")
+    # (0.392) a sketch's faces: a box beside the room — its top clicked (ochre), Ctrl + click on a side: the faces
+    # joined to it of the same colour (none: its sides and its base), the top left as it was
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.model.document import AddObject, SketchObject
+    box = sg.rectangle_mesh(2.0, 2.0)
+    sg.push_pull(box, 0, np.eye(4), 1.5)
+    at = np.eye(4)
+    at[:3, 3] = (7.0, 1.0, 0.0)
+    sketch = SketchObject("Caixa", at, box)
+    doc.execute(AddObject(sketch))
+    vp.zoom_extents()
+    pump(500)
+    win._context_option("material", "tinta_ocre")
+    move(near((8.0, 2.0, 1.5)), 3)
+    pump(150)
+    click()
+    pump(400)
+    mesh = doc.get(sketch.id).mesh
+    top = max(range(len(mesh.faces)), key=lambda g: mesh.face_points(g)[:, 2].mean())
+    sketch_top = mesh.paint_of(top) == "tinta_ocre" and sum(1 for p in mesh.painted() if p) == 1
+    win._context_option("material", "tinta_azul")
+    move(near((8.0, 1.0, 0.7)), 3)
+    pump(150)
+    press(modifiers=Qt.KeyboardModifier.ControlModifier)
+    release(modifiers=Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    mesh = doc.get(sketch.id).mesh
+    sketch_ctrl = mesh.paint_of(top) == "tinta_ocre" and \
+        sorted(p for g, p in enumerate(mesh.painted()) if g != top) == ["tinta_azul"] * (len(mesh.faces) - 1)
+    shot("392_pintura_esboco.png")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(300)
+    back = win.props.tabs.currentIndex() == 0
+    check("pintura", tool_on and first_none and chosen and face_painted and seen and whole and picked and back,
+          "balde={} sem_pintura={} escolhido={} face={} visto={} elemento={} conta_gotas={} volta={}".format(
+              tool_on, first_none, chosen, face_painted, seen, whole, picked, back))
+    check("pintura_esboco", sketch_top and sketch_ctrl, "topo={} ctrl_ligadas={} pintura={}".format(
+        sketch_top, sketch_ctrl, doc.get(sketch.id).mesh.painted()))
+    doc.modified = False
+
+
+HOUSE_FILE = "Casa de teste completa.ifc"
+
+
+def complete_house_flow():
+    """0.394 (the owner: «um teste de modelagem de uma casa não muito comum… não precisa ser arquitetonicamente
+    correta, mas ter todos os componentes do aplicativo; assim dá pra verificar tudo»): «Casa do Farol» — a main block
+    of two storeys (a living room with a glass front, a kitchen, a bathroom; bedrooms upstairs under a hip roof with a
+    skylight and gutters, a terrace under a glazed organic vault), a round concrete tower with a spiral stair, curved
+    windows and a curved glass strip under a flat roof with its drain, a studio by blocks, an arched garden wall with
+    a perforated panel, a balcony on columns and beams over footings, an elevator, a ramp, the terrain with a platform;
+    the rooms (and a separator), floors, ceilings, lights, skirting and cornices, tiles, paint (on elements and on a
+    sketch), a niche, a reveal, a kitchen, a wardrobe, bathroom fixtures, water, air, electricity; the structural
+    grid, a group, a component from a sketch, a section, sheets and their PDF. Built through the model's functions,
+    each part checked on its own («casa_…»: a failure does not hide the others); then the IFC valid, saved as
+    exemplos/«Casa de teste completa.ifc», opened again with the same elements; captured 394_casa_*.png."""
+    import math
+    from arqbim.core import cabinets as core_cab
+    from arqbim.core import roof_blocks as rb
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    from arqbim.model import paint as paint_model
+    from arqbim.model.document import AddObject, SketchObject
+    T, O = catalog.BY_KEY, catalog.OPENING_BY_KEY
+    made, report = {}, []
+
+    def step(name, fn):
+        """One part of the house: made and checked; its failure said, the others go on."""
+        try:
+            out = fn()
+            ok, detail = out if isinstance(out, tuple) else (bool(out), "")
+        except Exception as exc:                          # (said in the check: what failed and why)
+            ok, detail = False, "{}: {}".format(type(exc).__name__, str(exc)[:200])
+        report.append((name, ok))
+        check("casa_" + name, ok, detail)
+        pump(20)
+        return ok
+
+    def count(cls):
+        return len(doc.ifc.file.by_type(cls))
+
+    def opening(wall, spec, s, side=-1):
+        frame = B.wall_frame(doc, made[wall])
+        return B.add_opening(doc, made[wall], O[spec], frame, frame.x0 + s, side)
+
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    ground = doc.active_storey
+    made["ground"] = ground
+
+    # ---------------------------------------------------------------- storeys, grid, walls
+    def storeys():
+        made["first"] = B.add_storey(doc, "Piso 1", 3.0)
+        doc.set_active_storey(ground)
+        return [round(z, 3) for _g, _n, z in doc.storeys()] == [0.0, 3.0], doc.storeys()
+    step("pavimentos", storeys)
+
+    def grid():
+        for a, b in (((0, -2), (0, 10)), ((6, -2), (6, 10)), ((12, -2), (12, 10)), ((-2, 0), (14, 0)), ((-2, 8), (14, 8))):
+            B.add_grid_axis(doc, a, b)
+        return len(doc.grids) == 5, [g.tag for g in doc.grids]
+    step("grelha_estrutural", grid)
+
+    def outer_walls():
+        walls = B.add_wall_loop(doc, [(0, 0, 0), (12, 0, 0), (12, 8, 0), (0, 8, 0)], T["parede_alv_20"], 3.0, "axis",
+                                storey=ground)
+        made["S"], made["E"], made["N"], made["W"] = walls
+        return len(walls) == 4
+    step("paredes_exteriores", outer_walls)
+
+    def inner_walls():
+        made["P1"] = B.add_wall(doc, np.array((6.0, 0.1, 0.0)), np.array((6.0, 5.0, 0.0)), T["parede_alv_15"], 3.0,
+                                storey=ground)
+        made["P2"] = B.add_wall(doc, np.array((6.0, 5.0, 0.0)), np.array((11.9, 5.0, 0.0)), T["parede_alv_15"], 3.0,
+                                storey=ground)
+        return made["P1"] and made["P2"]
+    step("paredes_interiores", inner_walls)
+
+    def tower():
+        made["tower"] = B.add_curved_wall(doc, (14.5, 4.0, 0.0), 2.0, 0.0, 2 * math.pi, T["parede_betao_20"], 6.0,
+                                          storey=ground)
+        return doc.ifc.kind_of(made["tower"]) is not None, doc.ifc.kind_of(made["tower"])
+    step("torre_parede_circular", tower)
+
+    def studio():
+        walls = B.add_wall_loop(doc, [(-7, 1, 0), (-2, 1, 0), (-2, 6, 0), (-7, 6, 0)], T["parede_dry_10"], 2.8, "axis",
+                                storey=ground)
+        made["studio"] = walls
+        return len(walls) == 4
+    step("atelier_paredes_leves", studio)
+
+    def garden_wall():
+        made["garden"] = B.add_wall(doc, np.array((-7.0, -3.0, 0.0)), np.array((-1.0, -3.0, 0.0)),
+                                    T["parede_betao_15"], 2.0, storey=ground)
+        corners = [(0.0, 0.0), (6.0, 0.0), (6.0, 1.6), (0.0, 1.6)]
+        B.set_wall_profile(doc, made["garden"], corners, [None, None, {"kind": "arc", "through": (3.0, 2.6)}, None])
+        return doc.ifc.wall_profile_parts(made["garden"])[1][2]["kind"] == "arc"
+    step("muro_com_perfil_em_arco", garden_wall)
+
+    # ---------------------------------------------------------------- openings
+    def openings():
+        made["door_in"] = opening("S", "porta_exterior_90", 8.2)
+        made["win_s"] = opening("S", "janela_150", 10.3)
+        made["door_n"] = opening("N", "porta_dupla_140", 6.5)
+        made["win_n"] = opening("N", "janela_120", 2.6)
+        made["arch"] = opening("W", "janela_arco_100", 2.0)
+        made["tilt"] = opening("E", "janela_oscilo_100", 6.4)
+        made["door_k"] = opening("P1", "porta_80", 2.0, 1)
+        made["slide"] = opening("P2", "porta_correr_90", 1.4, 1)
+        made["fan"] = B.add_opening(doc, made["studio"][1], O["porta_80_bandeira"], B.wall_frame(doc, made["studio"][1]),
+                                    B.wall_frame(doc, made["studio"][1]).x0 + 2.0, -1)
+        return count("IfcDoor") == 5 and count("IfcWindow") == 4, (count("IfcDoor"), count("IfcWindow"))
+    step("portas_e_janelas", openings)
+
+    def curved_openings():
+        a = B.add_curved_opening(doc, made["tower"], O["janela_60"], 1.5, -1)
+        b = B.add_curved_opening(doc, made["tower"], O["porta_90"], 9.0, -1)
+        return bool(a and b)
+    step("vaos_na_parede_curva", curved_openings)
+
+    def glass_front():
+        made["glass"] = B.add_curtain_wall(doc, np.array((1.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), 2.6, 1.0, 1.3,
+                                           storey=ground)
+        made["glass_curve"] = B.add_curtain_wall(doc, None, None, 2.4, 1.0, 1.2, storey=ground,
+                                                 arc=(np.array((14.5, 4.0, 0.0)), 2.0, math.radians(-50),
+                                                      math.radians(70)))
+        return count("IfcCurtainWall") == 2
+    step("fachadas_de_vidro_reta_e_curva", glass_front)
+
+    def wall_opening_niche_reveal():
+        B.add_wall_opening(doc, made["studio"][0], 1.0, 1.6, 0.5, 1.4)
+        B.add_wall_niche(doc, made["W"], 4.5, 0.8, 0.6, 1.0, 0.1, (1.0, 0.0, 0.0))
+        B.add_wall_reveal(doc, made["S"], -1, False, 1.0)
+        return True
+    step("abertura_nicho_e_frisa", wall_opening_niche_reveal)
+
+    # ---------------------------------------------------------------- slabs, structure
+    def slabs():
+        made["slab0"] = B.add_slab_outline(doc, [(-0.1, -0.1), (12.1, -0.1), (12.1, 8.1), (-0.1, 8.1)], 0.0,
+                                           T["laje_15"], storey=ground)
+        made["slab1"] = B.add_slab_outline(doc, [(-0.1, -0.1), (12.1, -0.1), (12.1, 8.1), (-0.1, 8.1)], 3.0,
+                                           T["laje_12"], storey=made["first"],
+                                           holes=[[(0.4, 0.9), (1.7, 0.9), (1.7, 5.9), (0.4, 5.9)]])
+        made["balcony"] = B.add_slab_outline(doc, [(2.0, 8.1), (10.0, 8.1), (10.0, 9.6), (2.0, 9.6)], 3.0,
+                                             T["laje_12"], storey=made["first"])
+        made["tower_slab"] = B.add_slab_circle(doc, (14.5, 4.0), 2.1, 0.0, T["laje_15"], storey=ground)
+        return count("IfcSlab") >= 4, count("IfcSlab")
+    step("lajes_com_vazio_varanda_e_redonda", slabs)
+
+    def structure():
+        c1 = B.add_column(doc, np.array((2.2, 9.4, 0.0)), T["pilar_circ_30"], 2.88, storey=ground)
+        c2 = B.add_column(doc, np.array((9.8, 9.4, 0.0)), T["pilar_circ_30"], 2.88, storey=ground)
+        beam = B.add_beam(doc, np.array((2.2, 9.4, 2.88)), np.array((9.8, 9.4, 2.88)), T["viga_20x40"], 2.88,
+                          storey=ground)
+        made["portico"] = [c1, c2, beam]
+        for col in (c1, c2):
+            B.add_footing(doc, B.footing_place(doc, col, T["sapata_80"]), T["sapata_80"])
+        B.add_footing(doc, B.footing_place(doc, made["S"], T["sapata_corrida_50"]), T["sapata_corrida_50"])
+        return count("IfcColumn") == 2 and count("IfcBeam") == 1 and count("IfcFooting") == 3
+    step("pilares_viga_e_sapatas", structure)
+
+    # ---------------------------------------------------------------- upstairs
+    def upstairs():
+        doc.set_active_storey(made["first"])
+        walls = B.add_wall_loop(doc, [(0, 0, 3.0), (6, 0, 3.0), (6, 8, 3.0), (0, 8, 3.0)], T["parede_alv_20"], 2.8,
+                                "axis", storey=made["first"])
+        made["up"] = walls
+        for k, spec, s in ((0, "janela_150", 3.0), (1, "porta_sacada_140", 4.0), (2, "janela_120", 3.0),
+                           (3, "janela_60", 2.0)):
+            frame = B.wall_frame(doc, walls[k])
+            B.add_opening(doc, walls[k], O[spec], frame, frame.x0 + s, -1)
+        return len(walls) == 4
+    step("piso_1_paredes_e_vaos", upstairs)
+
+    # ---------------------------------------------------------------- roofs
+    def hip_roof():
+        made["hip"] = B.add_roof(doc, [(-0.1, -0.1), (6.1, -0.1), (6.1, 8.1), (-0.1, 8.1)], T["telhado_ceramico"],
+                                 "hip", 30.0, 0.5, storey=made["first"])
+        B.add_vertical_opening(doc, made["hip"], (2.0, 3.0), (3.0, 4.2))
+        eaves = B.roof_eaves(doc, made["hip"])
+        for a, b, out in eaves[:2]:
+            B.add_gutter(doc, a, b, out, storey=made["first"])
+        return len(eaves) >= 2 and len([e for e in doc.ifc.file.by_type("IfcFlowSegment")
+                                        if doc.ifc.kind_of(e.GlobalId) == "gutter"]) >= 2
+    step("telhado_de_4_aguas_clarabóia_e_calhas", hip_roof)
+
+    def organic():
+        made["organic"] = B.add_organic_roof(doc, [(6.4, 0.4), (11.6, 0.4), (11.6, 7.6), (6.4, 7.6)], 3.0 + 2.6,
+                                             storey=made["first"], system="envidracada", form="abobada", rise=1.6,
+                                             supports="cantos")
+        return doc.ifc.kind_of(made["organic"]) == "organic_roof"
+    step("cobertura_organica_no_terraco", organic)
+
+    def canopy():                                     # (0.395) a parametric surface: the entrance's canopy, a loft
+        from arqbim.core import surface_build as sb   # from the wall's top to a waving front edge, glass on a grid
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model.document import AddObject, SketchObject
+        xs = np.linspace(0.0, 6.0, 13)
+        ids = []
+        for pts in (np.column_stack((xs, np.full(13, -0.3), np.full(13, 2.9))),
+                    np.column_stack((xs, -3.2 + 0.4 * np.sin(xs * 1.1), 2.5 + 0.35 * np.cos(xs * 1.3)))):
+            sk = SketchObject("pala", np.eye(4), PolyMesh(pts, [], lines=[(k, k + 1) for k in range(12)]))
+            doc.execute(AddObject(sk, "add"))
+            ids.append(sk.id)
+        build = {"gridshell": dict(sb.TEMPLATES["gridshell"], mode="quad", u=6, v=3),
+                 "edge": dict(sb.TEMPLATES["edge"]), "panels": dict(sb.TEMPLATES["panels"], u=6, v=3, kind="glass")}
+        made["canopy"] = B.surface_from_sketches(doc, [(i, None) for i in ids], op="loft", usage="pala",
+                                                 storey=ground, divisions=(24, 8), build=build)
+        e = doc.ifc.by_guid(made["canopy"])
+        return e is not None and e.is_a("IfcShadingDevice") and doc.ifc.kind_of(made["canopy"]) == "param_surface" \
+            and "vidro" in doc.ifc.surface_summary(made["canopy"])["families"]
+    step("pala_superficie_parametrica", canopy)
+
+    def tower_roof():
+        ring = [(14.5 + 2.2 * math.cos(a), 4.0 + 2.2 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 24,
+                                                                                         endpoint=False)]
+        made["flat"] = B.add_roof(doc, ring, T["cobertura_15"], "flat", overhang=0.0, eave=6.0, storey=ground)
+        B.add_drain(doc, made["flat"], (14.5, 4.0))
+        return count("IfcWasteTerminal") >= 1
+    step("cobertura_plana_da_torre_com_ralo", tower_roof)
+
+    def block_roof():
+        doc.set_active_storey(ground)
+        made["blocks"] = B.add_block_roof(doc, rb.make(-4.5, 3.5, 0.0, 5.2, 5.2, "hip", 30.0, 0.4),
+                                          T["telhado_ceramico"], storey=ground)
+        return doc.ifc.kind_of(made["blocks"]) == "roof"
+    step("cobertura_por_blocos_no_atelier", block_roof)
+
+    # ---------------------------------------------------------------- circulation
+    def stairs():
+        a = B.add_stair(doc, np.array((1.05, 0.9, 0.0)), (0.0, 1.0), T["laje_15"], "straight", 3.0, width=1.0,
+                        storey=ground)
+        b = B.add_stair(doc, np.array((14.5, 3.2, 0.0)), (1.0, 0.0), T["laje_15"], "spiral", 3.0, width=0.8,
+                        going=0.25, storey=ground)
+        return count("IfcStair") == 2 and bool(a and b)
+    step("escada_reta_e_em_caracol", stairs)
+
+    def railings():
+        B.add_railing(doc, [(2.0, 9.55, 3.0), (10.0, 9.55, 3.0)], 1.0, "barras", storey=made["first"])
+        B.add_railing(doc, [(6.3, 0.15, 3.0), (11.85, 0.15, 3.0), (11.85, 7.85, 3.0)], 1.0, "cabos",
+                      storey=made["first"])
+        B.add_railing(doc, [(1.8, 0.9, 3.0), (1.8, 5.9, 3.0)], 1.0, "barras", storey=made["first"])
+        return count("IfcRailing") == 3
+    step("guardas", railings)
+
+    def ramp_and_lift():
+        B.add_ramp(doc, np.array((9.0, -3.6, 0.0)), np.array((9.0, -0.3, 0.0)), T["laje_15"], 1.2, 0.15,
+                   storey=ground)
+        made["lift"] = B.add_elevator(doc, (12.6, -2.6), storey=ground)
+        return count("IfcRamp") == 1 and bool(made["lift"])
+    step("rampa_e_elevador", ramp_and_lift)
+
+    # ---------------------------------------------------------------- rooms, finishes
+    def rooms():
+        # (axis to axis: from the partition's middle to the north wall's — started 2,5 cm off the partition's face it
+        # left a gap, and the bathroom was not closed)
+        B.add_separator(doc, (6.0, 5.0), (6.0, 8.0), storey=ground)
+        made_rooms = B.identify_rooms(doc, ground) + B.identify_rooms(doc, made["first"])
+        return len(made_rooms) >= 5, "{} ambientes".format(len(made_rooms))     # (studio, living, kitchen, bath; up)
+    step("ambientes_e_separador", rooms)
+
+    living = [(0.1, 0.1), (5.925, 0.1), (5.925, 7.9), (0.1, 7.9)]
+
+    def floors_ceilings():
+        B.add_flooring(doc, living, "madeira", storey=ground)
+        B.add_flooring(doc, [(6.075, 0.1), (11.9, 0.1), (11.9, 4.925), (6.075, 4.925)], "ceramico", storey=ground)
+        B.add_ceiling(doc, living, 2.7, storey=ground)
+        B.add_light(doc, (3.0, 4.0), "panel", storey=ground)
+        B.add_light(doc, (1.2, 6.8), "downlight", storey=ground)
+        return count("IfcLightFixture") == 2
+    step("pisos_teto_e_luzes", floors_ceilings)
+
+    def profiles():
+        B.add_profile(doc, living, "rodape", closed=True, side=1, storey=ground)
+        B.add_profile(doc, living, "sanca", closed=True, side=1, storey=ground)
+        return True
+    step("rodape_e_sanca", profiles)
+
+    def claddings():
+        made["tiles"] = B.add_cladding(doc, made["S"], 1, "azulejo", 2.1, region={"start": 6.2, "end": 12.0, "base": 0.0})
+        made["perforated"] = B.add_cladding(doc, made["garden"], -1, "perfurado", 0.0,
+                                            pattern={"hole": "quadrado", "grid": "diagonal", "joint": 0.01})
+        return doc.ifc.pattern_params(made["perforated"])["count"] > 50
+    step("azulejo_e_painel_perfurado", claddings)
+
+    def paint():
+        B.paint_face(doc, made["N"], (0.0, 1.0, 0.0), (6.0, 8.1, 1.5), "tinta_terracota")
+        B.paint_elements(doc, [made["tower"]], "tinta_branca")
+        B.paint_elements(doc, made["studio"], "tinta_grafite")
+        box = sg.rectangle_mesh(1.2, 0.5)
+        sg.push_pull(box, 0, np.eye(4), 0.6)
+        at = np.eye(4)
+        at[:3, 3] = (3.0, -2.0, 0.0)
+        made["planter"] = SketchObject("Floreira", at, box)
+        doc.execute(AddObject(made["planter"]))
+        top = max(range(len(box.faces)), key=lambda g: box.face_points(g)[:, 2].mean())
+        paint_model.paint_sketch(doc, [(doc.get(made["planter"].id), [top], "tinta_verde")])
+        return paint_model.entries(doc.ifc, made["N"]) and doc.get(made["planter"].id).mesh.paint_of(top) == "tinta_verde"
+    step("pintura_em_elementos_e_esboco", paint)
+
+    # ---------------------------------------------------------------- furniture, services
+    def kitchen():
+        out = B.make_kitchen(doc, [(6.2, 0.1), (11.9, 0.1), (11.9, 2.6)], side=1, storey=ground)
+        B.add_appliance(doc, np.array((6.7, 4.9, 0.0)), "fridge", 180.0, storey=ground)
+        B.add_cabinet(doc, np.array((3.0, 7.9, 3.0)), 180.0, core_cab.Cabinet.of("wardrobe", width=1.8),
+                      storey=made["first"])
+        return bool(out.get("base")), {k: len(v) if isinstance(v, list) else bool(v) for k, v in out.items()}
+    step("cozinha_frigorifico_e_roupeiro", kitchen)
+
+    def bathroom():
+        for kind, x in (("wc", 7.4), ("basin", 8.8), ("shower", 10.8)):
+            B.add_fixture(doc, (x, 7.9), kind, 180.0, storey=ground)
+        B.add_fixture(doc, (9.6, 0.1), "kitchen_sink", 0.0, storey=ground)
+        return count("IfcSanitaryTerminal") == 4
+    step("casa_de_banho_e_lava_loica", bathroom)
+
+    def water():
+        a = B.add_segment(doc, np.array((7.0, 7.7, 0.3)), np.array((11.0, 7.7, 0.3)), T["tubo_50"], 0.3)
+        B.add_segment(doc, np.array((11.0, 7.7, 0.3)), np.array((11.0, 5.3, 0.3)), T["tubo_50"], 0.3, after=a)
+        return count("IfcPipeSegment") >= 2
+    step("tubagem_de_agua", water)
+
+    def air():
+        B.add_air_terminal(doc, (4.0, 6.0), "diffuser_60", storey=ground)
+        B.add_equipment(doc, (3.0, 7.7), "split_wall", 180.0, storey=ground)
+        B.add_equipment(doc, (13.0, 9.0), "outdoor_unit", 0.0, storey=ground)
+        B.add_segment(doc, np.array((1.0, 6.0, 2.85)), np.array((4.0, 6.0, 2.85)), T["conduta_d160"], 2.85)
+        return count("IfcAirTerminal") == 1 and count("IfcDuctSegment") >= 1
+    step("climatizacao", air)
+
+    def electricity():
+        B.add_point(doc, (0.1, 1.2), "board", -90.0, storey=ground)
+        for x in (1.5, 3.5):
+            B.add_point(doc, (x, 7.9), "outlet", 180.0, storey=ground)
+        B.add_point(doc, (0.1, 6.0), "switch", -90.0, storey=ground)
+        try:
+            B.add_segment(doc, np.array((0.4, 1.2, 0.3)), np.array((0.4, 5.0, 0.3)), T["tubo_vd20"], 0.3)
+        except (ValueError, KeyError):
+            pass
+        return len(doc.ifc.file.by_type("IfcOutlet")) >= 2
+    step("eletricidade", electricity)
+
+    # ---------------------------------------------------------------- site, groups
+    def site():
+        pts = [(x, y, 0.04 * (x + 10) - 0.4) for x in range(-12, 24, 4) for y in range(-8, 16, 4)]
+        made["terrain"] = B.add_terrain(doc, pts)
+        B.add_platform(doc, made["terrain"], [(-8.0, -4.5), (17.5, -4.5), (17.5, 10.5), (-8.0, 10.5)], 0.0)
+        return count("IfcGeographicElement") >= 1
+    step("terreno_e_plataforma", site)
+
+    def group_component():
+        B.make_group(doc, made["portico"], "Pórtico da varanda")
+        bench = sg.rectangle_mesh(2.0, 0.45)
+        sg.push_pull(bench, 0, np.eye(4), 0.45)
+        at = np.eye(4)
+        at[:3, 3] = (-6.0, -5.5, 0.0)
+        sketch = SketchObject("Banco", at, bench)
+        doc.execute(AddObject(sketch))
+        comp = B.make_component(doc, [sketch.id], "Banco do jardim", "furniture", storey=ground)
+        return bool(comp)
+    step("grupo_e_componente", group_component)
+
+    # ---------------------------------------------------------------- the whole: valid, drawn, saved, opened again
+    errors = doc.ifc.validate()
+    check("casa_ifc_valido", errors == [], "{} erro(s): {}".format(len(errors), errors[:3]))
+    win.views.open(("3d",))
+    vp.set_view("iso", center=(4.0, 3.0, 2.5), radius=11.0)       # (the house, not the whole terrain)
+    pump(800)
+    shot("394_casa_3d.png")
+    vp.set_view("iso_ne", center=(4.0, 4.0, 2.5), radius=11.0)    # (from behind: the balcony, the terrace's vault)
+    pump(800)
+    shot("394_casa_3d_traseira.png")
+
+    def views():
+        doc.set_active_storey(ground)
+        win.open_view("plan", ground)
+        pump(800)
+        shot("394_casa_planta_terreo.png")
+        win.open_view("plan", made["first"])
+        pump(800)
+        shot("394_casa_planta_piso1.png")
+        index = doc.add_section(np.array((6.0, 4.0, 1.2)), np.array((0.0, 1.0, 0.0)))
+        win.open_view("section", index)
+        pump(900)
+        shot("394_casa_corte.png")
+        win.show_elevation("S")
+        pump(900)
+        shot("394_casa_alcado_sul.png")
+        win.views.open(("3d",))
+        pump(300)
+        return len(doc.sections) == 1
+    step("plantas_corte_e_alcado", views)
+
+    def sheets():
+        pages = [("Planta do Térreo", [("plan", ground)]), ("Planta do Piso 1", [("plan", made["first"])]),
+                 ("Alçados", [("elevation", side) for side in ("N", "S", "E", "W")]),
+                 ("Corte", [("section", s.name) for s in doc.sections])]
+        n = doc.make_sheets(pages, "A3", "full")
+        path = os.path.join(OUT, "394_casa_folhas.pdf")
+        if os.path.exists(path):
+            os.remove(path)
+        QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
+        win.export_sheets(doc.sheets)
+        pump(500)
+        return n == 4 and os.path.exists(path) and os.path.getsize(path) > 10000, (n, os.path.exists(path))
+    step("folhas_e_pdf", sheets)
+
+    classes = ("IfcWall", "IfcCurtainWall", "IfcDoor", "IfcWindow", "IfcSlab", "IfcRoof", "IfcStair", "IfcRailing",
+               "IfcRamp", "IfcColumn", "IfcBeam", "IfcFooting", "IfcCovering", "IfcSpace", "IfcFurniture",
+               "IfcSanitaryTerminal", "IfcPipeSegment", "IfcDuctSegment", "IfcAirTerminal", "IfcLightFixture",
+               "IfcOutlet", "IfcTransportElement", "IfcGeographicElement")
+    before = {c: count(c) for c in classes}
+    folder = os.path.join(ROOT, "exemplos")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, HOUSE_FILE)
+    saved = win.save_to(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    opened = win.open_path(path, remember=False)
+    pump(1500)
+    after = {c: count(c) for c in classes}
+    differ = {c: (before[c], after[c]) for c in classes if before[c] != after[c]}
+    check("casa_gravada_e_reaberta", saved == [] and opened and not differ,
+          "erros_ao_gravar={} aberta={} diferencas={} elementos={}".format(saved, opened, differ, before))
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(800)
+    shot("394_casa_reaberta.png")
+    failed = [name for name, ok in report if not ok]
+    check("casa_resumo", not failed, "{} de {} partes; falharam: {}".format(len(report) - len(failed), len(report),
+                                                                           failed))
+    doc.modified = False
+
+
+def profile_flow():
+    """0.174 — Profile Pen: in a room's plan (its corners joined, a door in its south wall), the Profile tool clicked
+    inside the room with a skirting board (round it, broken at the door), then with a cornice (round it, under the
+    walls' top); a dado rail along a path of three points (Enter); the rail's height over the floor changed in the
+    Properties; the cut list with the three profiles' pieces; the room seen in 3D from above its south wall."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [(0.0, 0.0), (5.0, 0.0), (5.0, 4.0), (0.0, 4.0)]
+    walls = []
+    for k in range(4):                                    # (a chain, its corners joined — as the Wall tool draws it)
+        a, b = np.array(corners[k] + (0.0,)), np.array(corners[(k + 1) % 4] + (0.0,))
+        prev = None
+        if walls:
+            d = a - np.array(corners[k - 1] + (0.0,))
+            prev = (walls[-1], d / np.linalg.norm(d))
+        first = (walls[0], np.array((1.0, 0.0, 0.0))) if k == 3 else None
+        walls.append(bim_actions.add_wall(doc, a, b, spec, prev=prev, first=first))
+    frame = bim_actions.wall_frame(doc, walls[0])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], frame, 2.0, -1)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["profile"].trigger()
+    pump(100)
+    move(near((2.5, 2.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(500)
+    win.tool.set_option("profile", "sanca")
+    click()
+    pump(500)
+    win.tool.set_option("shape", "path")
+    win.tool.set_option("profile", "friso")
+    for point in ((1.0, 1.0, 0.0), (3.0, 1.0, 0.0), (3.0, 3.0, 0.0)):
+        move(near(point), 4)
+        pump(120)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Return)
+    pump(500)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    made = {doc.ifc._params(e).get("Perfil"): e.GlobalId for e in doc.ifc.profiles()}
+    broken = "rodape" in made and [c for _p, c in doc.ifc.profile_runs(made["rodape"])] == [False]
+    whole = "sanca" in made and [c for _p, c in doc.ifc.profile_runs(made["sanca"])] == [True]
+    rail = made.get("friso")
+    length = doc.ifc.profile_params(rail)["length"] if rail else 0.0
+    vp.set_selection({rail} if rail else set())
+    pump(300)
+    editor = win.props.editors.get("profile_foot")
+    if editor is not None:
+        editor.setText("1,00")
+        editor.editingFinished.emit()
+        pump(500)
+    raised = bool(rail) and abs(doc.ifc.profile_params(rail)["foot"] - 1.0) < 1e-6
+    vp.set_selection(set())
+    pump(200)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_cut_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["roles"] = sorted({d.table.item(r, 0).text() for r in range(d.table.rowCount())})
+        seen["dxf"] = d.dxf_button.isEnabled()
+        d.grab().save(os.path.join(OUT, "174_lista_corte_perfis.png"))
+        win.export_fabrication(None, dxf_path)
+        d.accept()
+
+    dxf_path = os.path.join(OUT, "fabrico_perfis.dxf")
+    if os.path.exists(dxf_path):
+        os.remove(dxf_path)
+    QtCore.QTimer.singleShot(100, look)
+    win.cut_list()
+    pump(300)
+    with open(dxf_path, encoding="cp1252") if os.path.exists(dxf_path) else open(os.devnull) as f:
+        seen["dxf_text"] = "Rodapé" in f.read()
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.look_from((-0.3, -1.0, 1.1), animate=False)
+    vp.zoom_extents()
+    pump(600)
+    shot("173_perfis.png")
+    vp.set_camera((0.6, 0.5, 1.6), (4.3, 3.4, -0.35))         # (inside, towards the north-east corner)
+    pump(600)
+    shot("173b_perfis_dentro.png")
+    listed = seen.get("roles") == ["Friso", "Rodapé", "Sanca"] and seen.get("dxf") and seen.get("dxf_text")
+    check("perfis", broken and whole and abs(length - 4.0) < 0.15 and raised and listed,
+          "feitos={} rodape_partido={} sanca_inteira={} friso={:.2f} m subido={} lista={}".format(
+              sorted(made), broken, whole, length, raised, seen))
+
+
+def wavy_flow():
+    """0.175 — Wavy surface: in a room's plan, the Wall finish tool with Wavy (ribs) clicked on the north wall's
+    inner face; the wave's amplitude made larger in the Properties (the crest further out); the cut list with the
+    ribs and the DXF with their outlines; the wall seen from inside the room."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (5.0, 0.0)), ((5.0, 0.0), (5.0, 4.0)), ((5.0, 4.0), (0.0, 4.0)),
+                          ((0.0, 4.0), (0.0, 0.0)))]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["wall_finish"].trigger()
+    pump(100)
+    win.tool.set_option("finish", "ondulado")
+    win.tool.set_option("height", 2.6)
+    move(near((2.5, 3.94, 0.0)), 4)
+    pump(150)
+    click()
+    pump(800)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    wavy = next(iter(doc.ifc.claddings_of([walls[2]])), None)
+    finish = doc.ifc._params(doc.ifc.by_guid(wavy)).get("Acabamento") if wavy else None
+    crest = lambda: float(4.0 - 0.1 - doc.get(wavy).mesh.verts[:, 1].min()) if wavy else 0.0    # noqa: E731
+    before = crest()
+    vp.set_selection({wavy} if wavy else set())
+    pump(300)
+    editor = win.props.editors.get("cladding_amplitude")
+    if editor is not None:
+        editor.setText("0,10")
+        editor.editingFinished.emit()
+        pump(800)
+    after = crest()
+    vp.set_selection(set())
+    pump(200)
+    dxf_path = os.path.join(OUT, "fabrico_costelas.dxf")
+    if os.path.exists(dxf_path):
+        os.remove(dxf_path)
+    seen = {}
+
+    def look():
+        d = getattr(win, "_cut_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        seen["roles"] = sorted({d.table.item(r, 0).text() for r in range(d.table.rowCount())})
+        seen["dxf"] = d.dxf_button.isEnabled()
+        win.export_fabrication(None, dxf_path)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.cut_list()
+    pump(300)
+    ribs = doc.ifc.pattern_params(wavy)["count"] if wavy else 0
+    with open(dxf_path, encoding="cp1252") if os.path.exists(dxf_path) else open(os.devnull) as f:
+        polylines = f.read().count("POLYLINE")
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.set_camera((0.4, 1.6, 1.4), (4.2, 2.1, -0.1))          # (from a corner, along the north wall: its relief)
+    pump(800)
+    shot("175_ondulado.png")
+    check("ondulado", finish == "ondulado" and abs(before - 0.08) < 0.005 and abs(after - 0.12) < 0.005
+          and seen.get("roles") == ["Costela"] and seen.get("dxf") and polylines >= ribs > 0,
+          "acabamento={} crista={:.3f}→{:.3f} lista={} costelas={} polilinhas={}".format(
+              finish, before, after, seen, ribs, polylines))
+
+
+def laz_e57_flow():
+    """0.284 — LAZ and E57 linked: a scanned room written as a LAZ (laspy) and as an E57 (pye57), each linked in an
+    empty project — all its points shown."""
+    import importlib.util
+    if importlib.util.find_spec("laspy") is None or importlib.util.find_spec("pye57") is None:
+        check("nuvens_laz_e57", True, "laspy / pye57 por instalar: saltado")
+        return
+    import laspy
+    import pye57
+    ply = os.path.join(OUT, "sala_digitalizada.ply")
+    scan_ply(ply)
+    from arqbim.core import pointcloud
+    room = pointcloud.read_file(ply)
+    laz = os.path.join(OUT, "sala_digitalizada.laz")
+    las = laspy.create(point_format=2, file_version="1.2")
+    las.header.scales, las.header.offsets = (0.001, 0.001, 0.001), (0.0, 0.0, 0.0)
+    las.x, las.y, las.z = room.points[:, 0], room.points[:, 1], room.points[:, 2]
+    las.write(laz)
+    e57_path = os.path.join(OUT, "sala_digitalizada.e57")
+    if os.path.exists(e57_path):
+        os.remove(e57_path)
+    e57 = pye57.E57(e57_path, mode="w")
+    e57.write_scan_raw({"cartesianX": room.points[:, 0], "cartesianY": room.points[:, 1],
+                        "cartesianZ": room.points[:, 2]}, name="sala")
+    e57.close()
+    seen = {}
+    for path in (laz, e57_path):
+        key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+        pump(400)
+        link = win.link_cloud(path)
+        pump(600)
+        drawn = len(vp._cloud_objects) == 1 and \
+            len(next(iter(vp._cloud_objects.values()))[1].geometry.positions.data) == len(room)
+        seen[os.path.splitext(path)[1]] = link is not None and drawn
+    shot("284_nuvem_e57.png")
+    check("nuvens_laz_e57", all(seen.values()) and len(seen) == 2, str(seen))
+
+
+def cloud_splat_flow():
+    """0.216 — Splats from a point cloud: a room's scan linked (no model); Export Gaussian splat with the clouds:
+    the PLY has the cloud's points as splats (fewer than its points, thinned), none without them."""
+    from arqbim.model import splat
+    cloud = os.path.join(OUT, "sala_para_splat.ply")
+    scan_ply(cloud)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.link_cloud(cloud)
+    pump(500)
+    path = os.path.join(OUT, "nuvem_splat.ply")
+    if os.path.exists(path):
+        os.remove(path)
+    done = win.export_splat(path, "low", clouds=True)
+    pump(300)
+    data = splat.read_ply(path) if done and os.path.exists(path) else {}
+    n = len(data.get("x", ()))
+    refused = win.export_splat(os.path.join(OUT, "nada_splat.ply"), "low", clouds=False) is None
+    check("splat_da_nuvem", n > 1000 and refused and float(data["y"].max()) > 2.5,
+          "pontos={} sem_nuvem_recusado={}".format(n, refused))
+
+
+def splat_flow():
+    """0.176 — Gaussian splat: a room of four walls with a door; File ▸ Export Gaussian splat (presentation)… is in
+    the File menu; exported at the low quality (8 cm): the PLY written, read back — its points over the walls, Y up."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import splat
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (5.0, 0.0)), ((5.0, 0.0), (5.0, 4.0)), ((5.0, 4.0), (0.0, 4.0)),
+                          ((0.0, 4.0), (0.0, 0.0)))]
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], bim_actions.wall_frame(doc, walls[0]),
+                            2.0, -1)
+    pump(300)
+    win.set_discipline("render")                         # (0.182: in the ribbon's Render, the menus hidden)
+    pump(100)
+    in_menu = win.act_splat in win.ribbon_actions()
+    path = os.path.join(OUT, "casa_splat.ply")
+    if os.path.exists(path):
+        os.remove(path)
+    win.export_splat(path, "low")
+    pump(300)
+    data = splat.read_ply(path) if os.path.exists(path) else {}
+    n = len(data.get("x", ()))
+    tall = n and abs(float(data["y"].max()) - float(doc.get(walls[0]).mesh.verts[:, 2].max())) < 1e-3
+    check("gaussian_splat", in_menu and n > 1000 and tall,
+          "no_menu={} pontos={} y_em_cima={}".format(in_menu, n, tall))
+
+
+def curved_openings_flow():
+    """0.177 — Doors and windows in a curved wall: a half-circle wall of 4 m radius; in its plan the Door tool clicked
+    on it (from outside, at 45°): a door there, at the axis; the Window tool at 135°; the radius made 5 m in the
+    Properties: both go with the wall; seen in 3D."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    arc = bim_actions.add_curved_wall(doc, (0.0, 0.0, 0.0), 4.0, 0.0, math.pi, catalog.BY_KEY["parede_alv_20"], 2.8)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    placed = {}
+    for tool, angle in (("door", math.pi / 4), ("window", 3 * math.pi / 4)):
+        win.tool_actions[tool].trigger()
+        pump(100)
+        p = (4.08 * math.cos(angle), 4.08 * math.sin(angle), 0.0)          # (on the wall, outside its axis)
+        move(near(p), 4)
+        pump(150)
+        click()
+        pump(600)
+        cls = "IfcDoor" if tool == "door" else "IfcWindow"
+        made = [e for e in doc.ifc.file.by_type(cls)]
+        placed[tool] = made[-1].GlobalId if made else None
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+
+    def angle_of(guid):
+        v = doc.get(guid).mesh.verts
+        c = (v.min(axis=0) + v.max(axis=0)) / 2
+        return math.atan2(c[1], c[0]), math.hypot(c[0], c[1])
+
+    at = {k: angle_of(g) for k, g in placed.items() if g}
+    vp.set_selection({arc})
+    pump(300)
+    editor = win.props.editors.get("cw_radius")
+    if editor is not None:
+        editor.setText("5")
+        editor.editingFinished.emit()
+        pump(800)
+    vp.set_selection(set())
+    after = {k: angle_of(g) for k, g in placed.items() if g}
+    key(Qt.Key.Key_F4)
+    pump(500)
+    vp.look_from((0.6, 1.0, 0.5), animate=False)
+    vp.zoom_extents()
+    pump(600)
+    shot("177_vaos_parede_curva.png")
+    good = len(at) == 2 and abs(at["door"][0] - math.pi / 4) < 0.03 and abs(at["window"][0] - 3 * math.pi / 4) < 0.03
+    followed = len(after) == 2 and all(abs(r - 5.0) < 0.15 for _a, r in after.values())
+    check("vaos_parede_curva", good and followed and editor is not None,
+          "vaos={} depois={} editor={}".format({k: (round(a, 3), round(r, 2)) for k, (a, r) in at.items()},
+                                               {k: (round(a, 3), round(r, 2)) for k, (a, r) in after.items()},
+                                               editor is not None))
+
+
+def finish_layers_flow():
+    """0.178 — Finish layers: in a room's plan, the Wall finish tool with Plaster clicked on the south wall's inner
+    face, then with Tiles clicked on that plaster: a second layer over it (2 cm out), its Properties say over what."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (5.0, 0.0)), ((5.0, 0.0), (5.0, 4.0)), ((5.0, 4.0), (0.0, 4.0)),
+                          ((0.0, 4.0), (0.0, 0.0)))]
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.tool_actions["wall_finish"].trigger()
+    pump(100)
+    for finish, y in (("reboco", 0.06), ("azulejo", 0.11)):
+        win.tool.set_option("finish", finish)
+        move(near((2.5, y, 0.0)), 4)
+        pump(150)
+        click()
+        pump(600)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    pump(200)
+    made = sorted(doc.ifc.claddings_of([walls[0]]),
+                  key=lambda g: int(doc.ifc._params(doc.ifc.by_guid(g)).get("Camada") or 0))
+    finishes = [doc.ifc._params(doc.ifc.by_guid(g)).get("Acabamento") for g in made]
+    standoff = float(doc.get(made[-1]).mesh.verts[:, 1].min()) - 0.1 if len(made) == 2 else 0.0
+    vp.set_selection({made[-1]} if made else set())
+    pump(300)
+    text = win.props.text() if hasattr(win.props, "text") else ""
+    vp.set_selection(set())
+    check("camadas_de_revestimento", finishes == ["reboco", "azulejo"] and abs(standoff - 0.02) < 1e-6
+          and "Camada" in text,
+          "acabamentos={} afastamento={:.3f} painel_tem_camada={}".format(finishes, standoff, "Camada" in text))
+
+
+def scan_model_flow():
+    """0.162 — Model from the point cloud: a room scanned from inside with a 10 cm wall across it (a door's gap in
+    it) linked; BIM ▸ Model from the point cloud…: the floor at 0 and the height 2,80 found, five walls; OK: five
+    walls and a floor slab, in one step."""
+    path = os.path.join(OUT, "sala_com_parede.ply")
+    scan_ply(path, inner_wall=(3.0, 0.10), door=(1.0, 1.9, 2.1))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.link_cloud(path)
+    pump(500)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_scan_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["floor"], seen["height"] = round(d.floor.value(), 2), round(d.height.value(), 2)
+        seen["walls"] = sorted(round(th, 2) for _a, _b, th in d.axes)
+        seen["openings"] = [k for _i, k in d.openings]                 # (0.213: the door's gap, a door)
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.model_from_scan()
+    pump(600)
+    report = getattr(win, "_last_scan_model", None) or {}
+    made = (len(report.get("walls", ())), len(report.get("slabs", ())))
+    found = abs(seen.get("floor", 9) - 0.0) <= 0.03 and abs(seen.get("height", 0) - 2.8) <= 0.04 \
+        and len(seen.get("walls", ())) == 5
+    vp.zoom_extents()
+    pump(300)
+    shot("157_modelo_da_nuvem.png")
+    check("modelo_da_nuvem", made == (5, 1) and found, "feito={} janela={}".format(made, seen))
+    check("vaos_da_nuvem", seen.get("openings") == ["door"] and len(report.get("doors", ())) == 1,
+          "vaos={} portas={}".format(seen.get("openings"), len(report.get("doors", ()))))
+
+
+def scan_storeys_flow():
+    """0.214 — Every storey of a scan at once: two 6 × 4 rooms scanned one over the other (floors at 0 and 3,05,
+    2,80 m high); Model from the point cloud…: «Every storey at once (2…)» ticked, walls on 2 storeys; OK: a storey
+    at 3,05 made, four walls and a slab on each, all one undo step."""
+    path = os.path.join(OUT, "dois_pisos.ply")
+    rng = np.random.default_rng(3)
+    pts = []
+    for base in (0.0, 3.05):
+        zs = np.arange(base, base + 2.8001, 0.05)
+        for x in np.arange(0.0, 6.0001, 0.05):
+            pts += [(x, y, z) for y in (0.0, 4.0) for z in zs]
+        for y in np.arange(0.0, 4.0001, 0.05):
+            pts += [(x, y, z) for x in (0.0, 6.0) for z in zs]
+        for x in np.arange(0.0, 6.0001, 0.1):
+            for y in np.arange(0.0, 4.0001, 0.1):
+                pts += [(x, y, base), (x, y, base + 2.8)]
+    p = np.array(pts) + rng.normal(0.0, 0.002, (len(pts), 3))
+    head = ("ply\nformat binary_little_endian 1.0\nelement vertex {}\nproperty float x\nproperty float y\n"
+            "property float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+            ).format(len(p))
+    rows = np.zeros(len(p), dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("r", "u1"), ("g", "u1"), ("b", "u1")])
+    rows["x"], rows["y"], rows["z"] = p[:, 0], p[:, 1], p[:, 2]
+    rows["r"] = rows["g"] = rows["b"] = 180
+    with open(path, "wb") as f:
+        f.write(head.encode() + rows.tobytes())
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.link_cloud(path)
+    pump(500)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_scan_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["ticked"] = d.all_storeys.isChecked()
+        seen["storeys"] = [round(f, 2) for f, _h in d.storeys]
+        seen["per"] = [len(entry[2]) for entry in d.per_storey]
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.model_from_scan()
+    pump(600)
+    report = getattr(win, "_last_scan_model", None) or {}
+    levels = sorted(round(z, 2) for _g, _n, z in doc.ifc.storeys())
+    vp.zoom_extents()
+    pump(300)
+    shot("214_dois_pisos_da_nuvem.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    undone = not [o for o in doc.objects.values() if o.is_bim and o.ifc_class.startswith("IfcWall")]
+    check("pisos_da_nuvem", seen.get("ticked") and seen.get("per") == [4, 4] and report.get("storeys") == 2
+          and len(report.get("walls", ())) == 8 and len(report.get("slabs", ())) == 2
+          and any(abs(z - 3.05) <= 0.03 for z in levels) and undone,
+          "janela={} paredes={} lajes={} pisos={} desfeito={}".format(seen, len(report.get("walls", ())),
+                                                                   len(report.get("slabs", ())), levels, undone))
+
+
+def scan_curved_flow():
+    """0.215 — A curved wall from the point cloud: a 6 × 4 room scanned from inside with a curved wall in it (its two
+    faces 1,5 and 1,7 m round (3; 2), a third of a turn); Model from the point cloud…: one curved wall said; OK: a
+    curved wall 1,6 m round, 20 cm, with the room's walls."""
+    path = os.path.join(OUT, "sala_curva.ply")
+    rng = np.random.default_rng(9)
+    pts = []
+    zs = np.arange(0.0, 2.8001, 0.05)
+    for x in np.arange(0.0, 6.0001, 0.05):
+        pts += [(x, y, z) for y in (0.0, 4.0) for z in zs]
+    for y in np.arange(0.0, 4.0001, 0.05):
+        pts += [(x, y, z) for x in (0.0, 6.0) for z in zs]
+    for r in (1.5, 1.7):
+        for a in np.arange(np.radians(200.0), np.radians(320.0), 0.03 / r):
+            pts += [(3.0 + r * np.cos(a), 2.0 + r * np.sin(a) + 1.2, z) for z in zs]
+    for x in np.arange(0.0, 6.0001, 0.1):
+        for y in np.arange(0.0, 4.0001, 0.1):
+            pts += [(x, y, 0.0), (x, y, 2.8)]
+    p = np.array(pts) + rng.normal(0.0, 0.002, (len(pts), 3))
+    head = ("ply\nformat binary_little_endian 1.0\nelement vertex {}\nproperty float x\nproperty float y\n"
+            "property float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+            ).format(len(p))
+    rows = np.zeros(len(p), dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("r", "u1"), ("g", "u1"), ("b", "u1")])
+    rows["x"], rows["y"], rows["z"] = p[:, 0], p[:, 1], p[:, 2]
+    rows["r"] = rows["g"] = rows["b"] = 180
+    with open(path, "wb") as f:
+        f.write(head.encode() + rows.tobytes())
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.link_cloud(path)
+    pump(500)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_scan_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["curved"] = [(round(r, 2), round(t, 2)) for _c, r, _s, _w, t in d.arcs]
+        seen["said"] = d.found_label.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.model_from_scan()
+    pump(600)
+    report = getattr(win, "_last_scan_model", None) or {}
+    radii = []
+    for g in report.get("walls", ()):
+        try:
+            radii.append(round(doc.ifc.curved_wall_params(g)[1], 2))
+        except (KeyError, TypeError, ValueError):
+            pass
+    vp.zoom_extents()
+    pump(300)
+    shot("215_parede_curva_da_nuvem.png")
+    check("parede_curva_da_nuvem", len(seen.get("curved", ())) == 1 and len(radii) == 1
+          and abs(radii[0] - 1.6) <= 0.03 and "curvas" in seen.get("said", ""),
+          "janela={} raios={}".format(seen, radii))
+
+
+def dwg_link_flow():
+    """0.286 — A DWG linked: the plan's DXF made a DWG by the ODA File Converter, linked on the ground floor (through
+    its DXF): in millimetres, its walls drawn; walls made from it (Walls from the drawing) as from the DXF."""
+    from arqbim.core import dwg
+    if dwg.converter() is None:
+        check("ligar_dwg", True, "ODA File Converter por instalar: saltado")
+        return
+    source = os.path.join(OUT, "planta.dxf")
+    plan_dxf(source)
+    path = dwg.from_dxf(source, os.path.join(OUT, "planta.dwg"))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    link = win.link_cad(path)
+    pump(500)
+    linked = link is not None and len(doc.cad_links) == 1 and abs(link.units - 0.001) < 1e-12 \
+        and link.path.lower().endswith(".dwg")
+    vp.zoom_extents()
+    pump(300)
+    shot("286_dwg_ligado.png")
+    check("ligar_dwg", linked, "ligado={}".format(linked))
+
+
+def cad_link_flow():
+    """0.158 — Link a DXF: a plan's DXF (mm) linked on the ground floor's plan: origin to origin, in millimetres,
+    drawn; a wall's corner on it taken by the snaps (a click a little off it lands on it); in View ▸ Linked CAD
+    drawings… the dimensions' layer unticked: hidden; saved and opened again: there, drawn."""
+    path = os.path.join(OUT, "planta_cad.dxf")
+    plan_dxf(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    link = win.link_cad(path)
+    pump(500)
+    linked = link is not None and len(doc.cad_links) == 1 and abs(link.units - 0.001) < 1e-12 \
+        and tuple(link.origin) == (0.0, 0.0)
+    drawn = len(vp._cad_objects) == 1
+    level = doc.work_level()
+    snap, _hit = vp.snap(*near((0.04, 0.03, level)))
+    snapped = snap is not None and float(np.hypot(snap.point[0], snap.point[1])) < 1e-6 \
+        and str(snap.obj_id).startswith("cad:")
+    shot("151_dxf_ligado.png")
+    seen = {}
+
+    def untick():
+        d = getattr(win, "_cad_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, untick)
+            return
+        for k in range(d.layers.count()):
+            item = d.layers.item(k)
+            if item.data(QtCore.Qt.ItemDataRole.UserRole) == "COTAS":
+                item.setCheckState(QtCore.Qt.CheckState.Unchecked)
+        seen["layers"] = sorted(d.layers.item(k).data(QtCore.Qt.ItemDataRole.UserRole) for k in range(d.layers.count()))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, untick)
+    win.cad_links()
+    pump(300)
+    hidden = doc.cad_links[0].hidden == ["COTAS"] if doc.cad_links else False
+    listed = seen.get("layers") == ["COTAS", "PAREDES", "PORTAS", "TEXTOS"]
+    saved = os.path.join(OUT, "dxf_ligado.ifc")
+    win.save_to(saved)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    win.open_path(saved)
+    pump(800)
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    back = len(doc.cad_links) == 1 and doc.cad_links[0].hidden == ["COTAS"] and len(vp._cad_objects) == 1
+    check("dxf_ligado", linked and drawn and snapped and listed and hidden and back,
+          "ligado={} desenhado={} snap={} ({}) camadas={} escondida={} reaberto={}".format(
+              linked, drawn, snapped, None if snap is None else np.round(snap.point, 3), seen, hidden, back))
+
+
+def cad_walls_flow():
+    """0.159 — Walls from the drawing: the plan's DXF linked; BIM ▸ Walls from the drawing…: the layer PAREDES
+    ticked (not PORTAS, COTAS), four 20 cm walls found and shown; OK: four walls of 20 cm masonry, their corners
+    joined (the ring of 10 × 8 m less 9,6 × 7,6 m covered once); Ctrl+Z: none."""
+    path = os.path.join(OUT, "planta_cad.dxf")
+    plan_dxf(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.link_cad(path)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_cad_walls_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["ticked"] = sorted(d.chosen_layers())
+        seen["found"] = [round(th, 3) for _a, _b, th in d.axes]
+        seen["shown"] = len(vp._lines.geometry.positions.data) if getattr(vp, "_lines", None) is not None else 0
+        shot("152_paredes_do_dxf_janela.png")
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    made = win.walls_from_cad() or []
+    pump(500)
+    walls = [doc.ifc.wall_params(g) for g in made]
+    ring = sum(length * th for length, _h, th in walls)
+    ok_walls = len(made) == 4 and all(abs(th - 0.2) < 1e-6 for _l, _h, th in walls) \
+        and abs(ring - (80.0 - 9.6 * 7.6)) < 1e-6
+    listed = seen.get("ticked") == ["PAREDES"] and seen.get("found") == [0.2] * 4
+    win.views.close_current()
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("153_paredes_do_dxf.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = not [o for o in doc.objects.values() if o.is_bim and o.ifc_class.startswith("IfcWall")]
+    check("paredes_do_dxf", ok_walls and listed and undone,
+          "paredes={} ({:.3f} m² de anel) janela={} desfeito={}".format(len(made), ring, seen, undone))
+
+
+def curved_cad_walls_flow():
+    """0.210 — Curved walls from the drawing: a DXF with a straight wall (two lines) going on in a curved one (two
+    concentric arcs); Walls from the drawing…: two found, one of them curved (the window says so); OK: a straight
+    wall and a curved one, 3,1 m round."""
+    path = os.path.join(OUT, "planta_curva.dxf")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join([
+            "0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "6", "0", "ENDSEC",
+            "0", "SECTION", "2", "ENTITIES",
+            "0", "LINE", "8", "PAREDES", "10", "0", "20", "0", "11", "4", "21", "0",
+            "0", "LINE", "8", "PAREDES", "10", "0", "20", "-0.2", "11", "4", "21", "-0.2",
+            "0", "ARC", "8", "PAREDES", "10", "4", "20", "3", "40", "3.0", "50", "-90", "51", "0",
+            "0", "ARC", "8", "PAREDES", "10", "4", "20", "3", "40", "3.2", "50", "-90", "51", "0",
+            "0", "ENDSEC", "0", "EOF", ""]))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.link_cad(path)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_cad_walls_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["straight"], seen["curved"] = len(d.axes), len(d.arcs)
+        seen["said"] = d.found_label.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    made = win.walls_from_cad() or []
+    pump(500)
+    radii = []
+    for g in made:
+        try:
+            radii.append(round(doc.ifc.curved_wall_params(g)[1], 3))
+        except (KeyError, TypeError, ValueError):            # (a straight wall: no radius)
+            pass
+    win.views.close_current()
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("210_paredes_curvas_do_dxf.png")
+    check("paredes_curvas_do_dxf", len(made) == 2 and radii == [3.1] and seen.get("curved") == 1
+          and "curvas" in seen.get("said", ""), "paredes={} raios={} janela={}".format(len(made), radii, seen))
+
+
+def cad_columns_flow():
+    """0.211 — Columns from the drawing: a DXF with a PILARES layer — two closed 30 × 30 rectangles and a circle
+    30 cm across; Model from the drawing…: the layer ticked by its name, three columns found (said in the window);
+    OK: three columns as high as the walls would be."""
+    path = os.path.join(OUT, "pilares_cad.dxf")
+    rect = lambda x, y: ["0", "LWPOLYLINE", "8", "PILARES", "90", "4", "70", "1", "10", str(x), "20", str(y),  # noqa
+                         "10", str(x + 0.3), "20", str(y), "10", str(x + 0.3), "20", str(y + 0.3),
+                         "10", str(x), "20", str(y + 0.3)]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "6", "0", "ENDSEC",
+                           "0", "SECTION", "2", "ENTITIES"] + rect(0, 0) + rect(5, 0)
+                          + ["0", "CIRCLE", "8", "PILARES", "10", "2.5", "20", "4", "40", "0.15",
+                             "0", "ENDSEC", "0", "EOF", ""]))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.link_cad(path)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_cad_walls_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["ticked"] = d.chosen("columns")
+        seen["found"] = len(d.columns)
+        seen["said"] = d.found_label.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.walls_from_cad()
+    pump(500)
+    columns = [o for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcColumn"]
+    win.views.close_current()
+    pump(300)
+    vp.zoom_extents()
+    pump(300)
+    shot("211_pilares_do_dxf.png")
+    check("pilares_do_dxf", len(columns) == 3 and seen.get("found") == 3 and seen.get("ticked") == ["PILARES"]
+          and "pilares" in seen.get("said", ""), "pilares={} janela={}".format(len(columns), seen))
+
+
+def sized_openings_flow():
+    """0.212 — The openings' sizes written on the drawing: a room's DXF (walls in double lines, a door block in its
+    gap, a window block in the top wall) with «0,90x2,20» by the door and «1,20x1,10 pt 0,95» by the window; Model
+    from the drawing…: the window says two sizes read; OK: the door 2,20 m high, the window 1,10 m on 0,95 m."""
+    path = os.path.join(OUT, "vaos_cotados.dxf")
+    lines = [((0, 0), (4000, 0)), ((4900, 0), (10000, 0)), ((10000, 0), (10000, 8000)), ((10000, 8000), (0, 8000)),
+             ((0, 8000), (0, 0)), ((200, 200), (4000, 200)), ((4900, 200), (9800, 200)), ((9800, 200), (9800, 7800)),
+             ((9800, 7800), (200, 7800)), ((200, 7800), (200, 200)), ((4000, 0), (4000, 200)), ((4900, 0), (4900, 200))]
+    rows = ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "0", "ENDSEC", "0", "SECTION", "2", "BLOCKS",
+            "0", "BLOCK", "8", "0", "2", "PORTA90", "10", "0", "20", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "0", "11", "0", "21", "900",
+            "0", "ARC", "8", "0", "10", "0", "20", "0", "40", "900", "50", "0", "51", "90", "0", "ENDBLK",
+            "0", "BLOCK", "8", "0", "2", "JANELA120", "10", "0", "20", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "0", "11", "1200", "21", "0",
+            "0", "LINE", "8", "0", "10", "0", "20", "200", "11", "1200", "21", "200", "0", "ENDBLK", "0", "ENDSEC",
+            "0", "SECTION", "2", "ENTITIES"]
+    for (x0, y0), (x1, y1) in lines:
+        rows += ["0", "LINE", "8", "PAREDES", "10", str(x0), "20", str(y0), "11", str(x1), "21", str(y1)]
+    rows += ["0", "INSERT", "8", "PORTAS", "2", "PORTA90", "10", "4000", "20", "200",
+             "0", "INSERT", "8", "JANELAS", "2", "JANELA120", "10", "6000", "20", "7800",
+             "0", "TEXT", "8", "COTAS", "10", "4450", "20", "600", "40", "150", "1", "0,90x2,20",
+             "0", "TEXT", "8", "COTAS", "10", "6600", "20", "7300", "40", "150", "1", "1,20x1,10 pt 0,95",
+             "0", "ENDSEC", "0", "EOF", ""]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows))
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.link_cad(path)
+    pump(400)
+    seen = {}
+
+    def accept():
+        d = getattr(win, "_cad_walls_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, accept)
+            return
+        seen["sized"], seen["said"] = d.sized, d.found_label.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, accept)
+    win.walls_from_cad()
+    pump(500)
+    doors = doc.ifc.file.by_type("IfcDoor")
+    windows = doc.ifc.file.by_type("IfcWindow")
+    s = doc.ifc.unit_scale
+    door_h = round(doors[0].OverallHeight * s, 3) if doors else None
+    window_h = round(windows[0].OverallHeight * s, 3) if windows else None
+    win.views.close_current()
+    pump(300)
+    check("vaos_com_medidas_escritas", seen.get("sized") == 2 and door_h == 2.2 and window_h == 1.1
+          and "medidas escritas" in seen.get("said", ""),
+          "lidos={} porta={} janela={}".format(seen.get("sized"), door_h, window_h))
+
+
+def gfx_mesh_type():
+    import pygfx
+    return pygfx.Mesh
+
+
+def background_image_flow():
+    """0.154 — Background image: a 600 × 300 px «scanned plan» (a room and a 4 m dimension at 1 cm a pixel… drawn
+    at half that) imported on the plan of the ground floor: 6 m wide, drawn, the Calibrate image tool on it. Its two
+    ends of the dimension clicked, «8» + Enter: 12 m wide, locked; a click on the origin: that point at (0, 0);
+    Esc. Saved and opened again: there, drawn, locked; in View ▸ Background images…, the list shows it."""
+    picture = os.path.join(OUT, "planta_digitalizada.png")
+    image = QtGui.QImage(600, 300, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("#ffffff"))
+    p = QtGui.QPainter(image)
+    p.setPen(QtGui.QPen(QtGui.QColor("#202020"), 6))
+    p.drawRect(100, 50, 400, 200)                                   # (a room, its walls)
+    p.setPen(QtGui.QPen(QtGui.QColor("#c03020"), 2))
+    p.drawLine(100, 280, 500, 280)                                  # (its dimension: «8,00» on paper)
+    p.drawLine(100, 270, 100, 290)
+    p.drawLine(500, 270, 500, 290)
+    p.end()
+    image.save(picture)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    placed = win.import_image(picture)
+    pump(400)
+    imported = placed is not None and len(doc.images) == 1 and abs(placed.width - 6.0) < 1e-9
+    drawn = len(vp._image_objects) == 1
+    on_tool = win.tool.name == "calibrate_image" and win.tool.only == placed.uid if placed else False
+    level = doc.work_level()
+
+    def world(px, py):
+        """A pixel of the picture (row 0 at its top) → the plan point it is drawn at."""
+        im = doc.images[0]
+        u, v = im.axes()
+        s = im.width / im.pixels[0]
+        q = np.asarray(im.origin) + u * px * s + v * (im.pixels[1] - py) * s
+        return (float(q[0]), float(q[1]), level)
+
+    a, b = world(100, 280), world(500, 280)
+    move(near(a), 4)
+    pump(100)
+    click()
+    pump(200)
+    move(near(b), 4)
+    pump(100)
+    click()
+    pump(200)
+    type_text("8")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    im = doc.images[0]
+    calibrated = abs(im.width - 12.0) < 0.05 and im.locked
+    first = np.array(world(100, 280)[:2])                          # (where the first point is now)
+    move(near((0.0, 0.0, level)), 4)
+    pump(100)
+    click()
+    pump(300)
+    after = np.array(world(100, 280)[:2])
+    placed_ok = float(np.linalg.norm(after)) < 0.05
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    vp.zoom_extents()
+    pump(300)
+    shot("144_imagem_de_fundo.png")
+    path = os.path.join(OUT, "imagem_de_fundo.ifc")
+    win.save_to(path)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    gone = not doc.images and not vp._image_objects
+    win.open_path(path)
+    pump(800)
+    back = len(doc.images) == 1 and doc.images[0].locked and abs(doc.images[0].width - im.width) < 1e-9
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    drawn_again = len(vp._image_objects) == 1
+
+    def look():
+        d = getattr(win, "_images_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        listed.append(d.table.rowCount())
+        listed.append(d.table.item(0, 0).text())
+        d.accept()
+
+    listed = []
+    QtCore.QTimer.singleShot(100, look)
+    win.background_images()
+    pump(200)
+    win.set_tool("select")
+    check("imagem_de_fundo", imported and drawn and on_tool and calibrated and placed_ok and gone and back
+          and drawn_again and listed == [1, "planta_digitalizada"],
+          "importada={} desenhada={} ferramenta={} calibrada={} ({:.2f} m) no_sitio={} ({}, antes {}) novo={} "
+          "reaberta={} desenhada={} lista={}".format(imported, drawn, on_tool, calibrated, im.width, placed_ok,
+                                                     np.round(after, 3), np.round(first, 2), gone, back,
+                                                     drawn_again, listed))
+
+
+def connect_network_check():
+    """0.142 — Ligar à rede: a WC and a washbasin against a wall, a sewage collector and a cold water pipe behind it;
+    the two fixtures selected, BIM ▸ Ligar à rede: the WC's drain and cold water and the basin's drain and cold water
+    joined (tees), its hot water told as having no network. Returns (passed, details)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_segment(doc, np.array((0.0, -0.6)), np.array((6.0, -0.6)), catalog.BY_KEY["tubo_100"], -0.30,
+                            storey=doc.active_storey, end_z=-0.36, system="sewage")
+    bim_actions.add_segment(doc, np.array((0.0, -0.3)), np.array((6.0, -0.3)), catalog.BY_KEY["tubo_25"], 0.40,
+                            storey=doc.active_storey, system="cold")
+    wc = bim_actions.add_fixture(doc, (2.0, 0.1), "wc", 0.0)
+    basin = bim_actions.add_fixture(doc, (4.0, 0.1), "basin", 0.0)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    vp.set_selection({wc, basin})
+    pump(300)
+    in_menu = win.act_connect_network in win._selection_actions({"IfcSanitaryTerminal": 2})
+    win.act_connect_network.trigger()
+    pump(500)
+    joined = {(g, p.Name): doc.ifc.connected(p) is not None for g in (wc, basin) for p in doc.ifc.ports(g)}
+    expected = all(v for k, v in joined.items() if k[1] != "hot") and not joined.get((basin, "hot"), True)
+    told = "água quente" in win.last_message.lower()
+    shot("132_ligar_a_rede.png")
+    return expected and told and in_menu, "ligadas={} aviso={} menu={}".format(
+        sum(1 for v in joined.values() if v), told, in_menu)
+
+
+def ue_psets(entity):
+    import ifcopenshell.util.element as ue
+    return ue.get_psets(entity)
+
+
+def propose_structure_flow():
+    """0.98: Propose a structure… on a 12 × 8 m room with a wall across (largest span 6 m): 9 columns, 10 beams,
+    9 footings; Remove proposal: none left, the walls back to 2,80."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array(a + (0.0,)), np.array(b + (0.0,)), spec)
+             for a, b in (((0.0, 0.0), (12.0, 0.0)), ((12.0, 0.0), (12.0, 8.0)), ((12.0, 8.0), (0.0, 8.0)),
+                          ((0.0, 8.0), (0.0, 0.0)), ((6.0, 0.0), (6.0, 8.0)))]
+    pump(300)
+
+    def fill():
+        d = getattr(win, "_proposal_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.span.setText("6")
+        d.accept()
+
+    win._proposal_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    counts = win.propose_structure()
+    pump(300)
+    vp.set_view("iso")
+    pump(300)
+    shot("89_proposta_estrutura.png")
+    lowered = {round(doc.ifc.wall_params(w)[1], 6) for w in walls} == {2.5}
+    win.act_remove_proposal.trigger()
+    pump(300)
+    gone = len(doc.ifc.file.by_type("IfcColumn")) == 0 and {round(doc.ifc.wall_params(w)[1], 6) for w in walls} == {2.8}
+    check("propor_estrutura", counts == {"columns": 9, "beams": 10, "footings": 9} and lowered and gone,
+          "contagens={} paredes_rebaixadas={} removida={}".format(counts, lowered, gone))
+
+
+def beams_between_flow():
+    """0.94: six columns on a 3 × 2 grid, all selected — the contextual bar offers Beams: seven; a column moved
+    with Move: its beams follow (face to face)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 5.0, 10.0], [0.0, 6.0])
+    cols = bim_actions.columns_on_grid(doc, None, catalog.BY_KEY["pilar_30"], 2.8, doc.active_storey)
+    pump(300)
+    vp.set_selection(set(cols))
+    pump(200)
+    offered = win.act_beams_between in win.context_bar.actions()
+    win.act_beams_between.trigger()
+    pump(300)
+    beams = list(doc.ifc.beams_of(cols))
+    seven = len(beams) == 7
+    vp.set_selection(set())
+    vp.set_view("iso")
+    pump(300)
+    shot("86_vigas.png")
+    # 0.95: the beams selected — the contextual bar offers Walls: one under each
+    vp.set_selection(set(beams))
+    pump(200)
+    walls_offered = win.act_walls_under_beams in win.context_bar.actions()
+    win.act_walls_under_beams.trigger()
+    pump(300)
+    walls = list(doc.ifc.walls_of(beams))
+    vp.set_selection(set())
+    pump(200)
+    shot("87_paredes_sob_vigas.png")
+    # 0.96: the beams selected again — Slabs: one in each of the two bays
+    vp.set_selection(set(beams))
+    pump(200)
+    slabs_offered = win.act_slabs_in_bays in win.context_bar.actions()
+    win.act_slabs_in_bays.trigger()
+    pump(300)
+    slabs = list(doc.ifc.slabs_of(beams))
+    vp.set_selection(set())
+    pump(200)
+    shot("88_lajes_nos_vaos.png")
+    check("lajes_nos_vaos", slabs_offered and len(slabs) == 2,
+          "botao={} lajes={}".format(slabs_offered, len(slabs)))
+    # 0.97: Beam system… — two beams along Y in each bay
+    vp.set_selection(set(beams))
+    pump(200)
+    system_offered = win.act_beam_system in win.context_bar.actions()
+
+    def fill():
+        d = getattr(win, "_beam_system_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.way.setCurrentIndex(d.way.findData("y"))
+        d.value.setText("2")
+        d.accept()
+
+    win._beam_system_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    system = win.beam_system()
+    vp.set_selection(set())
+    pump(200)
+    check("sistema_de_vigas", system_offered and len(system) == 4,
+          "botao={} vigas={}".format(system_offered, len(system)))
+    corner = next(c for c in cols if np.allclose(doc.ifc.placement(c)[:2, 3], (0.0, 0.0)))
+    m = np.eye(4)
+    m[0, 3] = -1.0
+    bim_actions.transform_objects(doc, [corner], m, "mover")
+    pump(200)
+    lengths = sorted(round(float(np.linalg.norm((e - s)[:2])), 6) for s, e, *_ in map(doc.ifc.beam_params, beams))
+    follows = 5.7 in lengths and lengths.count(4.7) == 3
+    wall_lengths = sorted(round(doc.ifc.wall_params(w)[0], 6) for w in walls)
+    check("vigas_entre_pilares", offered and seven and follows,
+          "botao={} sete={} acompanham={} comprimentos={}".format(offered, seven, follows, lengths))
+    check("paredes_sob_as_vigas", walls_offered and len(walls) == 7 and wall_lengths.count(4.7) == 3,
+          "botao={} paredes={} comprimentos={}".format(walls_offered, len(walls), wall_lengths))
+
+
+def footings_under_flow():
+    """0.93: four columns on the grid, two selected — the contextual bar offers Footings: two; nothing selected:
+    the two others; a column moved with the Move tool — its footing goes along."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 5.0], [0.0, 6.0])
+    cols = bim_actions.columns_on_grid(doc, None, catalog.BY_KEY["pilar_30"], 2.8, doc.active_storey)
+    pump(300)
+    vp.set_selection(set(cols[:2]))
+    pump(200)
+    offered = win.act_footings_under in win.context_bar.actions()
+    win.act_footings_under.trigger()
+    pump(200)
+    two = sum(len(v) for v in doc.ifc.footings_of(cols).values()) == 2
+    vp.set_selection(set())
+    win.act_footings_under.trigger()
+    pump(300)
+    four = sum(len(v) for v in doc.ifc.footings_of(cols).values()) == 4
+    vp.set_view("iso")
+    pump(300)
+    shot("84_sapatas.png")
+    m = np.eye(4)
+    m[1, 3] = 1.5
+    bim_actions.transform_objects(doc, [cols[0]], m, "mover")
+    pump(200)
+    f0 = doc.ifc.footings_of([cols[0]])[cols[0]][0]
+    follows = np.allclose(doc.ifc.footing_params(f0)[0], doc.ifc.placement(cols[0])[:2, 3])
+    check("sapatas_sob_os_pilares", offered and two and four and follows,
+          "botao={} duas={} quatro={} acompanha={}".format(offered, two, four, follows))
+    # 0.94: the Footing tool's pad type made a pile cap of 2 piles (on its contextual bar): a new column's
+    # footing is that cap, with its two piles
+    win.tool_actions["footing"].trigger()
+    pump(100)
+    combo = win.context_bar.fields["pad"][0]
+    k = combo.findData("bloco_2e")
+    combo.setCurrentIndex(k)
+    combo.activated.emit(k)
+    key(Qt.Key.Key_Escape)
+    col = bim_actions.add_column(doc, np.array((2.5, 9.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+    pump(200)
+    vp.set_selection({col})
+    win.act_footings_under.trigger()
+    pump(300)
+    cap = doc.ifc.footings_of([col]).get(col, [None])[0]
+    piles = doc.ifc.footings_of([cap]).get(cap, []) if cap else []
+    vp.set_selection(set())
+    vp.zoom_extents()
+    pump(300)
+    shot("85_bloco_estacas.png")
+    win.tools["footing"].set_option("pad", "sapata_80")
+    check("bloco_sobre_estacas", cap is not None and len(piles) == 2,
+          "bloco={} estacas={}".format(cap is not None, len(piles)))
+
+
+def columns_on_grid_flow():
+    """0.92: axes 2 and A selected — the contextual bar offers Place columns: one at their crossing; nothing
+    selected: the five others; axis 2 moved 1 m — its columns go along; Ctrl+Z."""
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 5.0, 10.0], [0.0, 6.0])
+    pump(200)
+    idx = {a.tag: k for k, a in enumerate(doc.grids)}
+    vp.select_axes({idx["2"], idx["A"]})
+    pump(200)
+    offered = win.act_columns_on_grid in win.context_bar.actions()
+    win.act_columns_on_grid.trigger()
+    pump(200)
+    one = len(doc.ifc.grid_ties()) == 1
+    vp.set_selection(set())
+    vp.select_axes(set())
+    win.act_columns_on_grid.trigger()
+    pump(300)
+    six = len(doc.ifc.grid_ties()) == 6
+    vp.set_view("iso")
+    pump(300)
+    shot("83_pilares_grelha.png")
+    axis = doc.grids[idx["2"]]
+    bim_actions.move_grid_axes(doc, {idx["2"]: ((axis.start[0] + 1.0, axis.start[1]), (axis.end[0] + 1.0, axis.end[1]))})
+    pump(200)
+    xs = sorted(round(float(doc.ifc.placement(g)[0, 3]), 6) for g in doc.ifc.grid_ties())
+    followed = xs == [0.0, 0.0, 6.0, 6.0, 10.0, 10.0]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    xs = sorted(round(float(doc.ifc.placement(g)[0, 3]), 6) for g in doc.ifc.grid_ties())
+    back = xs == [0.0, 0.0, 5.0, 5.0, 10.0, 10.0]
+    check("pilares_na_grelha", offered and one and six and followed and back,
+          "botao={} um={} seis={} acompanham={} desfeito={}".format(offered, one, six, followed, back))
+
+
+def grid_settings_flow():
+    """0.91: BIM ▸ Structural grid… — dimensions between axes on, vertical axes lettered and renumbered, a bigger
+    bubble: in the plan the grid's dimensions are drawn (not picked) and the tags are A, B, C across; Ctrl+Z."""
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 5.0, 10.0], [0.0, 6.0])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    seen = {}
+
+    def fill():
+        d = getattr(win, "_grid_settings_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.dims.setChecked(True)
+        d.scheme.setCurrentIndex(d.scheme.findData("letters_y"))
+        seen["renumber"] = d.renumber.isChecked()             # (ticked by itself: the scheme changed)
+        d.bubble.setText("0,50")
+        d.accept()
+
+    win._grid_settings_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    win.grid_settings()
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    shot("82_grelha_cotas.png")
+    tags = [tag for _x, tag in sorted((a.start[0], a.tag) for a in doc.grids if a.numbered)]
+    dims = doc.dimensions_of(("plan", doc.active_storey))
+    drawn = len(dims) == 4 and len(vp._dim_objects) > 0
+    a, b = dims[0].a, dims[0].b if dims else (None, None)
+    middle = vp.project((a + b) / 2) if dims else (0, 0)
+    not_picked = vp.dimension_at(*middle) is None
+    ok = seen.get("renumber") and tags == ["A", "B", "C"] and drawn and not_picked and \
+        abs(vp.grid_bubble() - 0.5) < 1e-9
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    back = [tag for _x, tag in sorted((a_.start[0], a_.tag) for a_ in doc.grids if a_.numbered)] == ["1", "2", "3"] \
+        and not doc.dimensions_of(("plan", doc.active_storey))
+    win.open_view("3d", None)
+    pump(300)
+    check("grelha_esquema_cotas_bolha", ok and back,
+          "renumerar={} etiquetas={} cotas={} nao_selecionavel={} bolha={} desfeito={}".format(
+              seen.get("renumber"), tags, drawn, not_picked, vp.grid_bubble(), back))
+
+
+def typical_flow():
+    """0.90: Piso 1 made equal to the ground floor and Piso 2 (Pavimentos ▸ Iguais…): its wall copied to them,
+    "=A" on all three; a wall drawn with the Wall tool on Piso 1 appears on all; Ctrl+Z; "Separar": each on its
+    own; Ctrl+Z again: equal."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    ground = doc.storeys()[0][0]
+    first = bim_actions.add_storey(doc, "Piso 1", 3.0)
+    second = bim_actions.add_storey(doc, "Piso 2", 6.0)
+    win.set_active_storey(first)
+    pump(200)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 3.0)), np.array((5.0, 0.0, 3.0)), catalog.BY_KEY["parede_alv_20"],
+                         storey=first)
+    pump(200)
+
+    def walls():
+        by = {}
+        for e in doc.ifc.file.by_type("IfcWall"):
+            by[doc.ifc.storey_of(e.GlobalId)] = by.get(doc.ifc.storey_of(e.GlobalId), 0) + 1
+        return [by.get(s, 0) for s in (ground, first, second)]
+
+    from arqbim.ui.selection_dialogs import CHECKED, KEY
+    _answer_dialog(lambda d: [d.list.item(i).setCheckState(CHECKED) for i in range(d.list.count())])
+    win.storeys_panel.btn_typical.click()
+    pump(600)
+    copied = walls() == [1, 1, 1]
+    marks = [win.storeys_panel.table.topLevelItem(i).text(2) for i in range(3)]
+    shot("81_pisos_tipo.png")
+    vp.set_view("top", center=(2.5, 2.0, 3.0), radius=6.0)
+    pump(300)
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    move(near((0.0, 3.0, 3.0)), 3)
+    click()
+    move(near((4.0, 3.0, 3.0)), 4)
+    click()
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Space)
+    drawn = walls() == [2, 2, 2]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    undone = walls() == [1, 1, 1]
+    separate = win.storeys_panel.btn_typical.text()
+    win.storeys_panel.btn_typical.click()
+    pump(300)
+    apart = doc.ifc.typical_sets() == {} and win.storeys_panel.table.topLevelItem(0).text(2) == ""
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    again = len(doc.ifc.typical_sets()) == 1
+    check("pisos_tipo", copied and marks == ["=A", "=A", "=A"] and drawn and undone and separate == "Separar"
+          and apart and again,
+          "copiado={} marcas={} desenhada={} desfeito={} botao={} separados={} de_novo={}".format(
+              copied, marks, drawn, undone, separate, apart, again))
+
+
+def materials_flow():
+    """0.89: BIM ▸ Materials… — the clay block given the concrete hatch, a colour, a density and a conductivity;
+    a new material made; both in the IFC and in the type editor's lists; Ctrl+Z twice: as before."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import project_types
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_material_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("bloco")
+        d.hatch.setCurrentIndex(d.hatch.findData("concrete"))
+        d._set_colour((0.55, 0.35, 0.30))
+        d.density.setText("1400")
+        d.conductivity.setText("0,45")
+        seen["bloco"] = d.apply_changes()
+        seen["new"] = d.new_material()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "80_materiais.png"))
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_materials()
+    pump(200)
+    block = catalog.MATERIALS.get("bloco")
+    ifc_block = project_types.find_material(doc.ifc, block) if block else None
+    saved = seen.get("bloco") == "bloco" and block is not None and block.category == "concrete" and \
+        abs((block.density or 0) - 1400) < 1e-6 and ifc_block is not None and ifc_block.Category == "concrete"
+    new_key = seen.get("new")
+    made = new_key in catalog.MATERIALS and new_key.startswith("m:")
+    for _k in range(2):
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    back = catalog.MATERIALS["bloco"].category == "brick" and new_key not in catalog.MATERIALS
+    check("materiais", saved and made and back,
+          "bloco={} novo={} desfeito={}".format(saved, new_key, back))
+
+
+def types_flow():
+    """0.87: BIM ▸ Types… — the 20 cm wall type's block made 21 cm: both walls of that type 25 cm thick; a
+    duplicate, renamed "Parede 30" and thickened, is in the BIM menu and on the contextual bar; Ctrl+Z three
+    times: all as before."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    w20 = catalog.BY_KEY["parede_alv_20"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), w20)
+    b = bim_actions.add_wall(doc, np.array((0.0, 3.0, 0.0)), np.array((4.0, 3.0, 0.0)), w20)
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("parede_alv_20")
+        d.layers.cellWidget(1, 1).setText("0,21")
+        seen["changed"] = d.apply_changes()
+        seen["thick"] = (doc.ifc.wall_params(a)[2], doc.ifc.wall_params(b)[2])
+        new = d.duplicate_type()
+        d.name.setText("Parede 30")
+        d.layers.cellWidget(1, 1).setText("0,26")
+        seen["dup"] = d.apply_changes()
+        seen["dup_spec"] = catalog.BY_KEY.get(seen["dup"]) if seen["dup"] else None
+        seen["new"] = new
+        d.select("pilar_L_40")                         # (0.97) an L: its shape and its legs' thickness shown
+        seen["L"] = d.shape.currentData() == "L" and d.web.isVisibleTo(d) and d.depth.isVisibleTo(d)
+        d.select("pilar_circ_30")                      # a circle: its diameter only
+        seen["circle"] = d.shape.currentData() == "circle" and not d.depth.isVisibleTo(d)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "79_tipos.png"))
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_types("wall")
+    pump(200)
+    spec = seen.get("dup_spec")
+    in_menu = spec is not None and "Parede 30" in [a_.text() for a_ in win.type_menus["wall"].actions()]
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    combo = win.context_bar.fields["type"][0]
+    on_bar = combo.findText("Parede 30") >= 0
+    key(Qt.Key.Key_Space)
+    thick = seen.get("thick", (0, 0))
+    edited = abs(thick[0] - 0.25) < 1e-9 and abs(thick[1] - 0.25) < 1e-9 and seen.get("changed") == "parede_alv_20"
+    dup_ok = spec is not None and abs(spec.thickness - 0.30) < 1e-9 and spec.name_pt == "Parede 30"
+    for _k in range(3):
+        key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    back = abs(doc.ifc.wall_params(a)[2] - 0.20) < 1e-9 and \
+        "Parede 30" not in [a_.text() for a_ in win.type_menus["wall"].actions()]
+    check("editor_de_tipos", edited and dup_ok and in_menu and on_bar and back and seen.get("L")
+          and seen.get("circle"),
+          "espessuras={} duplicado={} menu={} barra={} desfeito={} L={} circular={}".format(
+              [round(v, 3) for v in thick], dup_ok, in_menu, on_bar, back, seen.get("L"), seen.get("circle")))
+    # 0.88: a door type 95 cm wide — the door in the wall follows; the Properties panel's button opens it
+    door = bim_actions.add_opening(doc, a, catalog.OPENING_BY_KEY["porta_80"], bim_actions.wall_frame(doc, a), 1.0, 1)
+    pump(200)
+    vp.set_selection({door})
+    pump(200)
+    button = win.props.editors.get("edit_type")
+    shown = {}
+
+    def door_work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, door_work)
+            return
+        shown["kind"] = d._kind()
+        shown["sill_hidden"] = not d.sill.isVisibleTo(d)
+        d.width.setText("0,95")
+        shown["key"] = d.apply_changes()
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, door_work)
+    if button is not None:
+        button.click()
+        pump(600)
+    width = doc.ifc.by_guid(door).OverallWidth * doc.ifc.unit_scale
+    door_ok = button is not None and shown.get("kind") == "door" and shown.get("sill_hidden") and \
+        shown.get("key") == "porta_80" and abs(width - 0.95) < 1e-9 and \
+        abs(catalog.OPENING_BY_KEY["porta_80"].width - 0.95) < 1e-9
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    door_back = abs(doc.ifc.by_guid(door).OverallWidth * doc.ifc.unit_scale - 0.80) < 1e-9
+    check("editor_de_tipos_portas", door_ok and door_back,
+          "botao={} visto={} largura={:.2f} desfeito={}".format(button is not None, shown, width, door_back))
+
+
+def placement_keys_flow():
+    """0.86: the placement keys — in Column R turns it 90° and Space takes its next insertion point (the
+    contextual bar follows), the column placed so; Esc goes back to Select. In Wall, X locks the red axis after
+    the first click, N lets go. In Door, F flips it to the other face. Outside them R is still Rectangle."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top")
+    pump(200)
+    bar = win.context_bar
+    col = win.tools["column"]
+    win.tool_actions["column"].trigger()
+    pump(100)
+    key(Qt.Key.Key_R)
+    key(Qt.Key.Key_Space)
+    keys_ok = col.angle == 90 and col.insertion == 1 and win.tool.name == "column"
+    bar_ok = bar.fields["angle"][0].currentData() == 90 and bar.fields["insertion"][0].currentData() == 1
+    move(near((2.0, 2.0, 0.0)), 3)
+    p = col._hover[0].copy()
+    click()
+    pump(200)
+    cols = [o for o in objects() if o.is_bim and o.ifc_class == "IfcColumn"]
+    placed = False
+    if cols:
+        m = doc.ifc.placement(cols[-1].id)
+        _centre, _x, foot = col._placed(p)
+        placed = np.allclose(m[:3, 0], (0.0, 1.0, 0.0), atol=1e-6) and np.allclose(foot[0][:2], p[:2], atol=1e-6) \
+            and np.allclose(m[:2, 3], _centre[:2], atol=1e-6)
+    key(Qt.Key.Key_Space, Qt.KeyboardModifier.ShiftModifier)
+    back = col.insertion == 0
+    key(Qt.Key.Key_Escape)
+    esc_select = win.tool.name == "select"
+    col.angle, col.insertion = 0, 0
+    # Wall: X after the first click keeps the next point on the red axis
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    move(near((0.0, -3.0, 0.0)), 3)
+    click()
+    key(Qt.Key.Key_X)
+    move(near((3.0, -1.5, 0.0)), 4)
+    wall = win.tools["wall"]
+    on_red = wall._end is not None and abs(wall._end[1] - wall._start[1]) < 1e-9 and wall._end[0] > 2.5
+    key(Qt.Key.Key_N)
+    freed = wall.locked is None
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Space)
+    # Door: F flips it to the wall's other face
+    guid = bim_actions.add_wall(doc, np.array((0.0, 4.0, 0.0)), np.array((4.0, 4.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    door = win.tools["door"]
+    win.tool_actions["door"].trigger()
+    pump(100)
+    vp.set_view("iso")
+    pump(200)
+    move(near((2.0, 3.9, 1.0)), 3)
+    side0 = door._target.side if door._target is not None else None
+    key(Qt.Key.Key_F)
+    side1 = door._target.side if door._target is not None else None
+    flipped = side0 is not None and side1 == -side0 and bar.fields["flip"][0].isChecked()
+    key(Qt.Key.Key_F)
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_R)                                      # in Select: R is still the Rectangle tool
+    rect = win.tool.name == "rectangle"
+    key(Qt.Key.Key_Space)
+    check("teclas_de_colocacao", keys_ok and bar_ok and placed and back and esc_select and on_red and freed
+          and flipped and rect and guid is not None,
+          "R_espaco={} barra={} pilar={} shift_espaco={} esc={} X={} N={} F={} R_retangulo={}".format(
+              keys_ok, bar_ok, placed, back, esc_select, on_red, freed, flipped, rect))
+
+
+def context_bar_flow():
+    """0.85: the contextual bar — with the Wall tool its type, shape (0.102), height, reference line and storey, changed right
+    there (and kept in step when Tab changes the reference); with Move, Copy; with Select and a wall selected,
+    what is selected and its buttons (Same type, Dimension the walls)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bar = win.context_bar
+    win.tool_actions["wall"].trigger()
+    pump(100)
+    fields = list(bar.fields)
+    combo = bar.fields["type"][0]
+    k = combo.findData("parede_alv_15")
+    combo.setCurrentIndex(k)
+    combo.activated.emit(k)
+    height = bar.fields["height"][0]
+    height.setText("3,20")
+    height.editingFinished.emit()
+    wall = win.tools["wall"]
+    chosen = wall.spec.key == "parede_alv_15" and abs(wall.height - 3.2) < 1e-9
+    shot("78_barra_contextual.png")
+    key(Qt.Key.Key_Tab)                                    # the reference line, changed by the keyboard
+    ref = bar.fields["reference"][0]
+    in_step = ref.currentData() == wall.reference and wall.reference != "axis"
+    win.use_draw_type(catalog.BY_KEY["parede_alv_20"])     # chosen in the BIM menu: the bar follows
+    menu_follows = bar.fields["type"][0].currentData() == "parede_alv_20"
+    win.tool_actions["move"].trigger()
+    pump(100)
+    key(Qt.Key.Key_Control)                                # Ctrl alone: copy on, the box ticked
+    copy = "copy" in bar.fields and bar.fields["copy"][0].isChecked()
+    key(Qt.Key.Key_Space)
+    guid = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    vp.set_selection({guid})
+    pump(100)
+    texts = [w.text() for w in bar.findChildren(QtWidgets.QLabel) if w.isVisible()]
+    acts = bar.actions()
+    selected = any("1 selecionado" in s and "Parede" in s for s in texts) and win.act_dimension_walls in acts \
+        and win.act_same_type in acts
+    vp.set_selection(set())
+    pump(100)
+    wall.height, wall.reference = bim_actions.WALL_HEIGHT, "axis"     # (as the next flows expect them)
+    check("barra_contextual", fields == ["type", "shape", "height", "reference", "storey"] and chosen and in_step
+          and menu_follows and copy and selected,
+          "campos={} escolhido={} tab={} menu={} copiar={} selecao={}".format(fields, chosen, in_step, menu_follows,
+                                                                          copy, selected))
+
+
+def context_panel_flow():
+    """0.183 — The contextual bar (panel 3): with the Wall tool its icon and name first, the fields framed; a height
+    written wrong (letters) turns the field red and leaves the height as it was; the gear opens the type editor on
+    the wall type in use."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bar = win.context_bar
+    win.tool_actions["wall"].trigger()
+    pump(200)
+    wall = win.tools["wall"]
+    icon = any(w.pixmap() is not None and not w.pixmap().isNull() for w in bar.findChildren(QtWidgets.QLabel)
+               if w.isVisible())
+    gear = [b for b in bar.findChildren(QtWidgets.QToolButton) if b.defaultAction() is win.act_tool_type]
+    height = bar.fields["height"][0]
+    before = wall.height
+    height.setText("abc")
+    height.editingFinished.emit()
+    pump(100)
+    red = bool(height.property("invalid")) and abs(wall.height - before) < 1e-12
+    shot("183_barra_parametros.png")
+    seen = {}
+
+    def look():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        item = d.list.currentItem()
+        seen["key"] = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, look)
+    if gear:
+        gear[0].click()
+    pump(300)
+    key(Qt.Key.Key_Space)
+    check("barra_de_parametros", icon and len(gear) == 1 and red and seen.get("key") == wall.spec.key,
+          "icone={} roda={} vermelho={} tipo={}/{}".format(icon, len(gear), red, seen.get("key"), wall.spec.key))
+
+
+def modules_flow():
+    """0.184 — The compact bar (panel 4) and the Project browser (panel 5): the bar at the far left, narrow, the
+    browser and the other left panels beside it, the Properties alone on the right; Storeys brings its panel up;
+    Sheets the browser open at the sheets; the search leaves only what matches (Norte); the module in view clicked
+    again folds the left panels away, and back; Rooms the schedules at the rooms."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    left = Qt.DockWidgetArea.LeftDockWidgetArea
+    placed = (win.toolBarArea(win.module_bar) == Qt.ToolBarArea.LeftToolBarArea and win.module_bar.width() <= 48
+              and win.dockWidgetArea(win.tree_panel) == left and win.dockWidgetArea(win.storeys_panel) == left
+              and win.dockWidgetArea(win.props) == Qt.DockWidgetArea.RightDockWidgetArea)
+
+    def up(panel):
+        return panel.isVisible() and not panel.visibleRegion().isEmpty()
+
+    win.module_actions["storeys"].trigger()
+    pump(200)
+    storeys = up(win.storeys_panel)
+    win.module_actions["sheets"].trigger()
+    pump(200)
+    item = win.tree_panel.tree.currentItem()
+    sheets = up(win.tree_panel) and item is not None and \
+        tuple(item.data(0, Qt.ItemDataRole.UserRole) or ()) == ("views", "sheets")
+    win.tree_panel.search.setText("Norte")
+    pump(200)
+    shown = [line.strip() for line in win.tree_panel.text().splitlines()]
+    tree = win.tree_panel.tree
+    visible = []
+
+    def walk(it):
+        if not it.isHidden():
+            visible.append(it.text(0))
+        for k in range(it.childCount()):
+            walk(it.child(k))
+
+    for k in range(tree.topLevelItemCount()):
+        walk(tree.topLevelItem(k))
+    found = any("Norte" in v for v in visible) and not any("Sul" in v for v in visible)
+    shot("184_barra_compacta_navegador.png")
+    win.tree_panel.search.setText("")
+    pump(100)
+    win.module_actions["project"].trigger()           # (the browser's module chosen…)
+    pump(200)
+    win.module_actions["project"].trigger()           # (…and clicked again, in view: it folds away)
+    pump(200)
+    folded = not win.tree_panel.isVisible()
+    win.module_actions["project"].trigger()           # (back)
+    pump(200)
+    back = up(win.tree_panel)
+    win.module_actions["rooms"].trigger()
+    pump(200)
+    rooms = win.schedules_panel.isVisible() and win.schedules_panel.category.currentData() == "rooms"
+    win.schedules_panel.hide()
+    pump(100)
+    check("barra_compacta_e_navegador", placed and storeys and sheets and found and folded and back and rooms,
+          "posicao={} pavimentos={} folhas={} pesquisa={} recolhe={} volta={} ambientes={} ({})".format(
+              placed, storeys, sheets, found, folded, back, rooms, len(shown)))
+
+
+def properties_panel_flow():
+    """0.185 — The Properties (panel 7): a wall selected — its name and type on top, with an icon; the rows in
+    groups (Identity, Constraints and dimensions, Materials…); the search leaves the length's row and not the
+    class's; the Materials browser lists the materials and a double click opens one; nothing selected: the view on
+    top, its rows in the View group."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    props = win.props
+    guid = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    vp.set_selection({guid})
+    pump(300)
+    header = props.header_title.text() == doc.get(guid).name and props.header_sub.text() != "" and \
+        not props.header_icon.pixmap().isNull()
+    text = props.text()
+    groups = all(g + ":" in text for g in ("Identificação", "Restrições e dimensões", "Materiais e acabamentos (do tipo)"))
+    props.search.setText("compr")
+    pump(200)
+    rows = {}
+    it = QtWidgets.QTreeWidgetItemIterator(props.tree)
+    while it.value():
+        rows[it.value().text(0)] = not it.value().isHidden()
+        it += 1
+    searched = rows.get("Comprimento") is True and rows.get("Classe IFC", rows.get("Classe")) is False
+    shot("185_propriedades.png")
+    props.search.setText("")
+    pump(100)
+    props.tabs.setCurrentIndex(1)
+    pump(200)
+    listed = props.materials.count() > 3
+    seen = {}
+
+    def close():
+        d = getattr(win, "_material_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, close)
+            return
+        seen["opened"] = True
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, close)
+    props.materials.itemDoubleClicked.emit(props.materials.item(0))
+    pump(300)
+    props.tabs.setCurrentIndex(0)
+    vp.set_selection(set())
+    pump(300)
+    view = props.header_title.text() == "3D" and "Vista:" in props.text().split("\n")[0]
+    check("painel_de_propriedades", header and groups and searched and listed and seen.get("opened") and view,
+          "cabecalho={} grupos={} pesquisa={} materiais={} abre={} vista={} ({})".format(
+              header, groups, searched, listed, seen.get("opened"), view, props.text().split("\n")[:2]))
+
+
+def footer_flow():
+    """0.186 — The footer (panel 8), after the navigation: the graphic style of the 3D view (Hidden lines, Ctrl+Z
+    back to Shaded), the ground grid off and on, the orientation (north-east isometric, back, the starting view),
+    the scale of a plan (or kept by its template) — the style and the grid off there; the units (cm: the wall's
+    length 400,0 cm in its Properties, 320 typed reads 3,20 m; the storeys' levels still in m; back to m); the
+    active storey chosen from the footer's list."""
+    from arqbim.core import units
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    guid = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    bar = win.footer_bar
+    right = bar.mapTo(win, QtCore.QPoint(bar.width(), 0)).x()
+    placed = bar.parent() is win.statusBar() and bar.isVisible() and right <= win.width() + 1 and \
+        win.navigation_bar.isVisible()
+    view = win._view_key()
+    hidden = next(a for a in win.style_button.menu().actions() if a.data() == "hidden")
+    hidden.trigger()
+    pump(200)
+    styled = doc.view_settings(view).style == "hidden" and hidden.isChecked() and win.style_button.isEnabled()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    undone = doc.view_settings(view).style == "shaded"
+    win.act_ground_grid.trigger()
+    pump(150)
+    grid_off = doc.view_settings(view).grid is False and not win.act_ground_grid.isChecked()
+    win.act_ground_grid.trigger()
+    pump(150)
+    grid_on = doc.view_settings(view).grid is True and win.act_ground_grid.isChecked()
+    orient = {a.text().split("\t")[0]: a for a in win.orientation_button.menu().actions() if a.text()}
+    centre, _radius = vp.scene_bounds()
+    orient["Isométrica nordeste"].trigger()
+    pump(200)
+    d = vp.camera_position() - np.asarray(centre)
+    north_east = d[0] > 0.5 and d[1] > 0.5 and d[2] > 0.5
+    orient["Trás (norte)"].trigger()
+    pump(200)
+    d = vp.camera_position() - np.asarray(centre)
+    back = d[1] > 0.5 and abs(d[0]) < 0.05 and abs(d[2]) < 0.05
+    orient["Ir para a vista inicial"].trigger()
+    pump(900)
+    d = vp.camera_position() - np.asarray(centre)
+    home = d[0] > 0.5 and d[1] < -0.5 and d[2] > 0.5                     # (the usual: from the south-east, above)
+    shot("186_rodape.png")
+    win.set_plan(True)
+    pump(300)
+    plan = win._view_key()
+    drawing = not win.style_button.isEnabled() and not win.act_ground_grid.isEnabled()
+    if doc.template_of(plan) is None:
+        win._fill_scale_menu()
+        fifty = next(a for a in win.scale_button.menu().actions() if a.text() == "1:50")
+        fifty.trigger()
+        pump(200)
+        scaled = doc.view_settings(plan).scale == 50 and win.scale_button.text() == "1:50" and win.scale_button.isEnabled()
+    else:
+        scaled = not win.scale_button.isEnabled()
+    vp.set_selection({guid})
+    pump(200)
+    win.set_units("cm")
+    pump(200)
+    in_cm = "400,0 cm" in win.props.text() and abs(parse_length_now("320") - 3.2) < 1e-9 and \
+        QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("unidades/comprimento") == "cm" and \
+        win.units_button.text() == "cm" and "0,00 m" in win.storey_label.text()
+    win.set_units("m")
+    pump(200)
+    in_m = "4,00 m" in win.props.text() and units.display_unit() == "m" and \
+        QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("unidades/comprimento") == "m"
+    vp.set_selection(set())
+    ground = doc.active_storey
+    win.new_storey()
+    pump(300)
+    win._fill_storey_menu()
+    acts = [a for a in win.storey_menu.actions() if a.isCheckable()]
+    ticked = [a.text() for a in acts if a.isChecked()]
+    acts[-1].trigger()                                          # (the lowest: the ground floor)
+    pump(300)
+    storey = len(acts) == 2 and len(ticked) == 1 and doc.active_storey == ground
+    win.set_plan(False)
+    pump(200)
+    check("rodape_vista_escala_unidades_pavimento",
+          placed and styled and undone and grid_off and grid_on and north_east and back and home and drawing
+          and scaled and in_cm and in_m and storey,
+          "no_rodape={} estilo={} desfeito={} grelha={}/{} nordeste={} tras={} inicial={} planta={} escala={} cm={} "
+          "m={} pavimento={} ({})".format(placed, styled, undone, grid_off, grid_on, north_east, back, home, drawing,
+                                          scaled, in_cm, in_m, storey, win.props.text().split("\n")[:3]))
+
+
+def many_properties_flow():
+    """0.187 — Several elements selected (three walls, 4, 4 and 5 m long, and a column): the Properties list them
+    (All 4, Walls 3, Columns 1); all of them — their phase, and no length; the walls — their height (2,80 m: the
+    same) and their length blank (<varies>); the height made 3,20 m in all three at once, one undo step; Ctrl+Z
+    takes them all back; a length typed over <varies> goes to all of them; the phase to all of them; the column
+    alone, chosen in the list, as on its own."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    props = win.props
+    spec = catalog.BY_KEY["parede_alv_20"]
+    walls = [bim_actions.add_wall(doc, np.array((0.0, 3.0 * k, 0.0)), np.array((length, 3.0 * k, 0.0)), spec)
+             for k, length in enumerate((4.0, 4.0, 5.0))]
+    column = bim_actions.add_column(doc, np.array((8.0, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+    pump(200)
+    vp.set_selection(set(walls + [column]))
+    pump(400)
+    combo = props.editors.get("many_filter")
+    listed = combo is not None and [combo.itemText(k) for k in range(combo.count())] == \
+        ["Todos (4)", "Paredes (3)", "Pilares (1)"]
+    text = props.text()
+    common = "status" in props.editors and "Comprimento" not in text and props.header_title.text() == \
+        "4 objetos selecionados"
+    props._pick_many("IfcWall")
+    pump(300)
+    text = props.text()
+    height = props.editors.get("height")
+    length = props.editors.get("length")
+    walls_shown = props.header_sub.text() == "Paredes" and height is not None and height.text() == "2,80 m" and \
+        length is not None and length.text() == "" and length.placeholderText() == "<vários>" and \
+        "GlobalId" not in text and "edit_profile" not in props.editors
+    shot("187_varios_elementos.png")
+    steps = len(doc._undo)
+    height.setText("3,20")
+    height.editingFinished.emit()
+    pump(500)
+    tall = all(abs(doc.ifc.wall_params(w)[1] - 3.2) < 1e-6 for w in walls) and len(doc._undo) == steps + 1
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = all(abs(doc.ifc.wall_params(w)[1] - 2.8) < 1e-6 for w in walls)
+    vp.set_selection(set(walls + [column]))                    # (undoing leaves nothing selected)
+    pump(300)
+    props._pick_many("IfcWall")
+    pump(300)
+    length = props.editors.get("length")
+    length.setText("6")
+    length.editingFinished.emit()
+    pump(500)
+    long_ = all(abs(doc.ifc.wall_params(w)[0] - 6.0) < 1e-6 for w in walls)
+    phase = props.editors.get("status")
+    phase.setCurrentIndex(phase.findData("EXISTING"))
+    phase.activated.emit(phase.currentIndex())
+    pump(500)
+    existing = all(doc.status_of(w) == "EXISTING" for w in walls) and doc.status_of(column) != "EXISTING"
+    props._pick_many("IfcColumn")
+    pump(300)
+    alone = props.header_title.text() == doc.get(column).name and "many_filter" in props.editors and \
+        "GlobalId" in props.text()
+    vp.set_selection(set())
+    pump(200)
+    check("varios_elementos_propriedades_comuns",
+          listed and common and walls_shown and tall and back and long_ and existing and alone,
+          "lista={} comuns={} paredes={} altura={} desfeito={} comprimento={} fase={} pilar={} ({})".format(
+              listed, common, walls_shown, tall, back, long_, existing, alone, text.split("\n")[:6]))
+
+
+def parse_length_now(text):
+    from arqbim.core.units import parse_length
+    return parse_length(text)
+
+
+def notices_flow():
+    """0.321 — What a command says, over the view (until 0.320 a line at the foot of the window, cut short and gone in
+    10 s). A new project, Structure ▸ «Pilares na grelha» with no grid: the balloon at the top of the view, in the
+    middle, under the views' tabs and clear of the view cube, amber, its text whole (word-wrapped, not cut); the
+    footer keeps the tool's step; a click in the view takes it down. Annotate's tab, then «Cota» in the 3D view: the
+    tool's name and its step over the view (no line about the discipline hiding it); Esc takes it down. A refusal
+    said by a tool that then goes back to Select stays; another tool afterwards takes it down. What a command did
+    (blue) goes by itself."""
+    from arqbim.ui import notice, ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection(set())
+    win.set_discipline("structure")
+    pump(100)
+    n, central = win.notice, win.centralWidget()
+    win.act_columns_on_grid.trigger()
+    pump(200)
+    said = win.last_message
+    g = n.geometry()
+    whole = (said.startswith("⚠ ") and n.shown_text() == said[2:] and n.text.wordWrap()
+             and n.text.heightForWidth(n.text.width()) <= n.text.height() + 1)
+    placed = (n.isVisible() and n.kind == "warning" and g.top() > win.view_bar.geometry().bottom()
+              and g.left() >= 0 and g.right() <= central.width() - notice.SIDE + 1)        # (clear of the view cube)
+    footer = win.statusBar().currentMessage() == "" and win.hint_label.isVisible()
+    shot("321_aviso_por_cima_da_vista.png")
+    move((canvas.width() / 2, canvas.height() * 0.75), 2)
+    click()
+    gone = not n.isVisible()
+    win.header.tabs.setCurrentIndex(ribbon.DISCIPLINES.index("annotate"))      # (as a click on the Annotate tab)
+    pump(100)
+    win.tool_actions["dimension"].trigger()
+    pump(200)
+    step = (n.isVisible() and n.kind == "hint" and n.title.text() == "Cota" and "planta" in n.shown_text()
+            and n.shown_text().endswith(notice._step("Cota", win.hint_label.text()))     # (0.323: the plan opened)
+            and not n.shown_text().startswith("Cota") and win.statusBar().currentMessage() == ""
+            and win.hint_label.toolTip() == win.hint_label.text())
+    shot("321_dica_da_ferramenta.png")
+    key(Qt.Key.Key_Escape)
+    esc = not n.isVisible()
+    win.set_tool("wall")
+    win.message("Recusado de propósito.", warning=True)        # (a tool that refuses, then goes back to Select)
+    win.set_tool("select")
+    stays = n.isVisible() and n.kind == "warning" and n.shown_text() == "Recusado de propósito."
+    pump(100)
+    win.set_tool("rectangle")
+    replaced = n.isVisible() and n.kind == "hint" and n.title.text() == "Retângulo"
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.message("Feito.")
+    info = n.isVisible() and n.kind == "info" and n.timer.isActive() and n.timer.interval() == notice.info_ms("Feito.")
+    n.timer.start(50)                                          # (its time, made short)
+    pump(250)
+    info_gone = not n.isVisible()
+    win.set_discipline("architecture")
+    check("avisos_por_cima_da_vista", whole and placed and footer and gone and step and esc and stays and replaced
+          and info and info_gone,
+          "inteiro={} sitio={} rodape={} clique={} dica={} esc={} fica={} outra_ferramenta={} feito={} vai={} "
+          "texto={!r}".format(whole, placed, footer, gone, step, esc, stays, replaced, info, info_gone, said[:60]))
+
+
+def help_flow():
+    """0.327 — The Help window (F1). With the Wall tool on: «This tool» says «Parede», «Na fita: Arquitetura ▸
+    Paredes», the step now and the tool's keys; it follows another tool chosen. «Find a command»: «pilares na» lists
+    «Pilares na grelha — Estrutura ▸ Grelha» first; «Show where» chooses Structure and lights its button; «Use» runs it
+    (no grid: said). «First steps»: ten, the first one's «Show where» chooses Architecture. «Keys» has Ctrl+C and no
+    hidden menu (BIM ▸)."""
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    win.set_discipline("home")
+    key(Qt.Key.Key_W)
+    pump(200)
+    key(Qt.Key.Key_F1)
+    pump(300)
+    h = win._help
+    tool = (h is not None and h.isVisible() and h.tabs.currentIndex() == 0 and h.tool_name.text() == "Parede"
+            and "Arquitetura ▸ Paredes" in h.tool_where.text() and "Parede alvenaria" in h.tool_text.text()
+            and "Tab" in h.tool_text.text())
+    shot("327_ajuda_ferramenta.png")
+    key(Qt.Key.Key_R)                                   # (the window follows the tool)
+    pump(200)
+    follows = h.tool_name.text() == "Retângulo"
+    follow_why = (win.tool.name, h.tool_name.text(), win.isActiveWindow(), h.isActiveWindow())
+    h.tabs.setCurrentIndex(1)
+    h.search.setText("pilares na")
+    pump(200)
+    names = h.found_names()
+    first = h.found.item(0).text() if names else ""
+    found = bool(names) and names[0] == "columns_on_grid" and "Estrutura ▸ Grelha" in first
+    shot("327_ajuda_procurar.png")
+    shown = win.show_command("columns_on_grid")
+    pump(100)
+    lit = (win.discipline == "structure" and shown and "#ffe58a" in win._lit.styleSheet()
+           and (win._lit.objectName() == "columns_on_grid" or isinstance(win._lit.parent(), ribbon.Panel)))
+    win.use_command("columns_on_grid")
+    pump(200)
+    used = "Ainda não há eixos" in win.last_message
+    h.tabs.setCurrentIndex(2)
+    steps = len(h.step_buttons) == 10
+    win.set_discipline("home")
+    h.step_buttons[0].click()
+    pump(200)
+    step_shown = win.discipline == "architecture"
+    keys = "Ctrl+C" in h.keys_text.toPlainText() and "BIM ▸" not in h.keys_text.toPlainText()
+    h.panel.hide()
+    pump(100)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.set_discipline("architecture")
+    check("ajuda_f1", tool and follows and found and lit and used and steps and step_shown and keys,
+          "ferramenta={} segue={} {} procurar={} ({!r}) acende={} usar={} passos={}/{} teclas={}".format(
+              tool, follows, follow_why, found, first, lit, used, steps, step_shown, keys))
+
+
+def image_flow():
+    """0.329 — Export ▸ Image of the view (Home ▸ Export, Render ▸ Presentation). A 4 m wall, selected — blue on the
+    screen —, the ground grid shown: an image 1200 px wide, of the view's proportion, the wall in it in its own colour
+    (not the selection's), its corners white; the selection as it was afterwards (no one told), the grid shown again.
+    Transparent: the corners clear; a JPEG of it on white. The dialog proposes white in a plan, the 3D view's sky in the
+    3D view."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import image_dialog, ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_view("front", center=(2.0, 0.0, 1.4), radius=3.5)
+    pump(400)
+    on_ribbon = "export_image" in ribbon.items_of("home") and "export_image" in ribbon.items_of("render")
+    vp.set_selection({wall})
+    middle = np.array((2.0, -0.1, 1.4))
+    on_screen = pixel(middle)
+    grid_before = vp.grid.visible
+    told = []
+    vp.selection_listeners.append(told.append)
+
+    def read(path):
+        img = QtGui.QImage(path).convertToFormat(QtGui.QImage.Format.Format_RGBA8888)
+        rows = np.frombuffer(img.constBits(), np.uint8).reshape(img.height(), img.bytesPerLine() // 4, 4)
+        return rows[:, :img.width()].copy()
+
+    def at_middle(img):
+        lw, _lh = vp.logical_size()
+        x, y = vp.project(middle)
+        k = img.shape[1] / lw
+        return tuple(int(c) for c in img[int(y * k), int(x * k), :3])
+
+    path = win.export_image(os.path.join(OUT, "329_imagem_3d.png"), 1200, "white")
+    img = read(path) if path else np.zeros((1, 1, 4), np.uint8)
+    size = (img.shape[1], img.shape[0]) == vp.image_size(1200)
+    in_image = at_middle(img) if path else (0, 0, 0)
+    own_colour = on_screen[2] - on_screen[0] > 25 and in_image[2] - in_image[0] < 15
+    white = bool(np.all(img[:4, :4, :3] >= 250))
+    vp.selection_listeners.remove(told.append)
+    kept =vp.selection == {wall} and not told and vp.grid.visible == grid_before
+    said = "329_imagem_3d.png" in win.last_message and "1200 ×" in win.last_message
+    path = win.export_image(os.path.join(OUT, "329_imagem_3d_transparente.png"), 800, "transparent")
+    clear = path is not None and int(read(path)[2, 2, 3]) == 0
+    path = win.export_image(os.path.join(OUT, "329_imagem_3d.jpg"), 800, "transparent")
+    jpeg = path is not None and bool(np.all(read(path)[2, 2, :3] >= 245))
+    dialog = image_dialog.ImageDialog(win, vp.image_size, vp.logical_size()[0], cutting=True)
+    proposed = dialog.background.currentData()
+    dialog.deleteLater()
+    in_3d = image_dialog.ImageDialog(win, vp.image_size, vp.logical_size()[0], cutting=False)
+    proposed_3d = in_3d.background.currentData()
+    in_3d.deleteLater()
+    vp.set_selection(set())
+    check("imagem_da_vista", on_ribbon and size and own_colour and white and kept and said and clear and jpeg
+          and proposed == "white" and proposed_3d == "view",
+          "fita={} tamanho={} {} cor ecrã={} imagem={} branco={} seleção={} avisos={} grelha={} msg={!r} "
+          "transparente={} jpeg={} proposto={}/{}".format(on_ribbon, size, img.shape, on_screen, in_image, white,
+                                                         vp.selection, told, vp.grid.visible, win.last_message,
+                                                         clear, jpeg, proposed, proposed_3d))
+
+
+def qt_words_flow():
+    """0.330 — Qt's own windows in Portuguese of Portugal, in the program as it starts: «Guardar as alterações?» with
+    Guardar / Não guardar / Cancelar; the window to save a file with «Nome do ficheiro» and «Guardar»; a text box's
+    menu with «Eliminar»."""
+    B = QtWidgets.QMessageBox.StandardButton
+    box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Icon.Question, "x", "y", B.Save | B.Discard | B.Cancel, win)
+    asked = sorted(b.text() for b in box.buttons())
+    box.deleteLater()
+    files = QtWidgets.QFileDialog(win, "x", OUT)
+    files.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog)
+    files.setAcceptMode(QtWidgets.QFileDialog.AcceptMode.AcceptSave)
+    labels = [w.text() for w in files.findChildren(QtWidgets.QLabel)]
+    buttons = [b.text() for b in files.findChildren(QtWidgets.QPushButton)]
+    files.deleteLater()
+    field = QtWidgets.QLineEdit("abc")
+    texts = [a.text().split("\t")[0] for a in field.createStandardContextMenu().actions()]
+    field.deleteLater()
+    check("botoes_do_qt_em_portugues", asked == ["Cancelar", "Guardar", "Não guardar"]
+          and "&Nome do ficheiro:" in labels and "&Guardar" in buttons and "Eliminar" in texts,
+          "pergunta={} ficheiro={} {} menu={}".format(asked, labels, buttons, texts))
+
+
+def element_hatches_flow():
+    """0.331 — Hatches by element (View ▸ Look; the Select tool's right button). Four walls, the plan: one wall given a
+    dark solid cut — dark on the screen, the wall in front of it as it was, said; the 3D view has none of it (that view
+    only), its own brick on one wall's faces there; Ctrl+Z takes it off; with nothing selected it asks for the
+    elements."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0),
+                                                                  (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    on_ribbon = "element_hatches" in ribbon.items_of("view")
+    win.open_view("plan", doc.active_storey)
+    win.set_tool("select")
+    pump(500)
+    vp.set_selection({walls[0]})
+    dark = (("solid", "#333333"), None, None, None)
+    given = win.element_hatches(dark)
+    said = "Tramas próprias para 1 elemento" in win.last_message
+    vp.set_selection(set())
+    pump(400)
+    level = vp.cut_level()
+    mine, other = pixel(np.array((2.5, 0.0, level))), pixel(np.array((2.5, 4.0, level)))
+    on_screen = max(mine) < 70 and min(other) > 120 and walls[0] in vp.element_hatches
+    shot("331_tramas_por_elemento.png")
+    win.open_view("3d", None)
+    pump(400)
+    only_there = vp.element_hatches == {}
+    vp.set_selection({walls[1]})
+    win.element_hatches((None, None, ("brick", "#7a3f2a"), None))
+    pump(300)
+    dressed = vp._dress(doc.get(walls[1]))
+    brick = dressed is not None and dressed[1] is not None and vp._dress(doc.get(walls[3])) is None
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = vp.element_hatches == {}
+    vp.set_selection(set())
+    win.element_hatches()
+    asked = win.pick_request is not None
+    win.cancel_pick()
+    win.selection_menu(20, 20)
+    in_menu = win.act_element_hatches in win._selection_menu.actions()
+    win._selection_menu.close()
+    check("tramas_por_elemento", on_ribbon and given and said and on_screen and only_there and brick and undone
+          and asked and in_menu,
+          "fita={} dado={} dito={} ({!r}) ecrã={} {} {} só_lá={} tijolo={} desfeito={} pede={} menu={}".format(
+              on_ribbon, given, said, win.last_message, on_screen, mine, other, only_there, brick, undone, asked,
+              in_menu))
+
+
+def pattern_align_flow():
+    """0.332 — Align on a pattern's line. A 4 m wall seen from the front, tiled (30 cm, its own hatch in the 3D view):
+    Align, the wall's top edge as the reference, then a tiles' course at 1,50 m — lit, the tip says how far — a click:
+    the tiles move up until a course lies on the top edge, kept in the wall; Ctrl+Z puts them back."""
+    from arqbim.ifc import catalog, pattern_align
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_view("front", center=(2.0, 0.0, 1.4), radius=3.0)
+    vp.set_selection({wall})
+    win.element_hatches((None, None, ("tile_30", "#606060"), None))
+    vp.set_selection(set())
+    pump(400)
+    top = float(doc.get(wall).mesh.bounds()[1][2])
+    win.tool_actions["align"].trigger()
+    pump(200)
+    move(at((1.3, -0.1, top)), 4)                       # (on the edge: not its middle, a point)
+    click()
+    pump(200)
+    referred = win.tool._ref is not None and win.tool._ref[3] == "Aresta"
+    move(at((2.15, -0.1, 1.5)), 4)
+    pump(200)
+    lit = win.tool._pattern is not None and "Alinhar o padrão" in vp.tip_text
+    tip = vp.tip_text
+    click()
+    pump(500)
+    kept = pattern_align.read(doc.ifc, wall)
+    said = "Padrão de" in win.last_message
+    dressed = vp._dress(doc.get(wall))
+    heights = set()
+    if dressed is not None and dressed[1] is not None:
+        ends = dressed[1][0].reshape(-1, 2, 3)
+        front = ends[(ends[:, :, 1] < -0.1 + 1e-6).all(axis=1)]           # (the face aligned: its lines a hair out)
+        flat = front[np.abs(front[:, 0, 2] - front[:, 1, 2]) < 1e-9]
+        heights = {round(float(z), 4) for z in flat[:, 0, 2]}
+    # (its courses now 30 cm apart down from the top edge: 2,50, 2,20…)
+    on_top = bool(heights) and all(abs((top - z) / 0.3 - round((top - z) / 0.3)) < 1e-3 for z in heights)
+    shot("332_padrao_alinhado.png")
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = pattern_align.read(doc.ifc, wall) == {}
+    key(Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    put_back = bool(pattern_align.read(doc.ifc, wall)) and win.reset_patterns() \
+        and pattern_align.read(doc.ifc, wall) == {} and "como estavam" in win.last_message
+    vp.set_selection(set())
+    check("alinhar_padrao", referred and lit and bool(kept) and said and on_top and undone and put_back,
+          "referência={} acende={} ({!r}) guardado={} dito={} ({!r}) no_topo={} (topo {:.3f}; {}) desfeito={} "
+          "reposto={}".format(referred, lit, tip, kept, said, win.last_message, on_top, top, sorted(heights)[-4:],
+                              undone, put_back))
+
+
+def unjoin_flow():
+    """0.333 — Unjoin / Join geometry (Modelling ▸ Modify). Two walls in a row, of one material: in the plan no line
+    between them, in 3D their common end hidden (a seam). «Desunir geometria», a click on each: kept in both, said; the
+    plan's cut has the line at their common end, their seam in 3D is gone (the edge shown). «Unir geometria», a click on
+    each: joined again. Ctrl+Z: unjoined again."""
+    from arqbim.ifc import catalog, unjoin
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    a, b = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (8.0, 0.0, 0.0))],
+                                     catalog.BY_KEY["parede_alv_20"], closed=False)
+    on_ribbon = {"join_geometry", "unjoin_geometry"} <= set(ribbon.items_of("modeling"))
+    pump(300)
+    seam_before = vp._seams.get(a, (None, None))[1] is not None
+    win.open_view("plan", doc.active_storey)
+    win.set_tool("select")
+    pump(500)
+    level = vp.cut_level()
+
+    def line_at_4():
+        lines = vp._hatch_parts.get(None)
+        if lines is None or not len(lines[2]):
+            return False
+        segs = np.asarray(lines[2]).reshape(-1, 2, 3)
+        there = segs[(np.abs(segs[:, :, 0] - 4.0) < 1e-3).all(axis=1)]       # (in pieces, at the layers' edges)
+        return float(np.abs(there[:, 0, 1] - there[:, 1, 1]).sum()) > 0.15
+
+    joined_plan = not line_at_4()
+    win.tool_actions["unjoin_geometry"].trigger()
+    pump(200)
+    move(at((2.0, 0.0, level)), 4)
+    click()
+    pump(150)
+    move(at((6.0, 0.0, level)), 4)
+    click()
+    pump(500)
+    apart = unjoin.apart_from(doc.ifc, a) == {b} and unjoin.apart_from(doc.ifc, b) == {a}
+    said = "desunidos" in win.last_message
+    unjoined_plan = line_at_4()
+    seam_after = vp._seams.get(a, (None, None))[1] is None
+    shot("333_desunir.png")
+    win.tool_actions["join_geometry"].trigger()
+    pump(200)
+    move(at((2.0, 0.0, level)), 4)
+    click()
+    pump(150)
+    move(at((6.0, 0.0, level)), 4)
+    click()
+    pump(500)
+    joined = unjoin.apart_from(doc.ifc, a) == frozenset() and "unidos de novo" in win.last_message and not line_at_4()
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = unjoin.apart_from(doc.ifc, a) == {b}
+    win.set_tool("select")
+    check("desunir_geometria", on_ribbon and seam_before and joined_plan and apart and said and unjoined_plan
+          and seam_after and joined and undone,
+          "fita={} junta_antes={} planta_unida={} desunidos={} dito={} ({!r}) linha={} junta_depois={} unidos={} "
+          "desfeito={}".format(on_ribbon, seam_before, joined_plan, apart, said, win.last_message, unjoined_plan,
+                               seam_after, joined, undone))
+
+
+def layer_functions_flow():
+    """0.334 — each layer's function in the type editor: the 20 cm wall's plaster «Acabamento 1» and «Acabamento 2»,
+    its block «Estrutura»; applied: kept in the IFC (the layers' Priority), the type read back with them; Ctrl+Z:
+    automatic again."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import project_types
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("parede_alv_20")
+        seen["column"] = d.layers.columnCount() == 3 and d.layers.cellWidget(0, 2).currentData() is None
+        for row, name in enumerate(("finish1", "structure", "finish2")):
+            role = d.layers.cellWidget(row, 2)
+            role.setCurrentIndex(role.findData(name))
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "334_funcoes_das_camadas.png"))
+        seen["applied"] = d.apply_changes()
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_types("wall")
+    pump(300)
+    found = project_types.find_type(doc.ifc, catalog.BY_KEY["parede_alv_20"])
+    layers = found.HasAssociations[0].RelatingMaterial.MaterialLayers if found is not None else ()
+    kept = [l.Priority for l in layers] == [30, 90, 10] and \
+        catalog.BY_KEY["parede_alv_20"].functions == ("finish1", "structure", "finish2")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    found = project_types.find_type(doc.ifc, catalog.BY_KEY["parede_alv_20"])
+    layers = found.HasAssociations[0].RelatingMaterial.MaterialLayers if found is not None else ()
+    undone = all(getattr(l, "Priority", None) is None for l in layers)
+    check("funcoes_das_camadas", seen.get("column") and seen.get("applied") == "parede_alv_20" and kept and undone,
+          "coluna={} aplicado={} guardado={} ({}) desfeito={}".format(
+              seen.get("column"), seen.get("applied"), kept, [getattr(l, "Priority", None) for l in layers], undone))
+
+
+def masonry_flow():
+    """0.337 — the load-bearing walls by Eurocode 6: four 20 cm walls marked load-bearing on strip footings, a slab
+    on them; Actions and materials: the masonry's fields (units, group, fb, mortar, γM), fb 15 and mortar M10 chosen
+    and kept; EC2 / EC6 check: a line for each wall, OK, «—» for the model's bars, the summary with EC6's fk; a wall's
+    notes below (compression at the top, mid-height and base; in-plane shear)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    strip = catalog.BY_KEY["sapata_corrida_50"]
+    for g in walls:
+        bim_actions.set_property(doc, g, "Pset_WallCommon", "LoadBearing", True)
+        bim_actions.add_footing(doc, bim_actions.footing_place(doc, g, strip), strip, under=g)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def choose():
+        d = getattr(win, "_actions_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, choose)
+            return
+        seen["fields"] = all(n in d.fields for n in ("masonry_unit", "masonry_group", "masonry_fb", "masonry_mortar",
+                                                      "masonry_gamma"))
+        if seen["fields"]:
+            seen["units"] = [d.fields["masonry_unit"].itemText(k) for k in range(d.fields["masonry_unit"].count())]
+            d.fields["masonry_fb"].setValue(15.0)
+            d.fields["masonry_mortar"].setCurrentIndex(d.fields["masonry_mortar"].findData("M10"))
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "337_alvenaria_nas_acoes.png"))
+        d.accept()
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = [[d.table.item(r, c).text() if d.table.item(r, c) else "" for c in range(6)]
+                for r in range(d.table.rowCount())]
+        seen["walls"] = [r for r in rows if r[0] in {doc.get(g).name for g in walls}]
+        seen["summary"] = d.summary.text()
+        row = next((k for k, r in enumerate(rows) if r in seen["walls"]), None)
+        if row is not None:
+            d.table.selectRow(row)
+            pump(100)
+        seen["notes"] = d.details.toPlainText()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.resize(1200, 640)
+            pump(200)
+            d.grab().save(os.path.join(OUT, "337_verificacao_ec6.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, choose)
+    win.structure_actions()
+    pump(300)
+    settings = doc.ifc.structural_settings()
+    kept = settings.masonry_fb == 15.0 and settings.masonry_mortar == "M10"
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(300)
+    lines = seen.get("walls", [])
+    listed = len(lines) == 4 and all(r[1] == "OK" and r[4] == "—" and any(w in r[5] for w in (
+        "compressão", "corte", "flexão", "arco")) for r in lines)              # (0.345: the wind on the façade too)
+    notes = seen.get("notes", "")
+    told = all(w in notes for w in ("no topo", "a meio", "na base", "corte no plano", "fb = 15,0", "M10",
+                                    "vento na fachada", "flexão para fora do plano"))
+    check("alvenaria_ec6", seen.get("fields") and kept and listed and told and "EC6" in seen.get("summary", "")
+          and "Cerâmicos (tijolo)" in seen.get("units", []),
+          "campos={} guardado={} linhas={} notas={!r} resumo={!r}".format(
+              seen.get("fields"), kept, lines, notes[:200], seen.get("summary", "")[-120:]))
+
+
+def presentation_export_flow():
+    """0.362 — Export ▸ For the ArqSynth Presentation: a room of four walls with a door, a named 3D view; on the ribbon
+    (Home ▸ Export and Render ▸ Presentation); written: a GLB with the description in it (the handoff envelope, a
+    layer per element, the scenes — the general view, the 3D view, the plan), said in the balloon; an empty project:
+    refused, said why."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation_export
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    folder = tempfile.mkdtemp(prefix="arqsynth_present_")
+    empty = win.export_presentation(os.path.join(folder, "vazio.glb")) is None and "nada" in win.last_message.lower()
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(200)
+    doc.add_view3d(vp.camera_snapshot())
+    on_ribbon = "export_presentation" in ribbon.items_of("home") and "export_presentation" in ribbon.items_of("render")
+    path = win.export_presentation(os.path.join(folder, "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    model = (found or {}).get("presentation", {}).get("model3d", {})
+    kinds = [s["kind"] for s in model.get("scenes", [])]
+    layers = {l["globalId"] for l in model.get("layers", [])}
+    told = "Presentation" in win.last_message and "3 cenas" in win.last_message
+    doc.modified = False
+    check("para_o_presentation", empty and on_ribbon and found is not None and kinds == ["overview", "view3d", "plan"]
+          and set(walls) <= layers and told,
+          "vazio={} fita={} descricao={} cenas={} camadas={} balao={!r}".format(
+              empty, on_ribbon, found is not None, kinds, len(layers), win.last_message))
+
+
+def presentation_panel_flow():
+    """0.363 — Render ▸ Scenes of the presentation: a room with a named 3D view and a section; the panel from the
+    ribbon with the four scenes (the general view first, the entry); the section chosen and moved up, given a cut (no
+    seconds then), the construction effect and a caption typed (kept when it is left); the general view left out (the
+    3D view becomes the entry), Ctrl+Z puts it back; Thumbnails: a JPEG of each scene, in the list, and the tabs, the
+    view shown and its camera as they were; exported: the scenes in that order, with what was chosen and their
+    thumbnails. Captured: 363_painel.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_export
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    folder = tempfile.mkdtemp(prefix="arqsynth_scenes_")
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(200)
+    view = doc.add_view3d(vp.camera_snapshot())[1]
+    doc.add_section(np.array((3.0, 2.0, 0.0)), np.array((0.0, 1.0, 0.0)))
+    win.open_view("3d", None)
+    pump(300)
+    on_ribbon = "presentation_panel" in ribbon.items_of("render")
+    view_width = canvas.width()
+    win.ribbon_item("presentation_panel").trigger()
+    pump(300)
+    panel = win.presentation_panel
+    narrow = canvas.width() >= view_width - 2       # (0.364: no wider than the panels beside it — the 3D view keeps
+    #                                                 its width, and the clicks of the flows after this one their aim)
+    keys = [s.key for s in pm.scenes(doc)]
+    listed = [panel.list.item(k).data(Qt.ItemDataRole.UserRole) for k in range(panel.list.count())]
+    shown = panel.isVisible() and listed == keys and len(keys) == 4 and "entrada" in panel.list.item(0).text()
+    panel.list.setCurrentRow(3)
+    pump(50)
+    panel.up_button.click()
+    pump(150)
+    moved = [s.key for s in pm.scenes(doc)][2] == keys[3] and panel.chosen_key() == keys[3]
+    panel.transition.setCurrentIndex(panel.transition.findData("cut"))
+    pump(100)
+    panel.effect.setCurrentIndex(panel.effect.findData("construction"))
+    pump(100)
+    _active()
+    panel.caption.setFocus()
+    pump(50)
+    QtTest.QTest.keyClicks(panel.caption, "O corte pela sala.")
+    panel.seconds.setFocus()                         # (the caption left: kept)
+    pump(150)
+    cut = next(s for s in pm.scenes(doc) if s.key == keys[3])
+    chosen = (cut.transition, cut.effect, cut.caption) == ("cut", "construction", "O corte pela sala.") \
+        and not panel.transition_s.isEnabled() and panel.effect_s.isEnabled()
+    panel.list.setCurrentRow(0)
+    pump(50)
+    panel.hidden_box.click()
+    pump(150)
+    entry = pm.initial(doc) == "vista_" + view and "fora" in panel.list.item(0).text() \
+        and "entrada" in panel.list.item(1).text()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    undone = not pm.scenes(doc)[0].hidden and pm.initial(doc) == "geral"
+    win.act_redo.trigger()
+    pump(200)
+    tabs, current, camera = list(win.views.keys), win.views.current(), vp.camera_snapshot()
+    panel.thumbs_button.click()
+    pump(400)
+    thumbs = dict(win._scene_thumbs)
+    jpegs = sorted(thumbs) == sorted(keys) and all(bytes(v[:2]) == b"\xff\xd8" for v in thumbs.values())
+    back = list(win.views.keys) == tabs and win.views.current() == current \
+        and np.allclose(vp.camera_snapshot()["position"], camera["position"], atol=1e-6)
+    pictured = all(not panel.list.item(k).icon().isNull() for k in range(panel.list.count())) \
+        and "4 miniaturas" in win.last_message
+    panel.list.setCurrentRow(2)
+    pump(100)
+    shot("363_painel.png")
+    path = win.export_presentation(os.path.join(folder, "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    model = (found or {}).get("presentation", {}).get("model3d", {})
+    sent = model.get("scenes", [])
+    order = [s.key for s in pm.scenes(doc)]
+    exported = [s["id"] for s in sent] == ["bim_scene_" + k for k in order] and all("thumbnail" in s for s in sent) \
+        and sent[2].get("transition", {}).get("type") == "cut" and sent[2].get("effect", {}).get("type") == \
+        "construction" and sent[2].get("narration", {}).get("caption") == "O corte pela sala." and sent[0]["hidden"] \
+        and model.get("initialSceneId") == "bim_scene_vista_" + view and list(win.views.keys) == tabs
+    doc.modified = False
+    panel.hide()
+    pump(100)
+    narrow = narrow and canvas.width() >= view_width - 2
+    check("cenas_da_apresentacao", on_ribbon and shown and moved and chosen and entry and undone and jpegs and back
+          and pictured and exported and narrow,
+          "fita={} lista={} subir={} escolhas={} entrada={} desfazer={} jpeg={} voltou={} icones={} exportado={} "
+          "estreito={} ({}→{} px, painel ≥ {} px) ordem={} balao={!r}".format(
+              on_ribbon, shown, moved, chosen, entry, undone, jpegs, back, pictured, exported, narrow, view_width,
+              canvas.width(), panel.minimumSizeHint().width(), order, win.last_message))
+
+
+def camera_move_flow():
+    """0.364 — A scene's camera move: a room of four walls with a room drawn in it, a named 3D view; in the
+    Presentation panel the 3D view's scene given «Volta ao compartimento» (the Room row shown: the scene's, and the
+    room drawn), 10 s; «Ver movimento»: the camera goes round the room (moved after a moment, the button says «Parar»,
+    the balloon the move and its time); Esc: back where it was; the general view given «Órbita 90°» (no Room row) for
+    1 s: played to its end by itself, the camera back. Captured: 364_movimento.png (mid-move)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    room = bim_actions.add_room(doc, (3.0, 2.0), "Sala")
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(200)
+    view = doc.add_view3d(vp.camera_snapshot())[1]
+    win.show_presentation_panel()
+    pump(300)
+    panel = win.presentation_panel
+    keys = [panel.list.item(k).data(Qt.ItemDataRole.UserRole) for k in range(panel.list.count())]
+    panel.list.setCurrentRow(keys.index("vista_" + view))
+    pump(50)
+    panel.move.setCurrentIndex(panel.move.findData("int_orbit_full"))
+    pump(150)
+    panel.move_s.setValue(10.0)
+    pump(150)
+    scene = next(s for s in pm.scenes(doc) if s.key == "vista_" + view)
+    rooms = [panel.room.itemData(k) for k in range(panel.room.count())]
+    chosen = (scene.move, scene.move_s) == ("int_orbit_full", 10.0) and panel.room.isVisible() and rooms == ["", room]
+    win.open_view("3d", view)
+    pump(300)
+    before = vp.camera_snapshot()
+    panel.play_button.click()
+    pump(700)
+    playing = win._move_play is not None and panel.play_button.text() == "Parar" \
+        and not np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-3) \
+        and win.views.current() == ("3d", view) and "10 s" in win.last_message
+    shot("364_movimento.png")
+    key(Qt.Key.Key_Escape)
+    pump(150)
+    stopped = win._move_play is None and panel.play_button.text() == "Ver movimento" \
+        and np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-6)
+    panel.list.setCurrentRow(keys.index("geral"))
+    pump(50)
+    panel.move.setCurrentIndex(panel.move.findData("orbit_90"))
+    pump(150)
+    panel.move_s.setValue(1.0)
+    pump(150)
+    no_room = not panel.room.isVisible()
+    win.open_view("3d", None)
+    pump(200)
+    before = vp.camera_snapshot()
+    panel.play_button.click()
+    pump(400)
+    started = win._move_play is not None
+    pump(1400)
+    ended = started and win._move_play is None and np.allclose(vp.camera_snapshot()["position"], before["position"],
+                                                                atol=1e-6)
+    doc.modified = False
+    panel.hide()
+    check("movimento_de_camara", room is not None and chosen and playing and stopped and no_room and ended,
+          "sala={} escolhido={} a_tocar={} parou={} sem_ambiente={} acabou={} ambientes={} balao={!r}".format(
+              room is not None, chosen, playing, stopped, no_room, ended, rooms, win.last_message))
+
+
+def scene_sun_flow():
+    """0.365 — A scene's sun: a room of four walls; without the site's place the panel's day, hour and animation off,
+    its note shown, «Ver sol» says where to give it; the site in Lisbon: the general view's sun on 21/12 at 10:00
+    (typed in the panel's fields), exposure 1,2, sky — kept; «Ver sol»: the 3D view with shadows from that sun (the
+    balloon its azimuth and altitude), Esc: the view style's sun again; through the day: played to its end by itself.
+    Captured: 365_sol.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_sun as ps
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(200)
+    win.show_presentation_panel()
+    pump(300)
+    panel = win.presentation_panel
+    panel.list.setCurrentRow(0)
+    pump(100)
+    off = not panel.sun_date.isEnabled() and panel.sun_note.isVisible() and not panel.sun_button.isEnabled()
+    refused = win.play_scene_sun("geral") is False and "Localização" in win.last_message
+    bim_actions.set_site_location(doc, 38.72, -9.14)
+    pump(300)
+    on = panel.sun_date.isEnabled() and not panel.sun_note.isVisible()
+    panel.sun_date.setDate(QtCore.QDate(2025, 12, 21))
+    pump(100)
+    panel.sun_time.setTime(QtCore.QTime(10, 0))
+    pump(100)
+    panel.exposure.setValue(1.2)
+    pump(100)
+    panel.sky.setChecked(True)
+    pump(150)
+    scene = pm.scenes(doc)[0]
+    kept = (scene.sun_day, scene.sun_minutes, scene.exposure, scene.sky) == (355, 600, 1.2, True)
+    panel.sun_button.click()
+    pump(400)
+    az, alt = ps.angles(38.72, -9.14, 355, 600)
+    shown = win._move_play is not None and vp._sun_preview is not None and vp.bim.shadows \
+        and panel.sun_button.text() == "Parar" and "21/12" in win.last_message \
+        and "{}°".format(round(az)) in win.last_message and float(vp._sun_preview[2]) > 0.0
+    np_dir = np.allclose(vp._sun_preview, ps.direction(38.72, -9.14, 355, 600), atol=1e-6)
+    shot("365_sol.png")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    back = win._move_play is None and vp._sun_preview is None and panel.sun_button.text() == "Ver sol"
+    panel.sun_animate.setCurrentIndex(panel.sun_animate.findData("day"))
+    pump(150)
+    seconds, win.SUN_SECONDS = win.SUN_SECONDS, 1.0
+    try:
+        started = win.play_scene_sun("geral")
+        pump(400)
+        moving = win._move_play is not None and vp._sun_preview is not None
+        pump(1300)
+        ended = started and moving and win._move_play is None and vp._sun_preview is None
+    finally:
+        win.SUN_SECONDS = seconds
+    doc.modified = False
+    panel.hide()
+    check("sol_da_cena", off and refused and on and kept and shown and np_dir and back and ended,
+          "sem_lugar={} recusou={} com_lugar={} guardado={} mostrado={} direcao={} voltou={} dia={} balao={!r}".format(
+              off, refused, on, kept, shown, np_dir, back, ended, win.last_message))
+
+
+def rooms_walk_flow():
+    """0.366 — The rooms for the Presentation: a house of two rooms with a door between them and one from outside; the
+    panel's «Room labels (2)» and «Virtual Walk through the rooms (2)» on; the walk off (one undo step: Ctrl+Z puts it
+    back); exported: the two rooms, the inner door between them, the outer one to outside, the walk starting where one
+    comes in; the 3D view as wide as before (the panel no wider than the ones beside it)."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation_export
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, spec)
+    inner = bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+    door = catalog.OPENING_BY_KEY["porta_90"]
+    bim_actions.add_opening(doc, walls[0], door, bim_actions.wall_frame(doc, walls[0]), 2.0, -1)
+    bim_actions.add_opening(doc, inner, door, bim_actions.wall_frame(doc, inner), 2.0, -1)
+    living = bim_actions.add_room(doc, (2.0, 2.0), "Sala")
+    kitchen = bim_actions.add_room(doc, (6.0, 2.0), "Cozinha")
+    win.open_view("3d", None)
+    pump(300)
+    view_width = canvas.width()
+    win.show_presentation_panel()
+    pump(300)
+    panel = win.presentation_panel
+    offered = panel.labels_box.isChecked() and panel.walk_box.isChecked() and panel.labels_box.text().endswith("(2)") \
+        and panel.walk_box.isEnabled()
+    panel.walk_box.click()
+    pump(200)
+    off = doc.presentation["walk"] is False and not panel.walk_box.isChecked()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = doc.presentation["walk"] is True and panel.walk_box.isChecked()
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_rooms_"), "casa.glb"))
+    found = (presentation_export.read(path) or {}).get("presentation", {}).get("model3d", {}).get("spaces", {}) \
+        if path else {}
+    doors = found.get("doors", [])
+    sent = {r["id"] for r in found.get("rooms", [])} == {living, kitchen} and len(doors) == 2 \
+        and any({d["from"], d["to"]} == {living, kitchen} for d in doors) \
+        and any(d["to"] is None and d["from"] == living for d in doors) and found.get("start") == living
+    panel.hide()
+    pump(100)
+    narrow = canvas.width() >= view_width - 2
+    doc.modified = False
+    check("ambientes_e_passeio", offered and off and back and sent and narrow,
+          "oferecidos={} desligado={} desfeito={} enviados={} estreito={} ({}→{} px) portas={}".format(
+              offered, off, back, sent, narrow, view_width, canvas.width(), len(doors)))
+
+
+def presentation_package_flow():
+    """0.367 — The package for the Presentation: a house of two rooms, a sheet with its plan (and one with nothing on
+    it); exported as a ZIP: the manifest (the brand's envelope, its checksum), the GLB, the sheet as a single-page PDF,
+    the two rooms as zones of that page — inside it, where the plan is drawn —; the empty sheet not sent."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation_package
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, spec)
+    bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+    living = bim_actions.add_room(doc, (2.0, 2.0), "Sala")
+    kitchen = bim_actions.add_room(doc, (6.0, 2.0), "Cozinha")
+    storey = next(g for g, _n, _z in doc.storeys())
+    doc.make_sheets([("Planta", [("plan", storey)]), ("Vazia", [])], "A3", "full")
+    pump(200)
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_package_"), "casa.zip"))
+    found = presentation_package.read(path) if path else None
+    manifest, files = found if found else ({}, {})
+    pages = manifest.get("package", {}).get("pages", [])
+    page = pages[0] if pages else {}
+    zones = {z["room"]: z for z in page.get("zones", [])}
+    inside = all(0.0 < x < 100.0 and 0.0 < y < 100.0 for z in zones.values() for x, y in z["points"])
+    left_right = len(zones) == 2 and zones[living]["label"][0] < zones[kitchen]["label"][0]
+    sheet = next(s for s in doc.sheets if s.name == "Planta")
+    made = len(pages) == 1 and page.get("id") == "bim_sheet_" + sheet.uid and files.get(page.get("file", ""), b"")[:4] \
+        == b"%PDF" and files.get("modelo.glb", b"")[:4] == b"glTF" and page.get("size") == [420.0, 297.0]
+    rest = {k: v for k, v in manifest.items() if k != "checksum"}
+    from arqbim.model import presentation_export
+    signed = manifest.get("checksum") == presentation_export.checksum(json.dumps(rest, ensure_ascii=False,
+                                                                                separators=(",", ":")))
+    told = "1 folha para as plantas" in win.last_message
+    doc.modified = False
+    check("pacote_para_o_presentation", made and inside and left_right and signed and told,
+          "feito={} dentro={} esquerda_direita={} assinado={} balao={!r} zonas={}".format(
+              made, inside, left_right, signed, win.last_message, len(zones)))
+
+
+def panorama_flow():
+    """0.368 — Render ▸ Panorama 360°: a house of two rooms and a sheet with its plan; asked before the project is
+    saved: refused, said why; in the plan: refused (the 3D in perspective); saved, the 3D view's camera in the living
+    room at eye height: a tiny panorama rendered apart (its window), done — a JPEG twice as wide as high in «casa -
+    panoramas», its record kept (one undo step) and listed in the Presentation panel —; the package: the panorama as a
+    360° point on the plan's page, inside the living room's zone, its picture in the ZIP; removed from the panel's
+    list, Ctrl+Z puts it back. Captured: 368_painel_panoramas.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import panoramas as panoramas_model
+    from arqbim.model import presentation_package
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, spec)
+    bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+    living = bim_actions.add_room(doc, (2.0, 2.0), "Sala")
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 8.0, 4.0, catalog.BY_KEY["laje_12"])
+    storey = next(g for g, _n, _z in doc.storeys())
+    doc.make_sheets([("Planta", [("plan", storey)])], "A3", "full")
+    on_ribbon = "panorama" in ribbon.items_of("render")
+    win.open_view("3d", None)
+    pump(300)
+    unsaved = win.render_panorama(width=64, samples=4) is None and "Guarde o projeto" in win.last_message
+    folder = tempfile.mkdtemp(prefix="arqsynth_pano_")
+    win.save_to(os.path.join(folder, "casa.ifc"))
+    win.open_view("plan", storey)
+    pump(300)
+    in_plan = win.render_panorama(width=64, samples=4) is None and "3D em perspetiva" in win.last_message
+    win.open_view("3d", None)
+    pump(300)
+    vp.look_at((2.0, 2.0, 1.6), (2.0, 5.0, 1.6))
+    pump(200)
+    win.show_presentation_panel()
+    pump(200)
+    steps = len(doc._undo)
+    window = win.render_panorama(width=64, samples=4)
+    started = window is not None and window.running() and "seis vistas" in win.last_message
+    end = time.time() + 180
+    while window is not None and not window.finished() and time.time() < end:
+        pump(200)
+    pump(500)
+    kept = list(doc.panoramas)
+    record = kept[0] if kept else {}
+    picture = QtGui.QImage(panoramas_model.path_of(doc, record)) if record else QtGui.QImage()
+    done = len(kept) == 1 and len(doc._undo) == steps + 1 and record["file"].startswith("casa - panoramas/") and \
+        (picture.width(), picture.height()) == (64, 32) and record["storey"] == storey and \
+        np.allclose(record["eye"], (2.0, 2.0, 1.6), atol=0.05) and "guardado com o projeto" in win.last_message
+    if window is not None:
+        window.close()
+        pump(200)
+    panel = win.presentation_panel
+    listed = panel.panoramas.count() == 1 and panel.panoramas.item(0).data(Qt.ItemDataRole.UserRole) == \
+        record.get("uid")
+    panel.grab().save(os.path.join(OUT, "368_painel_panoramas.png"))
+    path = win.export_presentation(os.path.join(folder, "casa.zip"))
+    found = presentation_package.read(path) if path else None
+    manifest, files = found if found else ({}, {})
+    package = manifest.get("package", {})
+    page = (package.get("pages") or [{}])[0]
+    entry = (package.get("panoramas") or [{}])[0]
+    where = (entry.get("placements") or [{}])[0]
+    zone = next((z for z in page.get("zones", []) if z["room"] == living), None)
+    xs = [x for x, _y in zone["points"]] if zone else [0.0]
+    ys = [y for _x, y in zone["points"]] if zone else [0.0]
+    sent = entry.get("id") == "bim_pano_" + record.get("uid", "") and where.get("page") == page.get("id") and \
+        min(xs) < where.get("x", -1) < max(xs) and min(ys) < where.get("y", -1) < max(ys) and \
+        files.get(entry.get("file", ""), b"")[:2] == b"\xff\xd8" and "1 panorama 360°" in win.last_message
+    panel.panoramas.setCurrentRow(0)
+    panel.panorama_remove.click()
+    pump(200)
+    removed = doc.panoramas == [] and panel.panoramas.item(0).data(Qt.ItemDataRole.UserRole) is None
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = [p["uid"] for p in doc.panoramas] == [record.get("uid")]
+    win.presentation_panel.hide()
+    doc.modified = False
+    check("panorama_360", on_ribbon and unsaved and in_plan and started and done and listed and sent and removed
+          and back, "fita={} sem_guardar={} planta={} comecou={} feito={} lista={} pacote={} removido={} voltou={} "
+          "registo={} imagem={}x{} lugar={} balao={!r}".format(
+              on_ribbon, unsaved, in_plan, started, done, listed, sent, removed, back, record, picture.width(),
+              picture.height(), where, win.last_message))
+
+
+def gltf_flow():
+    """0.348 — Export ▸ 3D model (GLB): a house of four walls with a door and a slab; on the ribbon (Home ▸ Export and
+    Render ▸ Presentation); «What is shown» written: a GLB 2.0 file, its tree Model ▸ storey ▸ categories, the walls
+    with their GlobalIds; «Only the selection» with one wall chosen: that wall alone; with nothing chosen: refused,
+    said why. 0.349: OBJ (with its MTL) and STL at 1:100; 0.350: SKP and 3DM, each wall there with its GlobalId (the
+    SKP's groups' «ArqSynth» dictionary, the 3DM's user text); a name without extension a GLB."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import gltf_export
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_12"])
+    win.open_view("3d", None)
+    pump(300)
+    on_ribbon = "export_model" in ribbon.items_of("home") and "export_model" in ribbon.items_of("render")
+    folder = tempfile.mkdtemp(prefix="arqsynth_glb_")
+    path = win.export_model(os.path.join(folder, "casa.glb"), "shown")
+    whole = path is not None and os.path.exists(path)
+    gltf, _bin = gltf_export.read(path) if whole else ({}, b"")
+    nodes = gltf.get("nodes", [])
+    ids = {n.get("extras", {}).get("GlobalId") for n in nodes}
+    told = "Modelo 3D gravado" in win.last_message
+    vp.selection = {walls[1]}
+    one = win.export_model(os.path.join(folder, "parede.glb"), "selection")
+    alone = one is not None and len(gltf_export.read(one)[0]["meshes"]) == 1
+    vp.selection = set()
+    refused = win.export_model(os.path.join(folder, "nada.glb"), "selection") is None and \
+        "Nada escolhido" in win.last_message
+    obj = win.export_model(os.path.join(folder, "casa.obj"), "all")         # (0.349: OBJ and STL too)
+    stl = win.export_model(os.path.join(folder, "casa.stl"), "all", scale=100)
+    other = obj is not None and os.path.exists(os.path.join(folder, "casa.mtl")) and stl is not None and \
+        "1:100" in win.last_message
+    import openskp                                                          # (0.350: SketchUp and Rhino)
+    import rhino3dm
+    skp = win.export_model(os.path.join(folder, "casa.skp"), "all")
+    skp_ids = {i.attribute_dictionaries.get("ArqSynth", {}).get("GlobalId")
+               for i in openskp.SkpFile(skp).parse().root.instances} if skp else set()
+    rhino = win.export_model(os.path.join(folder, "casa"), "all")           # (no extension: the GLB's)
+    model3dm = win.export_model(os.path.join(folder, "casa.3dm"), "all")
+    rh_ids = {o.Attributes.GetUserString("GlobalId") for o in rhino3dm.File3dm.Read(model3dm).Objects} \
+        if model3dm else set()
+    cad = set(walls) <= skp_ids and set(walls) <= rh_ids and rhino is not None and rhino.endswith(".glb")
+    # (0.371) USDZ for augmented reality: typed without an extension, the USDZ type chosen; read back with USD
+    from pxr import Usd, UsdGeom
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(
+        lambda *a, **k: (os.path.join(folder, "casa_ra"), "Realidade aumentada USDZ, iPhone e iPad (*.usdz)"))
+    usdz = win.export_model(None, "all")
+    stage = Usd.Stage.Open(usdz) if usdz else None
+    usd_ids = {p.GetCustomDataByKey("GlobalId") for p in stage.Traverse()} if stage is not None else set()
+    ar = usdz is not None and usdz.endswith("casa_ra.usdz") and set(walls) <= usd_ids and \
+        UsdGeom.GetStageUpAxis(stage) == "Y" and "Modelo 3D gravado em casa_ra.usdz" in win.last_message
+    del stage
+    import shutil
+    shutil.rmtree(folder, ignore_errors=True)
+    check("exportar_glb", on_ribbon and whole and set(walls) <= ids and told and alone and refused and other and cad
+          and ar, "fita={} ficheiro={} paredes={} disse={} so_uma={} recusou={} obj_stl={} skp_3dm={} usdz={}".format(
+              on_ribbon, whole, set(walls) <= ids, told, alone, refused, other, cad, ar))
+
+
+def wall_continue_flow():
+    """0.353 — a wall's «+»: in the plan, a 20 cm wall of 4 m selected alone shows a «+» on each end of its axis (none
+    with two walls selected); a click on the end's «+» takes the Wall tool of that type, by the axis, drawing on from
+    there; a click 3 m up makes a wall of the same type joined to the first at that corner; Esc ends."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_plan(True)
+    pump(300)
+    spec = catalog.BY_KEY["parede_alv_15"]
+    first = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), spec)
+    other = bim_actions.add_wall(doc, np.array((0.0, 6.0, 0.0)), np.array((4.0, 6.0, 0.0)), spec)
+    win.set_tool("select")
+    vp.set_selection({first, other})
+    pump(200)
+    none_for_two = not vp.grips[2]
+    vp.set_selection({first})
+    pump(200)
+    a, b, _t = doc.ifc.wall_axis(first)
+    pluses = [np.asarray(p) for p in vp.grips[2]]
+    shown = len(pluses) == 2 and np.allclose(pluses[0], a) and np.allclose(pluses[1], b)
+    move(at(b), 2)
+    click()
+    pump(200)
+    tool = win.tool
+    drawing = tool.name == "wall" and tool._start is not None and np.allclose(tool._start, b) and \
+        tool.spec.key == spec.key and tool.reference == "axis"
+    before = {o.id for o in doc.objects.values() if getattr(o, "ifc_class", "") == "IfcWall"}
+    move(at(np.array((4.0, 3.0, 0.0))), 4)
+    click()
+    pump(300)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    walls = {o.id for o in doc.objects.values() if getattr(o, "ifc_class", "") == "IfcWall"}
+    made = sorted(walls - before)
+    joined = bool(made) and first in doc.ifc.joined_walls([made[0]])
+    same = bool(made) and doc.ifc.by_guid(made[0]).IsTypedBy[0].RelatingType.Name == spec.name_pt
+    win.set_plan(False)
+    check("parede_continuar", none_for_two and shown and drawing and len(made) == 1 and joined and same,
+          "dois={} mais={} a_desenhar={} novas={} ligada={} mesmo_tipo={}".format(
+              none_for_two, shown, drawing, len(made), joined, same))
+
+
+def quick_edit_flow():
+    """0.354–0.355 — TAB, the quick edit: a wall selected alone, TAB in the view shows a panel over the view beside
+    it — its type on top, its constraints and dimensions (the base offset, the profile's button), not its
+    identification nor its IFC data —; the base offset typed there (10 cm) changes the wall (one undo step) and the
+    panel stays, showing it; Esc closes it; TAB opens it and TAB closes it; nothing selected, TAB does nothing. A
+    double click on the wall: its profile edited (the Wall profile tool)."""
+    from arqbim.i18n import t as t_
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_plan(True)
+    pump(300)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.set_tool("select")
+    vp.set_selection(set())
+    canvas.setFocus()
+    key(Qt.Key.Key_Tab)
+    pump(200)
+    nothing = not win.quick.isVisible()
+    vp.set_selection({wall})
+    pump(200)
+    canvas.setFocus()
+    key(Qt.Key.Key_Tab)
+    pump(300)
+    panel = win.quick.panel
+    groups = [panel.tree.topLevelItem(k).text(0) for k in range(panel.tree.topLevelItemCount())]
+    shown = win.quick.isVisible() and "type" in panel.editors and "c_base_offset" in panel.editors and \
+        "edit_profile" in panel.editors and groups == [t_("props.g.parameters")]
+    drawing = QtCore.QRect(canvas.mapTo(win.quick.parentWidget(), QtCore.QPoint(0, 0)), canvas.size())
+    beside = drawing.contains(win.quick.geometry())                                   # (inside the drawing, whole)
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        shot("354_edicao_rapida.png")
+    undo_before = len(doc._undo)
+    edit = panel.editors.get("c_base_offset")
+    if edit is not None:
+        edit.setText("0,10")
+        edit.editingFinished.emit()
+    pump(400)
+    c = doc.ifc.describe(wall).get("constraints") or {}
+    offset = abs(float(c.get("base_offset", 0.0)) - 0.10) < 1e-6 and len(doc._undo) == undo_before + 1
+    stays = win.quick.isVisible() and "c_base_offset" in win.quick.panel.editors and \
+        win.quick.panel.editors["c_base_offset"].text().startswith("0,10")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    esc = not win.quick.isVisible() and vp.selection == {wall}
+    canvas.setFocus()
+    key(Qt.Key.Key_Tab)
+    pump(200)
+    again = win.quick.isVisible()
+    canvas.setFocus()
+    key(Qt.Key.Key_Tab)
+    pump(200)
+    toggled = again and not win.quick.isVisible()
+    a, b, _t = doc.ifc.wall_axis(wall)
+    move(at((a + b) / 2), 3)
+    click()
+    pump(60)
+    click()
+    pump(300)
+    profile = win.tool.name == "wall_profile"
+    win.set_tool("select")
+    win.set_plan(False)
+    check("edicao_rapida_tab", nothing and shown and beside and offset and stays and esc and toggled and profile,
+          "vazio={} mostrado={} ao_lado={} desvio={} fica={} esc={} tab_tab={} perfil={} {}".format(
+              nothing, shown, beside, offset, stays, esc, toggled, profile, groups))
+
+
+def roof_blocks_double_flow():
+    """0.356 — a roof by blocks double-clicked: an L-shaped house, its roof a main block and a wing; in the 3D view seen
+    from the top, the roof chosen, a double click on the wing — (0.385, the owner: «gostaria que a edição do bloco de
+    telhado se desse no ambiente 3D sem ser pela janela extra») the blocks edited in the view itself, the wing chosen;
+    its height typed 50 cm higher (Enter) raises all four of its eaves by 50 cm (one undo step), the main block's stay.
+    Then, seen from the side — (0.386, the owner: the heights boxes alone, handles that scale, «+» / «−» for the
+    waters): the main block's east «−» — that water a gable, a «+» there now, clicked — a water again; its south side's
+    square dragged a metre out — the block deeper; its north-east corner's square dragged a metre out both ways — wider
+    and deeper; Shift and a click on the wing — both chosen; the main block's diamond dragged a metre east — both moved;
+    the main block alone, its west eave's box clicked, 3,20 typed — that eave at 3,20; the heights drawn as boxes alone
+    (no lines); the wing chosen, Delete — gone; Esc: Select. Captured: 385_blocos_no_3d.png."""
+    from arqbim.core import roof_blocks as rb
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (6.0, 10.0), (6.0, 6.0), (0.0, 6.0)]
+    for k in range(len(pts)):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % len(pts)] + (0.0,)), spec)
+    roof = bim_actions.add_block_roof(doc, rb.make(5.0, 3.0, 0.0, 10.2, 6.2, "hip", 30.0, 0.5),
+                                      catalog.BY_KEY["laje_15"])
+    bim_actions.add_roof_block(doc, roof, rb.make(8.0, 7.05, 0.0, 4.2, 6.1, "gable", 30.0, 0.5))
+    before = doc.ifc.roof_params(roof)["blocks"]
+    level = doc.ifc.roof_params(roof)["eave"]
+    win.open_view("3d", None)
+    pump(200)
+    win.set_view("top")
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({roof})
+    pump(300)
+    mesh = doc.get(roof).mesh
+    corners = np.asarray(mesh.verts, dtype=float)[np.asarray(mesh.tris, dtype=np.int64)]
+    middles = corners.mean(axis=1)
+    k = int(np.argmin(np.hypot(middles[:, 0] - 8.0, middles[:, 1] - 9.0) - middles[:, 2] * 1e-3))
+    move(at(middles[k]), 3)
+    click()
+    pump(60)
+    click()
+    pump(900)
+    tool = win.tool
+    in_3d = tool.name == "roof_blocks" and tool.chosen == {1} and getattr(win, "_roof_block_dialog", None) is None
+    type_text(format_length_plain(level + min(before[1].eave) + 0.5))
+    key(Qt.Key.Key_Return)
+    pump(600)
+    after = doc.ifc.roof_params(roof)["blocks"]
+    raised = len(after) == 2 and all(abs(a - b - 0.5) < 1e-6 for a, b in zip(after[1].eave, before[1].eave)) and \
+        after[0].eave == before[0].eave
+    check("telhado_duplo_clique", in_3d and raised, "no_3d={} escolhido={} subiu={}".format(
+        in_3d, sorted(tool.chosen) if tool.name == "roof_blocks" else None, raised))
+
+    # the other gestures, seen from the side
+    vp.set_view("iso", center=(5.0, 5.0, 3.5), radius=9.0)
+    pump(400)
+
+    def blocks():
+        return doc.ifc.roof_blocks_world(roof)
+
+    def top(b, x, y):
+        return np.array((x, y, level + (rb.block_top(b, x, y) or 0.0)))
+
+    def handle(kind, i, s):
+        return next(p for kind_, j, k_, p in tool._grips[0] if (kind_, j, k_) == (kind, i, s))
+
+    def sign(which, i, s):                           # (which: 2 the «+», 3 the «−»)
+        return next(p for j, k_, p in tool._grips[which] if (j, k_) == (i, s))
+
+    b0 = blocks()[0]
+    move(at(top(b0, b0.cx - 3.0, b0.cy)), 4)                 # (the main block chosen alone)
+    click()
+    pump(300)
+    move(at(sign(3, 0, 1)), 4)                               # (its east «−»: that water a gable)
+    click()
+    pump(600)
+    gable = blocks()[0].water[1] is False and tool.chosen == {0}
+    move(at(sign(2, 0, 1)), 4)                               # (now a «+» there: a water again)
+    click()
+    pump(600)
+    gable = gable and blocks()[0].water[1] is True
+    p = handle("side", 0, 2)
+    depth = blocks()[0].depth
+    move(at(p), 4)
+    press()
+    move(at(p + np.array((0.0, -1.0, 0.0))), 8)
+    pump(150)
+    release()
+    pump(600)
+    deeper = abs(blocks()[0].depth - depth - 1.0) < 0.1
+    p = handle("corner", 0, 2)                               # (its north-east corner: out a metre both ways)
+    size = (blocks()[0].width, blocks()[0].depth)
+    move(at(p), 4)
+    press()
+    move(at(p + np.array((1.0, 1.0, 0.0))), 8)
+    pump(150)
+    release()
+    pump(600)
+    scaled = abs(blocks()[0].width - size[0] - 1.0) < 0.15 and abs(blocks()[0].depth - size[1] - 1.0) < 0.15
+    b1 = blocks()[1]
+    move(at(top(b1, b1.cx, b1.cy + 1.5)), 4)
+    press(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    release(modifiers=Qt.KeyboardModifier.ShiftModifier)
+    pump(400)
+    group = tool.chosen == {0, 1}
+    was = [(b.cx, b.cy) for b in blocks()]
+    p = next(q for i, q in tool._grips[1] if i == 0)
+    move(at(p), 4)
+    press()
+    move(at(p + np.array((1.0, 0.0, 0.0))), 8)
+    pump(150)
+    release()
+    pump(600)
+    moved = all(abs(b.cx - w[0] - 1.0) < 0.1 for b, w in zip(blocks(), was))
+    b0 = blocks()[0]
+    move(at(top(b0, b0.cx - 3.0, b0.cy)), 4)
+    click()
+    pump(400)
+    boxes = all(d.kind == "label" for d in tool._dims) and not vp._tdim_lines.visible and \
+        not vp._tdim_strong.visible                         # (the heights: boxes alone, no lines)
+    spot = {d.key: at_ for d, at_, _tx in vp.temp_dims}.get(("eave", 0, 3))
+    eave = False
+    if spot is not None:
+        others = [blocks()[0].eave[k] for k in range(3)]
+        move(at(spot), 4)
+        click()
+        pump(300)
+        clicked = tool._active is not None and tool._active.key == ("eave", 0, 3)
+        type_text("3,2")
+        key(Qt.Key.Key_Return)
+        pump(600)
+        eave = clicked and abs(level + blocks()[0].eave[3] - 3.2) < 1e-6 and \
+            [blocks()[0].eave[k] for k in range(3)] == others and all(blocks()[0].water)   # (that eave alone)
+    shot("385_blocos_no_3d.png")
+    b1 = blocks()[1]
+    move(at(top(b1, b1.cx, b1.cy + 1.5)), 4)
+    click()
+    pump(400)
+    key(Qt.Key.Key_Delete)
+    pump(600)
+    gone = len(blocks()) == 1
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    left = win.tool.name == "select"
+    vp.set_selection(set())
+    check("blocos_no_3d", gable and deeper and scaled and group and moved and boxes and eave and gone and left
+          and doc.ifc.validate() == [],
+          "empena={} esticado={} escalado={} grupo={} movidos={} caixas={} beirado={} apagado={} esc={}".format(
+              gable, deeper, scaled, group, moved, boxes, eave, gone, left))
+    doc.modified = False
+
+
+def format_length_plain(meters):
+    """A length as typed by a person (Portuguese decimal comma, in metres)."""
+    return "{:.6f}".format(meters).replace(".", ",")
+
+
+def room_program_flow():
+    """0.357 — the programme: Arquitetura ▸ Programa de necessidades on the ribbon; a CSV (headings, «;», decimal
+    commas) imported: the panel lists its 3 rooms, none made; «Quarto» dragged and dropped in the left half of the plan
+    (a drop on the view): a room «Quarto» made there, the panel says 1 / 1; «Terraço» dropped on it: the same room
+    renamed and exterior; Ctrl+Z: «Quarto» again; the Room tool's name «Ambiente»."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import room_program as rp
+    from arqbim.ui import ribbon
+    from arqbim.ui import room_program as program_ui
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    pts = [(0.0, 0.0), (8.0, 0.0), (8.0, 4.0), (0.0, 4.0)]
+    for k in range(4):
+        bim_actions.add_wall(doc, np.array(pts[k] + (0.0,)), np.array(pts[(k + 1) % 4] + (0.0,)), spec)
+    bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+    win.set_plan(True)
+    pump(300)
+    on_ribbon = "room_program" in ribbon.items_of("architecture") and win.tool_actions["room"].text() == "Ambiente"
+    folder = tempfile.mkdtemp(prefix="arqsynth_programa_")
+    path = os.path.join(folder, "programa.csv")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("Ambiente;Área;Quantidade;Tipo\nQuarto;12,5;1;interior\nSala comum;14;1;\nTerraço;6;1;exterior\n")
+    n = win.import_room_program(path)
+    pump(300)
+    panel = win.program_panel
+    listed = n == 3 and panel.isVisible() and panel.list.topLevelItemCount() == 3 and \
+        panel.list.topLevelItem(0).text(2) == "0 / 1"
+
+    def drop(name, p):
+        need = next(d for d in doc.ifc.room_program() if d.name == name)
+        data = QtCore.QMimeData()
+        data.setData(program_ui.MIME, QtCore.QByteArray(rp.to_text([need]).encode("utf-8")))
+        x, y = at(np.array(p))
+        target = getattr(canvas, "_subwidget", None) or canvas
+        enter = QtGui.QDragEnterEvent(QtCore.QPoint(int(x), int(y)), Qt.DropAction.CopyAction, data,
+                                      Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        QtWidgets.QApplication.sendEvent(target, enter)
+        pump(100)
+        dropped = QtGui.QDropEvent(QtCore.QPointF(x, y), Qt.DropAction.CopyAction, data, Qt.MouseButton.LeftButton,
+                                   Qt.KeyboardModifier.NoModifier)
+        QtWidgets.QApplication.sendEvent(target, dropped)
+        pump(400)
+
+    drop("Quarto", (2.0, 2.0, 0.0))
+    rooms = doc.ifc.spaces()
+    made = len(rooms) == 1 and rooms[0]["name"] == "Quarto" and not rooms[0]["external"] and \
+        panel.list.topLevelItem(0).text(2) == "1 / 1"
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        shot("357_programa.png")
+    drop("Terraço", (1.0, 3.0, 0.0))
+    rooms = doc.ifc.spaces()
+    renamed = len(rooms) == 1 and rooms[0]["name"] == "Terraço" and rooms[0]["external"]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    rooms = doc.ifc.spaces()
+    undone = len(rooms) == 1 and rooms[0]["name"] == "Quarto"
+    import shutil
+    shutil.rmtree(folder, ignore_errors=True)
+    panel.hide()
+    win.set_plan(False)
+    check("programa_necessidades", on_ribbon and listed and made and renamed and undone,
+          "fita={} lista={} feito={} renomeado={} desfeito={} salas={}".format(
+              on_ribbon, listed, made, renamed, undone, [(r["name"], r["external"]) for r in doc.ifc.spaces()]))
+
+
+def section_edit_flow():
+    """0.358 — a section's line chosen and changed in the plan: a room, a section across it; a click on its head
+    chooses it — a square on each end of its line and a diamond («turn») —; its start's square dragged 1 m along the
+    line: the line 1 m shorter (its own ends kept); the diamond clicked: it looks the other way, the same line; Ctrl+Z:
+    back; a click elsewhere lets it go."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    doc.add_section(np.array((3.0, 2.0, 1.0)), np.array((0.0, 1.0, 0.0)))
+    win.set_plan(True)
+    pump(400)
+    win.set_tool("select")
+    vp.set_selection(set())
+    vp.zoom_extents()
+    pump(300)
+    heads = [(c, r) for c, r, ref in vp._mark_heads if ref == ("section", doc.sections[0].name)]
+    if heads:
+        move(at(heads[0][0]), 3)
+        click()
+        pump(300)
+    tool = win.tool
+    chosen = tool._section == doc.sections[0].name and len(vp.grips[0]) == 2 and len(vp.grips[1]) == 1
+    a, b = (np.asarray(p) for p in vp.grips[0][:2]) if chosen else (np.zeros(3), np.ones(3))
+    before = float(np.linalg.norm(b - a))
+    d = (b - a) / max(before, 1e-9)
+    move(at(a), 3)
+    press()
+    move(at(a + d * 1.0), 6)
+    release()
+    pump(300)
+    s = doc.sections[0]
+    shorter = s.ends is not None and abs(float(np.linalg.norm(np.subtract(*s.ends))) - (before - 1.0)) < 0.02
+    normal = np.asarray(s.normal, dtype=float).copy()
+    turn = vp.grips[1][0] if vp.grips[1] else None
+    if turn is not None:
+        move(at(turn), 3)
+        click()
+        pump(300)
+    flipped = np.allclose(np.asarray(doc.sections[0].normal), -normal)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = np.allclose(np.asarray(doc.sections[0].normal), normal)
+    shot("359_corte_editado.png")
+    move(at(np.array((3.0, 2.0, 0.0))), 3)
+    click()
+    pump(200)
+    let_go = win.tool._section is None
+    win.set_plan(False)
+    check("corte_editavel", chosen and shorter and flipped and back and let_go,
+          "escolhido={} encurtado={} virado={} desfeito={} largado={} pontas={}".format(
+              chosen, shorter, flipped, back, let_go, s.ends))
+
+
+def wall_relations_flow():
+    """0.361 — a wall's relations to the walls round it (the owner: «ao selecionar a parede … não aparece a relação da
+    parede com outras paredes»): a house of 10 × 7 m (20 cm walls), a partition across it at x = 4, one along y = 3,5
+    on its right, and a stub (15 cm) at x = 6,5 from that one up to y = 5,6, free there. The stub chosen alone: its
+    length, and three relations — 2,5 m to the partition on its left, 3,5 m to the house's wall on its right, 1,4 m
+    from its free end to the wall beyond it (none from the end joined) —, from axis to axis; the mouse over a value
+    picks it out; a click on a relation's line turns them to face to face (2,325 / 3,325 / 1,3 m, kept for next time;
+    on Modificar | Paredes); its free end's value clicked shows what is typed in it («[ 0,9 ]»), and Enter makes the
+    stub reach that near (40 cm longer: one undo step). Pictures on the light and the dark canvas."""
+    from arqbim.core import walls as walls_core
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    kept = win.dim_faces
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_dim_faces(False, remember=False)
+    outer, inner = catalog.BY_KEY["parede_alv_20"], catalog.BY_KEY["parede_alv_15"]
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 7.0, 0.0), (0.0, 7.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, outer)
+
+    def partition(a, b):
+        a, b = np.array(a, dtype=float), np.array(b, dtype=float)
+        d = (b - a) / np.linalg.norm(b - a)
+        axes = bim_actions.wall_axes(doc)
+        return bim_actions.add_wall(doc, a, b, inner, start_join=walls_core.find_joint(a, d, axes, inner.thickness),
+                                    end_join=walls_core.find_joint(b, d, axes, inner.thickness))
+
+    partition((4.0, 0.0, 0.0), (4.0, 7.0, 0.0))
+    partition((4.0, 3.5, 0.0), (10.0, 3.5, 0.0))
+    stub = partition((6.5, 3.5, 0.0), (6.5, 5.6, 0.0))
+    win.set_plan(True)
+    pump(300)
+    win.set_tool("select")
+    vp.zoom_box((np.array((3.6, 2.4, 0.0)), np.array((10.4, 7.4, 2.8))))       # (the stub's room and the next one)
+    vp.set_selection({stub})
+    pump(300)
+
+    def relations():
+        return sorted((d.key[0], round(d.value, 4)) for d, _at, _t in vp.temp_dims if d.kind == "relation")
+
+    half = inner.thickness / 2
+    axes_seen = relations()
+    by_axes = axes_seen == sorted([("wall_end", 1.4), ("wall_offset", 2.5), ("wall_offset", 3.5)])
+    bar = win.act_dims_faces in win.ribbon_actions() and win.act_dims_axes.isChecked()   # (Modificar | Paredes)
+    shot("361_cotas_eixos.png")
+    gap = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "wall_end"), None)
+    picked = turned = typed_shown = longer = undone = False
+    faces_seen = []
+    if gap is not None:
+        move(at(gap[1]), 3)
+        move(np.array(at(gap[1])) + vp._dim_frame(gap[0])[1] * np.array(8.0), 1)        # over its value
+        picked = win.tool._hover is gap[0]
+        move(at(gap[1]), 3)                                                            # on its line, under its value
+        click()
+        pump(300)
+        faces_seen = relations()
+        wide = outer.thickness / 2
+        turned = win.dim_faces and faces_seen == sorted([("wall_end", round(1.4 - wide, 4)),
+                                                         ("wall_offset", round(2.5 - 2 * half, 4)),
+                                                         ("wall_offset", round(3.5 - half - wide, 4))])
+        shot("361_cotas_faces.png")
+        gap = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "wall_end"), None)
+        if gap is not None:
+            move(np.array(at(gap[1])) + vp._dim_frame(gap[0])[1] * np.array(8.0), 3)
+            click()
+            pump(100)
+            type_text("0,9")
+            typed_shown = any(text == "[ 0,9 ]" for _d, _at, text in vp.temp_dims)
+            shot("361_cota_a_escrever.png")
+            undo_before, length_before = len(doc._undo), doc.ifc.wall_params(stub)[0]
+            key(Qt.Key.Key_Return)
+            pump(400)
+            grown = doc.ifc.wall_params(stub)[0] - length_before
+            longer = abs(grown - ((1.4 - outer.thickness / 2) - 0.9)) < 1e-6 and len(doc._undo) == undo_before + 1
+            key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+            pump(400)
+            undone = abs(doc.ifc.wall_params(stub)[0] - length_before) < 1e-6
+    saved = str(QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("cotas/face_a_face")) == "true"
+    vp.set_selection({stub})
+    win.act_canvas_dark.trigger()
+    pump(400)
+    shot("361_cotas_escuro.png")
+    win.act_canvas_dark.trigger()
+    pump(300)
+    win.act_dims_axes.trigger()
+    pump(200)
+    back = not win.dim_faces and relations() == axes_seen
+    win.set_dim_faces(kept)
+    win.set_plan(False)
+    check("cotas_relacoes_paredes", by_axes and bar and picked and turned and saved and typed_shown and longer
+          and undone and back,
+          "eixos={} barra={} realce={} faces={} {} guardado={} escrito={} mais_perto={} desfeito={} volta={}".format(
+              axes_seen, bar, picked, turned, faces_seen, saved, typed_shown, longer, undone, back))
+
+
+def symbol_styles_flow():
+    """0.360 — the symbols' generator: Anotar ▸ Símbolos… on the ribbon; a plan with a section; the window — a tab a
+    symbol, each its preview —: the section's head a square, no arrow, its line only at its ends: the preview drawn so;
+    OK: the project's graphic style has them (one undo step), the plan's section heads still there; Ctrl+Z: as before;
+    pictures of the window and the plan."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import graphic_styles as gs
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    doc.add_section(np.array((3.0, 2.0, 1.0)), np.array((0.0, 1.0, 0.0)))
+    win.set_plan(True)
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    on_ribbon = "symbol_styles" in ribbon.items_of("annotate") and "symbol_styles" in ribbon.items_of("view")
+    seen = {}
+
+    def work():
+        d = getattr(win, "_symbol_styles_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        seen["tabs"] = d.tabs.count()
+        for name, value in (("head", "square"), ("arrow", "none"), ("line", "ends")):
+            box = d.editors[("section", name)]
+            box.setCurrentIndex(box.findData(value))
+        seen["preview"] = d.previews["section"].style["head"] == "square"
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "360_simbolos.png"))
+        d.accept()
+
+    steps = len(doc._undo)
+    QtCore.QTimer.singleShot(100, work)
+    changed = win.symbol_styles()
+    pump(400)
+    style = gs.symbol(doc.graphic_style, "section")
+    kept = changed and (style["head"], style["arrow"], style["line"]) == ("square", "none", "ends") and \
+        len(doc._undo) == steps + 1
+    heads = sum(1 for _c, _r, ref in vp._mark_heads if ref[0] == "section")
+    shot("360_simbolos_planta.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = gs.symbol(doc.graphic_style, "section")["head"] == "circle"
+    win.set_plan(False)
+    check("gerador_simbolos", on_ribbon and seen.get("tabs") == 4 and seen.get("preview") and kept and heads == 2
+          and back, "fita={} separadores={} previa={} guardado={} cabecas={} desfeito={}".format(
+              on_ribbon, seen.get("tabs"), seen.get("preview"), kept, heads, back))
+
+
+def door_plan_flow():
+    """0.359 — a door in plan, as the owner asked: a room of 20 cm walls; the Door tool (90 cm): one placed, another with
+    Space pressed before its click — their hinges at opposite jambs (each one undo step); chosen alone:
+    two flip arrows with a grip each — the side's clicked: it opens to the other side; the hinge's: its hinges to the
+    other jamb —; the plan draws it by its pieces (each its own fill); the Caixilho Studio's «Planta…»: closed, the
+    swing dashed — the design so; a picture of the plan."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import caixilho_studio
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.set_plan(True)
+    pump(300)
+    vp.zoom_extents()
+    pump(200)
+    win.set_tool("door")
+    tool = win.tool
+    tool.set_spec(catalog.OPENING_BY_KEY["porta_90"])
+
+    hover = []
+
+    def place(x, space=False):
+        before = {o.id for o in doc.objects.values() if getattr(o, "ifc_class", "") == "IfcDoor"}
+        move(at(np.array((x, -0.05, 0.0))), 4)            # (in the wall, on its outer side)
+        pump(100)
+        if space:
+            key(Qt.Key.Key_Space)
+            move(at(np.array((x + 0.01, -0.05, 0.0))), 1)
+        args = getattr(vp, "_tdim_args", None)            # (0.404) Revit's dimensions to the walls on each side
+        hover.append(len(args[0]) if args else 0)
+        if len(hover) == 1:
+            shot("404_porta_a_inserir.png")
+        click()
+        pump(400)
+        made = sorted({o.id for o in doc.objects.values() if getattr(o, "ifc_class", "") == "IfcDoor"} - before)
+        found = doc.ifc.door_hinge(made[0]) if made else None
+        return (made[0] if made else None), (found is not None and found[0][0] > found[1][0])
+
+    first, first_right = place(1.5)
+    door, door_right = place(3.5, space=True)           # (Space: its hinges at the other jamb)
+    lo_x = first is not None and door is not None and first_right != door_right
+    # (0.404) it swings to the side the mouse was on (outside, y < 0), as previewed
+    swing = doc.plan_symbols([first]).get(first) if first else None
+    outward = swing is not None and float(np.asarray(swing).reshape(-1, 3)[:, 1].min()) < -0.5 and \
+        float(np.asarray(swing).reshape(-1, 3)[:, 1].max()) < 0.3
+    dims_shown = hover == [2, 2]
+    # (0.409) the snaps, inside the room: a jamb 0,10 from the wall across, then the middle of the room's side
+    move(at(np.array((0.1 + 0.10 + 0.45 + 0.02, 0.05, 0.0))), 4)
+    pump(150)
+    target = tool._target
+    gap = target is not None and target.snap == 0.10 and "0,10" in (vp.tip_text or "") and \
+        abs(float(target.frame.to_world((target.s, 0.0, 0.0))[0]) - 0.2) < 1e-6
+    shot("409_porta_a_10cm.png")
+    move(at(np.array((2.5 + 0.06, 0.05, 0.0))), 4)
+    pump(150)
+    target = tool._target
+    middle = target is not None and target.snap == "middle" and \
+        abs(float(target.frame.to_world((target.s + 0.45, 0.0, 0.0))[0]) - 2.5) < 1e-6
+    snaps = gap and middle
+    win.set_tool("window")
+    move(at(np.array((2.5, 4.05, 0.0))), 4)               # (a window: drawn in the plan too)
+    pump(150)
+    args = getattr(vp, "_tdim_args", None)
+    window_preview = bool(vp._fill.visible) and bool(args) and len(args[0]) == 2
+    shot("404_janela_a_inserir.png")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("door")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_selection({door} if door else set())
+    pump(300)
+    arrows = len(vp.grips[1]) == 2 and len(vp.grip_arrows) > 0
+    m_before = doc.ifc.placement(door).copy() if door else np.eye(4)
+    if arrows:
+        side_grip = vp.grips[1][1]
+        move(at(side_grip), 3)
+        click()
+        pump(400)
+    m_after = doc.ifc.placement(door) if door else np.eye(4)
+    sided = float(m_before[:3, 1] @ m_after[:3, 1]) < 0
+    h_before = doc.ifc.door_hinge(door) if door else None
+    vp.set_selection({door} if door else set())
+    pump(200)
+    if len(vp.grips[1]) == 2:
+        move(at(vp.grips[1][0]), 3)
+        click()
+        pump(400)
+    h_after = doc.ifc.door_hinge(door) if door else None
+    hinged = h_before is not None and h_after is not None and \
+        float(np.linalg.norm(np.asarray(h_before[0]) - np.asarray(h_after[0]))) > 0.5
+    vp.set_selection(set())
+    pump(300)
+    parts = vp._hatch_parts.get(door) if door else None
+    pieces = parts is not None and len(parts[0]) > 0
+    lo, hi = doc.get(door).mesh.bounds() if door else (np.zeros(3), np.ones(3))
+    vp.zoom_extents([door] if door else None)
+    pump(400)
+    shot("359_porta_planta.png")
+    from arqbim.core import joinery as jn
+    dialog = caixilho_studio.PlanOptions(win, jn.door("left"), 0.9)
+    dialog.shown.setCurrentIndex(dialog.shown.findData(False))
+    dialog.swing.setCurrentIndex(dialog.swing.findData("dashed"))
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        dialog.show()
+        pump(200)
+        dialog.grab().save(os.path.join(OUT, "359_porta_planta_opcoes.png"))
+    dialog._ok()
+    studio = dialog.design.plan_open is False and dialog.design.swing_style == "dashed"
+    win.set_plan(False)
+    check("porta_planta", door is not None and lo_x and arrows and sided and hinged and pieces and studio
+          and outward and dims_shown and window_preview and snaps,
+          "porta={} espaco_outro_aro={} setas={} lado={} dobradica={} pecas={} studio={} abre_para_o_rato={} "
+          "cotas={} janela={} gola_10={} meio={}".format(door is not None, lo_x, arrows, sided, hinged, pieces, studio,
+                                                         outward, hover, window_preview, gap, middle))
+
+
+def wall_corners_flow():
+    """0.352 — the outside corners of a room of plastered brick walls in the 3D view by materials («Cores
+    consistentes»): no brick on the outside — the walls' pieces' colours on the room's outer faces all the plaster's —,
+    and no seam drawn up a façade at a corner; a picture of it."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import material_looks
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win._fill_style_menu()
+    before = vp.vstyle.uid
+    next(a for a in win.style_button.menu().actions() if a.data() == "consistent").trigger()
+    pump(500)
+    seen = {}
+    for g in walls:
+        look = material_looks.look(doc.ifc, doc.get(g), (0.5, 0.5, 0.5), colours=True, patterns=False)
+        centres = look.corners.mean(axis=1)
+        side = np.abs(look.normals[:, 2]) < 0.5
+        out = side & ((np.abs(centres[:, 0] + 0.1) < 1e-3) | (np.abs(centres[:, 0] - 5.1) < 1e-3) |
+                      (np.abs(centres[:, 1] + 0.1) < 1e-3) | (np.abs(centres[:, 1] - 4.1) < 1e-3))
+        seen[g] = set(look.materials[out])
+    outside_plaster = len(set().union(*seen.values())) == 1
+    vp.set_selection(set())
+    win.set_view("iso")
+    vp.zoom_extents()
+    shot("352_esquinas_rebocadas.png")
+    next(a for a in win.style_button.menu().actions() if a.data() == before).trigger()
+    pump(300)
+    check("esquinas_rebocadas", vp.vstyle.uid == before and outside_plaster, "materiais_por_fora={}".format(
+        sorted(set().union(*seen.values()))))
+
+
+def model_import_flow():
+    """0.351 — Import ▸ 3D model: a room of four walls with a window written to SKP and OBJ, then a new project; on the
+    ribbon (Home ▸ Import and Manage ▸ Components). The SKP through the dialog — its summary, no unit asked (the file
+    says it), its size the room's (5,20 m long), to the millimetre — as a component «where I click»: in the library, the Place tool on with it. The
+    same as a component «where it is in the file»: a copy there, as tall as the walls, in its colours (the plaster's
+    among them). The OBJ: the dialog asks its unit and vertical (Y up, metres guessed); as a sketch: one sketch whose
+    faces are whole (fewer than its triangles); a file that is no 3D model: refused, said why."""
+    import shutil
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import cad3d_export, gltf_export, mesh_export
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"], bim_actions.wall_frame(doc, walls[0]),
+                            2.0, -1)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    folder = tempfile.mkdtemp(prefix="arqsynth_3d_in_")
+    elements, materials = gltf_export.gather(doc, list(doc.objects.values()))
+    every = np.concatenate([c.reshape(-1, 3) for e in elements for c in e["parts"].values()])
+    lowest = every.min(axis=0)
+    from arqbim.core.units import format_length
+    expected = " × ".join(format_length(round(float(v), 3), ",", 2, "m") for v in every.max(axis=0) - lowest)
+    skp, obj = os.path.join(folder, "sala.skp"), os.path.join(folder, "sala.obj")
+    cad3d_export.write_skp(skp, elements, materials)
+    _n, triangles = mesh_export.write_obj(obj, elements, materials)
+    doc.modified = False
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(300)
+    on_ribbon = "import_model" in ribbon.items_of("home") and "import_model" in ribbon.items_of("manage")
+    seen = {}
+
+    def answer(how, where=None, unit=None):
+        def work():
+            d = getattr(win, "_model3d_dialog", None)
+            if d is None or not d.isVisible():
+                QtCore.QTimer.singleShot(100, work)
+                return
+            w = d.widgets
+            seen.setdefault("asks_unit", []).append(w["unit"].isVisibleTo(d))
+            seen.setdefault("size", []).append(w["size"].text())
+            seen.setdefault("summary", []).append(w["about"].text())
+            w["how"].setCurrentIndex(w["how"].findData(how))
+            if where is not None:
+                w["where"].setCurrentIndex(w["where"].findData(where))
+            if unit is not None:
+                w["unit"].setCurrentIndex(w["unit"].findData(unit))
+            seen.setdefault("guessed", []).append((w["unit"].currentData(), w["up"].currentData()))
+            d.accept()
+        QtCore.QTimer.singleShot(100, work)
+
+    answer("component", "click")
+    first = win.import_model(skp)
+    pump(300)
+    placing = first is not None and win.tool is win.tools["place"] and win.tools["place"].type_guid == first and \
+        any(g == first for g, _n, _i, _p in doc.ifc.library()["components"])
+    win.set_tool("select")
+    answer("component", "file")
+    second = win.import_model(skp)
+    pump(300)
+    copies = doc.ifc.component_instances(second) if second else []
+    mesh = doc.get(copies[0]).mesh if copies else None
+    lo, hi = mesh.bounds() if mesh is not None else (np.zeros(3), np.zeros(3))
+    plaster = np.array(catalog.MATERIALS["reboco"].color, dtype=float)
+    coloured = mesh is not None and mesh.colors is not None and \
+        bool(np.any(np.all(np.abs(np.asarray(mesh.colors, dtype=float) - plaster) < 0.01, axis=1)))
+    in_place = len(copies) == 1 and abs(float(hi[2] - lo[2]) - top) < 0.01 and \
+        float(np.abs(lo - lowest).max()) < 0.01
+    vp.set_selection(set())
+    win.set_view("iso")
+    vp.zoom_extents()
+    shot("351_componente_importado.png")
+    bim_actions.delete(doc, copies)
+    answer("sketch")
+    sketch = win.import_model(obj)
+    pump(300)
+    vp.set_selection(set())
+    vp.zoom_extents()
+    shot("351_esboco_importado.png")
+    s = doc.get(sketch) if sketch is not None else None
+    whole = s is not None and not s.is_bim and 0 < len(s.mesh.faces) < triangles
+    asked = seen.get("asks_unit", []) == [False, False, True] and seen.get("guessed", [])[-1:] == [("m", "y")]
+    sized = seen.get("size", [""])[0] == expected and expected.startswith("5,20 m × ")
+    junk = os.path.join(folder, "nada.obj")
+    with open(junk, "w", encoding="utf-8") as fh:
+        fh.write("# nada\n")
+    refused = win.import_model(junk) is None and "nada.obj" in win.last_message
+    shutil.rmtree(folder, ignore_errors=True)
+    check("importar_modelo_3d", on_ribbon and placing and in_place and coloured and whole and asked and sized
+          and refused, "fita={} colocar={} no_sitio={} cores={} esboco={} unidade={} tamanho={!r} recusou={} {}".format(
+              on_ribbon, placing, in_place, coloured, whole, asked, seen.get("size", [""])[0], refused,
+              seen.get("guessed")))
+
+
+def masonry_type_flow():
+    """0.346 — masonry by wall type: a house of four load-bearing 20 cm walls on strip footings with a slab; Manage ▸
+    Types, the 20 cm wall: «Masonry for the calculation (EC6)» shown, its own off (the project's greyed); ticked —
+    concrete units, group 1, fb 15, M10 — and applied: kept in its IFC type; a slab type: no such box; EC2 / EC6
+    check: the walls' notes «blocos de betão do grupo 1 (a do tipo)», the summary's fk the type's (all four of it)."""
+    from arqbim.core import ec6
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    import ifcopenshell.util.element as ue_mt
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    strip = catalog.BY_KEY["sapata_corrida_50"]
+    for g in walls:
+        bim_actions.set_property(doc, g, "Pset_WallCommon", "LoadBearing", True)
+        bim_actions.add_footing(doc, bim_actions.footing_place(doc, g, strip), strip, under=g)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("parede_alv_20")
+        seen["shown"] = d.masonry_box.isVisibleTo(d) and not d.masonry_own.isChecked() \
+            and not d.masonry_fb.isEnabled()
+        d.masonry_own.setChecked(True)
+        seen["enabled"] = d.masonry_fb.isEnabled()
+        d.masonry_unit.setCurrentIndex(d.masonry_unit.findData("concrete"))
+        d.masonry_group.setCurrentIndex(d.masonry_group.findData("1"))
+        d.masonry_fb.setValue(15.0)
+        d.masonry_mortar.setCurrentIndex(d.masonry_mortar.findData("M10"))
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "346_alvenaria_do_tipo.png"))
+        seen["applied"] = d.apply_changes()
+        d.kind.setCurrentIndex(d.kind.findData("slab"))
+        pump(100)
+        seen["slab_hidden"] = not d.masonry_box.isVisibleTo(d)
+        d.reject()
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        names = {doc.get(g).name for g in walls}
+        rows = [d.table.item(r, 0).text() for r in range(d.table.rowCount())]
+        row = next((k for k, n in enumerate(rows) if n in names), None)
+        if row is not None:
+            d.table.selectRow(row)
+            pump(100)
+        seen["notes"] = d.details.toPlainText()
+        seen["summary"] = d.summary.text()
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_types("wall")
+    pump(300)
+    type_ = ue_mt.get_type(doc.ifc.by_guid(walls[0]))
+    kept = ec6.decode(doc.ifc._params(type_).get("Alvenaria")) == ("concrete", "1", 15.0, "M10")
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(300)
+    notes = seen.get("notes", "")
+    fk = "{:.2f}".format(0.55 * 15.0 ** 0.7 * 10.0 ** 0.3).replace(".", ",")
+    told = "blocos de betão do grupo 1 (a do tipo)" in notes and "M10" in notes and "fk = " + fk in seen.get(
+        "summary", "")
+    check("alvenaria_por_tipo", seen.get("shown") and seen.get("enabled") and kept and seen.get("slab_hidden")
+          and told, "visto={} ativo={} guardado={} laje={} notas={!r} resumo={!r}".format(
+              seen.get("shown"), seen.get("enabled"), kept, seen.get("slab_hidden"), notes[:240],
+              seen.get("summary", "")[-120:]))
+
+
+def facade_walls_flow():
+    """0.345 — the façade walls out of their plane by the wind: a house of four 20 cm masonry walls (not load-bearing)
+    with a door and two windows, a slab on them, and a garden wall standing alone; EC2 / EC6 check: a line for each of
+    the five — the house's OK by their arch under the slab, the garden wall a failure, standing free —; the notes of
+    the wall with the openings: the masonry in bending, the wind with their share, the panel held on its four edges,
+    the vertical arch; the calculation report's line of the façades."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import structure_report
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    for at in (0.8, 4.2):
+        bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"],
+                                bim_actions.wall_frame(doc, walls[0]), at, -1)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_12"])
+    garden = bim_actions.add_wall(doc, np.array((10.0, 0.0, 0.0)), np.array((14.0, 0.0, 0.0)),
+                                  catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+    names = {g: doc.get(g).name for g in walls + [garden]}
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = [[d.table.item(r, c).text() if d.table.item(r, c) else "" for c in range(6)]
+                for r in range(d.table.rowCount())]
+        seen["rows"] = {r[0]: r for r in rows if r[0] in names.values()}
+        row = next((k for k, r in enumerate(rows) if r[0] == names[walls[0]]), None)
+        if row is not None:
+            d.table.selectRow(row)
+            pump(100)
+        seen["notes"] = d.details.toPlainText()
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.resize(1300, 660)
+            pump(200)
+            d.grab().save(os.path.join(OUT, "345_fachadas_ec6.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(300)
+    rows = seen.get("rows", {})
+    house = [rows.get(names[g]) for g in walls]
+    standing = rows.get(names[garden])
+    listed = len(rows) == 5 and all(r is not None and r[1] == "OK" and r[4] == "—" and "arco" in r[5] for r in house) \
+        and standing is not None and standing[1] == "Falha" and "consola" in standing[5]
+    notes = seen.get("notes", "")
+    told = all(w in notes for w in ("alvenaria à flexão", "vento na fachada", "janelas e portas", "nos quatro bordos",
+                                    "efeito de arco vertical"))
+    page = structure_report.report_html(bim_actions.report_data(doc))
+    check("paredes_fachada_ec6", listed and told and "Paredes de fachada à flexão" in page,
+          "linhas={} notas={!r}".format(rows, notes[:300]))
+
+
+def theme_flow():
+    """0.338 — the dark theme: View ▸ Theme ▸ «Tema escuro» on the ribbon: the Qt windows' palette dark, the
+    header, the ribbon, the contextual bar and the modules' bar in the prototype's colours, the ribbon's icons in the
+    light ink (another drawing than the light theme's), the balloon dark; kept on this computer; «Tema claro»: all as
+    it was."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon, theme
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.set_discipline("view")
+    pump(300)
+    on_ribbon = all(n in ribbon.items_of("view") for n in ("theme_light", "theme_dark"))
+    light_icon = win.ribbon_item("wall").icon().pixmap(16, 16).toImage()
+
+    def wall_button_icon():
+        """(the ribbon's large Wall button: since the minimalist interface its own drawing, not the action's icon)"""
+        found = next((b for b in win.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == "wall"), None)
+        return found.icon().pixmap(30, 30).toImage() if found is not None else None
+    win.set_discipline("architecture")
+    pump(300)
+    light_button = wall_button_icon()
+    win.set_discipline("view")
+    pump(300)
+    button = next((b for b in win.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == "theme_dark"), None)
+    if button is not None:
+        button.click()
+    else:
+        win.act_theme_dark.trigger()
+    pump(500)
+    app = QtWidgets.QApplication.instance()
+    dark = theme.NAME == "dark" and app.palette().window().color().name() == "#17191c" \
+        and app.palette().base().color().name() == "#15171a" and win.act_theme_dark.isChecked()
+    styled = "#111316" in win.header.styleSheet() and "#1b1e22" in win.ribbon_bar.styleSheet() \
+        and "#17191c" in win.context_bar.styleSheet() and "#1c1f23" in win.module_bar.styleSheet()
+    dark_icon = win.ribbon_item("wall").icon().pixmap(16, 16).toImage()
+    inked = dark_icon != light_icon
+    said = "Tema escuro" in win.last_message and win.notice.isVisible()
+    kept = QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(theme.KEY) == "dark"
+    win.set_discipline("architecture")
+    pump(300)
+    dark_button = wall_button_icon()              # (the ribbon's own icons drawn again in the dark theme's colours)
+    ribbon_dark = light_button is not None and dark_button is not None and dark_button != light_button
+    win.open_view("3d", None)
+    pump(300)
+    shot("338_tema_escuro.png")
+    win.set_theme("light")
+    pump(400)
+    back = theme.NAME == "light" and app.palette().window().color().name() == "#efefef" \
+        and "#1f2a37" in win.header.styleSheet() and "#f6f7f9" in win.ribbon_bar.styleSheet() \
+        and win.ribbon_item("wall").icon().pixmap(16, 16).toImage() == light_icon \
+        and QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(theme.KEY) == "light"
+    check("tema_escuro", on_ribbon and dark and styled and inked and said and kept and ribbon_dark and back,
+          "fita={} escuro={} estilos={} icones={} dito={} guardado={} fita_escura={} de_volta={}".format(
+              on_ribbon, dark, styled, inked, said, kept, ribbon_dark, back))
+
+
+def _luminance(c):
+    def ch(v):
+        v = v / 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * ch(c.red()) + 0.7152 * ch(c.green()) + 0.0722 * ch(c.blue())
+
+
+def contrast(a, b):
+    """WCAG's contrast ratio of two QColors (1 to 21)."""
+    la, lb = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _text_contrast(image, rect):
+    """(0.340) A text's contrast with its ground, read off the picture: its ground the commonest colour in its box,
+    its ink the pixels not of its ground (their 90th percentile); 1 when none are (nothing to be seen)."""
+    rect = rect.intersected(image.rect())
+    if rect.width() < 6 or rect.height() < 6:
+        return None
+    sub = image.copy(rect).convertToFormat(QtGui.QImage.Format.Format_RGB32)
+    a = np.frombuffer(bytes(sub.constBits()), dtype=np.uint8).reshape(sub.height(), sub.bytesPerLine())
+    px = a[:, :sub.width() * 4].reshape(-1, 4)[:, :3].astype(np.float64) / 255.0       # B, G, R
+    lin = np.where(px <= 0.03928, px / 12.92, ((px + 0.055) / 1.055) ** 2.4)
+    lum = 0.0722 * lin[:, 0] + 0.7152 * lin[:, 1] + 0.2126 * lin[:, 2]
+    keys, counts = np.unique(np.round(lum, 3), return_counts=True)
+    ground = keys[np.argmax(counts)]
+    ratio = (np.maximum(lum, ground) + 0.05) / (np.minimum(lum, ground) + 0.05)
+    ink = ratio[ratio > 1.1]
+    return 1.0 if ink.size < 4 else float(np.percentile(ink, 90))
+
+
+def low_contrast(widget, least=3.0):
+    """(0.339; 0.340: read off the picture) The texts of a window that read badly — its labels', check boxes', radio
+    buttons', text buttons' (not those switched off: dim on purpose) —: [(text, ratio)] under `least`."""
+    image = widget.grab().toImage()
+    bad = []
+    for w in widget.findChildren(QtWidgets.QWidget):
+        if not w.isVisibleTo(widget) or not w.isEnabled():
+            continue
+        if isinstance(w, QtWidgets.QLabel):
+            if w.pixmap() is not None and not w.pixmap().isNull():
+                continue
+        elif isinstance(w, QtWidgets.QPushButton):
+            if not w.icon().isNull():
+                continue
+        elif isinstance(w, QtWidgets.QToolButton):
+            if w.toolButtonStyle() != Qt.ToolButtonStyle.ToolButtonTextOnly and not w.icon().isNull():
+                continue
+        elif not isinstance(w, (QtWidgets.QCheckBox, QtWidgets.QRadioButton)):
+            continue
+        text = w.text().strip() if hasattr(w, "text") else ""
+        if not text or text.startswith("<"):
+            continue
+        part = w.visibleRegion().boundingRect()                # (scrolled out of sight: not on the picture)
+        if part.width() < 8 or part.height() < 8:
+            continue
+        box = QtCore.QRect(w.mapTo(widget, part.topLeft()), part.size())
+        if isinstance(w, (QtWidgets.QCheckBox, QtWidgets.QRadioButton)):
+            box.setLeft(box.left() + 22)                       # (its box, left of its text)
+        elif isinstance(w, (QtWidgets.QPushButton, QtWidgets.QToolButton)):
+            box = box.adjusted(5, 5, -5, -5)                   # (inside its frame)
+        ratio = _text_contrast(image, box)
+        if ratio is not None and ratio < least:
+            bad.append((text[:40], round(ratio, 2)))
+    return bad
+
+
+def theme_dialogs_flow():
+    """0.339 — the windows over the main one in the dark theme: the Caixilho Studio in the prototype's dark colours,
+    the materials', the types' and the actions' windows dark — every text in them readable (contrast 3 or more against
+    what is under it); the theme light again: the studio light."""
+    from arqbim.ui import caixilho_studio as cs
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.set_theme("dark")
+    pump(300)
+    seen = {"window": (None, low_contrast(win), None)}         # (0.340: the main window's own, restyled)
+
+    def look(attr, name, shot_name):
+        def go():
+            d = getattr(win, attr, None)
+            if d is None or not d.isVisible():
+                QtCore.QTimer.singleShot(100, go)
+                return
+            pump(200)
+            seen[name] = (d.palette().window().color().name(), low_contrast(d), cs.BG)
+            if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+                d.grab().save(os.path.join(OUT, shot_name))
+            d.reject()
+        return go
+
+    QtCore.QTimer.singleShot(100, look("_studio", "studio", "339_caixilho_escuro.png"))
+    win.act_caixilho.trigger()
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("_material_dialog", "materials", "339_materiais_escuro.png"))
+    win.edit_materials()
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("_type_dialog", "types", "339_tipos_escuro.png"))
+    win.edit_types("wall")
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("_actions_dialog", "actions", "339_acoes_escuro.png"))
+    win.structure_actions()
+    pump(300)
+    win.set_theme("light")
+    pump(300)
+    QtCore.QTimer.singleShot(100, look("_studio", "studio_light", "339_caixilho_claro.png"))
+    win.act_caixilho.trigger()
+    pump(300)
+    dark = all(seen.get(n, ("",))[0] == "#17191c" for n in ("materials", "types", "actions")) \
+        and seen.get("studio", (None, None, ""))[2] == "#17191c"
+    readable = all(not seen.get(n, (None, [None]))[1] for n in ("window", "studio", "materials", "types", "actions"))
+    light = seen.get("studio_light", (None, None, ""))[2] == "#ffffff"
+    check("janelas_escuras", dark and readable and light,
+          "escuras={} legiveis={} claro={} vistos={}".format(dark, readable, light, seen))
+
+
+def render_flow():
+    """0.343 — Render ▸ Realistic render: a house of four walls (a door, two windows, a slab) in the 3D view; a small
+    draft render: its window shows the picture getting finer, the render runs apart (the window answers meanwhile),
+    done — seen from the view's camera: the slab's top light where the view shows it, the ground darker —; saved as
+    PNG; Stop on a second one ends its process at once, its picture so far kept."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    for at in (0.8, 4.2):
+        bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["janela_120"],
+                                bim_actions.wall_frame(doc, walls[0]), at, -1)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_12"])
+    win.open_view("3d", None)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    on_ribbon = "render" in ribbon.items_of("render")
+    window = win.render_realistic(width=480, quality="draft", samples=8)
+    started = window is not None and window.running() and "Render realista" in win.last_message
+    answering = 0
+    end = time.time() + 180
+    while window is not None and not window.finished() and time.time() < end:
+        pump(200)
+        answering += 1                                # (the window's loop turned: the program answers)
+    pump(500)
+    done = window is not None and window.finished() and not window.running()
+    image = window.image.convertToFormat(QtGui.QImage.Format.Format_RGB32) if done else None
+
+    def seen(p):                                      # (the render's colour where the view shows a point)
+        if image is None:
+            return QtGui.QColor()
+        x, y = vp.project(np.asarray(p, dtype=float))
+        k = image.width() / vp.logical_size()[0]
+        return QtGui.QColor(image.pixel(min(max(int(x * k), 0), image.width() - 1),
+                                        min(max(int(y * k), 0), image.height() - 1)))
+    roof, ground = seen((3.0, 2.0, top + 0.12)), seen((8.5, -2.5, 0.0))    # (the ground in front of the house)
+    camera = roof.lightness() > ground.lightness() + 40       # (the slab's top where the view shows it: light)
+    path = window.save(os.path.join(OUT, "343_render.png")) if done else None
+    saved = path is not None and os.path.exists(path)
+    if window is not None:
+        window.close()
+        pump(200)
+        saved = saved and not os.path.exists(os.path.dirname(window.picture))   # (0.347: its temporary folder gone)
+    second = win.render_realistic(width=480, quality="high")
+    pump(1500)
+    second.stop()
+    pump(800)
+    stopped = second is not None and not second.running() and second.stopped
+    if second is not None:
+        second.close()
+    check("render_realista", on_ribbon and started and answering > 3 and done and camera and saved and stopped,
+          "fita={} comecou={} voltas={} feito={} laje={} chao={} guardado={} parado={} estado={}".format(
+              on_ribbon, started, answering, done, roof.name(), ground.name(), saved, stopped,
+              window.state if window is not None else None))
+
+
+def render_setup_flow():
+    """0.343 — the render's finishes, lights and sun: in the materials window the plaster given a glossy finish (kept
+    in the IFC); a light in the ceiling of a house of four walls, the site in Lisbon; Render ▸ Realistic render…
+    asked: the sun by the site on a summer night at eleven — the window says it is under the horizon —, the draft
+    quality, exposure +1: the scene it renders lit by the lights at night, the light's face shining, the plaster
+    glossy, exposed so; its render stopped."""
+    from arqbim.ifc import catalog, material_graphics
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import project_types, render_scene
+    from arqbim.ui import render_dialog
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_12"])
+    bim_actions.add_light(doc, (3.0, 2.0), "panel")
+    bim_actions.set_site_location(doc, 38.72, -9.14)
+    pump(200)
+    seen = {}
+
+    def materials():
+        d = getattr(win, "_material_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, materials)
+            return
+        d.select("reboco")
+        seen["combo"] = d.finish.count() == 1 + len(render_scene.FINISHES) and d.finish.currentData() == ""
+        d.finish.setCurrentIndex(d.finish.findData("glossy"))
+        seen["applied"] = d.apply_changes()
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, materials)
+    win.edit_materials()
+    pump(200)
+    plaster = catalog.MATERIALS["reboco"]
+    glossy = plaster.finish == "glossy" and \
+        material_graphics.read_finish(project_types.find_material(doc.ifc, plaster)) == "glossy"
+    win.open_view("3d", None)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+
+    def setup():
+        d = getattr(win, "_render_setup", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, setup)
+            return
+        seen["site_on"] = d.sun_from.model().item(1).isEnabled()
+        d.sun_from.setCurrentIndex(d.sun_from.findData("site"))
+        d.when.setDateTime(QtCore.QDateTime(QtCore.QDate(2026, 6, 21), QtCore.QTime(23, 0)))
+        d.zone.setValue(1.0)
+        seen["down"] = d.sun_text.text()
+        d.lighting.setCurrentIndex(d.lighting.findData("sun"))
+        d.quality.setCurrentIndex(d.quality.findData("draft"))
+        d.exposure.setValue(1.0)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "343_render_preparar.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, setup)
+    window = win.render_realistic()
+    render_dialog.RenderSetup.last = dict(render_dialog.RenderSetup.last, sun="style", exposure=0.0,
+                                          lighting="sun_lights", quality="normal")
+    scene = render_scene.RenderScene.load(window.command[3]) if window is not None else None
+    if window is not None:
+        window.stop()
+        pump(500)
+        window.close()
+    night = scene is not None and scene.lighting == "night" and scene.sun[2] < 0.0 and scene.exposure == 1.0
+    lit = scene is not None and len(scene.lights) == 1 and scene.lights[0][0] > 1000.0
+    shiny = scene is not None and any(f == "glossy" and np.allclose(c, plaster.color, atol=0.01)
+                                      for f, c, _t in scene.groups)
+    check("render_acabamentos_luzes", seen.get("combo") and seen.get("applied") == "reboco" and glossy
+          and seen.get("site_on") and "horizonte" in seen.get("down", "") and night and lit and shiny,
+          "combo={} aplicado={} brilhante={} terreno={} sol='{}' noite={} luz={} reboco={}".format(
+              seen.get("combo"), seen.get("applied"), glossy, seen.get("site_on"), seen.get("down"), night, lit,
+              shiny))
+
+
+def concrete_walls_flow():
+    """0.342 — reinforced concrete walls by Eurocode 2: four 20 cm concrete walls (the new type: load-bearing as made)
+    on strip footings, a slab on them, a door; EC2 / EC6 check: each wall OK with its bars («vert. Ø… · horiz. Ø…»), its
+    notes; «Put the reinforcement in the model»: the walls' bars made (vertical, horizontal, round the door) — the
+    window says they are the model's —; seen in x-ray."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_betao_20"])
+    strip = catalog.BY_KEY["sapata_corrida_50"]
+    for g in walls:
+        bim_actions.add_footing(doc, bim_actions.footing_place(doc, g, strip), strip, under=g)
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.0, -1)
+    top = float(doc.get(walls[0]).mesh.bounds()[1][2])
+    bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    names = {doc.get(g).name for g in walls}
+    seen = {}
+
+    def look():
+        d = getattr(win, "_design_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look)
+            return
+        rows = [[d.table.item(r, c).text() if d.table.item(r, c) else "" for c in range(6)]
+                for r in range(d.table.rowCount())]
+        seen["walls"] = [r for r in rows if r[0] in names]
+        row = next((k for k, r in enumerate(rows) if r[0] in names), None)
+        if row is not None:
+            d.table.selectRow(row)
+            pump(100)
+        seen["notes"] = d.details.toPlainText()
+        d.make_button.click()
+        pump(400)
+        rows = [[d.table.item(r, c).text() if d.table.item(r, c) else "" for c in range(6)]
+                for r in range(d.table.rowCount())]
+        seen["model"] = sorted({r[4] for r in rows if r[0] in names})
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.resize(1200, 640)
+            pump(200)
+            d.grab().save(os.path.join(OUT, "342_paredes_betao.png"))
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, look)
+    win.verify_structure()
+    pump(400)
+    lines = seen.get("walls", [])
+    listed = len(lines) == 4 and all(r[1] == "OK" and r[3].startswith("vert. Ø") for r in lines)
+    notes = seen.get("notes", "")
+    told = all(w in notes for w in ("armadura vertical", "armadura horizontal", "compressão no topo"))
+    roles = {r["role"] for r in doc.ifc.rebar_rows() if r["host"] in walls}
+    made = roles == {"wall_v", "wall_h", "wall_trim"} and seen.get("model") == ["estas"]
+    win.open_view("3d", None)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    vp.set_look("xray", True, True, False)
+    pump(500)
+    shot("342_paredes_armadas.png")
+    vp.set_look("shaded", True, True, False)
+    pump(200)
+    check("paredes_betao_ec2", listed and told and made,
+          "linhas={} notas={!r} funcoes={} modelo={}".format(lines, notes[:160], sorted(roles), seen.get("model")))
+
+
+def lightest(p, r=3):
+    """(0.341) The lightest colour a few pixels around the world point p (a cut hatched light on the dark views)."""
+    vp.redraw()
+    pump(150)
+    image = vp.snapshot()
+    h, w = image.shape[:2]
+    lw, lh = vp.logical_size()
+    x, y = vp.project(p)
+    row, col = min(int(y * h / lh), h - 1), min(int(x * w / lw), w - 1)
+    patch = image[max(row - r, 0):row + r + 1, max(col - r, 0):col + r + 1, :3].reshape(-1, 3).astype(int)
+    c = patch[np.argmax(patch.sum(axis=1))]
+    return int(c[0]), int(c[1]), int(c[2])
+
+
+def dark_views_flow():
+    """0.341 — View ▸ Theme ▸ «Vistas escuras» (apart from the interface's theme): a room of four walls in a plan —
+    its background dark, the walls' cut light on it (dark on the light views before); kept on this computer, said; the
+    3D view's background dark too, its walls in their own light colour (the model as on paper); the view's image on
+    white still on paper (a white corner) and the views dark after it; «Vistas escuras» again: light, as before."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.render import canvas
+    from arqbim.ui import ribbon, theme
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    level = vp.cut_level()
+    cut_at, out_at = np.array((3.0, 0.0, level)), np.array((3.0, -1.5, level))
+    before = (darkest(cut_at), pixel(out_at))
+    win.set_discipline("view")
+    pump(200)
+    on_ribbon = "canvas_dark" in ribbon.items_of("view")
+    button = next((b for b in win.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == "canvas_dark"), None)
+    if button is not None:
+        button.click()
+    else:
+        win.act_canvas_dark.trigger()
+    pump(500)
+    chosen = canvas.DARK and win.act_canvas_dark.isChecked() and theme.dark_views() \
+        and "Vistas escuras" in win.last_message and theme.NAME == "light"
+    after = (lightest(cut_at), pixel(out_at))
+    light = before[1][0] > 200 and sum(before[0]) < 300               # (light views: a light ground, the cut dark)
+    dark = sum(after[1]) < 3 * 70 and sum(after[0]) > sum(after[1]) + 3 * 80
+    shot("341_planta_escura.png")
+    path = win.export_image(os.path.join(OUT, "341_planta_em_papel.png"), 800, "white")
+    paper = False
+    if path:
+        img = QtGui.QImage(path).convertToFormat(QtGui.QImage.Format.Format_RGB32)
+        paper = QtGui.QColor(img.pixel(3, 3)).lightness() > 245
+    still = canvas.DARK and sum(pixel(out_at)) < 3 * 70
+    win.open_view("3d", None)
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("341_3d_escura.png")
+    sky = vp.snapshot()[3, 3, :3].astype(int)
+    wall_3d = pixel(np.array((3.0, -0.1, 1.4)))                      # (the south wall's face: its own light colour)
+    dark_3d = int(sky.sum()) < 3 * 80 and sum(wall_3d) > 3 * 150
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    win.act_canvas_dark.trigger()
+    pump(500)
+    back = not canvas.DARK and not theme.dark_views() and pixel(out_at)[0] > 200 and sum(darkest(cut_at)) < 300
+    win.set_discipline("architecture")
+    check("vistas_escuras", on_ribbon and chosen and light and dark and paper and still and dark_3d and back,
+          "fita={} escolhido={} antes={} depois={} claro={} escuro={} papel={} continua={} 3d={} ({}, parede {}) "
+          "de_volta={}".format(on_ribbon, chosen, before, after, light, dark, paper, still, dark_3d, sky.tolist(),
+                               wall_3d, back))
+
+
+def copy_array_flow():
+    """0.326 — Copy and Array on the ribbon (Modelling ▸ Modify), and the clipboard. A 4 m wall seen from the top:
+    «Copiar» — the Move tool copying from the start —, a base point, the mouse down, 3 typed: a copy 3 m away, the
+    original where it was. «Matriz» with 4 copies on the bar: 2 typed — four copies at 2, 4, 6 and 8 m. Ctrl+C on the
+    wall, Ctrl+V: the copy on the cursor from the wall's corner, a click puts it there. A second storey, Ctrl+Shift+V:
+    the wall on it, in the same place."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_view("top", center=(2.0, -8.0, 0.0), radius=11.0)
+    pump(500)
+    on_ribbon = all(n in ribbon.items_of("modeling") for n in ("copy", "array", "copy_clip", "paste", "paste_storeys"))
+
+    def walls_y():
+        return sorted(round(float(o.mesh.transformed(o.matrix).verts[:, 1].mean()), 2)
+                      for o in objects() if o.is_bim and o.ifc_class == "IfcWall")
+
+    def copy_down(distance):
+        move(at((1.0, -0.5, 0.0)), 3)
+        click()
+        pump(150)
+        move(at((1.0, -2.5, 0.0)), 4)
+        pump(150)
+        type_text(distance)
+        key(Qt.Key.Key_Return)
+        pump(300)
+
+    vp.set_selection({wall})
+    win.tool_actions["copy"].trigger()
+    pump(200)
+    copying = win.tool.name == "copy" and win.tool.copy
+    copy_down("3")
+    copied = walls_y() == [-3.0, 0.0]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    vp.set_selection({wall})
+    win.tool_actions["array"].trigger()
+    pump(200)
+    win.tool.set_option("count", 4)
+    copy_down("2")
+    arrayed = walls_y() == [-8.0, -6.0, -4.0, -2.0, 0.0]
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    key(Qt.Key.Key_C, Qt.KeyboardModifier.ControlModifier)
+    clip = win._clipboard is not None and win._clipboard[0] == [wall] and "copiado" in win.last_message
+    key(Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    pasting = win.tool.name == "copy" and win.tool._base is not None
+    move(at((0.0, -5.0, 0.0)), 4)
+    pump(150)
+    click()
+    pump(300)
+    pasted = len(walls_y()) == 2 and min(walls_y()) < -4.0
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    upper = bim_actions.add_storey(doc, "Piso 1", 3.0)
+    real_dialog = win._storeys_dialog
+    win._storeys_dialog = lambda exclude: [upper]          # (the storeys' window would wait for a person)
+    try:
+        key(Qt.Key.Key_V, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        pump(300)
+    finally:
+        win._storeys_dialog = real_dialog
+    on_upper = any(o.is_bim and o.ifc_class == "IfcWall" and o.storey == upper for o in objects())
+    shot("326_copiar_e_matriz.png")
+    win.set_tool("select")
+    vp.set_selection(set())
+    check("copiar_matriz_e_colar", on_ribbon and copying and copied and arrayed and clip and pasting and pasted
+          and on_upper,
+          "fita={} copiar={}/{} matriz={} ctrl_c={} ctrl_v={}/{} pavimentos={} paredes={}".format(
+              on_ribbon, copying, copied, arrayed, clip, pasting, pasted, on_upper, walls_y()))
+
+
+def small_fixes_flow():
+    """0.325 — What the sweep of the ribbon found. Delete with nothing selected asks what to delete (as Revit's):
+    a wall clicked, Delete again — gone; Pavimento acima on the only storey says so, with «Novo pavimento»; «Sapatas
+    sob pilares» with no column says there are none, with the Column tool; the access ramp's step with no terrain
+    names the ramp (it said «Plataforma»)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection(set())
+    vp.set_view("iso", center=(2.5, 0.0, 1.4), radius=4.0)
+    pump(500)
+    n = win.notice
+    key(Qt.Key.Key_Delete)
+    pump(200)
+    asked = win.pick_request is not None and "apagar" in n.shown_text() and doc.ifc.count("IfcWall") == 1
+    move(near((2.5, -0.1, 1.0)), 3)
+    pump(150)
+    click()
+    pump(200)
+    picked = vp.selection == {wall}
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    deleted = doc.ifc.count("IfcWall") == 0 and win.pick_request is None
+    win.act_storey_up.trigger()
+    pump(150)
+    top = "mais alto" in win.last_message and n.action_button.text() == "Novo pavimento"
+    win.act_footings_under.trigger()
+    pump(150)
+    columns = "Não há pilares" in win.last_message and n.action_button.text() == "Pilar"
+    win.tool_actions["terrain_ramp"].trigger()
+    pump(150)
+    ramp = win.hint_label.text().startswith("Rampa de acesso") and n.action_button.text() == "Terreno por pontos"
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    check("pequenos_defeitos_da_varredura", asked and picked and deleted and top and columns and ramp,
+          "apagar_pede={} escolhida={} apagada={} mais_alto={} sem_pilares={} rampa={} balao={!r}".format(
+              asked, picked, deleted, top, columns, ramp, n.shown_text()[:60]))
+
+
+def missing_step_flow():
+    """0.324 — What is missing, with a button to do it. A new project: «Pilares na grelha» with no grid — the balloon's
+    button «Gerar eixos…», clicked: the balloon goes and the grid's window is asked for; «Proposta elétrica» with no
+    room — «Ambiente» (0.357; «Sala» before), clicked: the Room tool; the Platform tool with no terrain — its step and
+    «Terreno por pontos»,
+    clicked: the Terrain tool; «Calibrar imagem» with no image — «Importar imagem de fundo…»; a refusal with nothing to offer has
+    no button."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection(set())
+    n = win.notice
+    asked = []
+    win.generate_grid = lambda: asked.append("grid")             # (its window would wait for a person)
+    win.import_image = lambda: asked.append("image")
+    try:
+        win.act_columns_on_grid.trigger()
+        pump(200)
+        grid_button = n.action_button.isVisible() and n.action_button.text() == "Gerar eixos…" and n.kind == "warning"
+        inside = n.rect().contains(n.action_button.geometry())
+        shot("324_botao_gerar_eixos.png")
+        n.action_button.click()
+        pump(200)
+        grid = asked == ["grid"] and not n.isVisible()
+        win.act_electrical_proposal.trigger()
+        pump(200)
+        room_button = n.action_button.text() == "Ambiente"
+        n.action_button.click()
+        pump(200)
+        room = win.tool.name == "room"
+        win.tool_actions["platform"].trigger()
+        pump(200)
+        platform_button = (n.kind == "hint" and n.action_button.isVisible()
+                           and n.action_button.text() == "Terreno por pontos")
+        n.action_button.click()
+        pump(200)
+        terrain = win.tool.name == "terrain"
+        win.tool_actions["calibrate_image"].trigger()
+        pump(200)
+        image_button = n.action_button.isVisible() and n.action_button.text().startswith("Importar imagem")
+        n.action_button.click()
+        pump(200)
+        image = asked == ["grid", "image"]
+        key(Qt.Key.Key_Escape)
+        win.set_tool("select")
+        win.act_remove_proposal.trigger()                          # (nothing to remove: nothing to offer)
+        pump(200)
+        plain = n.kind == "warning" and not n.action_button.isVisible()
+    finally:
+        del win.generate_grid, win.import_image
+    win.set_tool("select")
+    check("o_que_falta_com_um_botao", grid_button and inside and grid and room_button and room and platform_button
+          and terrain and image_button and image and plain,
+          "eixos={}/{}/{} sala={}/{} terreno={}/{} imagem={}/{} sem_botao={} pedidos={}".format(
+              grid_button, inside, grid, room_button, room, platform_button, terrain, image_button, image, plain,
+              asked))
+
+
+def view_tools_flow():
+    """0.323 — Cota, Desenho 2D and Pormenor chosen in the 3D view open the active storey's plan by themselves (until
+    0.322 their step said «open a plan first» and a click in 3D did nothing): the plan of «Térreo» shown, the tool on,
+    the balloon saying why with the tool's step; a dimension then drawn there with two clicks and a third. Chosen in a
+    plan, nothing changes view. Not on a sheet."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import notice
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    n = win.notice
+    results_here = {}
+    for name in ("draft", "detail", "dimension"):
+        win.open_view("3d", None)
+        win.set_tool("select")
+        pump(200)
+        win.tool_actions[name].trigger()
+        pump(300)
+        results_here[name] = (win.tool.name == name and vp.current_view() == ("plan", doc.active_storey)
+                              and n.kind == "hint" and n.shown_text().startswith("Isto faz-se numa planta")
+                              and "«Térreo»" in n.shown_text())
+    said = n.shown_text()
+    shot("323_cota_abre_a_planta.png")
+    before = len(doc.dimensions)
+    vp.zoom_extents()
+    pump(300)
+    for p in ((0.0, -0.1, 0.0), (5.0, -0.1, 0.0), (2.5, -1.0, 0.0)):
+        move(at(p), 3)
+        pump(150)
+        click()
+        pump(200)
+    drawn = len(doc.dimensions) == before + 1
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.tool_actions["dimension"].trigger()                  # (in the plan already: no other view, no word on it)
+    pump(300)
+    stays = (vp.current_view() == ("plan", doc.active_storey) and win.tool.name == "dimension"
+             and n.shown_text() == notice._step("Cota", win.hint_label.text()))
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.open_view("3d", None)
+    pump(200)
+    check("cota_desenho_pormenor_abrem_a_planta", all(results_here.values()) and drawn and stays,
+          "{} cota_feita={} na_planta={} balao={!r}".format(results_here, drawn, stays, said[:70]))
+
+
+def pick_flow():
+    """0.322 — A command short of its elements asks for them (as Revit's pick) instead of refusing. «Ligar o topo» with
+    nothing selected: the Select tool, the green balloon «Clique nas paredes e pilares…», «Escolhidos: 0»; a click on a
+    wall takes it in, on another too, on the first again takes it out (and again in); a click on the slab (not a wall)
+    is let go and said; Enter: «Agora clique na laje…», the walls kept; a click on the slab: done — both walls follow
+    it. Espelhar with nothing selected: what to mirror asked for, Enter: the Mirror tool on it. Juntar paredes, Esc:
+    given up, said, the selection kept. Ligar a base: the right button goes on, as Enter. Sapata combinada with no
+    column: Enter says what is missing and keeps waiting."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    walls = bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                                   (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    slab = bim_actions.add_slab_outline(doc, [(-0.5, -0.5), (6.5, -0.5), (6.5, 4.5), (-0.5, 4.5)], 3.2,
+                                        catalog.BY_KEY["laje_12"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection(set())
+    vp.set_view("iso", center=(3.0, 2.0, 1.5), radius=6.0)
+    pump(500)
+    n = win.notice
+
+    def wall_at(p):
+        hit = vp.pick_object(*at(p))
+        return hit if hit in walls else None
+
+    south = wall_at((3.0, -0.1, 0.8))
+    east = wall_at((6.1, 2.0, 0.8))
+
+    def pick_click(p, button=Qt.MouseButton.LeftButton):
+        move(near(p), 3)
+        pump(150)
+        QtTest.QTest.mouseClick(canvas, button, Qt.KeyboardModifier.NoModifier, qp(*mouse))
+        pump(250)
+
+    win.act_attach_top.trigger()
+    pump(200)
+    asked = (win.pick_request is not None and win.tool.name == "select" and n.kind == "ask"
+             and n.title.text().startswith("Ligar") and "Clique nas paredes" in n.shown_text()
+             and "Escolhidos: 0" in n.shown_text())
+    pick_click((3.0, -0.1, 0.8))
+    one = vp.selection == {south} and "Escolhidos: 1" in n.shown_text()
+    pick_click((6.1, 2.0, 0.8))
+    two = vp.selection == {south, east}
+    pick_click((3.0, -0.1, 0.8))
+    out = vp.selection == {east}
+    pick_click((3.0, -0.1, 0.8))
+    back = vp.selection == {south, east} and "Escolhidos: 2" in n.shown_text()
+    shot("322_escolher_paredes.png")
+    pick_click((3.0, 2.0, 3.2))                               # the slab: not a wall
+    refused = vp.selection == {south, east} and "não serve" in win.last_message
+    pump(400)                                                 # (the refusal settled: a person does not press Enter
+    key(Qt.Key.Key_Return)                                    #  within a quarter of a second — 2026-11-03)
+    for _k in range(10):                                      # (the next request: at once, or a little later when busy)
+        pump(100)
+        if "laje ou cobertura" in n.shown_text():
+            break
+    second = (win.pick_request is not None and n.kind == "ask" and "laje ou cobertura" in n.shown_text()
+              and vp.selection == {south, east})
+    second_why = (win.pick_request is not None, n.kind, n.shown_text()[:80], len(vp.selection))
+    shot("322_escolher_laje.png")
+    pick_click((3.0, 2.0, 3.2))
+    pump(200)
+    tied = (win.pick_request is None, n.kind, doc.ifc.top_tied(south), win.last_message[:70])
+    attached = (win.pick_request is None and n.kind == "info" and doc.ifc.top_tied(south) == "slab"
+                and doc.ifc.top_tied(east) == "slab" and doc.ifc.top_tied(walls[2]) is None
+                and "2 elemento(s) ligados" in win.last_message)
+    vp.set_selection(set())
+    win.tool_actions["mirror"].trigger()
+    pump(200)
+    mirror_asked = win.tool.name == "select" and win.pick_request is not None and n.title.text() == "Espelhar"
+    pick_click((6.1, 2.0, 0.8))
+    key(Qt.Key.Key_Return)
+    pump(200)
+    mirror = win.tool.name == "mirror" and vp.selection == {east} and win.pick_request is None
+    key(Qt.Key.Key_Escape)
+    vp.set_selection({east})
+    win.act_merge_walls.trigger()
+    pump(200)
+    waiting = win.pick_request is not None and vp.selection == {east}
+    key(Qt.Key.Key_Escape)
+    cancelled = (waiting and win.pick_request is None and "cancelado" in win.last_message and n.kind == "info"
+                 and vp.selection == {east})
+    vp.set_selection(set())
+    win.act_attach_base.trigger()
+    pump(200)
+    pick_click((3.0, -0.1, 0.8))
+    pick_click((3.0, -0.1, 0.8), Qt.MouseButton.RightButton)
+    right = (win.pick_request is not None and "laje ou sapata" in n.shown_text() and vp.selection == {south})
+    key(Qt.Key.Key_Escape)
+    vp.set_selection(set())
+    win.act_combined_footing.trigger()
+    pump(200)
+    key(Qt.Key.Key_Return)
+    few = win.pick_request is not None and "Falta escolher 2" in win.last_message
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_selection(set())
+    check("escolher_dentro_do_comando", south is not None and east is not None and asked and one and two and out
+          and back and refused and second and attached and mirror_asked and mirror and cancelled and right and few,
+          "paredes={} pede={} uma={} duas={} tira={} volta={} recusa={} laje={} ligadas={} espelhar_pede={} "
+          "espelhar={} esc={} direito={} faltam={} ligar={} laje:{}".format(
+              bool(south and east), asked, one, two, out, back, refused, second, attached, mirror_asked, mirror,
+              cancelled, right, few, tied, second_why))
+
+
+def environments_flow():
+    """0.182 (the environments of 0.84 before): the header's disciplines — Massing and studies shows the sketch
+    tools (no walls), Ctrl+6 Structure's (grid, beam; Ctrl+3 before 0.298), a click on the Annotate tab the plan and
+    the dimensions; a tool's key works in any of them (W in Annotate); kept for next time; Home has the file's
+    commands; the menus hidden, the navigation in the status bar; the header shows the project's name."""
+    from arqbim.ui import ribbon
+
+    def shown():
+        return set(win.ribbon_actions())
+
+    tabs = win.header.tabs
+    win.set_discipline("massing")
+    pump(100)
+    massing = (win.tool_actions["line"] in shown() and win.tool_actions["wall"] not in shown()
+               and tabs.currentIndex() == ribbon.DISCIPLINES.index("massing"))
+    key(Qt.Key.Key_6, Qt.KeyboardModifier.ControlModifier)
+    structure = (win.discipline == "structure" and win.tool_actions["grid"] in shown()
+                 and win.tool_actions["beam"] in shown() and tabs.currentIndex() == ribbon.DISCIPLINES.index("structure"))
+    tabs.setCurrentIndex(ribbon.DISCIPLINES.index("annotate"))       # (as a click on the Annotate tab)
+    pump(100)
+    annotate = (win.discipline == "annotate" and win.act_plan in shown() and win.tool_actions["dimension"] in shown()
+                and win.tool_actions["wall"] not in shown() and win.disc_actions["annotate"].isChecked())
+    shot("77_ambiente_docs.png")
+    key(Qt.Key.Key_W)
+    wall_key = win.tool.name == "wall"
+    key(Qt.Key.Key_Space)
+    kept = QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("disciplina/atual") == "annotate"
+    win.set_discipline("home")
+    pump(300)
+    home = win.act_new in shown() and win.act_open in shown() and win.act_save in shown()
+    try:            # (the ribbon's Classify button gone with Massing: the window's menus still there, 0.182)
+        win._fill_type_menus()
+        menus = len(win.classify_menu.actions()) > 0
+    except RuntimeError:
+        menus = False
+    layout = (not win.menuBar().isVisible() and win.navigation_bar.parent() is win.statusBar()
+              and win.header.project.text() != "")
+    shot("182_cabecalho_e_ferramentas.png")
+    win.set_discipline("architecture")
+    pump(100)
+    check("ambientes_conceito_bim_estrutura_docs", massing and structure and annotate and wall_key and kept
+          and home and layout and menus,
+          "massa={} estrutura={} anotar={} tecla_W={} guardado={} inicio={} disposicao={} menus={}".format(
+              massing, structure, annotate, wall_key, kept, home, layout, menus))
+
+
+def brand_flow():
+    """0.82: the window's icon is the ArqSynth symbol (every size, up to the taskbar's); the starting screen has
+    the symbol, the name and the version (saved as a picture to be looked at)."""
+    from arqbim import __version__
+    from arqbim.app import APP_NAME
+    from arqbim.ui import brand
+    icon = win.windowIcon()
+    sizes = {s.width() for s in icon.availableSizes()}
+    image = icon.pixmap(64, 64).toImage()
+    blue = image.pixelColor(32, 12)                  # (the symbol's top: its blue)
+    symbol_icon = {16, 32, 256} <= sizes and blue.blue() > 200 and blue.red() < 90
+    splash = brand.Splash(APP_NAME, "Versão " + __version__)
+    splash.say("A abrir a janela…")
+    pm = splash.grab()
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        pm.save(os.path.join(OUT, "76_arranque.png"))
+    splash.close()
+    check("marca_icone_e_arranque", symbol_icon and pm.width() >= brand.SPLASH_W and splash.message() != "",
+          "tamanhos={} azul={} arranque={}x{}".format(sorted(sizes), blue.name(), pm.width(), pm.height()))
+
+
+def walk_flow():
+    """0.80: Position camera (a click on the ground: the eyes at 1,60, then Look around), Look around (turns,
+    stays in place), Walk (dragging up walks forward at the same height; the Up arrow 50 cm); in a plan they
+    say they are for the 3D view."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 6.0, 0.0)), np.array((6.0, 6.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    vp.set_view("iso", center=(3.0, 3.0, 0.0), radius=6.0)
+    pump(300)
+    w, h = vp.logical_size()
+    win.tool_actions["position_camera"].trigger()
+    pump(200)
+    move(near((3.3, 1.2, 0.0)), 3)
+    click()
+    pump(300)
+    eye = vp.camera_position()
+    placed = abs(eye[2] - 1.6) < 1e-6 and np.allclose(eye[:2], (3.3, 1.2), atol=0.05) and win.tool.name == "look_around"
+    level = abs(vp.view_direction()[2]) < 1e-6
+    f0 = vp.view_direction()
+    drag([(w / 2, h / 2), (w / 2 + 100, h / 2)])
+    f1 = vp.view_direction()
+    turned = np.linalg.norm(f1 - f0) > 0.2 and np.allclose(vp.camera_position(), eye, atol=1e-9)
+    shot("75_posicionar_camara.png")
+    win.tool_actions["walk"].trigger()
+    pump(200)
+    p0 = vp.camera_position()
+    drag([(w / 2, h / 2), (w / 2, h / 2 - 100)])
+    p1 = vp.camera_position()
+    walked = np.linalg.norm((p1 - p0)[:2]) > 1.0 and abs(p1[2] - p0[2]) < 1e-9
+    key(Qt.Key.Key_Up)
+    p2 = vp.camera_position()
+    stepped = abs(np.linalg.norm((p2 - p1)[:2]) - 0.5) < 1e-6
+    # 0.83: towards the wall (its face at y 5,90): it stops 25 cm before it; with Alt, through it
+    vp.camera.local.position = (3.3, 4.0, 1.6)
+    vp.camera.show_pos((3.3, 10.0, 1.6), up=(0, 0, 1))
+    for _k in range(8):
+        key(Qt.Key.Key_Up)
+    y_stop = vp.camera_position()[1]
+    blocked = abs(y_stop - 5.65) < 0.02 and "parede" in win.last_message
+    drag([(w / 2, h / 2), (w / 2, h / 2 - 60)], modifiers=Qt.KeyboardModifier.AltModifier)
+    through = vp.camera_position()[1] > 6.2
+    check("caminhar_nao_atravessa_paredes", blocked and through,
+          "parou_em_y={:.2f} com_Alt_y={:.2f}".format(y_stop, vp.camera_position()[1]))
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    win.tool_actions["walk"].trigger()
+    move((w / 2, h / 2), 2)
+    click()
+    said = "3D" in win.last_message
+    win.open_view("3d", None)
+    pump(300)
+    key(Qt.Key.Key_Space)
+    check("caminhar_olhar_posicionar", placed and level and turned and walked and stepped and said,
+          "olhos={} nivelado={} rodou={} andou={} seta={} planta_avisa={}".format(np.round(eye, 2), level, turned,
+                                                                                 walked, stepped, said))
+
+
+def _answer_dialog(fill):
+    """Run `fill(dialog)` on the selection window that opens next, then press its OK."""
+    def later():
+        dialog = getattr(win, "_sel_dialog", None)
+        if dialog is None or not dialog.isVisible():
+            QtCore.QTimer.singleShot(100, later)
+            return
+        fill(dialog)
+        dialog.accept()
+
+    win._sel_dialog = None
+    QtCore.QTimer.singleShot(100, later)
+
+
+def filters_flow():
+    """0.76: two 20 cm walls, a 15 cm one, a column and a slab. Ctrl+A, then Filter… without slabs and columns:
+    the walls; the same type in the view; Select by… the 15 cm type; the slab made not selectable, a box over
+    everything leaves it out; the right button's menu."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui.selection_dialogs import CHECKED, UNCHECKED, KEY
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    w20, w15 = catalog.BY_KEY["parede_alv_20"], catalog.BY_KEY["parede_alv_15"]
+    a = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((3.0, 0.0, 0.0)), w20)
+    b = bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((7.0, 0.0, 0.0)), w20)
+    c = bim_actions.add_wall(doc, np.array((8.0, 0.0, 0.0)), np.array((11.0, 0.0, 0.0)), w15)
+    col = bim_actions.add_column(doc, np.array((5.0, 3.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+    slab = bim_actions.add_slab(doc, np.array((-1.0, -1.0, 0.0)), 13.0, 5.0, catalog.BY_KEY["laje_12"])
+    vp.set_view("top", center=(5.5, 1.5, 0.0), radius=9.0)
+    pump(400)
+    key(Qt.Key.Key_Space)
+    key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    everything = set(vp.selection)
+
+    def keep_walls(dialog):
+        for k in range(dialog.list.count()):
+            item = dialog.list.item(k)
+            item.setCheckState(CHECKED if item.data(KEY) in ("IfcWall", "IfcWallStandardCase") else UNCHECKED)
+
+    _answer_dialog(keep_walls)
+    win.act_filter_selection.trigger()
+    pump(300)
+    walls = set(vp.selection)
+    vp.set_selection({a})
+    win.select_same("view")
+    same = set(vp.selection)
+    check("filtrar_e_mesmo_tipo", everything == {a, b, c, col, slab} and walls == {a, b, c} and same == {a, b},
+          "tudo={} paredes={} mesmo_tipo={}".format(len(everything), len(walls), len(same)))
+
+    def pick_15(dialog):
+        dialog.set_key(("type",))
+        pump(100)
+        for k in range(dialog.list.count()):
+            item = dialog.list.item(k)
+            item.setCheckState(CHECKED if "15" in (item.data(KEY) or "") else UNCHECKED)
+
+    _answer_dialog(pick_15)
+    win.act_select_by.trigger()
+    pump(300)
+    by_type = set(vp.selection)
+
+    def no_slabs(dialog):
+        for k in range(dialog.list.count()):
+            item = dialog.list.item(k)
+            if item.data(KEY) == "IfcSlab":
+                item.setCheckState(UNCHECKED)
+
+    _answer_dialog(no_slabs)
+    win.act_selectable.trigger()
+    pump(300)
+    drag([near((12.5, 4.0, 0.0)), near((-1.5, -2.0, 0.0))])          # a crossing box over everything
+    boxed = set(vp.selection)
+    move(near((5.5, 1.5, 0.0)), 2)
+    press(Qt.MouseButton.RightButton)
+    release(Qt.MouseButton.RightButton)
+    pump(300)
+    menu = getattr(win, "_selection_menu", None)
+    entries = [a_.text() for a_ in menu.actions() if a_.text()] if menu is not None else []
+    if menu is not None:
+        menu.close()
+    check("selecionar_por_e_selecionaveis", by_type == {c} and boxed == {a, b, c, col}
+          and "Todas do mesmo tipo, na vista" in entries and win.act_selectable.text().startswith("Selecionáveis (1"),
+          "por_tipo={} caixa={} menu={} botão={!r}".format(len(by_type), len(boxed), entries[:3],
+                                                          win.act_selectable.text()))
+    vp.unselectable = set()
+    win._show_selectable()
+    move(near((5.5, 6.0, 0.0)), 2)                     # (a click in the view, as a person would after a menu:
+    click()                                            # in Linux the window is not made active again by itself)
+    _active()
+    key(Qt.Key.Key_Escape)
+
+
+def panel_set(editor_key, text):
+    """Type a value into a Properties panel field and confirm it (like Enter)."""
+    edit = win.props.editors[editor_key]
+    edit.setText(text)
+    edit.editingFinished.emit()
+    pump(400)
+
+
+def edit_ifc_flow():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(3.0, 0.0, 1.4), radius=4.5)
+    pump(300)
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)
+    click()
+    move(near((3, 0, 0)), 4)
+    pump(200)
+    type_text("5")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    wall = [o for o in objects() if o.is_bim][0].id
+    key(Qt.Key.Key_D)
+    pump(300)
+    move(near((2.55, -0.1, 1.0)), 3)              # wall centre: snaps there
+    pump(200)
+    click()
+    pump(300)
+    door = [o for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"][0].id
+
+    # Push/Pull on the wall: top -> height, end -> length, side -> explains the type ------
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((3.5, 0.0, 2.8)), 3)
+    click()
+    move((mouse[0], mouse[1] - 60), 4)
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    h = doc.ifc.wall_params(wall)[1]
+    move(near((5.0, 0.0, 1.5)), 3)                # end face of the wall (x = 5)
+    click()
+    end_out = np.array(at((6.0, 0.0, 1.5))) - np.array(at((5.0, 0.0, 1.5)))
+    move(np.array(mouse) + end_out / np.linalg.norm(end_out) * 50, 4)
+    type_text("1")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    length = doc.ifc.wall_params(wall)[0]
+    check("pushpull_parede_ifc_altura_e_comprimento", abs(h - 3.3) < 1e-9 and abs(length - 6.0) < 1e-9,
+          "altura={:.3f} comprimento={:.3f}".format(h, length))
+    move(near((1.0, -0.1, 1.5)), 3)               # side face: thickness comes from the type
+    click()
+    pump(200)
+    msg = win.last_message
+    check("pushpull_face_lateral_explica_tipo", "tipo" in msg, repr(msg[:70]))
+    shot("18_parede_ifc_editada.png")
+
+    # Properties panel: name, type, length (refused when the door would be left out) -------
+    key(Qt.Key.Key_Space)
+    pump(200)
+    vp.set_selection({wall})
+    pump(300)
+    panel_set("name", "Parede da sala")
+    combo = win.props.editors["type"]
+    i = combo.findText("Parede alvenaria 15 cm")
+    combo.setCurrentIndex(i)
+    combo.activated.emit(i)
+    pump(500)
+    panel_set("length", "4,0")
+    panel_set("length", "2,5")                     # the door (2,05..2,95) would stick out: refused
+    refused_msg = win.last_message
+    check("recusa_explicada_em_portugues", "ficaria fora do elemento" in refused_msg, repr(refused_msg[:80]))
+    e = doc.ifc.by_guid(wall)
+    L, H, T = doc.ifc.wall_params(wall)
+    y = doc.get(door).mesh.verts[:, 1]
+    check("painel_nome_tipo_comprimento", e.Name == "Parede da sala" and abs(T - 0.15) < 1e-9
+          and abs(L - 4.0) < 1e-9 and y.max() - y.min() < 0.15 + 0.12 + 1e-6,           # (and its handles: 0.290)
+          "nome={!r} espessura={:.3f} comprimento={:.3f}".format(e.Name, T, L))
+
+    vp.set_selection({door})
+    pump(300)
+    panel_set("from_start", "0,5")
+    lo = doc.get(door).mesh.verts.min(axis=0)
+    check("painel_mover_porta", abs(lo[0] - (0.5 - 0.05)) < 2e-3, "x_min={:.4f}".format(lo[0]))   # (casings: 0.288)
+    import ifcopenshell.util.element as ue
+    first_hand = doc.ifc.by_guid(door).OperationType        # (0.404: as placed — to the mouse's side)
+    QtTest.QTest.mouseClick(win.props.editors["flip_hinge"], Qt.MouseButton.LeftButton)   # Virar a porta: Dobradiça
+    pump(400)
+    hand = doc.ifc.by_guid(door).OperationType
+    QtTest.QTest.mouseClick(win.props.editors["flip_side"], Qt.MouseButton.LeftButton)    # (rebuilt panel) Lado
+    pump(400)
+    door_type = ue.get_type(doc.ifc.by_guid(door)).Name
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    swings = {"SINGLE_SWING_LEFT", "SINGLE_SWING_RIGHT"}
+    check("painel_virar_porta", first_hand in swings and hand in swings and hand != first_hand
+          and door_type.startswith("Porta 80×210") and doc.ifc.by_guid(door).OperationType == first_hand,
+          "{} -> {} {}".format(first_hand, hand, door_type))
+
+    vp.set_selection({wall})
+    pump(300)
+    combo = win.props.editors[("ifc", "IsExternal")]       # (0.266: the standard set's row; 0.267: alone, outside)
+    k = combo.findData(False)
+    combo.setCurrentIndex(k)
+    combo.activated.emit(k)
+    pump(400)
+    inside = ifc_value(wall, "Pset_WallCommon", "IsExternal")
+    shot("19_painel_editavel.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    check("painel_pset_e_desfazer", inside is False and ifc_value(wall, "Pset_WallCommon", "IsExternal") is True)
+    errors = doc.ifc.validate(express_rules=True)
+    check("edicoes_ifc_validas", errors == [], errors[:2])
+
+
+def ifc_value(guid, pset, prop):
+    import ifcopenshell.util.element as ue
+    return ue.get_psets(doc.ifc.by_guid(guid)).get(pset, {}).get(prop)
+
+
+def inward(c, normal_out, px=80):
+    """Screen point `px` pixels from c, in the direction going INTO the wall (against normal_out)."""
+    a, b = np.array(at(c)), np.array(at(np.asarray(c) - np.asarray(normal_out) * 0.5))
+    return a + (b - a) / np.linalg.norm(b - a) * px
+
+
+def voids_flow():
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(3.0, 2.5, 1.2), radius=5.0)
+    pump(300)
+
+    # A. Sketch: a hole pushed right through a wall-like box, then classified -----------
+    box = make_box((1, 1, 0), "4,5;0,2", "2,8", (3.25, 1.1, 0))
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near((2.0, 1.0, 0.8)), 3)                # on the front face (y = 1)
+    click()
+    move(near((2.6, 1.0, 1.4)), 3)
+    type_text("1;1")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    key(Qt.Key.Key_P)
+    pump(300)
+    centre = np.array((2.5, 1.0, 1.3))
+    move(near(centre), 3)
+    click()
+    move(inward(centre, (0, -1, 0)), 6)           # the mouse goes well past the back face
+    pump(200)
+    tip = vp.tip_text
+    shot("16_furo_a_atravessar.png")
+    click()
+    pump(300)
+    sk = doc.get(box.id)
+    vol = volume(sk)
+    check("pushpull_fura_o_esboco", tip == "Atravessa: abre vão" and len(sk.mesh.voids) == 1
+          and abs(vol - (4.5 * 0.2 * 2.8 - 0.2)) < 1e-6 and sk.mesh.is_closed(),
+          "dica={!r} furos={} volume={:.4f}".format(tip, len(sk.mesh.voids), vol))
+    vp.set_selection({box.id})
+    win.classify_actions["parede_alv_20"].trigger()
+    pump(300)
+    check("classificar_com_furo_vira_vao_ifc", doc.ifc.count("IfcWall") == 1
+          and doc.ifc.count("IfcOpeningElement") == 1, "vãos={}".format(doc.ifc.count("IfcOpeningElement")))
+
+    # B. IFC wall (W): rectangle on its face pushed in -> IFC opening; then a niche --------
+    # (in front of the first wall, so nothing hides it from the camera)
+    key(Qt.Key.Key_W)
+    pump(200)
+    move(near((1, -2, 0)), 3)
+    click()
+    move(near((4, -2, 0)), 4)
+    pump(200)
+    type_text("5")
+    key(Qt.Key.Key_Return)
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    wall = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"][-1]
+    vol0 = wall.mesh.volume()
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near((2.0, -2.1, 0.8)), 3)               # front face of the IFC wall (y = -2,10)
+    click()
+    move(near((2.6, -2.1, 1.4)), 3)
+    type_text("1;1")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    key(Qt.Key.Key_P)
+    pump(300)
+    centre = np.array((2.5, -2.1, 1.3))
+    move(near(centre), 3)
+    click()
+    move(inward(centre, (0, -1, 0)), 6)
+    pump(200)
+    tip = vp.tip_text
+    click()
+    pump(400)
+    cut = vol0 - doc.get(wall.id).mesh.volume()
+    sheets = [o for o in objects() if not o.is_bim]
+    # (the mouse may end on an edge of the wall's far face: then the snap's tip is shown — the opening is the same)
+    check("pushpull_abre_vao_na_parede_ifc", tip in ("Atravessa: abre vão", "Na aresta") and abs(cut - 0.2) < 1e-6
+          and doc.ifc.count("IfcOpeningElement") == 2 and len(sheets) == 0,
+          "dica={!r} volume_cortado={:.4f} esboços={}".format(tip, cut, len(sheets)))
+
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near((4.0, -2.1, 0.8)), 3)
+    click()
+    move(near((4.6, -2.1, 1.4)), 3)
+    type_text("0,8;0,5")
+    key(Qt.Key.Key_Return)
+    pump(200)
+    key(Qt.Key.Key_P)
+    pump(300)
+    centre = np.array((4.4, -2.1, 1.05))
+    move(near(centre), 3)
+    click()
+    move(inward(centre, (0, -1, 0), px=4), 2)     # just a little inwards: the sign
+    type_text("0,05")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    cut2 = vol0 - 0.2 - doc.get(wall.id).mesh.volume()
+    import ifcopenshell.util.element  # noqa: F401
+    recesses = [o for o in doc.ifc.file.by_type("IfcOpeningElement") if o.PredefinedType == "RECESS"]
+    check("pushpull_nicho_na_parede_ifc", abs(cut2 - 0.8 * 0.5 * 0.05) < 1e-6 and len(recesses) == 1,
+          "volume_nicho={:.4f} nichos={}".format(cut2, len(recesses)))
+    vp.set_view("iso", center=(3.5, -0.5, 1.2), radius=4.5)
+    pump(400)
+    shot("17_vaos_e_nicho.png")
+
+    # 0.57: Push/Pull on a side of the opening (its left reveal, x = 2): that side moves, 30 cm to the left
+    key(Qt.Key.Key_P)
+    pump(300)
+    reveal = np.array((2.0, -2.0, 1.3))
+    [(gid, lo, hi, _filled, _box)] = [v for v in doc.ifc.voids(wall.id) if not v[3] and v[2][1] - v[1][1] > 0.2]
+    move(near(reveal), 3)
+    pump(200)
+    click()
+    move(inward(reveal, (1.0, 0, 0), px=30), 3)       # outwards from the opening: it gets wider
+    type_text("0,3")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    after = [v for v in doc.ifc.voids(wall.id) if v[0] == gid][0]
+    cut3 = vol0 - 0.2 - 0.8 * 0.5 * 0.05 - doc.get(wall.id).mesh.volume()
+    check("pushpull_lado_do_vao", abs(after[1][0] - (lo[0] - 0.3)) < 1e-6 and abs(after[2][0] - hi[0]) < 1e-6
+          and abs(cut3 - 0.3 * 1.0 * 0.2) < 1e-6 and doc.ifc.validate(express_rules=True) == [],
+          "lado={:.3f} -> {:.3f} volume_cortado={:.4f} msg={!r}".format(lo[0], after[1][0], cut3,
+                                                                     win.last_message[:60]))
+
+    # ... and on the wall's base, seen from under the ground: down 20 cm (the top stays)
+    base = np.array((5.13, -2.04, 0.0))               # (off the ground grid's lines, drawn over the base here)
+    eye = np.array((5.73, -4.54, -1.4))
+    vp.set_camera(eye, base - eye)
+    pump(300)
+    z_top = float(doc.get(wall.id).mesh.verts[:, 2].max())
+    move(near(base), 3)
+    pump(200)
+    click()
+    move(near(base - np.array((0, 0, 0.5))), 3)
+    type_text("0,2")
+    key(Qt.Key.Key_Return)
+    pump(400)
+    verts = doc.get(wall.id).mesh.verts
+    check("pushpull_base_da_parede", abs(verts[:, 2].min() + 0.2) < 1e-6 and abs(verts[:, 2].max() - z_top) < 1e-6,
+          "z={:.3f}..{:.3f} msg={!r}".format(verts[:, 2].min(), verts[:, 2].max(), win.last_message[:60]))
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    vp.set_view("iso", center=(3.5, -0.5, 1.2), radius=4.5)
+    pump(300)
+    shot("17b_lado_do_vao.png")
+    errors = doc.ifc.validate(express_rules=True)
+    check("vaos_ifc_validos", errors == [], errors[:2])
+
+
+def beginner_flow():
+    """What a first-time user does: types sizes without clicking, with the focus elsewhere,
+    and chooses 'Classify as…' before selecting."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("iso", center=(3.0, 2.0, 1.0), radius=6.0)
+    pump(300)
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near((1, 1, 0)), 3)
+    pump(200)
+    win.props.tree.setFocus()                     # keyboard focus in the properties panel
+    pump(100)
+    QtTest.QTest.keyClicks(win.props.tree, "4,5;0,2")
+    QtTest.QTest.keyClick(win.props.tree, Qt.Key.Key_Return)
+    pump(300)
+    rect = objects()[-1] if objects() else None
+    check("medidas_sem_clique_e_foco_no_painel", rect is not None and len(rect.mesh.faces) == 1
+          and abs(rect.mesh.face_area(0) - 0.9) < 1e-9, "objetos={}".format(len(objects())))
+
+    key(Qt.Key.Key_P)
+    pump(300)
+    move(near((3.25, 1.1, 0)), 3)                 # over the thin rectangle, no click
+    pump(200)
+    type_text("2,8")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    vol = volume(doc.get(rect.id)) if rect else 0
+    check("pushpull_so_digitando", abs(vol - 4.5 * 0.2 * 2.8) < 1e-9, "volume={:.4f}".format(vol))
+
+    vp.set_selection(set())
+    win.classify_actions["parede_alv_20"].trigger()   # nothing selected: pick mode
+    pump(200)
+    pending = win.pending_classify is not None and win.tool.name == "select"
+    move(near((3.25, 1.0, 1.4)), 3)
+    click()
+    pump(300)
+    check("classificar_escolhendo_depois_clicando", pending and doc.ifc.count("IfcWall") == 1
+          and win.pending_classify is None, "modo_pendente={} paredes={}".format(pending, doc.ifc.count("IfcWall")))
+
+
+def wall_and_slab_tools():
+    # Walls point by point, typed lengths, closing the outline -------------------------
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=5.0)
+    pump(400)
+    key(Qt.Key.Key_W)
+    check("atalho_W_parede", win.tool.name == "wall", win.tool.name)
+    pump(200)
+    move(near((0.02, 0.02, 0)), 3)                # snaps to the origin
+    pump(200)
+    click()
+    for target, length in (((3, 0, 0), "6"), ((6, 2, 0), "4"), ((3, 4, 0), "6"), ((0, 2, 0), "4")):
+        move(near(target), 4)
+        pump(300)                                   # (more time: at the end of the long run it is slower)
+        type_text(length)
+        key(Qt.Key.Key_Return)
+        pump(500)
+    walls = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
+    total = sum(o.mesh.volume() for o in walls)
+    chain_closed = win.tools["wall"]._start is None
+    check("paredes_contorno_fechado", len(walls) == 4 and abs(total - 20 * 0.2 * 2.8) < 1e-6 and chain_closed,
+          "paredes={} volume={:.4f} fechado={}".format(len(walls), total, chain_closed))
+
+    # Roof slab snapped to the outer top corners of the walls --------------------------
+    vp.set_view("iso", center=(3.0, 2.0, 1.4), radius=5.0)
+    pump(400)
+    win.set_tool("slab")
+    pump(200)
+    move(near((-0.1, -0.1, 2.8), 3, 2), 3)
+    pump(200)
+    tip1 = vp.tip_text
+    click()
+    move(near((6.1, 4.1, 2.8), -3, 2), 4)
+    pump(200)
+    tip2 = vp.tip_text
+    click()
+    pump(300)
+    slabs = [o for o in objects() if o.is_bim and o.ifc_class == "IfcSlab"]
+    lo = slabs[0].mesh.verts.min(axis=0) if slabs else np.zeros(3)
+    hi = slabs[0].mesh.verts.max(axis=0) if slabs else np.zeros(3)
+    check("laje_nos_cantos_das_paredes", len(slabs) == 1 and np.allclose(lo, (-0.1, -0.1, 2.8)) and
+          np.allclose(hi, (6.1, 4.1, 2.92)), "dicas={!r}/{!r} min={} max={}".format(tip1, tip2, lo, hi))
+    shot("15_paredes_e_laje.png")
+
+    # Door tool over a sketch explains what to do -----------------------------------------
+    key(Qt.Key.Key_R)
+    pump(200)
+    move(near((-3.5, 0, 0)), 3)                             # (to the left of the house: clear of the view cube)
+    click()
+    move(near((-2.5, 1, 0)), 3)
+    pump(200)
+    type_text("2;0,2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    key(Qt.Key.Key_P)
+    pump(400)
+    sk = doc.sketches()[0] if doc.sketches() else None      # the face drawn (its first corner may have aligned)
+    middle = np.mean([transform_point(sk.matrix, v) for v in sk.mesh.verts], axis=0) if sk else (9, 0.1, 0)
+    move(near(middle), 3)
+    pump(500)                                               # (the face picked before the height is typed)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(500)
+    key(Qt.Key.Key_D)
+    pump(300)
+    move(near((middle[0], middle[1] - 0.1, 1.0)), 3)        # its front face, half way up
+    pump(300)
+    hit = vp.pick_point(*mouse)
+    check("porta_sobre_esboco_explica", "esboço" in vp.label_text,
+          "{!r} sob o rato={} esboços={}".format(vp.label_text[:60], hit and doc.get(hit[0]) and doc.get(hit[0]).name,
+                                                 [(o.name, len(o.mesh.faces)) for o in doc.sketches()]))
+    errors = doc.ifc.validate(express_rules=True)
+    check("modelo_final_valido", errors == [], errors[:2])
+
+
+def doors_and_windows(wall, path):
+    from arqbim.model import bim as bim_actions
+    vol0 = doc.get(wall).mesh.volume()
+    vp.set_selection(set())
+    # the wall was drawn with the mouse: measure where it really starts and ends
+    frame = bim_actions.wall_frame(doc, wall)
+    wall_start = frame.to_world((frame.x0, 0, 0))[0]
+    wall_end = frame.to_world((frame.x0 + frame.length, 0, 0))[0]
+
+    # 24. Door (D): hover the wall centre, click ------------------------------------
+    key(Qt.Key.Key_D)
+    check("atalho_D_porta", win.tool.name == "door", win.tool.name)
+    pump(300)
+    move(near((3.3, 1.0, 1.2)), 4)                 # front face of the wall, near its centre (x = 3.25)
+    pump(200)
+    tip = vp.tip_text
+    shot("12_porta_a_colocar.png")
+    click()
+    pump(300)
+    doors = [o for o in objects() if o.is_bim and o.ifc_class == "IfcDoor"]
+    lo = doors[0].mesh.verts.min(axis=0) if doors else np.zeros(3)
+    hi = doors[0].mesh.verts.max(axis=0) if doors else np.zeros(3)
+    centre = (lo[0] + hi[0]) / 2
+    cut = vol0 - doc.get(wall).mesh.volume()
+    check("porta_no_centro_da_parede", tip == "Centro da parede" and len(doors) == 1
+          and abs(centre - (wall_start + wall_end) / 2) < 1e-6
+          and abs(cut - 0.8 * 2.1 * 0.2) < 1e-6,
+          "dica={!r} centro={:.3f} vão={:.4f} m³".format(tip, centre, cut))
+
+    # 25. Window (J): typed distance to the nearest end, then corrected --------------
+    key(Qt.Key.Key_J)
+    pump(300)
+    move(near((5.0, 1.0, 1.6)), 4)                 # near the right end of the wall (x = 5.5)
+    pump(200)
+    for dx in (1, -1, 2, -2):                      # (the screen's pick buffer one frame behind the door: hover on)
+        if win.tool._target is not None:
+            break
+        move(near((5.0, 1.0, 1.6), dx), 1)
+        pump(200)
+    type_text("0,3")
+    key(Qt.Key.Key_Return)
+    pump(300)
+
+    def window_x():
+        ws = [o for o in objects() if o.is_bim and o.ifc_class == "IfcWindow"]
+        if not ws:
+            return None
+        v = ws[0].mesh.verts
+        return round(float(v[:, 0].min()), 3), round(float(v[:, 0].max()), 3), len(ws)
+
+    first = window_x()
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    second = window_x()
+    exp1 = (round(wall_end - 0.3 - 1.2, 3), round(wall_end - 0.3, 3), 1)
+    exp2 = (round(wall_end - 0.5 - 1.2, 3), round(wall_end - 0.5, 3), 1)
+    check("janela_por_distancia_digitada", first == exp1 and second == exp2,
+          "0,3 -> {} (esperado {})  corrigido 0,5 -> {} (esperado {})".format(first, exp1, second, exp2))
+    vp.set_selection(set())
+    shot("13_porta_e_janela.png")
+
+    # 26. Undo removes the window; deleting the door closes its opening ---------------
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    no_window = window_x() is None
+    select_at((3.25, 1.0, 1.0))                     # the door
+    selected = [doc.get(i).ifc_class for i in vp.selection if doc.get(i)]
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    check("desfazer_janela_e_apagar_porta",
+          no_window and selected == ["IfcDoor"] and doc.ifc.count("IfcDoor") == 0
+          and doc.ifc.count("IfcOpeningElement") == 0 and abs(doc.get(wall).mesh.volume() - vol0) < 1e-6,
+          "janela_desfeita={} selecionado={}".format(no_window, selected))
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)   # door back for the saved file
+
+    # 27. Save with the door: valid IFC (schema + WHERE rules) ---------------------------
+    win.save_to(path)
+    from arqbim.ifc.model import IfcModel
+    errors = IfcModel.open(path).validate(express_rules=True)
+    import ifcopenshell
+    f = ifcopenshell.open(path)
+    rel_ok = len(f.by_type("IfcRelVoidsElement")) == 1 and len(f.by_type("IfcRelFillsElement")) == 1
+    check("gravar_com_porta_ifc_valido", errors == [] and rel_ok and len(f.by_type("IfcDoor")) == 1,
+          "erros={} relações_vão={}".format(errors[:2], rel_ok))
+
+
+def wheel(steps):
+    pos = QtCore.QPointF(*mouse)
+    ev = QtGui.QWheelEvent(pos, QtCore.QPointF(canvas.mapToGlobal(pos.toPoint())), QtCore.QPoint(0, 0),
+                           QtCore.QPoint(0, 120 * steps), Qt.MouseButton.NoButton,
+                           Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    QtWidgets.QApplication.sendEvent(canvas, ev)
+    pump(150)
+
+
+def navigation():
+    # 16. Wheel zooms towards the point under the cursor -------------------------
+    p = np.array((1.0, 0.0, 1.5))           # on the front face of A
+    move(at(p), 2)
+    start = np.array(mouse)
+    d0 = np.linalg.norm(vp.camera_position() - p)
+    wheel(+2)
+    d1 = np.linalg.norm(vp.camera_position() - p)
+    drift = np.linalg.norm(np.array(at(p)) - start)
+    check("zoom_para_o_cursor", d1 < d0 * 0.9 and drift < 1.5, "distancia {:.2f}->{:.2f}, desvio {:.2f}px".format(d0, d1, drift))
+
+    # 17. Middle drag orbits around the point under the cursor -------------------
+    press(Qt.MouseButton.MiddleButton)
+    before = vp.camera_position()
+    move((mouse[0] + 80, mouse[1] + 30), 6)
+    release(Qt.MouseButton.MiddleButton)
+    pump(60)
+    moved = np.linalg.norm(vp.camera_position() - before)
+    drift = np.linalg.norm(np.array(at(p)) - start)
+    check("orbitar_a_volta_do_ponto", moved > 0.5 and drift < 2.0, "camara moveu {:.2f} m, ponto desviou {:.2f}px".format(moved, drift))
+    shot("9_depois_de_orbitar.png")
+
+
+try:
+    only = os.environ.get("ARQBIM_GUI_ONLY")       # e.g. "components,groups": only those flows (to look into one)
+    if only:
+        pump(1500)
+        canvas.setFocus()
+        for name in only.split(","):
+            globals()[name.strip()]()
+    else:
+        run()
+except Exception:
+    check("excecao", False, traceback.format_exc())
+
+with open(os.path.join(OUT, "gui_smoke.json"), "w", encoding="utf-8") as f:
+    json.dump(results, f, indent=2, ensure_ascii=False)
+failed = sum(not r["ok"] for r in results)
+print("\n{} verificações, {} falharam. Capturas em {}".format(len(results), failed, OUT), flush=True)
+win.close()
+pump(200)
+sys.stdout.flush()
+# (not sys.exit: in Linux (WSL), after this long session Python's clean-up of the GPU and Qt objects crashed the
+# process at the very end, once everything had been checked and written; the program itself closes cleanly)
+os._exit(1 if failed else 0)
