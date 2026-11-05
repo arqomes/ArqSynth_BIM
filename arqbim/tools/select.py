@@ -1722,6 +1722,13 @@ class SelectTool(Tool):
             self._element_click = None
             self.host.edit_wall_profile(obj_id)
             return True
+        # (0.410, the owner: «2 clique no piso para abrir a edição do perfil») a slab's, a floor finish's or a
+        # ceiling's outline (a round slab changes by its radius)
+        if kind in ("slab", "flooring", "ceiling") and hasattr(self.host, "edit_slab_outline") and \
+                not (kind == "slab" and self.doc.ifc.slab_shape(obj_id) == "circulo"):
+            self._element_click = None
+            self.host.edit_slab_outline(obj_id)
+            return True
         if kind == "roof" and hasattr(self.host, "edit_roof_blocks") and \
                 (self.doc.ifc.roof_params(obj_id) or {}).get("form") == "blocks":
             self._element_click = None

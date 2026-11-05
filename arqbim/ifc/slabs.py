@@ -12,6 +12,7 @@ import ifcopenshell
 import ifcopenshell.api
 import ifcopenshell.util.element
 
+from ..core import outline_loops
 from ..core import slabs as core_slabs
 from .edit import EditRefused
 
@@ -101,6 +102,9 @@ class SlabMixin:
             info["area"], info["perimeter"] = float(np.pi * radius ** 2), float(2 * np.pi * radius)
             return info
         info["outline"], info["holes"] = world(outside), [world(h) for h in holes]
+        # (0.410) as drawn — the outline and its holes, their sides arcs or curves — while it is still this body
+        info["loops"] = outline_loops.mapped(outline_loops.drawn([outside] + holes, self._params(slab).get("Desenho")),
+                                             lambda p: world([p])[0])
         poly = core_slabs.outline_polygon(info["outline"], info["holes"])
         info["area"] = float(poly.area) if poly is not None else core_slabs.ring_area(info["outline"])
         info["perimeter"] = float(poly.exterior.length) if poly is not None else 0.0
@@ -195,10 +199,13 @@ class SlabMixin:
         from shapely.geometry import Point
         return all(grown.contains(Point(x, y)) for x, y in corners)
 
-    def set_slab_outline(self, guid, outline, holes=None):
+    def set_slab_outline(self, guid, outline, holes=None, loops=None):
         """A slab's plan made the outline [(x, y)…] (program's coordinates): edited by its corners (0.100). Its
         holes stay (or `holes`); its level, thickness and placement stay, so its openings stay where they are.
-        A rectangle becomes a polygon; tied to beams, it no longer follows them (drawn by hand now)."""
+        A rectangle becomes a polygon; tied to beams, it no longer follows them (drawn by hand now).
+
+        (0.410) Or `loops` (core/outline_loops, program's coordinates): the outline and its holes as drawn, their
+        sides arcs or Bézier curves — the body made of them in pieces, the drawing kept beside it («Desenho»)."""
         slab, _ = self._require(guid, "slab")
         if self.slab_shape(guid) == "circulo":
             raise EditRefused("slab_circle")
@@ -212,20 +219,30 @@ class SlabMixin:
         def local(pts):
             return [tuple(float(c) for c in (inv @ np.array((x, y, m[2, 3], 1.0)))[:2]) for x, y in pts]
 
-        outside = local(outline)
-        inner = rings[1] if holes is None else [local(h) for h in holes]
+        drawing = None
+        if loops is not None:
+            drawing = outline_loops.rounded(outline_loops.mapped(loops, lambda p: local([p])[0]))
+            drawn_rings = outline_loops.rings(drawing)
+            if not drawn_rings or outline_loops.polygon(drawing) is None:
+                raise EditRefused("slab_outline")
+            outline, holes = drawn_rings[0], drawn_rings[1:]
+            outside, inner = outline, holes
+        else:
+            outside = local(outline)
+            inner = rings[1] if holes is None else [local(h) for h in holes]
         poly = core_slabs.outline_polygon(outside, inner)
-        if poly is None:
+        if poly is None and drawing is None:
             inner = [h for h in inner if core_slabs.outline_polygon(outside).contains(
                 core_slabs.outline_polygon(h))] if core_slabs.outline_polygon(outside) is not None else []
             poly = core_slabs.outline_polygon(outside, inner)
-            if poly is None:
-                raise EditRefused("slab_outline")
+        if poly is None:
+            raise EditRefused("slab_outline")
         if not self._openings_fit(slab, outside):
             raise EditRefused("opening_outside")
         thickness = float(solid.Depth) * self.unit_scale
         self._set_slab_shape(slab, thickness, outside, inner)
-        params = {"Forma": "poligono"}
+        params = {"Forma": "poligono",
+                  "Desenho": outline_loops.text(drawing) if drawing and outline_loops.curved(drawing) else None}
         if self._params(slab).get("Vigas"):
             params["Vigas"] = ""                     # (drawn by hand: it no longer follows the beams)
         self._set_params(slab, params)

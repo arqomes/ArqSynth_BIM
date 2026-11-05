@@ -1528,12 +1528,13 @@ def _follow_seat(ifc, plans):
             ifc.set_roof_blocks(g, blocks)
 
 
-def set_wall_profile(doc, guid, points, sides=None):
+def set_wall_profile(doc, guid, points, sides=None, holes=None):
     """A wall's elevation profile (0.109): [(x along its axis, z above its base)] corners — (0.375) its sides
-    straight, arcs or Bézier curves (core/curves) —, or None for a plain wall again. In a group, every copy the
-    same. One undo step."""
+    straight, arcs or Bézier curves (core/curves) —, or None for a plain wall again; (0.410) holes: the holes drawn
+    in it ([[corners, sides]…]; None keeps its own). In a group, every copy the same. One undo step."""
     gs = _and_copies(doc, guid)
-    _edit(doc, lambda ifc: [ifc.set_wall_profile(g, points, sides) for g in gs], gs, "cmd.wall_profile", plan=False)
+    _edit(doc, lambda ifc: [ifc.set_wall_profile(g, points, sides, holes) for g in gs], gs, "cmd.wall_profile",
+          plan=False)
 
 
 def attach_top(doc, guids, slab, offset=0.0):
@@ -3461,17 +3462,39 @@ def resize_slab(doc, guid, x0, y0, x1, y1):
     _edit(doc, lambda ifc: [ifc.resize_slab(g, x0, y0, x1, y1) for g in gs], gs)
 
 
-def set_slab_outline(doc, guid, outline):
-    """A slab's plan made the outline [(x, y)…] (0.100: its corners moved, added or taken away). In a group,
-    every copy gets the same outline in its own place. One undo step."""
-    gs = _and_copies(doc, guid)
+def _per_copy(doc, guid, gs, fn):
+    """fn(to_copy) for each of gs: to_copy takes a plan point of `guid` to the same place in that copy."""
     m = doc.ifc.placement(guid)
-    local = [np.linalg.inv(m) @ np.array((float(x), float(y), m[2, 3], 1.0)) for x, y in outline]
-    per_copy = {}
+    inv = np.linalg.inv(m)
+    out = {}
     for g in gs:
         mg = doc.ifc.placement(g)
-        per_copy[g] = [tuple(float(c) for c in (mg @ p)[:2]) for p in local]
+        out[g] = fn(lambda q, mg=mg: tuple(float(c) for c in (mg @ inv @ np.array((float(q[0]), float(q[1]), m[2, 3],
+                                                                                  1.0)))[:2]))
+    return out
+
+
+def set_slab_outline(doc, guid, outline=None, loops=None):
+    """A slab's plan made the outline [(x, y)…] (0.100: its corners moved, added or taken away) — (0.410) or the
+    loops drawn (core/outline_loops: the outline and its holes, their sides arcs or curves). In a group, every copy
+    gets the same outline in its own place. One undo step."""
+    from ..core import outline_loops
+    gs = _and_copies(doc, guid)
+    if loops is not None:
+        per_copy = _per_copy(doc, guid, gs, lambda go: outline_loops.mapped(loops, go))
+        _edit(doc, lambda ifc: [ifc.set_slab_outline(g, None, loops=per_copy[g]) for g in gs], gs, "cmd.slab_outline")
+        return
+    per_copy = _per_copy(doc, guid, gs, lambda go: [go(q) for q in outline])
     _edit(doc, lambda ifc: [ifc.set_slab_outline(g, per_copy[g]) for g in gs], gs, "cmd.slab_outline")
+
+
+def set_covering_outline(doc, guid, loops):
+    """(0.410) A floor finish's or a ceiling's plan made these loops (core/outline_loops: its outline and its holes,
+    their sides arcs or curves). In a group, every copy in its own place. One undo step."""
+    from ..core import outline_loops
+    gs = _and_copies(doc, guid)
+    per_copy = _per_copy(doc, guid, gs, lambda go: outline_loops.mapped(loops, go))
+    _edit(doc, lambda ifc: [ifc.set_covering_outline(g, per_copy[g]) for g in gs], gs, "cmd.covering_outline")
 
 
 def set_slab_radius(doc, guid, radius):
@@ -4695,8 +4718,10 @@ def add_wall_opening(doc, wall_guid, s, width, height, sill):
             outline = shapely_box(0.0, 0.0, length, wall_height)
             profile = ifc.wall_profile(wall)
             if profile is not None:
+                from ..core import outline_loops
                 from ..core import slabs as core_slabs
-                outline = core_slabs.outline_polygon(profile) or outline
+                outline = core_slabs.outline_polygon(profile, outline_loops.rings(ifc.wall_profile_holes(wall))) or \
+                    outline
             if (s < frame.x0 - 1e-6 or s + width > frame.x0 + frame.length + 1e-6 or sill < -1e-6
                     or not outline.buffer(1e-6).contains(shapely_box(s, sill, s + width, sill + height))):
                 raise EditRefused("opening_outside")

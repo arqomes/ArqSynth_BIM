@@ -390,7 +390,8 @@ _STRINGS = {
     "pick.merge": ("Clique nas duas paredes a juntar (em linha, de ponta a ponta).",
                    "Click the two walls to merge (in line, end to end)."),
     "pick.profile_wall": ("Clique na parede reta cujo perfil quer editar.", "Click the straight wall whose profile to edit."),
-    "pick.outline": ("Clique na laje cujo contorno quer editar.", "Click the slab whose outline to edit."),
+    "pick.outline": ("Clique na laje, no piso ou no teto cujo contorno quer editar.",
+                     "Click the slab, floor finish or ceiling whose outline to edit."),
     "pick.platform": ("Clique no terreno cuja plataforma quer editar.", "Click the terrain whose platform to edit."),
     "pick.combined_footing": ("Clique nos dois pilares da sapata combinada.", "Click the combined footing's two columns."),
     "pick.circuit": ("Clique nas tomadas, interruptores e luminárias do circuito.",
@@ -2566,23 +2567,84 @@ _STRINGS = {
     "err.slab_wand_open": ("Aqui não há paredes fechadas à volta", "There are no closed walls round here"),
     "info.slab_wand": ("Laje de {a} criada {reach} ({type}). Ctrl+Z desfaz.",
                        "{a} slab created {reach} ({type}). Ctrl+Z undoes."),
-    "tool.slab_outline": ("Contorno da laje", "Slab outline"),
-    "hint.slab_outline": ("Arraste um canto (quadrado) para o mover, ou o meio de um lado (losango) para acrescentar "
-                          "um canto. Clique num canto e Delete: tira-o. Esc: Selecionar.",
-                          "Drag a corner (square) to move it, or a side's middle (diamond) to add a corner. Click a "
-                          "corner and Delete: it goes. Esc: Select."),
+    "tool.slab_outline": ("Contorno", "Outline"),
+    # (0.410) the wall profile's gestures and holes on a slab's, a floor's, a ceiling's outline
+    "hint.slab_outline": ("Arraste o losango do meio de um lado: um canto novo — com Shift, um arco; com Alt, uma "
+                          "curva. Arraste um quadrado: move o canto. Alt + clique num canto: concordância. «Furo» na "
+                          "barra de cima: desenhar furos. Clique num ponto e Delete: tira-o. Esc: sair.",
+                          "Drag a side's middle diamond: a new corner — with Shift, an arc; with Alt, a curve. Drag a "
+                          "square: the corner moves. Alt + a click on a corner: a fillet. «Hole» on the bar above: "
+                          "draw holes. Click a point and Delete: it goes. Esc: leave."),
     "hint.slab_outline_move": ("Com o botão carregado, leve o canto e largue onde fica (ou escreva a distância + "
                                "Enter). Botão direito: fica onde estava.",
                                "With the button held, take the corner and let go where it goes (or type the distance + "
                                "Enter). Right button: it stays where it was."),
-    "hint.slab_outline_none": ("Esta laje não tem contorno que se edite aqui (uma laje circular muda pelo raio). "
+    "hint.slab_outline_none": ("Este elemento não tem contorno que se edite aqui (uma laje circular muda pelo raio). "
                                "Esc: Selecionar.",
-                               "This slab has no outline to edit here (a round slab changes by its radius). "
+                               "This element has no outline to edit here (a round slab changes by its radius). "
                                "Esc: Select."),
-    "keys.slab_outline": ("Arrastar: mover um canto  ·  arrastar o meio de um lado: canto novo  ·  clique + Delete: "
-                          "tirar o canto  ·  X / Y: bloquear o eixo  ·  Esc: Selecionar",
-                          "Drag: move a corner  ·  drag a side's middle: new corner  ·  click + Delete: take the "
-                          "corner away  ·  X / Y: lock the axis  ·  Esc: Select"),
+    "keys.slab_outline": ("Arrastar losango: canto · +Shift: arco · +Alt: curva  ·  Alt + clique num canto: "
+                          "concordância  ·  Furo: polígono, retângulo, círculo  ·  clique + Delete: tirar  ·  X / Y: "
+                          "bloquear o eixo  ·  Esc: sair",
+                          "Drag a diamond: corner · +Shift: arc · +Alt: curve  ·  Alt + click on a corner: fillet  ·  "
+                          "Hole: polygon, rectangle, circle  ·  click + Delete: take away  ·  X / Y: lock the axis  ·  "
+                          "Esc: leave"),
+    "cmd.covering_outline": ("Contorno", "Outline"),
+    "info.outline_changed": ("Contorno mudado.", "Outline changed."),
+    "info.outline_area.slab": ("A laje tem agora {a}. Ctrl+Z desfaz.", "The slab is now {a}. Ctrl+Z undoes."),
+    "info.outline_area.flooring": ("O piso tem agora {a}. Ctrl+Z desfaz.", "The floor finish is now {a}. Ctrl+Z "
+                                   "undoes."),
+    "info.outline_area.ceiling": ("O teto tem agora {a}. Ctrl+Z desfaz.", "The ceiling is now {a}. Ctrl+Z undoes."),
+    "info.outline_pick_first": ("Clique primeiro num canto, na pega de uma curva ou dentro de um furo, depois Delete.",
+                                "Click a corner, a curve's grip or inside a hole first, then Delete."),
+    # (0.410) holes drawn in an outline (a slab's, a floor's, a ceiling's) or in a wall's profile
+    "ctx.hole": ("Furo", "Hole"),
+    "holeshape.poly": ("Polígono", "Polygon"),
+    "holeshape.rect": ("Retângulo", "Rectangle"),
+    "holeshape.circle": ("Círculo", "Circle"),
+    "vcb.hole_size": ("Largura;Altura", "Width;Height"),
+    "info.hole_mode.poly": ("Furo em polígono: clique nos cantos; clique no primeiro (ou Enter) fecha. Esc: largar o "
+                            "furo.",
+                            "Polygon hole: click its corners; a click on the first one (or Enter) closes it. Esc: "
+                            "let the hole go."),
+    "info.hole_mode.rect": ("Furo retangular: clique num canto e no oposto (ou arraste), ou escreva o tamanho "
+                            "(ex.: 1,2;0,8) e Enter. Esc: largar o furo.",
+                            "Rectangular hole: click a corner and the opposite one (or drag), or type its size (e.g. "
+                            "1.2;0.8) and Enter. Esc: let the hole go."),
+    "info.hole_mode.circle": ("Furo redondo: clique no centro e na borda (ou arraste), ou escreva o raio e Enter. "
+                              "Esc: largar o furo.",
+                              "Round hole: click its centre and its edge (or drag), or type the radius and Enter. "
+                              "Esc: let the hole go."),
+    "hint.hole.poly": ("Furo: clique no primeiro canto. Esc ou botão direito: largar o furo.",
+                       "Hole: click its first corner. Esc or right button: let the hole go."),
+    "hint.hole.poly_next": ("Clique no canto seguinte; no primeiro (ou Enter) fecha o furo. Delete: tira o último. "
+                            "Esc: desiste deste.",
+                            "Click the next corner; on the first one (or Enter) the hole closes. Delete: the last one "
+                            "back. Esc: give this one up."),
+    "hint.hole.rect": ("Furo: clique num canto do retângulo (ou arraste). Esc ou botão direito: largar o furo.",
+                       "Hole: click a corner of the rectangle (or drag). Esc or right button: let the hole go."),
+    "hint.hole.rect_next": ("Clique no canto oposto, ou escreva o tamanho (ex.: 1,2;0,8) e Enter. Esc: desiste deste.",
+                            "Click the opposite corner, or type its size (e.g. 1.2;0.8) and Enter. Esc: give this "
+                            "one up."),
+    "hint.hole.circle": ("Furo: clique no centro (ou arraste até à borda). Esc ou botão direito: largar o furo.",
+                         "Hole: click its centre (or drag to its edge). Esc or right button: let the hole go."),
+    "hint.hole.circle_next": ("Clique na borda, ou escreva o raio e Enter. Esc: desiste deste.",
+                              "Click its edge, or type the radius and Enter. Esc: give this one up."),
+    "hint.hole_move": ("Com o botão carregado, leve o furo e largue onde fica. Botão direito: fica onde estava.",
+                       "With the button held, take the hole and let go where it goes. Right button: it stays where it "
+                       "was."),
+    "tip.hole": ("Furo — arraste para o mover · clique + Delete: apagar",
+                 "Hole — drag to move it · click + Delete: delete"),
+    "tip.hole_drop": ("Furo a {d}  —  largue", "Hole {d} away  —  let go"),
+    "tip.hole_close": ("Fechar o furo", "Close the hole"),
+    "tip.hole_radius": ("Raio {r}", "Radius {r}"),
+    "tip.hole_chosen": ("Furo escolhido: Delete apaga-o", "Hole chosen: Delete deletes it"),
+    "err.hole_small": ("Esse furo é pequeno demais.", "That hole is too small."),
+    "err.hole_outside": ("O furo tem de ficar dentro do contorno, sem tocar na borda nem noutro furo.",
+                         "The hole must lie inside the outline, touching neither its edge nor another hole."),
+    "info.hole_added": ("Furo de {a} feito.", "Hole of {a} made."),
+    "info.hole_deleted": ("Furo apagado.", "Hole deleted."),
+    "info.hole_moved": ("Furo mudado de sítio.", "Hole moved."),
     "tip.slab_corner": ("Arraste para mover · clique + Delete: tirar", "Drag to move · click + Delete: take away"),
     "tip.slab_add_corner": ("Arraste: um canto novo aqui", "Drag: a new corner here"),
     "tip.slab_corner_chosen": ("Escolhido: Delete tira este canto", "Chosen: Delete takes this corner away"),
@@ -2593,14 +2655,20 @@ _STRINGS = {
                                     "Click a corner first, then Delete to take it away."),
     "err.slab_three_corners": ("Uma laje precisa de pelo menos três cantos.", "A slab needs three corners at least."),
     "act.edit_outline": ("Editar contorno", "Edit outline"),
-    "tip.edit_outline": ("Mudar o contorno da laje pelos cantos: mover, acrescentar e tirar cantos",
-                         "Change the slab's outline by its corners: move, add and take away corners"),
-    "info.edit_outline_none": ("Selecione uma laje (uma só) para editar o contorno.",
-                               "Select one slab to edit its outline."),
+    "tip.edit_outline": ("Mudar o contorno da laje, do piso ou do teto: cantos, arcos (Shift), curvas (Alt), "
+                         "concordâncias e furos (também com dois cliques no elemento)",
+                         "Change the outline of the slab, floor finish or ceiling: corners, arcs (Shift), curves (Alt), "
+                         "fillets and holes (also with two clicks on the element)"),
+    "info.edit_outline_none": ("Selecione uma laje, um piso ou um teto (um só) para editar o contorno.",
+                               "Select one slab, floor finish or ceiling to edit its outline."),
     "info.edit_outline_circle": ("Uma laje circular muda pelo raio, no painel Propriedades.",
                                  "A round slab changes by its radius, in the Properties panel."),
-    "info.edit_outline": ("A editar o contorno de «{name}»: arraste um canto para o mover.",
-                          "Editing the outline of “{name}”: drag a corner to move it."),
+    "info.edit_outline": ("Contorno de «{name}»: arraste o losango do meio de um lado para fazer um canto — com Shift "
+                          "um arco, com Alt uma curva. Alt + clique num canto: concordância. «Furo» na barra de cima: "
+                          "desenhar furos. Esc: sair.",
+                          "Outline of “{name}”: drag a side's middle diamond for a corner — with Shift an arc, with "
+                          "Alt a curve. Alt + click on a corner: a fillet. «Hole» on the bar above: draw holes. "
+                          "Esc: leave."),
     "props.radius": ("Raio", "Radius"),
     "props.slab_function": ("Função", "Function"),
     "props.slab_use": ("Uso (sobrecarga)", "Use (imposed load)"),                       # (0.218)
@@ -4829,10 +4897,10 @@ _STRINGS = {
     # (0.380) no modes: a side's diamond pulled — a corner, with Shift an arc, with Alt a curve; Alt + a corner: a fillet
     "hint.wall_profile": ("Arraste o losango do meio de um lado: um canto novo — com Shift, um arco; com Alt, uma "
                           "curva. Arraste um quadrado: move o canto. Alt + clique num canto: concordância (raio). "
-                          "Clique num ponto e Delete: tira-o. Esc: sair.",
+                          "«Furo» na barra de cima: desenhar furos. Clique num ponto e Delete: tira-o. Esc: sair.",
                           "Drag a side's middle diamond: a new corner — with Shift, an arc; with Alt, a curve. Drag a "
-                          "square: the corner moves. Alt + a click on a corner: a fillet (radius). Click a point and "
-                          "Delete: it goes. Esc: leave."),
+                          "square: the corner moves. Alt + a click on a corner: a fillet (radius). «Hole» on the bar "
+                          "above: draw holes. Click a point and Delete: it goes. Esc: leave."),
     "hint.wall_profile_move": ("Com o botão carregado, leve o canto e largue onde fica. Botão direito: fica onde "
                                "estava.",
                                "With the button held, take the corner and let go where it goes. Right button: it "
@@ -4874,17 +4942,19 @@ _STRINGS = {
     "info.wall_profile_curves": ("Perfil da parede mudado ({n} lado(s) curvo(s)). Ctrl+Z desfaz.",
                                  "Wall profile changed ({n} curved side(s)). Ctrl+Z undoes."),
     "keys.wall_profile": ("Arrastar losango: canto · +Shift: arco · +Alt: curva  ·  Alt + clique num canto: "
-                          "concordância  ·  clique + Delete: tirar  ·  Esc: sair",
+                          "concordância  ·  Furo: polígono, retângulo, círculo  ·  clique + Delete: tirar  ·  Esc: sair",
                           "Drag a diamond: corner · +Shift: arc · +Alt: curve  ·  Alt + click on a corner: fillet  ·  "
-                          "click + Delete: take away  ·  Esc: leave"),
+                          "Hole: polygon, rectangle, circle  ·  click + Delete: take away  ·  Esc: leave"),
     "ctx.wall_plain": ("Parede simples (retângulo)", "Plain wall (rectangle)"),
     "info.wall_plain": ("A parede voltou a ser um retângulo. Ctrl+Z desfaz.", "The wall is a rectangle again. "
                         "Ctrl+Z undoes."),
     "info.wall_profile": ("Perfil da parede mudado. Ctrl+Z desfaz.", "Wall profile changed. Ctrl+Z undoes."),
     "info.edit_profile": ("Perfil de «{name}»: arraste o losango do meio de um lado para fazer um canto — com Shift um "
-                          "arco, com Alt uma curva. Alt + clique num canto: concordância. Esc: sair.",
+                          "arco, com Alt uma curva. Alt + clique num canto: concordância. «Furo» na barra de cima: "
+                          "desenhar furos. Esc: sair.",
                           "Profile of “{name}”: drag a side's middle diamond for a corner — with Shift an arc, with "
-                          "Alt a curve. Alt + click on a corner: a fillet. Esc: leave."),
+                          "Alt a curve. Alt + click on a corner: a fillet. «Hole» on the bar above: draw holes. "
+                          "Esc: leave."),
     "info.edit_profile_none": ("Selecione uma parede reta (uma só) para editar o perfil.",
                                "Select one straight wall to edit its profile."),
     "err.profile_bad": ("Esse perfil não serve: os lados cruzam-se ou é pequeno demais.",

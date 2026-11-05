@@ -307,30 +307,65 @@ class EditMixin:
         sides = [side_of(texts[k] if k < len(texts) else "", sx, sz) for k in range(len(pts))]
         return [(x * sx, z * sz) for x, z in pts], sides
 
+    @staticmethod
+    def _profile_holes(p, sx, sz):
+        """(0.410) The holes drawn in a wall's profile [[corners, sides]…] (core/outline_loops) stretched by (sx, sz)."""
+        from ..core import outline_loops
+        loops = outline_loops.parse(p.get("PerfilFuros")) if p.get("Perfil") else None
+        return outline_loops.mapped(loops, lambda q: (q[0] * sx, q[1] * sz)) if loops else []
+
+    def wall_profile_holes(self, wall):
+        """(0.410) The holes drawn in a wall's profile — [[corners [(x, z)], sides]…], core/outline_loops — scaled to
+        its length and height now ([]: none)."""
+        if isinstance(wall, str):
+            wall = self.by_guid(wall)
+        p = self._params(wall)
+        if not p.get("Perfil") or not p.get("PerfilFuros"):
+            return []
+        q = ifcopenshell.util.element.get_psets(wall).get("Qto_WallBaseQuantities", {})
+        s = self.unit_scale
+        sx = q["Length"] * s / float(p["PerfilComprimento"]) if q.get("Length") else 1.0
+        sz = q["Height"] * s / float(p["PerfilAltura"]) if q.get("Height") else 1.0
+        return self._profile_holes(p, sx, sz)
+
+    def _scale_of(self, wall, length, height):
+        p = self._params(wall)
+        sx = length / float(p["PerfilComprimento"]) if p.get("PerfilComprimento") else 1.0
+        sz = height / float(p["PerfilAltura"]) if p.get("PerfilAltura") else 1.0
+        return p, sx, sz
+
     def _scaled_profile(self, wall, length, height):
         """The profile stretched to this length and height (as it was drawn for its own) — (0.375) its curved sides
         in pieces —, or None."""
-        p = self._params(wall)
+        p, sx, sz = self._scale_of(wall, length, height)
         if not p.get("Perfil"):
             return None
-        sx = length / float(p["PerfilComprimento"]) if p.get("PerfilComprimento") else 1.0
-        sz = height / float(p["PerfilAltura"]) if p.get("PerfilAltura") else 1.0
         from ..core.curves import profile_outline
         return profile_outline(*self._profile_parts(p, sx, sz))
 
-    def set_wall_profile(self, guid, points, sides=None):
+    def _scaled_holes(self, wall, length, height):
+        """(0.410) The profile's holes stretched to this length and height, their curved sides in pieces."""
+        from ..core import outline_loops
+        p, sx, sz = self._scale_of(wall, length, height)
+        return outline_loops.rings(self._profile_holes(p, sx, sz))
+
+    def set_wall_profile(self, guid, points, sides=None, holes=None):
         """A wall's elevation drawn by its profile — [(x, z)] corners in its own frame, x from 0 to its length; (0.375)
         sides: each side straight (None), an arc or a Bézier (core/curves) — or plain again (None). Its height is
-        the profile's top; a door / window must stay inside it."""
+        the profile's top; a door / window must stay inside it.
+
+        (0.410) holes: the holes drawn in it ([[corners, sides]…], core/outline_loops; [] none) — None keeps the
+        ones it has (those still inside it)."""
         wall, _ = self._require(guid, "wall")
         length, _h, thickness = self.wall_params(guid)
         if points is None:
             pts = self.wall_profile(wall)
             height = max(z for _x, z in pts) if pts else _h
             self._set_params(wall, {"Perfil": None, "PerfilComprimento": None, "PerfilAltura": None,
-                                    "PerfilLados": None})
+                                    "PerfilLados": None, "PerfilFuros": None})
             self._set_wall_body(wall, length, height, thickness)
             return
+        from ..core import outline_loops
         from ..core import slabs as core_slabs
         from ..core.curves import profile_outline, side_text
         pts = [(min(max(float(x), 0.0), length), max(float(z), 0.0)) for x, z in points]
@@ -344,6 +379,15 @@ class EditMixin:
         height = max(z for _x, z in outline)
         if height < MIN_SIZE - 1e-9:
             raise EditRefused("too_small")
+        if holes is None:                           # (0.410) kept — those no longer inside the new profile let go
+            holes = [h for h in outline_loops.rounded(self.wall_profile_holes(wall))
+                     if core_slabs.outline_polygon(outline, outline_loops.rings([h])) is not None]
+        else:
+            holes = outline_loops.rounded(holes)
+        if holes:
+            poly = core_slabs.outline_polygon(outline, outline_loops.rings(holes))
+            if poly is None:
+                raise EditRefused("profile_bad")
         bounds = self.opening_bounds(guid)
         if bounds is not None:
             lo, hi = bounds
@@ -353,21 +397,27 @@ class EditMixin:
                 raise EditRefused("opening_outside")
         self._set_params(wall, {"Perfil": ";".join("{:.6f},{:.6f}".format(x, z) for x, z in pts),
                                 "PerfilComprimento": length, "PerfilAltura": height,
-                                "PerfilLados": "|".join(side_text(s) for s in sides) if any(sides) else None})
+                                "PerfilLados": "|".join(side_text(s) for s in sides) if any(sides) else None,
+                                "PerfilFuros": outline_loops.text(holes) if holes else None})
         self._set_wall_body(wall, length, height, thickness)
 
-    def _profile_wall_solid(self, points, thickness):
-        """A wall's body from its elevation profile: the outline in its x-z plane extruded across its thickness
-        (centred on its axis)."""
+    def _profile_wall_solid(self, points, thickness, holes=()):
+        """A wall's body from its elevation profile: the outline in its x-z plane — (0.410) less its holes —
+        extruded across its thickness (centred on its axis)."""
         f, u = self.file, 1.0 / self.unit_scale
-        coords = [(float(x * u), float(z * u)) for x, z in points]
-        coords.append(coords[0])
-        if f.schema == "IFC2X3":
-            curve = f.createIfcPolyline([f.createIfcCartesianPoint(p) for p in coords])
-        else:
-            curve = f.createIfcIndexedPolyCurve(f.createIfcCartesianPointList2D(coords), None, False)
+
+        def curve_of(ring):
+            coords = [(float(x * u), float(z * u)) for x, z in ring]
+            coords.append(coords[0])
+            if f.schema == "IFC2X3":
+                return f.createIfcPolyline([f.createIfcCartesianPoint(p) for p in coords])
+            return f.createIfcIndexedPolyCurve(f.createIfcCartesianPointList2D(coords), None, False)
+
+        profile = f.createIfcArbitraryProfileDefWithVoids("AREA", None, curve_of(points),
+                                                          [curve_of(h) for h in holes]) if holes else \
+            f.createIfcArbitraryClosedProfileDef("AREA", None, curve_of(points))
         solid = f.createIfcExtrudedAreaSolid(       # (the position's z along -y: its y is the wall's z)
-            f.createIfcArbitraryClosedProfileDef("AREA", None, curve),
+            profile,
             f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, float(thickness / 2 * u), 0.0)),
                                         f.createIfcDirection((0.0, -1.0, 0.0)), f.createIfcDirection((1.0, 0.0, 0.0))),
             f.createIfcDirection((0.0, 0.0, 1.0)), float(thickness * u))
@@ -378,13 +428,14 @@ class EditMixin:
         profile = self._scaled_profile(wall, length, height)
         if profile is not None:                     # (0.109) drawn by its elevation profile
             from ..core.slabs import ring_area
+            holes = self._scaled_holes(wall, length, height)
             self._clear_representations(wall)
             api.geometry.assign_representation(self.file, product=wall,
-                                               representation=self._profile_wall_solid(profile, thickness))
+                                               representation=self._profile_wall_solid(profile, thickness, holes))
             axis = api.geometry.add_axis_representation(self.file, context=self.axis,
                                                         axis=[(0.0, 0.0), (length, 0.0)])
             api.geometry.assign_representation(self.file, product=wall, representation=axis)
-            area = ring_area(profile)
+            area = ring_area(profile) - sum(ring_area(h) for h in holes)
             self._set_qto(wall, "Qto_WallBaseQuantities", {"Length": length * u, "Height": height * u,
                                                            "Width": thickness * u, "GrossVolume": area * thickness,
                                                            "GrossSideArea": area})

@@ -644,6 +644,36 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.410 — Contorno do piso como o perfil da parede; furos desenhados
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.410.0**. Abra a planta (F4) de um projeto
+   novo.
+2. Desenhe uma laje: **Arquitetura ▸ Pisos e coberturas ▸ Laje**, dois cliques em cantos opostos (por exemplo um
+   retângulo de 6 × 4 m). Carregue em **Esc**.
+3. Carregue em **Espaço** (Selecionar) e dê **dois cliques** na laje: aparecem quadrados nos cantos e losangos no
+   meio dos lados; o balão diz Shift, Alt e «Furo». Na barra de cima aparece «Contorno — Furo: Polígono, Retângulo,
+   Círculo».
+4. Carregue sem largar no **losango do lado direito**, carregue também em **Shift** e leve o rato 1 m para fora;
+   largue: o lado fica um **arco**.
+5. Faça o mesmo no **losango de cima**, mas com **Alt**: o lado fica uma **curva**, com duas linhas de tangente.
+6. Com **Alt** carregado, clique no **canto de baixo à esquerda**, escreva **0,5** e carregue em **Enter**: o canto
+   fica arredondado (concordância de 0,50 m).
+7. Na barra de cima, clique em **Retângulo** (fica aceso). Clique em dois pontos dentro da laje: aparece um **furo**
+   retangular, com as suas pegas.
+8. Clique em **Polígono** e clique em três pontos dentro da laje; clique outra vez no primeiro: fecha-se um furo
+   triangular.
+9. Clique em **Círculo**, clique num ponto dentro da laje, escreva **0,4** e **Enter**: um furo redondo de 0,40 m de
+   raio.
+10. Carregue em **Esc**: o botão apaga-se (continua a editar a laje).
+11. Carregue dentro do furo retangular, arraste-o e largue noutro sítio: o furo muda de sítio.
+12. Clique dentro do furo triangular (fica laranja) e carregue em **Delete**: o furo desaparece. **Ctrl+Z** volta a
+    pô-lo.
+13. Arraste o losango do meio de um lado de um furo com **Shift**: esse lado do furo fica em arco.
+14. Carregue em **Esc**: volta ao Selecionar. Rode a vista (3D): a laje tem os furos e o lado em arco.
+15. Faça um **Piso** (Arquitetura ▸ Acabamentos ▸ Piso) e dê dois cliques nele: edita-se da mesma maneira.
+16. Dê dois cliques numa **parede** (perfil da parede). Na barra de cima clique em **Retângulo** e em dois pontos na
+    parede: um furo que a atravessa. Experimente pôr uma janela por cima do furo: é recusada.
+
 ## 0.409 — Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.409.0**. Abra a planta (F4) da casa com o

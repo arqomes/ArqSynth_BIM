@@ -3495,6 +3495,129 @@ class WallProfile(unittest.TestCase):
         self.assertEqual(len(doc.ifc.wall_profile(wall)), 4)
         self.assertIsNone(doc.ifc._params(doc.ifc.by_guid(wall)).get("PerfilLados"))
 
+    def test_wall_profile_holes(self):
+        """0.410 (the owner: «desenhar (em edição) polígonos no meio para fazer buracos personalizados»): a 6 m wall
+        with a door, a rectangular hole and a round one (four arcs) drawn in its profile — its volume less theirs, the
+        body an extrusion with voids; kept in the IFC, stretched with the wall; the profile changed without saying
+        the holes: they stay (one no longer inside goes); a hole over the door refused; a window over a hole
+        refused; plain again: no holes; a valid IFC."""
+        import math
+        from arqbim.core import outline_loops
+        doc = Document()
+        wall = bim.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+        bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], bim.wall_frame(doc, wall), 1.0, 1)
+        door_cut = 0.8 * 2.1 * 0.2
+        corners = [(0.0, 0.0), (6.0, 0.0), (6.0, 2.8), (0.0, 2.8)]
+        square = outline_loops.rectangle((3.0, 1.0), (4.0, 2.0))
+        disc = outline_loops.circle((5.0, 1.5), 0.4)
+        bim.set_wall_profile(doc, wall, corners, [None] * 4, holes=[square, disc])
+        holes = doc.ifc.wall_profile_holes(wall)
+        self.assertEqual([len(h[0]) for h in holes], [4, 4])
+        self.assertEqual([s and s["kind"] for s in holes[1][1]], ["arc"] * 4)
+        solid = doc.ifc.by_guid(wall).Representation.Representations[0].Items[0]
+        self.assertEqual(solid.SweptArea.is_a(), "IfcArbitraryProfileDefWithVoids")
+        volume = (6 * 2.8 - 1.0 - math.pi * 0.16) * 0.2 - door_cut
+        self.assertAlmostEqual(doc.get(wall).mesh.volume(), volume, delta=0.002)
+        q = ue.get_psets(doc.ifc.by_guid(wall))["Qto_WallBaseQuantities"]
+        self.assertAlmostEqual(q["GrossSideArea"], 6 * 2.8 - 1.0 - math.pi * 0.16, delta=0.01)
+        with self.assertRaises(ValueError):                              # (a hole over the door)
+            bim.set_wall_profile(doc, wall, corners, [None] * 4, holes=[outline_loops.rectangle((0.9, 0.5),
+                                                                                               (1.5, 1.5))])
+        with self.assertRaises(ValueError):                              # (a hole poking out of the wall)
+            bim.set_wall_profile(doc, wall, corners, [None] * 4, holes=[outline_loops.rectangle((5.5, 1.0),
+                                                                                               (6.5, 2.0))])
+        with self.assertRaises(ValueError):                              # (a window over a hole)
+            bim.add_wall_opening(doc, wall, 2.8, 0.6, 0.6, 1.2)
+        bim.resize_wall(doc, wall, at_end=2.0)                           # (stretched with the wall: 6 → 8 m)
+        holes = doc.ifc.wall_profile_holes(wall)
+        self.assertAlmostEqual(holes[0][0][0][0], 4.0, places=6)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        # the profile changed, its holes not said: they stay — the round one, out of the shorter profile, goes
+        bim.set_wall_profile(doc, wall, [(0.0, 0.0), (6.2, 0.0), (6.2, 2.8), (0.0, 2.8)])
+        holes = doc.ifc.wall_profile_holes(wall)
+        self.assertEqual(len(holes), 1)
+        bim.set_wall_profile(doc, wall, None)
+        self.assertEqual(doc.ifc.wall_profile_holes(wall), [])
+        self.assertIsNone(doc.ifc._params(doc.ifc.by_guid(wall)).get("PerfilFuros"))
+
+
+class OutlinesDrawn(unittest.TestCase):
+    """0.410 (the owner: «assim como editamos o perfil da parede com Shift, Alt, quero que faça também o mesmo com o
+    piso»; «buracos personalizados»): a slab's, a floor finish's and a ceiling's outline as drawn — sides arcs and
+    curves, holes —, the body in pieces, the drawing kept beside it and read back while it is still that body."""
+
+    def test_loops_text(self):
+        from arqbim.core import outline_loops
+        loops = [[[(0.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)],
+                  [None, {"kind": "arc", "through": (5.0, 1.5)}, None, {"kind": "bezier", "h1": (-1, 2), "h2": (-1, 1)}]],
+                 outline_loops.circle((2.0, 1.5), 0.5)]
+        back = outline_loops.parse(outline_loops.text(loops))
+        self.assertEqual([[s and s["kind"] for s in sd] for _c, sd in back],
+                         [[None, "arc", None, "bezier"], ["arc"] * 4])
+        self.assertTrue(outline_loops.matches(back, outline_loops.rings(loops)))
+        self.assertFalse(outline_loops.matches(back, outline_loops.rings(loops)[:1]))
+        self.assertIsNone(outline_loops.parse("nada"))
+        self.assertIsNotNone(outline_loops.polygon(loops + [outline_loops.rectangle((3.5, 1.0), (4.5, 2.0))]))
+        self.assertIsNone(outline_loops.polygon(loops + [outline_loops.rectangle((2.2, 1.2), (3.0, 1.8))]))  # (crosses)
+
+    def test_slab_outline_drawn(self):
+        import math
+        from arqbim.core import outline_loops
+        doc = Document()
+        slab = bim.add_slab_outline(doc, [(0, 0), (6, 0), (6, 4), (0, 4)], 0.0, catalog.BY_KEY["laje_12"])
+        loops = doc.ifc.slab_outline(slab)["loops"]
+        self.assertEqual((len(loops), [s for s in loops[0][1]]), (1, [None] * 4))
+        # the side x = 6 an arc bulging 1 m out; a square hole and a round one
+        loops[0][1][1] = {"kind": "arc", "through": (7.0, 2.0)}
+        loops += [outline_loops.rectangle((1.0, 1.0), (2.0, 2.0)), outline_loops.circle((4.0, 2.0), 0.5)]
+        bim.set_slab_outline(doc, slab, loops=loops)
+        info = doc.ifc.slab_outline(slab)
+        self.assertEqual([[s and s["kind"] for s in sd] for _c, sd in info["loops"]],
+                         [[None, "arc", None, None], [None] * 4, ["arc"] * 4])
+        self.assertEqual(len(info["holes"]), 2)
+        r = (1.0 + 4.0) / 2                                             # (the arc through (6,0) (7,2) (6,4): r 2,5)
+        segment = r * r * math.acos((r - 1.0) / r) - (r - 1.0) * math.sqrt(2 * r * 1.0 - 1.0)
+        area = 24 + segment - 1.0 - math.pi * 0.25
+        self.assertAlmostEqual(info["area"], area, delta=0.02)
+        self.assertEqual(doc.ifc._slab_solid(doc.ifc.by_guid(slab)).SweptArea.is_a(),
+                         "IfcArbitraryProfileDefWithVoids")
+        self.assertAlmostEqual(doc.get(slab).mesh.volume(), area * 0.12, delta=0.005)
+        doc.undo()                                                      # (one undo step)
+        self.assertEqual(len(doc.ifc.slab_outline(slab)["holes"]), 0)
+        doc.redo()
+        self.assertEqual(len(doc.ifc.slab_outline(slab)["loops"]), 3)
+        # its corners moved the old way (by another command): the drawing no longer matches — its corners, straight
+        ring = doc.ifc.slab_outline(slab)["outline"]
+        bim.set_slab_outline(doc, slab, [(x + (0.5 if x > 6.5 else 0.0), y) for x, y in ring])
+        loops = doc.ifc.slab_outline(slab)["loops"]
+        self.assertFalse(outline_loops.curved(loops))
+        self.assertGreater(len(loops[0][0]), 10)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
+    def test_floor_and_ceiling_outline_drawn(self):
+        from arqbim.core import outline_loops
+        doc = Document()
+        floor = bim.add_flooring(doc, [(0, 0), (5, 0), (5, 4), (0, 4)], "madeira")
+        ceiling = bim.add_ceiling(doc, [(0, 0), (5, 0), (5, 4), (0, 4)])
+        for guid in (floor, ceiling):
+            loops = doc.ifc.ceiling_params(guid)["loops"]
+            self.assertEqual(len(loops), 1)
+            loops[0][1][0] = {"kind": "bezier", "h1": (1.5, -1.0), "h2": (3.5, -1.0)}      # (the side y = 0 curved out)
+            loops.append(outline_loops.circle((2.5, 2.0), 0.6))
+            bim.set_covering_outline(doc, guid, loops)
+            p = doc.ifc.ceiling_params(guid)
+            self.assertEqual([[s and s["kind"] for s in sd] for _c, sd in p["loops"]], [["bezier", None, None, None],
+                                                                                         ["arc"] * 4])
+            self.assertEqual(len(p["holes"]), 1)
+            self.assertGreater(len(p["outline"]), 10)
+            self.assertIsNotNone(doc.get(guid).mesh)
+        q = ue.get_psets(doc.ifc.by_guid(floor))["Qto_CoveringBaseQuantities"]
+        self.assertGreater(q["GrossArea"], 20.0 - 1.2)                   # (the curve adds, the round hole takes)
+        with self.assertRaises(ValueError):                              # (a hole across the edge)
+            bim.set_covering_outline(doc, floor, [[[(0, 0), (5, 0), (5, 4), (0, 4)], [None] * 4],
+                                                  outline_loops.rectangle((4.5, 1.0), (5.5, 2.0))])
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
 
 class Mirror(unittest.TestCase):
     """0.108: a corner of two walls with a door (hinged left), a column, an L slab and a beam mirrored about the

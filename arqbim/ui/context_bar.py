@@ -120,6 +120,22 @@ class ContextBar(QtWidgets.QToolBar):
             widget = QtWidgets.QLineEdit(format_length(option.value, decimal_sep()))
             widget.setFixedWidth(80)
             widget.editingFinished.connect(lambda w=widget, k=option.key: self._typed(k, w))
+        elif option.kind == "buttons":
+            # (0.410) side by side, the one on lit — a click on another lights it, on the lit one puts it out ("")
+            widget = QtWidgets.QWidget(self)
+            row = QtWidgets.QHBoxLayout(widget)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(2)
+            for value, text in option.choices:
+                button = QtWidgets.QToolButton(widget)
+                button.setText(text)
+                button.setCheckable(True)
+                button.setChecked(value == option.value)
+                button.setObjectName("ctx_{}_{}".format(option.key, value))
+                button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+                button.clicked.connect(lambda _on=False, k=option.key, v=value: self._changed(
+                    k, "" if self.fields[k][1].value == v else v))
+                row.addWidget(button)
         else:
             widget = QtWidgets.QCheckBox(option.label)
             widget.setChecked(bool(option.value))
@@ -162,6 +178,9 @@ class ContextBar(QtWidgets.QToolBar):
             elif option.kind == "length":
                 if not widget.hasFocus():
                     widget.setText(format_length(option.value, decimal_sep()))
+            elif option.kind == "buttons":
+                for button in widget.findChildren(QtWidgets.QToolButton):
+                    button.setChecked(button.objectName() == "ctx_{}_{}".format(option.key, option.value))
             else:
                 widget.setChecked(bool(option.value))
             del blocker

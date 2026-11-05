@@ -648,6 +648,7 @@ def bim_flow():
     wall_profile_flow()
     wall_profile_curves_flow()
     wall_profile_direct_flow()
+    outline_gestures_flow()
     openings_kit_flow()
     roofs_flow()
     attach_roof_flow()
@@ -4677,13 +4678,13 @@ def slabs_flow():
     move(at(mid), 3)
     press()
     pump(100)
-    added = len(win.tool._ring) == 5 and win.tool._picked == 3
-    key(Qt.Key.Key_Delete)                                # (picked, not moved: taken away again)
+    added = win.tool._picked == ("side", 0, 2)            # (0.410: a corner is made only once it is dragged)
+    key(Qt.Key.Key_Delete)                                # (picked, not moved: given up)
     pump(300)
     release()
     pump(100)
-    back = len(doc.ifc.slab_outline(poly)["outline"]) == 4 and len(win.tool._ring) == 4
-    corner = next(k for k, q in enumerate(win.tool._ring) if np.hypot(q[0] - 9.5, q[1] - 3.5) < 0.1)
+    back = len(doc.ifc.slab_outline(poly)["outline"]) == 4 and len(win.tool._pts) == 4
+    corner = next(k for k, q in enumerate(win.tool._pts) if np.hypot(q[0] - 9.5, q[1] - 3.5) < 0.1)
     move(at(vp.grips[0][corner]), 3)                      # (0.382) a click on a corner and Delete: it goes
     click()
     pump(100)
@@ -5115,7 +5116,7 @@ def wall_profile_direct_flow():
         return parts and [sd and sd["kind"] for sd in parts[1]]
 
     def grip_of_side(side):
-        k = next(k for k, (sd, _w) in enumerate(tool._mids) if sd == side)
+        k = next(k for k, (_n, sd, _w) in enumerate(tool._mids) if sd == side)
         return vp.grips[1][k].copy()
 
     # the top's diamond pulled up: a corner shown; Shift pressed, the mouse still: an arc shown; let go: an arc
@@ -5125,7 +5126,7 @@ def wall_profile_direct_flow():
     press()
     move(at(p + np.array((0.0, 0.0, 1.0))), 8)
     pump(150)
-    corner_first = tool._picked == ("side", 2) and vp.tip_text.startswith("Canto")
+    corner_first = tool._picked == ("side", 0, 2) and vp.tip_text.startswith("Canto")
     QtTest.QTest.keyPress(QtWidgets.QApplication.focusWidget() or canvas, Qt.Key.Key_Shift)
     pump(200)
     arc_at_once = vp.tip_text.startswith("Arco")
@@ -5167,7 +5168,7 @@ def wall_profile_direct_flow():
     press(modifiers=ALT)
     release(modifiers=ALT)
     pump(200)
-    filleting = tool._picked == ("fillet", bottom_right) and tool.accepts_typing
+    filleting = tool._picked == ("fillet", 0, bottom_right) and tool.accepts_typing
     move(at(vp.grips[0][bottom_right] + np.array((-0.4 * float(along[0]), -0.4 * float(along[1]), 0.3))), 6)
     pump(200)
     radius_shown = vp.tip_text.startswith("Raio")
@@ -5208,6 +5209,191 @@ def wall_profile_direct_flow():
     pump(300)
 
 
+def outline_gestures_flow():
+    """0.410 (the owner: «assim como editamos o perfil da parede com Shift, Alt, quero que faça também o mesmo com o
+    piso»; «2 clique no piso para abrir a edição do perfil»; «desenhar (em edição) polígonos no meio para fazer
+    buracos personalizados»), as he does it, in the plan: a 6 × 4 slab clicked twice — its outline edited, the
+    balloon saying Shift, Alt and «Furo»; its right side's diamond dragged 1 m out with Shift: an arc; its top's with
+    Alt: a curve; Alt and a click on the bottom left corner, 0,5 typed, Enter: a fillet; «Furo ▸ Retângulo», two
+    clicks: a hole; «Polígono», three clicks and one on the first: another; «Círculo», a click and 0,4 typed: a third;
+    Esc: the holes' mode off, still editing; the rectangle dragged 50 cm up: moved; the triangle clicked and Delete:
+    gone, Ctrl+Z: back; Esc: Select. A floor finish clicked twice: its outline, a side made an arc with Shift. A
+    wall's profile: «Furo ▸ Retângulo», two clicks: a hole through the wall. Captured: 410_contorno_furos.png,
+    410_furo_parede.png. The IFC valid."""
+    from arqbim.core import outline_loops
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = bim_actions.add_slab_outline(doc, [(0, 0), (6, 0), (6, 4), (0, 4)], 0.0, catalog.BY_KEY["laje_12"])
+    floor = bim_actions.add_flooring(doc, [(10, 0), (14, 0), (14, 3), (10, 3)], "madeira")
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents([slab, floor])
+    pump(200)
+    win.set_tool("select")
+    pump(100)
+    SHIFT, ALT = Qt.KeyboardModifier.ShiftModifier, Qt.KeyboardModifier.AltModifier
+    move(near((1.5, 2.5, 0.0)), 3)
+    click()
+    pump(120)
+    click()
+    pump(500)
+    tool = win.tool
+    opened = tool.name == "slab_outline" and getattr(tool, "kind", None) == "slab" and len(vp.grips[0]) == 4
+    said = "Shift" in win.last_message and "Alt" in win.last_message and "Furo" in win.last_message
+    vp.zoom_extents([slab])                                            # (closer, as one works on it)
+    pump(300)
+
+    def kinds(loops):
+        return [[sd and sd["kind"] for sd in sides] for _c, sides in loops]
+
+    def side_grip(mid):
+        """The diamond of the outline's straight side whose middle is `mid`."""
+        pts = tool._pts
+        k = next(i for i in range(len(pts)) if np.hypot((pts[i][0] + pts[(i + 1) % len(pts)][0]) / 2 - mid[0],
+                                                       (pts[i][1] + pts[(i + 1) % len(pts)][1]) / 2 - mid[1]) < 0.01)
+        g = next(j for j, (n, sd, w) in enumerate(tool._mids) if n == 0 and sd == k and w == "mid")
+        return vp.grips[1][g].copy()
+
+    def drag_from(p, to, modifiers=Qt.KeyboardModifier.NoModifier):
+        move(at(p), 4, modifiers)
+        pump(120)
+        press(modifiers=modifiers)
+        move(near(to), 8, modifiers)
+        pump(150)
+        release(modifiers=modifiers)
+        pump(500)
+
+    drag_from(side_grip((6.0, 2.0)), (7.0, 2.0, 0.0), SHIFT)            # the right side: an arc
+    loops = doc.ifc.slab_outline(slab)["loops"]
+    arc_side = next((s for s in loops[0][1] if s and s["kind"] == "arc"), None)
+    arc = arc_side is not None and abs(arc_side["through"][0] - 7.0) < 0.1
+    drag_from(side_grip((3.0, 4.0)), (3.0, 4.6, 0.0), ALT)              # the top: a curve
+    curve = sum(1 for k in kinds(doc.ifc.slab_outline(slab)["loops"])[0] if k == "bezier") == 1
+    corner = next(j for j, (n, c) in enumerate(tool._ends) if n == 0 and np.hypot(*tool._pts[c]) < 1e-6)
+    move(at(vp.grips[0][corner]), 4)
+    press(modifiers=ALT)
+    release(modifiers=ALT)
+    pump(200)
+    move(near((0.4, 0.4, 0.0)), 4)
+    type_text("0,5")
+    key(Qt.Key.Key_Return)
+    pump(500)
+    loops = doc.ifc.slab_outline(slab)["loops"]
+    fillet = len(loops[0][0]) == 5 and kinds(loops)[0].count("arc") == 2
+
+    def hole_button(shape):
+        button = win.context_bar.findChild(QtWidgets.QToolButton, "ctx_hole_" + shape)
+        if button is not None:
+            button.click()
+            pump(200)
+        return button is not None
+
+    def holes():
+        return doc.ifc.slab_outline(slab)["loops"][1:]
+
+    buttons = hole_button("rect")
+    rect_mode = tool.hole_shape == "rect"
+    for p in ((1.5, 1.0, 0.0), (2.5, 2.0, 0.0)):
+        move(near(p), 4)
+        click()
+        pump(200)
+    pump(300)
+    # (the clicks come onto the alignments found, as when a slab is drawn: within ~15 cm here)
+    rect = len(holes()) == 1 and len(holes()[0][0]) == 4 and abs(outline_loops.area(holes()) - 1.0) < 0.3
+    buttons = hole_button("poly") and buttons
+    for p in ((3.5, 1.0, 0.0), (4.5, 1.0, 0.0), (4.0, 2.0, 0.0), (3.5, 1.0, 0.0)):
+        move(near(p), 4)
+        click()
+        pump(200)
+    pump(300)
+    poly = len(holes()) == 2 and len(holes()[1][0]) == 3
+    buttons = hole_button("circle") and buttons
+    move(near((4.8, 2.9, 0.0)), 4)
+    click()
+    pump(150)
+    move(near((5.0, 2.9, 0.0)), 4)
+    type_text("0,4")
+    key(Qt.Key.Key_Return)
+    pump(500)
+    circle = len(holes()) == 3 and kinds(holes())[2] == ["arc"] * 4
+    shot("410_contorno_furos.png")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    mode_off = win.tool is tool and tool.hole_shape == "" and \
+        not win.context_bar.findChild(QtWidgets.QToolButton, "ctx_hole_rect").isChecked()
+    before = outline_loops.polygon([holes()[0]]).centroid.y
+    move(near((2.0, 1.5, 0.0)), 4)                                     # (inside the rectangle: dragged, it moves)
+    press()
+    move(near((2.0, 2.0, 0.0)), 8)
+    pump(150)
+    release()
+    pump(500)
+    moved = abs(outline_loops.polygon([holes()[0]]).centroid.y - before - 0.5) < 0.06
+    move(near((4.0, 1.35, 0.0)), 4)                                    # (inside the triangle: a click, Delete)
+    click()
+    pump(200)
+    chosen = tool._chosen is not None and tool._chosen[0] == "hole"
+    key(Qt.Key.Key_Delete)
+    pump(500)
+    deleted = len(holes()) == 2
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    undone = len(holes()) == 3
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    left = win.tool.name == "select"
+    # a floor finish: two clicks, a side an arc with Shift
+    vp.zoom_extents([slab, floor])
+    pump(300)
+    move(near((12.0, 1.5, 0.0)), 4)
+    click()
+    pump(120)
+    click()
+    pump(500)
+    tool = win.tool
+    floor_open = tool.name == "slab_outline" and getattr(tool, "kind", None) == "flooring"
+    if floor_open:
+        drag_from(side_grip((14.0, 1.5)), (14.8, 1.5, 0.0), SHIFT)
+    floor_arc = any(s and s["kind"] == "arc" for s in doc.ifc.ceiling_params(floor)["loops"][0][1])
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    # a wall's profile: a rectangular hole through it
+    wall = bim_actions.add_wall(doc, np.array((0.0, -3.0, 0.0)), np.array((6.0, -3.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win.edit_wall_profile(wall)
+    pump(500)
+    tool = win.tool
+    wall_buttons = hole_button("rect")
+    for q in ((2.0, 1.0), (3.2, 2.0)):
+        move(at(tool._world([q])[0]), 4)
+        click()
+        pump(200)
+    pump(400)
+    wall_holes = doc.ifc.wall_profile_holes(wall)
+    wall_hole = len(wall_holes) == 1 and abs(outline_loops.area(wall_holes) - 1.2) < 0.06 and \
+        abs(volume(doc.get(wall)) - (6 * 2.8 - 1.2) * 0.2) < 0.02
+    shot("410_furo_parede.png")
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    key(Qt.Key.Key_Escape)
+    pump(400)
+    back = win.tool.name == "select"
+    valid = doc.ifc.validate() == []
+    check("contorno_gestos_e_furos", opened and said and arc and curve and fillet and buttons and rect_mode and rect
+          and poly and circle and mode_off and moved and chosen and deleted and undone and left and floor_open
+          and floor_arc and wall_buttons and wall_hole and back and valid,
+          "abre={} dito={} arco={} curva={} concordancia={} botoes={}/{} retangulo={} poligono={} circulo={} "
+          "modo_sai={} move={} escolhe={} apaga={} desfaz={} sai={} piso={}/{} parede={}/{} volta={} valido={} "
+          "{}".format(opened, said, arc, curve, fillet, buttons, rect_mode, rect, poly, circle, mode_off, moved,
+                      chosen, deleted, undone, left, floor_open, floor_arc, wall_buttons, wall_hole, back, valid,
+                      [[tuple(float(v) for v in np.round(c, 2)) for c in h[0]] for h in holes()]))
+    doc.modified = False
+
+
 def wall_profile_curves_flow():
     """0.375 (the owner: «na edição do perfil da parede preciso de mais controlo para poder criar arcos ou curva
     Bézier»), (0.381: «porque não está funcionando para as curvas?» — the owner's own gestures, as the X server saw
@@ -5229,7 +5415,7 @@ def wall_profile_curves_flow():
     pump(400)
     tool = win.tool
     SHIFT, ALT = Qt.KeyboardModifier.ShiftModifier, Qt.KeyboardModifier.AltModifier
-    top = next(k for k, (s, _w) in enumerate(tool._mids) if s == 2)
+    top = next(k for k, (_n, s, _w) in enumerate(tool._mids) if s == 2)
     p = vp.grips[1][top]
     move(at(p), 4)
     pump(200)
@@ -5245,7 +5431,7 @@ def wall_profile_curves_flow():
     press(modifiers=SHIFT)                          # (a click again there, on the arc's own grip)
     release(modifiers=SHIFT)
     pump(300)
-    left = next(k for k, (s, _w) in enumerate(tool._mids) if s == 3)
+    left = next(k for k, (_n, s, _w) in enumerate(tool._mids) if s == 3)
     p = vp.grips[1][left]
     move(at(p), 8)                                  # (the mouse taken away: the arc must not follow it)
     pump(300)

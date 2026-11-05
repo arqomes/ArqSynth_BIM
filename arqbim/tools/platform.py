@@ -13,7 +13,7 @@ from ..i18n import decimal_sep, t
 from ..model import bim
 from ..render.viewport import PREVIEW
 from .base import LEFT, RIGHT, Option, Tool, infer_point, show_snap
-from .slab import SlabOutlineTool
+from .slab import RingOutlineTool
 
 TERRAIN_CLASS = "IfcGeographicElement"
 CLOSE_PX = 10
@@ -329,7 +329,7 @@ class TerrainRampTool(PlatformTool):
         return cut, fill
 
 
-class PlatformOutlineTool(SlabOutlineTool):
+class PlatformOutlineTool(RingOutlineTool):
     """Editar plataforma (0.204): a platform's corners as grips, at its height — picked up and put down, one added
     in a side's middle, one taken away (Delete), a distance typed —, its slopes and the ground round it made again
     each time (one undo step), as a slab's outline (0.100). A terrain with several platforms: a click inside one

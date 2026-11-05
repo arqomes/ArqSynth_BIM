@@ -20,6 +20,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 
 from ..core import ceilings as core_ceilings
+from ..core import outline_loops
 from ..core import surfaces as core_surfaces
 from .edit import EditRefused
 
@@ -84,9 +85,58 @@ class CoveringMixin:
         local = _pts(p.get("Contorno"))
         holes = [_pts(h) for h in (p.get("Furos") or "").split("|") if h]
         world = lambda pts: [tuple((m @ np.array((x, y, 0.0, 1.0)))[:2]) for x, y in pts]      # noqa: E731
+        # (0.410) as drawn — the outline and its holes, their sides arcs or curves — while it still is this one
+        loops = outline_loops.drawn([local] + holes, p.get("Desenho")) if len(local) >= 3 else []
         return {"outline": world(local), "holes": [world(h) for h in holes], "local": local, "local_holes": holes,
                 "style": p.get("Estilo") or "continuous", "thickness": float(p.get("Espessura") or BOARD),
-                "z": float(m[2, 3])}
+                "z": float(m[2, 3]),
+                "loops": outline_loops.mapped(loops, lambda q: tuple(float(c) for c in world([q])[0]))}
+
+    def set_covering_outline(self, guid, loops):
+        """(0.410) A ceiling's or a floor finish's plan made these loops (core/outline_loops, program's coordinates):
+        its outline and its holes as drawn, their sides arcs or Bézier curves — kept in pieces in «Contorno» /
+        «Furos» (what the body and everything else read) and as drawn in «Desenho»."""
+        covering, kind = self._require(guid, "ceiling", "flooring")
+        m = self._placement_si(covering)
+        inv = np.linalg.inv(m)
+        local = outline_loops.rounded(outline_loops.mapped(
+            loops, lambda q: tuple(float(c) for c in (inv @ np.array((q[0], q[1], m[2, 3], 1.0)))[:2])))
+        rings = outline_loops.rings(local)
+        if not rings or outline_loops.polygon(local) is None:
+            raise EditRefused("slab_outline")
+        self._set_params(covering, {"Contorno": _text(rings[0]), "Furos": "|".join(_text(h) for h in rings[1:]),
+                                    "Desenho": outline_loops.text(local) if outline_loops.curved(local) else None})
+        if kind == "ceiling":
+            self._set_ceiling_body(covering)
+        else:
+            self._set_flooring_body(covering)
+
+    def _set_flooring_body(self, floor):
+        """(0.374) A floor finish's body: its plan («Contorno», «Furos») its finish's thickness thick, and its
+        quantities."""
+        f, u = self.file, 1.0 / self.unit_scale
+        p = self._params(floor)
+        local = _pts(p.get("Contorno"))
+        local_holes = [_pts(h) for h in (p.get("Furos") or "").split("|") if h]
+        thickness = float(p.get("Espessura") or FLOORINGS["ceramico"][1])
+        poly = Polygon(local, local_holes).buffer(0)
+        if poly.is_empty or poly.area < 0.01:
+            raise EditRefused("too_small")
+        items = []
+        for q in getattr(poly, "geoms", [poly]):
+            q = orient(q, 1.0)
+            outer = self._ring_curve(list(q.exterior.coords)[:-1])
+            inner = [self._ring_curve(list(h.coords)[:-1]) for h in q.interiors]
+            profile = f.createIfcArbitraryProfileDefWithVoids("AREA", None, outer, inner) if inner else \
+                f.createIfcArbitraryClosedProfileDef("AREA", None, outer)
+            items.append(f.createIfcExtrudedAreaSolid(
+                profile, f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, 0.0)), None, None),
+                f.createIfcDirection((0.0, 0.0, 1.0)), float(thickness * u)))
+        self._clear_representations(floor)
+        api.geometry.assign_representation(f, product=floor, representation=f.createIfcShapeRepresentation(
+            self.body, self.body.ContextIdentifier, "SweptSolid", items))
+        self._set_qto(floor, "Qto_CoveringBaseQuantities", {"Width": thickness * u, "GrossArea": poly.area,
+                                                            "NetArea": poly.area})
 
     def _set_ceiling_body(self, ceiling):
         f, u = self.file, 1.0 / self.unit_scale
@@ -176,23 +226,7 @@ class CoveringMixin:
         local_holes = [[(x - x0, y - y0) for x, y in h] for h in holes]
         self._set_params(floor, {"Contorno": _text(local), "Furos": "|".join(_text(h) for h in local_holes),
                                  "Acabamento": finish, "Espessura": thickness})
-        poly = Polygon(local, local_holes).buffer(0)
-        if poly.is_empty or poly.area < 0.01:
-            raise EditRefused("too_small")
-        items = []
-        for q in getattr(poly, "geoms", [poly]):
-            q = orient(q, 1.0)
-            outer = self._ring_curve(list(q.exterior.coords)[:-1])
-            inner = [self._ring_curve(list(h.coords)[:-1]) for h in q.interiors]
-            profile = f.createIfcArbitraryProfileDefWithVoids("AREA", None, outer, inner) if inner else \
-                f.createIfcArbitraryClosedProfileDef("AREA", None, outer)
-            items.append(f.createIfcExtrudedAreaSolid(
-                profile, f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, 0.0)), None, None),
-                f.createIfcDirection((0.0, 0.0, 1.0)), float(thickness * u)))
-        api.geometry.assign_representation(f, product=floor, representation=f.createIfcShapeRepresentation(
-            self.body, self.body.ContextIdentifier, "SweptSolid", items))
-        self._set_qto(floor, "Qto_CoveringBaseQuantities", {"Width": thickness * u, "GrossArea": poly.area,
-                                                            "NetArea": poly.area})
+        self._set_flooring_body(floor)
         return floor
 
     def set_ceiling(self, guid, style=None, z=None, gap=None, bulkhead=None):

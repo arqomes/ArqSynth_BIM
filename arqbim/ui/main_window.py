@@ -1849,7 +1849,10 @@ class MainWindow(QtWidgets.QMainWindow):
             acts.append(self.act_walls_under_beams)
         if counts.get("IfcBeam", 0) >= 3:                   # (0.96) 3+ beams: slabs in their bays
             acts += [self.act_slabs_in_bays, self.act_beam_system]
-        if counts.get("IfcSlab", 0) == 1 and sum(counts.values()) == 1:     # (0.100) one slab: its outline
+        if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
+                counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
+                    isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
+                    for i in list(self.viewport.selection)[:2]))):
             acts.append(self.act_edit_outline)
         if counts.get("IfcGeographicElement", 0) == 1:      # (0.204) a terrain: its platforms
             acts.append(self.act_edit_platform)
@@ -2074,19 +2077,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def edit_slab_outline(self, guid=None):
         """Editar contorno (0.100): the selected slab's corners as grips (the tool Contorno da laje). A round
-        slab changes by its radius, in the Properties panel."""
+        slab changes by its radius, in the Properties panel. (0.410) A floor finish's or a ceiling's too, with
+        the wall profile's gestures and holes."""
+        from ..tools.slab import OUTLINED
         if guid is None:
             slabs = [i for i in self.viewport.selection
-                     if self.doc.get(i) is not None and self.doc.get(i).ifc_class == "IfcSlab"]
+                     if isinstance(i, str) and self.doc.ifc.kind_of(i) in OUTLINED]
             if len(slabs) != 1:                  # (0.322) the slab asked for
-                self._ask(self.act_edit_outline, "pick.outline", self._kind_is("slab"), self.edit_slab_outline,
+                self._ask(self.act_edit_outline, "pick.outline", self._kind_is(*OUTLINED), self.edit_slab_outline,
                           most=1, fresh=bool(slabs))
                 return False
             guid = slabs[0]
-        if self.doc.ifc.kind_of(guid) != "slab":
+        if self.doc.ifc.kind_of(guid) not in OUTLINED:
             self.message(t("info.edit_outline_none"), warning=True)
             return False
-        if self.doc.ifc.slab_shape(guid) == "circulo":
+        if self.doc.ifc.kind_of(guid) == "slab" and self.doc.ifc.slab_shape(guid) == "circulo":
             self.message(t("info.edit_outline_circle"), warning=True)
             return False
         self.viewport.set_selection(set())
@@ -8517,6 +8522,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._typed:
                 self._typed = ""
                 self._refresh_vcb()
+            elif getattr(self.tool, "escape", None) is not None and self.tool.escape():
+                pass                          # (0.410) the tool took it: a hole being drawn given up, its mode left
             elif self.tool.placement:
                 self.set_tool("select")       # (placing ends with Esc: Space is the insertion point there, 0.86)
             elif self.tool.name == "zoom_window":

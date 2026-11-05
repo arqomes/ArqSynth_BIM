@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.410.0 — 2026-11-05
+
+**Contorno do piso como o perfil da parede, e furos desenhados nos dois.** (O dono: «assim como editamos o perfil da
+parede com Shift, Alt quero que faça também o mesmo com o piso. E vamos adicionar tanto na parede como no piso a
+possibilidade de desenhar (em edição) polígonos no meio para fazer buracos personalizados»; e «2 clique no piso para
+abrir a edição do perfil».)
+
+- **Dois cliques numa laje, num piso (acabamento) ou num teto abrem o contorno** — como dois cliques numa parede
+  abrem o perfil. O botão «Editar contorno» também aparece com um piso ou um teto escolhido.
+- **Os mesmos gestos do perfil da parede, no contorno:**
+  - arrastar o losango do meio de um lado faz um canto novo;
+  - com **Shift**, o lado fica um **arco**;
+  - com **Alt**, fica uma **curva**;
+  - **Alt + clique num canto** faz uma **concordância** (o raio pelo rato, ou escrito e Enter);
+  - um clique num ponto e Delete tira-o (ou endireita a curva).
+  - Os cantos continuam a prender aos pontos do modelo, com X / Y e a distância escrita.
+- **Furos desenhados**, com «Furo» na barra de cima (Polígono, Retângulo, Círculo), no contorno da laje / piso / teto
+  e no perfil da parede:
+  - polígono: clique nos cantos; no primeiro (ou Enter) fecha;
+  - retângulo: dois cantos (ou arrastar, ou o tamanho escrito «1,2;0,8»);
+  - círculo: o centro e a borda (ou o raio escrito).
+  - Cada furo tem as mesmas pegas do contorno (os lados podem ficar arcos e curvas).
+  - **Arrastar dentro de um furo muda-o de sítio**; um clique dentro e Delete apaga-o.
+  - O modo fica ligado para desenhar o seguinte; Esc (ou o botão aceso outra vez) desliga-o, e só depois o Esc sai.
+- No IFC: o corpo continua a ser uma extrusão com vazios (IfcArbitraryProfileDefWithVoids), com as curvas em
+  pedaços; o desenho (cantos, arcos, curvas) fica ao lado — «Desenho» na laje, no piso e no teto, «PerfilFuros» na
+  parede. Uma porta ou janela não pode ficar por cima de um furo da parede. Ao mudar o perfil da parede, os furos
+  ficam (os que deixam de caber saem).
+
 ## 0.409.0 — 2026-11-05
 
 **Portas e janelas com snaps; cotas interiores com as esquinas e as duas paredes.** (O dono: «coloque snap na inserção

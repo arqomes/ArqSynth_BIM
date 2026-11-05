@@ -15,6 +15,7 @@ Delete takes it away. Each change is one undo step."""
 
 import numpy as np
 
+from ..core import outline_loops
 from ..core import roof_blocks as core_blocks
 from ..core import roofs as core_roofs
 from ..core import slabs as core_slabs
@@ -28,6 +29,7 @@ from ..render.viewport import PREVIEW
 from .base import (LEFT, RIGHT, Option, drawing_dims, inferred_style, moved_enough, outside_dim, show_snap,
                    show_start_reference, start_reference)
 from .bim_draw import CLOSE_PX, MIN_LENGTH, _fmt, _name, _PointTool, length_option, type_option
+from .outline_grips import OutlineGrips
 
 Z = np.array((0.0, 0.0, 1.0))
 SHAPES = ("rect", "poly", "circle", "wand")
@@ -755,11 +757,14 @@ class FlooringTool(CeilingTool):
                    [[tuple(c) for c in list(h.coords)[:-1]] for h in region.interiors])
 
 
-class SlabOutlineTool(_PointTool):
+class RingOutlineTool(_PointTool):
     """Editar contorno (0.100): the corners of a slab as grips (see the module's docstring). (0.382, as the wall's
     profile in 0.381) A grip moves only while the button is held — dragged and let go; a distance can be typed
     meanwhile (Enter). A click (no drag) on a corner chooses it, for Delete; it no longer picks it up to follow the
-    mouse until the next click (a click more, where the mouse was, picked it up again)."""
+    mouse until the next click (a click more, where the mouse was, picked it up again).
+
+    (0.410) Only a terrain's platform is edited so now (tools/platform.py); a slab's, a floor's or a ceiling's outline
+    is SlabOutlineTool's, below, with the wall profile's gestures and holes."""
 
     name = "slab_outline"
     title = "tool.slab_outline"
@@ -964,3 +969,161 @@ class SlabOutlineTool(_PointTool):
         self._drop()
         self.viewport.clear_overlays()
         self._load()
+
+
+OUTLINED = ("slab", "flooring", "ceiling")      # (0.410) what the outline editor edits
+
+
+class SlabOutlineTool(OutlineGrips, _PointTool):
+    """Editar contorno (0.100; 0.410 with the wall profile's gestures, the owner: «assim como editamos o perfil da
+    parede com Shift, Alt, quero que faça também o mesmo com o piso»): the outline of a slab, a floor finish or a
+    ceiling — and its holes — by their grips (tools/outline_grips): a square dragged moves its corner (snaps,
+    alignments, X / Y, a distance typed); a side's diamond dragged makes a new corner, with Shift an arc, with Alt a
+    curve; Alt and a click on a corner, a fillet; a click and Delete takes a corner away. «Furo» on the contextual bar
+    draws holes (a polygon, a rectangle, a circle); a hole dragged moves, clicked and Delete goes. Each change one
+    undo step. Two clicks on the element (Select) open it."""
+
+    name = "slab_outline"
+    title = "tool.slab_outline"
+    placement = True                    # (Esc: back to Select — a hole being drawn first given up)
+    on_storey = False
+    common_keys = frozenset(("x", "y", "n"))
+    keys_help = "keys.slab_outline"
+    typing_always = True                # (a corner dragged: the distance typed, as before 0.410)
+    bad_outline = "err.slab_outline_bad"
+
+    def common_key(self, name):
+        return self.lock_key(name)
+
+    def __init__(self, host):
+        super().__init__(host)
+        self.guid = None
+        self.kind = None                # "slab" | "flooring" | "ceiling"
+        self._z = 0.0                   # its top: where the grips are
+        host.doc.subscribe(self._changed)
+
+    def edit(self, guid):
+        """Start editing this element's outline."""
+        self.guid = guid
+        self.host.set_tool(self.name)
+
+    def activate(self):
+        super().activate()
+        self.hole_shape = ""
+        self._load()
+
+    def deactivate(self):
+        self._drop_all()
+        self.hole_shape = ""
+        self.viewport.show_grips()
+        self.viewport.clear_overlays()
+
+    def _changed(self, changed, removed):
+        if self.host.tool is self:      # (undone / redone, or changed elsewhere: the grips follow)
+            self._pick(None)
+            self._load()
+
+    def options(self):
+        return [self.hole_option()]
+
+    def set_option(self, key, value):
+        if key == "hole":
+            self.set_hole_shape(value)
+
+    def _info(self):
+        """(loops, z of its top) of the element edited, or None (gone, a round slab, not one of these)."""
+        ifc = self.doc.ifc
+        if not self.guid or self.doc.loading or ifc.by_guid(self.guid) is None:
+            return None
+        self.kind = ifc.kind_of(self.guid)
+        if self.kind == "slab":
+            info = ifc.slab_outline(self.guid)
+            if info is None or info["shape"] == "circulo" or not info.get("loops"):
+                return None
+            return info["loops"], info["top"]
+        if self.kind in ("flooring", "ceiling"):
+            info = ifc.ceiling_params(self.guid)
+            return (info["loops"], info["z"] + info["thickness"]) if info.get("loops") else None
+        return None
+
+    def _load(self):
+        found = self._info()
+        if found is None:
+            self._loops = []
+            self.viewport.show_grips()
+            self.viewport.clear_overlays()
+            self.host.set_hint(self.none_hint())
+            return
+        self._loops, self._z = outline_loops.copy(found[0]), float(found[1])
+        self.viewport.clear_overlays()                # (the preview, its dimensions: gone)
+        self.viewport.show_alignments()
+        self._show()
+
+    def none_hint(self):
+        return t("hint.slab_outline_none")
+
+    def idle_hint(self):
+        return t("hint.slab_outline")
+
+    def _world(self, pts):
+        return [np.array((float(x), float(y), self._z)) for x, y in pts]
+
+    def _raw_local(self, x, y):
+        origin, direction = self.viewport.ray(x, y)
+        level = np.array((0.0, 0.0, self._z))
+        p = ray_plane(origin, direction, level, Z)
+        if p is None:
+            p = ray_plane(origin, direction, level, -Z)
+        return None if p is None else (float(p[0]), float(p[1]))
+
+    def _local_at(self, x, y, origin=None):
+        """The point under the mouse at the element's top — snapped, lined up, on the axis locked (X / Y) through
+        where it is dragged from."""
+        last = None if origin is None else np.array((origin[0], origin[1], self._z))
+        # (Shift held for an arc is not the inference's lock: only a corner dragged keeps it)
+        mods = self._mods if self._picked is not None and self._picked[0] == "corner" else ()
+        p, snap = self._point(x, y, self._z, last, mods)
+        if p is None:
+            return None
+        show_snap(self.viewport, snap, p)
+        return float(p[0]), float(p[1])
+
+    def _preview_extra(self, q):
+        """A corner moved: its distance from where it was (temporary dimension, the Measurements box)."""
+        origin = self._origin()
+        if self._picked is None or self._picked[0] != "corner" or origin is None:
+            return
+        a, b = np.array((origin[0], origin[1], self._z)), np.array((q[0], q[1], self._z))
+        drawing_dims(self.viewport, a, b)
+        self.host.set_vcb(_fmt(float(np.linalg.norm((b - a)[:2]))))
+
+    def _typed_other(self, text):
+        """A corner being dragged: the distance typed, along the way the mouse took it."""
+        values = parse_lengths(text, 1)
+        if values is None or values[0] is None:
+            self.host.message(t("err.bad_value", t=text), warning=True)
+            return
+        if self._picked is None or self._picked[0] != "corner" or self._end is None:
+            return
+        x0, y0 = self._origin()
+        d = np.array((self._end[0] - x0, self._end[1] - y0))
+        if np.linalg.norm(d) < 1e-9:
+            return
+        d = d / np.linalg.norm(d) * values[0]
+        self._apply(self._moved((x0 + float(d[0]), y0 + float(d[1]))))
+
+    def _save(self, loops, text=None):
+        try:
+            if self.kind == "slab":
+                bim.set_slab_outline(self.doc, self.guid, loops=loops)
+            else:
+                bim.set_covering_outline(self.doc, self.guid, loops)
+        except ValueError as exc:
+            from ..i18n import refusal
+            self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            self._load()
+            return False
+        area = outline_loops.area(outline_loops.copy(loops))
+        self.host.message("{} {}".format(text or t("info.outline_changed"),
+                                         t("info.outline_area." + (self.kind or "slab"), a=_area(area))))
+        return True
