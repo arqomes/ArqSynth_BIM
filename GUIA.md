@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.408.0
+# Guia das ferramentas — ArqSynth BIM 0.409.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.408.0.
+ArqSynth BIM 0.409.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -412,7 +412,7 @@ Operações gerais de criação e edição geométrica.
 #### Cota  ·  tecla C
 
 - **Como se usa:** Cota: abra primeiro uma planta (F4), um corte ou um alçado — a cota fica nessa vista.
-- **Passos de teste (TESTAR.md):** 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.405 «Cotas: arrastar com alinhamentos; tipo e ajustes nas Propriedades»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.402 «Editar as cotas como no Revit»; 0.401 «A Cota manual como no Revit»; 0.400 «Cotas interiores num clique»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.405 «Cotas: arrastar com alinhamentos; tipo e ajustes nas Propriedades»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.402 «Editar as cotas como no Revit»; 0.401 «A Cota manual como no Revit»
 
 ### Modelagem ▸ Criar
 
@@ -729,7 +729,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.383 «As prévias das paredes em volume»; 0.380 «O perfil da parede com gestos (arrastar, Shift, Alt)»; 0.379 «O perfil da parede: o contorno a meio do movimento»; 0.378 «O perfil da parede, simples e direto»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.383 «As prévias das paredes em volume»; 0.380 «O perfil da parede com gestos (arrastar, Shift, Alt)»; 0.379 «O perfil da parede: o contorno a meio do movimento»
 
 #### Fachada de vidro
 
@@ -772,15 +772,15 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 #### Porta  ·  tecla D
 
-- **Como se usa:** Porta 80×210: passe o cursor sobre uma parede e clique, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
+- **Como se usa:** Porta 80×210: passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** Rato numa face: abre para esse lado · F: para o outro · Espaço: dobradiças no outro aro · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.366 «Os ambientes e o Passeio Virtual»; 0.359 «A porta em planta»; 0.351 «Importar modelos 3D»; 0.350 «Exportar para o SketchUp e o Rhino»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.366 «Os ambientes e o Passeio Virtual»; 0.359 «A porta em planta»; 0.351 «Importar modelos 3D»
 
 #### Janela  ·  tecla J
 
-- **Como se usa:** Janela 120×120 (peitoril 1,00): passe o cursor sobre uma parede e clique, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
+- **Como se usa:** Janela 120×120 (peitoril 1,00): passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** F: para a outra face da parede · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»; 0.330 «Botões e janelas em português de Portugal»; 0.328 «Reabrir um modelo grande sem a janela parar»; 0.327 «A janela de Ajuda (F1)»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»; 0.330 «Botões e janelas em português de Portugal»; 0.328 «Reabrir um modelo grande sem a janela parar»
 
 #### Abertura na parede
 
@@ -1075,7 +1075,7 @@ Fundações, pilares, vigas, lajes, cálculo e armaduras.
 #### Paredes
 
 - **O que faz:** Paredes entre os pilares, sob as vigas selecionadas (nenhuma: todas as do pavimento): de face a face dos pilares, da base deles até à face de baixo da viga, com o tipo da ferramenta Parede. Ficam presas à viga: acompanham-na.
-- **Passos de teste (TESTAR.md):** 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.336 «As cargas nas paredes resistentes»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»
 
 #### Lajes
 
@@ -1372,7 +1372,7 @@ Cotas, textos, pormenores, plantas e cortes.
 #### Cotas interiores
 
 - **Como se usa:** Abra a planta do pavimento (F4): as cotas automáticas fazem-se na planta.
-- **Passos de teste (TESTAR.md):** 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.400 «Cotas interiores num clique»
+- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.400 «Cotas interiores num clique»
 
 #### Cotar paredes (cadeias e totais)
 
@@ -1773,4 +1773,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*239 comandos descritos, gerados do ArqSynth BIM 0.408.0.*
+*239 comandos descritos, gerados do ArqSynth BIM 0.409.0.*
