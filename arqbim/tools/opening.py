@@ -229,13 +229,15 @@ class OpeningTool(Tool):
         hand = self._type_hand() if ok else None
         if hand is not None:                           # (0.359) its type's hinges as it goes in on that side; Space: the other
             hinge = s if ((hand == "LEFT") == (side < 0)) != self.hinge_flip else s + w
-        return _Target(obj.id, frame, side, s, nearest_end(frame, hit[2]), snap == "middle", ok, hinge=hinge,
-                       snap=snap)
+        return _Target(obj.id, frame, side, s, nearest_end(frame, hit[2]), snap in ("middle", "centre"), ok,
+                       hinge=hinge, snap=snap)
 
     def _snap_tip(self, target):
         """(0.409) What the opening snapped to, said beside it."""
         if target.snap == "middle":
             return t("snap.room_middle")
+        if target.snap == "centre":
+            return t("snap.wall_center")
         if target.snap:
             return t("snap.from_wall", d=_fmt(target.snap))
         return ""

@@ -90,13 +90,15 @@ def snap_s(frame, hit_point, width, faces=()):
     """(0.409) Where an opening goes from the cursor: centred on it, to the centimetre — snapped, when near, to the
     middle of the room's side it is on (between the walls across: `faces`, their local x on the face the mouse is on;
     none: the whole wall, its centre as before) within CENTER_SNAP, or with a jamb GAPS from either of those walls
-    within GAP_SNAP (the nearer of all wins). Returns (s, what): what "" (free), "middle", or the gap (0.10 / 0.20)."""
+    within GAP_SNAP (the nearer of all wins). Returns (s, what): what "" (free), "middle" (of a room's side: a wall
+    across on at least one side), "centre" (of the wall: none), or the gap (0.10 / 0.20)."""
     x = float(frame.to_local(hit_point)[0])
     raw = x - width / 2
     left, right = bounds_at(faces, x, frame)
     lo = frame.x0 + EDGE_CLEARANCE - 1e-9
     hi = frame.x0 + frame.length - EDGE_CLEARANCE - width + 1e-9
-    candidates = [((left + right - width) / 2, "middle", CENTER_SNAP)]
+    whole = abs(left - frame.x0) < 1e-9 and abs(right - frame.x0 - frame.length) < 1e-9
+    candidates = [((left + right - width) / 2, "centre" if whole else "middle", CENTER_SNAP)]
     for gap in GAPS:
         candidates += [(left + gap, gap, GAP_SNAP), (right - gap - width, gap, GAP_SNAP)]
     best = None

@@ -229,7 +229,7 @@ class DoorsAndWindows(unittest.TestCase):
         self.assertAlmostEqual(s - f.x0, 3.6)
         self.assertEqual(at(2.1)[1], "")                        # (over the wall across: no snap puts it into it)
         s, what = op.snap_s(f, f.to_world((f.x0 + 2.3, f.y0, 1.0)), w)     # (no wall across: the wall's centre)
-        self.assertEqual(what, "middle")
+        self.assertEqual(what, "centre")
         self.assertAlmostEqual(s - f.x0, (4.5 - w) / 2)
 
     def test_door_cuts_the_wall(self):

@@ -5459,6 +5459,7 @@ _STRINGS = {
                      "{type}: hover a wall and click — it snaps to the middle of the room and with its jamb 0.10 or "
                      "0.20 from the corner —, or type the distance to the nearest end (e.g. 0.60) and Enter."),
     "vcb.to_end": ("Até à extremidade", "To the end"),
+    "snap.wall_center": ("Centro da parede", "Wall centre"),
     "snap.room_middle": ("Meio do compartimento", "Middle of the room"),
     "snap.from_wall": ("Ombreira a {d} da gola", "Jamb {d} from the corner"),
     "err.no_wall": ("Passe o cursor sobre uma face de parede (elemento IFC).", "Hover a wall face (IFC element)."),
