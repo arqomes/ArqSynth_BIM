@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.413.0 — 2026-11-05
+
+**O plano de trabalho fica guardado com o projeto.** (O dono: «Sim, guardar».)
+
+- O plano de trabalho posto (XY, XZ, YZ ou de uma face) grava-se com o projeto, no ficheiro das vistas, ao lado do
+  IFC. Ao abrir o projeto outra vez, volta ao mesmo sítio.
+- Pôr ou tirar o plano marca o projeto como alterado (o «*» no título), para o «Guardar» o levar.
+- Um projeto novo continua a começar sem plano (no nível do piso).
+
 ## 0.412.0 — 2026-11-05
 
 **Rodar à volta de X, Y ou Z, e planos de trabalho.** (O dono, com a captura de uma curva deitada no chão: «senti
@@ -23,7 +32,8 @@ faces».)
     desenham nele quando não há uma face por baixo do rato, e o Mover desliza nele.
   - «Voltar ao nível do piso» tira-o. As plantas, os cortes e os alçados não o usam, e as paredes, lajes e outros
     elementos BIM continuam nos pisos.
-  - Dura enquanto o projeto está aberto (ao abrir ou criar um projeto, volta o nível do piso).
+  - Dura enquanto o projeto está aberto (ao abrir ou criar um projeto, volta o nível do piso; desde a 0.413 fica
+    guardado com o projeto).
 - O **Offset** passou para o painel Modificar (como no Revit), para o Plano de trabalho caber no painel Desenhar
   sem dobrar mais nenhum painel no ecrã de 1536 px.
 

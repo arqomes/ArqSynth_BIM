@@ -3408,6 +3408,24 @@ def work_plane_rotate_flow():
     # (the click comes onto the alignments found nearby, as any click does: within ~10 cm here)
     xz = plane is not None and plane.kind == "xz" and abs(float(plane.origin[1]) - 3.0) < 0.15 and \
         win.tool.name == "select" and vp.work_grid.visible
+    # (0.413, the owner: «Sim, guardar») the project marked changed; saved and opened again: the same plane, shown
+    marked = doc.modified and win.windowTitle().endswith("*")
+    import tempfile
+    kept_dir = tempfile.mkdtemp()
+    kept_path = os.path.join(kept_dir, "plano_de_trabalho.ifc")
+    win.save_to(kept_path)
+    pump(200)
+    reopened = win.open_path(kept_path, remember=False)
+    pump(600)
+    win.open_view("3d", None)
+    pump(300)
+    again = doc.work_plane
+    kept = bool(reopened) and again is not None and again.kind == "xz" and plane is not None and \
+        np.allclose(again.origin, plane.origin, atol=1e-6) and vp.work_grid.visible and marked
+    plane = again
+    win.set_discipline("modeling", remember=False)
+    vp.set_view("iso", center=(2.0, 2.0, 1.0), radius=7.0)
+    pump(400)
     # the Line, two clicks in the air: on that plane
     before = {o.id for o in objects()}
     key(Qt.Key.Key_L)
@@ -3489,10 +3507,11 @@ def work_plane_rotate_flow():
     win.set_tool("select")
     win.set_discipline("architecture", remember=False)
     check("plano_de_trabalho_e_rodar_xyz", flat and axis_x and drawn_axis and up and axis_y and about_y and on_ribbon
-          and open_1536 and xz and on_plane and bezier_on and hidden_in_plan and by_face and none_again and refused,
-          "deitada={} eixo_x={} eixo_visto={} de_pe={} eixo_y={} roda_y={} fita={}/1536:{} xz={} linha={} bezier={} "
-          "planta={} face={} nivel={} parede={} ({})".format(flat, axis_x, drawn_axis, up, axis_y, about_y, on_ribbon,
-                                                             open_1536, xz,
+          and open_1536 and xz and kept and on_plane and bezier_on and hidden_in_plan and by_face and none_again
+          and refused,
+          "deitada={} eixo_x={} eixo_visto={} de_pe={} eixo_y={} roda_y={} fita={}/1536:{} xz={} guardado={} "
+          "linha={} bezier={} planta={} face={} nivel={} parede={} ({})".format(flat, axis_x, drawn_axis, up, axis_y,
+                                                                             about_y, on_ribbon, open_1536, xz, kept,
                                                    on_plane, bezier_on, hidden_in_plan, by_face, none_again, refused,
                                                    line_pts))
     doc.modified = False

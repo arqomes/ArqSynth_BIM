@@ -1207,7 +1207,6 @@ class Document:
         self.ifc = ifc_model
         self.path = path
         self.active_storey = None
-        self.work_plane = None                      # (0.412: the storey's level again)
         self.loading = False
         side = sidecar_path(path) if path else None
         with _reading_sidecar():                    # (0.255: parsed once for all its parts)
@@ -1233,6 +1232,8 @@ class Document:
             self.panoramas = _read_panoramas(side) if path else []
             self.grids = _read_grids(side, ifc_model.origin) if path else []
             self.grid_settings = _read_grid_settings(side) if path else dict(GRID_DEFAULTS)
+            # (0.412) the storey's level for a new project; (0.413) the one kept with a project opened
+            self.work_plane = _read_work_plane(side, ifc_model.origin) if path else None
         self._changed |= {IMAGES_CHANGED, CAD_CHANGED, CLOUD_CHANGED}
         if path and not self.grids and hasattr(ifc_model, "read_grids"):
             self.grids = [GridAxis(*axis) for axis in ifc_model.read_grids()]      # (a grid from another program)
@@ -1297,6 +1298,7 @@ class Document:
             self.panoramas = _read_panoramas(side)
             self.grids = _read_grids(side, origin)
             self.grid_settings = _read_grid_settings(side)
+            self.work_plane = _read_work_plane(side, origin)         # (0.413)
         self._changed |= {IMAGES_CHANGED, CAD_CHANGED, CLOUD_CHANGED}
         self._grid_dims = {}
         self._changed.add(GRID_CHANGED)
@@ -1372,7 +1374,8 @@ class Document:
                         self.title_block, self.open_views, self.view_props, self.views3d, self.grids,
                         self.grid_settings, self.annotations, self.dim_style, self.graphic_style,
                         self.schedule_defs, self.details, self.clash_status, self.images, self.cad_links,
-                        self.cloud_links, self.view_styles, self.presentation, self.panoramas)
+                        self.cloud_links, self.view_styles, self.presentation, self.panoramas,
+                        work_plane=self.work_plane)
         notes_path = notes_file(path)
         if self.notes or os.path.exists(notes_path):      # (no notes left: the file is kept, empty)
             notes_model.save(self.notes, notes_path, os.path.splitext(os.path.basename(path))[0])
@@ -1758,7 +1761,7 @@ def _write_sketches(path, sketches, guides=(), origin=(0.0, 0.0, 0.0), sections=
                     sheets=(), dimensions=(), templates=(), view_templates=None, title_block=None, open_views=None,
                     view_props=None, views3d=(), grids=(), grid_settings=None, annotations=(), dim_style=None,
                     graphic_style=None, schedule_defs=(), details=(), clash_status=None, images=(), cad_links=(),
-                    cloud_links=(), view_styles=(), presentation=None, panoramas=()):
+                    cloud_links=(), view_styles=(), presentation=None, panoramas=(), work_plane=None):
     """Sketches, guides, the named sections and the dimensions in the program's coordinates, with
     the model origin they are relative to; the sheets (in mm on paper) and their title block; the
     views' templates and own properties."""
@@ -1826,6 +1829,9 @@ def _write_sketches(path, sketches, guides=(), origin=(0.0, 0.0, 0.0), sections=
                           "uid": g.uid} for g in grids]
     if grid_settings and dict(grid_settings) != GRID_DEFAULTS:
         data["grid_settings"] = dict(grid_settings)
+    if work_plane is not None:                          # (0.413) the work plane set
+        from . import work_plane as work_plane_model
+        data["work_plane"] = work_plane_model.to_dict(work_plane)
     if title_block:
         data["title_block"] = dict(title_block)
     if open_views:
@@ -1915,6 +1921,20 @@ def camera_from_json(data, shift=(0.0, 0.0, 0.0)):
         return camera
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _read_work_plane(path, origin=(0.0, 0.0, 0.0)):
+    """(0.413) The work plane saved beside an IFC file, in the program's coordinates — None (none, or not
+    understood)."""
+    try:
+        data = _sidecar_data(path)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("work_plane"), dict):
+        return None
+    from . import work_plane as work_plane_model
+    shift = np.array(data.get("origin", (0.0, 0.0, 0.0)), dtype=float) - np.asarray(origin, dtype=float)
+    return work_plane_model.from_dict(data["work_plane"], shift)
 
 
 def _read_grid_settings(path):

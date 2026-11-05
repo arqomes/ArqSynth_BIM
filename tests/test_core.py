@@ -6729,6 +6729,34 @@ class FreeDrawingTest(unittest.TestCase):
         pts = [sg.transform_point(doc.get(line.id).matrix, v) for v in doc.get(line.id).mesh.verts]
         self.assertTrue(np.allclose(sorted(p[2] for p in pts), (0.0, 4.0)) and all(abs(p[1]) < 1e-9 for p in pts))
 
+    def test_the_work_plane_is_kept_with_the_project(self):
+        """0.413 (the owner: «Sim, guardar»): the work plane set is written to the side file and read back — the model's
+        origin moved meanwhile, it stays where it was in the model —; a project saved and opened again has it; a new
+        one has none; one not understood is let go."""
+        import tempfile
+        from arqbim.model import document, work_plane
+        plane = work_plane.by_face((1.0, 2.0, 3.0), (0.0, 1.0, 1.0))
+        with tempfile.TemporaryDirectory() as tmp:
+            side = os.path.join(tmp, "p.arqsynthbim")
+            document._write_sketches(side, [], origin=(10.0, 0.0, 0.0), work_plane=plane)
+            back = document._read_work_plane(side, origin=(12.0, 0.0, 0.0))
+            self.assertEqual(back.kind, "face")
+            self.assertTrue(np.allclose(back.origin, (-1.0, 2.0, 3.0)) and np.allclose(back.normal, plane.normal))
+            self.assertTrue(np.allclose(back.u, plane.u) and np.allclose(back.v, plane.v))
+            document._write_sketches(side, [])
+            self.assertIsNone(document._read_work_plane(side))
+            self.assertIsNone(work_plane.from_dict({"kind": "xz", "origin": [0, "a", 0]}))
+            doc = Document()
+            doc.work_plane = work_plane.by_axes("xz", (0.0, 3.0, 0.0))
+            path = os.path.join(tmp, "casa.ifc")
+            doc.save(path)
+            again = Document()
+            again.open(path)
+            self.assertEqual(again.work_plane.kind, "xz")
+            self.assertAlmostEqual(float(again.work_plane.origin[1]), 3.0)
+            again.new()
+            self.assertIsNone(again.work_plane)
+
     def test_a_curve_is_saved_with_the_sketches(self):
         import tempfile
         from arqbim.core import curves

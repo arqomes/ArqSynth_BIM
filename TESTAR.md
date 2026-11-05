@@ -644,6 +644,14 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.413 — O plano de trabalho fica guardado com o projeto
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.413.0**. Abra um projeto e a vista **3D**.
+2. **Desenhar ▸ Plano de trabalho**, **XZ**, e clique num ponto: aparece a grelha azul, e o título ganha um «*».
+3. Guarde (**Ctrl+S**), feche o projeto e abra-o outra vez: na vista 3D, a grelha azul está no mesmo sítio, e a
+   Linha continua a desenhar nela.
+4. **Plano de trabalho ▸ Voltar ao nível do piso**, guarde e reabra: já não há grelha.
+
 ## 0.412 — Rodar à volta de X, Y ou Z; planos de trabalho
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.412.0**. Num projeto novo, abra a vista **3D**.

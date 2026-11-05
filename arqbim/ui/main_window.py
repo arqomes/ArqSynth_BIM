@@ -2081,7 +2081,10 @@ class MainWindow(QtWidgets.QMainWindow):
         storey's level again. Shown as a blue grid."""
         from ..model.work_plane import describe
         from ..tools.work_plane import where
-        self.doc.work_plane = plane
+        if plane is not self.doc.work_plane:
+            self.doc.work_plane = plane
+            self.doc.modified = True                 # (0.413: kept with the project — saved with it)
+            self._update_title()
         self.viewport.redraw()
         if plane is None:
             self.message(t("info.work_plane_off"))

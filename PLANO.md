@@ -1078,6 +1078,24 @@ unidade, decimais, tipos com nome). Cada cota desenhava-se em quatro sítios com
    (Unitários 779/779; janela 549 verificações, 3 refeitas sozinhas e passadas — 2 eram um teste que deixava a
    ferramenta em «eixos»; o desenho das cotas medido e acelerado: 128 cotas 0,28 → 0,06 s.)
 
+### Propriedades e tipos para todos os elementos (pedido do dono do projeto, 2026-11-05)
+O dono, com a captura das propriedades de uma superfície paramétrica: «vamos arrumar o painel de propriedades para
+tornar visualmente mais interessante… pode ser mais bem organizado, destacando os títulos colapsáveis e com trama para
+melhorar a distinção de parâmetros. Quero todos os elementos IFC tenham tipo, guardado e aplicado a outros elementos.»
+Até aqui têm tipos (TypeSpec do catálogo, escolhidos no topo do painel e editados no editor de tipos) as paredes, lajes,
+pilares, vigas, sapatas, portas, janelas, tubos, condutas e coberturas; as escadas, rampas, guardas, tetos e outros só
+mostram o tipo; a superfície paramétrica, o piso (acabamento), os móveis e outros não têm.
+1. **O painel Propriedades:** os títulos dos grupos numa faixa própria, em negrito e mais altos, recolhíveis com um
+   clique em todo o título; os subgrupos (Forma, Nervuras…) numa faixa mais leve; as linhas em faixas alternadas
+   («trama»); os botões que não cabem na coluna dos valores em linha inteira. Cores só do tema, nos dois temas.
+2. **Tipos guardados e aplicados — o mecanismo e a superfície paramétrica:** «Guardar como tipo…» (nome) faz um tipo
+   do elemento (IfcTypeObject da classe dele, os valores do tipo num pset); no topo do painel, a lista dos tipos dessa
+   natureza: escolher um aplica-o ao elemento — ou a todos os escolhidos —; «Atualizar o tipo» leva as mudanças de um
+   elemento ao tipo e a todos os elementos desse tipo (como «Editar tipo» no Revit). Na superfície, o tipo é a forma
+   (operação, divisões), os modificadores, a construção e o uso — não as curvas, que são de cada uma.
+3. **Os outros elementos sem tipo**, um grupo de cada vez: piso e teto; escadas, rampas e guardas; móveis e cozinhas;
+   o resto (elevador, calha, nicho, painéis, iluminação, aparelhos).
+
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.
 - ~~Investigar: no papel, o contorno grosso das paredes falhou uma vez num canto (a união dos contornos pelo Qt, `pdf._paths`); não se repetiu ao desenhar de novo.~~ (0.253.0: os contornos saíam do corte num sentido ou noutro; agora orientados por elemento; 0.254.0: o pilar recorta a parede no papel.)
