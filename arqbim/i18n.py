@@ -3661,6 +3661,10 @@ _STRINGS = {
                       "{f} floor of {a} on the slab (IFC, in the quantities)."),
     "cmd.ceiling": ("Teto", "Ceiling"),
     "cmd.ceiling_edit": ("Mudar teto", "Change ceiling"),
+    "cmd.flooring_edit": ("Mudar piso", "Change floor finish"),                       # (0.415)
+    "props.catalog_type": ("Tipo do catálogo", "Catalogue type"),
+    "props.type_fixed": ("O tipo do catálogo, escolhido ao colocar (para outro, coloque outro elemento)",
+                         "The catalogue type, chosen when placed (for another, place another element)"),
     "ctx.ceiling_style": ("Acabamento", "Finish"),
     "ctx.ceiling_height": ("Altura do teto", "Ceiling height"),
     "ceilshape.wand": ("Por ambiente (clique dentro)", "By room (click inside)"),

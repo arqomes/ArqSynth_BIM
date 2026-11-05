@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.415 — Tipos para os outros elementos, no cabeçalho
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.415.0**.
+2. Faça dois **Pisos** (Arquitetura ▸ Acabamentos ▸ Piso). Clique no primeiro: no painel, em Restrições e dimensões,
+   mude o **Acabamento** para **Madeira**.
+3. Em **Identificação ▸ Tipo**, clique em **Guardar como tipo…**, escreva «Soalho» e **OK**.
+4. Clique no segundo piso e, no topo do painel, escolha **Soalho**: fica de madeira, com o seu próprio contorno.
+5. Faça o mesmo com duas **Escadas** (mude a largura de uma, guarde o tipo, aplique-o à outra: a outra fica com essa
+   largura, mas com o seu desnível), e com dois **Tetos**, duas **Rampas**, duas **Paredes cortina** e dois
+   **Móveis**.
+6. Clique numa **Guarda**: a lista dos tipos de guarda está no topo do painel.
+7. Clique numa **Luminária**: o tipo aparece no topo, a cinzento (vem do catálogo).
+
 ## 0.414 — Painel Propriedades arrumado; tipos guardados e aplicados
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.414.0**. Abra um projeto com duas superfícies

@@ -2283,6 +2283,12 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                                   "gap": float(pp.get("Rasgo") or 0.0),                 # (0.119)
                                   "bulkhead": float(pp.get("SancaLargura") or 0.0),
                                   "drop": float(pp.get("SancaAltura") or 0.0)}
+            elif kind == "flooring":                                    # (0.415) a floor finish: its finish
+                pp = self._params(e)
+                q = ifcopenshell.util.element.get_psets(e).get("Qto_CoveringBaseQuantities", {})
+                info["params"] = {"finish": pp.get("Acabamento") or "ceramico",
+                                  "thickness": float(pp.get("Espessura") or 0.0),
+                                  "area": float(q.get("GrossArea") or 0.0) * scale * scale}
             elif kind == "roof_tiles":                                  # (0.279) a roof's tiles
                 roof = self._params(e).get("Cobertura")
                 info["params"] = dict(self.tiles_summary(roof) or {}, roof=roof,

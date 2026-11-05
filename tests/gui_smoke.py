@@ -14980,11 +14980,37 @@ def properties_types_flow():
     view_typed = tpl is not None and given is not None and given.uid == tpl.uid and panel.type_combo is not None and \
         panel.type_combo.currentText() == "Vista geral da cúpula"
     shot("414_tipo_da_vista.png")
+    # 0.415 — the others: on top a stair's saved types, a floor finish's (its finish editable in the rows), a
+    # railing's railing types, a lamp's catalogue type (shown, greyed)
+    from arqbim.ifc import catalog as cat
+    stair = B.add_stair(doc, np.array((30.0, 0.0, 0.0)), (0.0, 1.0), cat.BY_KEY["laje_15"], rise=2.8)
+    floor = B.add_flooring(doc, [(30, 10), (34, 10), (34, 13), (30, 13)])
+    railing = B.add_railing(doc, [(30.0, 20.0, 0.0), (34.0, 20.0, 0.0)])
+    lamp = B.add_light(doc, (32.0, 11.0))
+    headers = {}
+    for name, g in (("stair", stair), ("flooring", floor), ("railing", railing), ("light", lamp)):
+        vp.set_selection({g})
+        pump(400)
+        combo = panel.type_combo
+        headers[name] = (combo is not None and combo.count() >= 1, combo is not None and combo.isEnabled())
+    others = headers["stair"] == (True, True) and headers["flooring"] == (True, True) and \
+        headers["railing"] == (True, True) and headers["light"] == (True, False)
+    vp.set_selection({floor})
+    pump(400)
+    finish = panel.editors.get("flooring_finish")
+    if finish is not None:
+        finish.setCurrentIndex(finish.findData("madeira"))
+        finish.activated.emit(finish.currentIndex())
+        pump(500)
+    floor_finish = doc.ifc._params(doc.ifc.by_guid(floor)).get("Acabamento") == "madeira"
+    vp.set_selection(set())
     check("propriedades_tipos", band and sub_band and striped and folded and opened and buttons_row and listed
-          and applied and can_update and followed and header and view_typed and doc.ifc.validate() == [],
+          and applied and can_update and followed and header and view_typed and others and floor_finish
+          and doc.ifc.validate() == [],
           "faixa={} subgrupo={} listras={} recolhe={} abre={} botoes={} tipo={} aplicado={} atualizar={} segue={} "
-          "vista_no_cabecalho={}/{} ({})".format(band, sub_band, striped, folded, opened, buttons_row, listed, applied,
-                                                  can_update, followed, header, view_typed, win.last_message[:70]))
+          "vista_no_cabecalho={}/{} outros={} {} piso={} ({})".format(
+              band, sub_band, striped, folded, opened, buttons_row, listed, applied, can_update, followed, header,
+              view_typed, others, headers, floor_finish, win.last_message[:70]))
     doc.modified = False
 
 

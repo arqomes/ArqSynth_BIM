@@ -1636,6 +1636,22 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self.tree.setItemWidget(row, 1, button)
             self.editors["joinery"] = button
 
+    def _header_choice(self, tip, action, guid, choices, current, enabled=True):
+        """(0.415) A type chosen on top, under the name — a list of (text, value) — as the wall's and the door's (a
+        railing's railing types; a lamp's catalogue type, shown only)."""
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName("props_type")
+        combo.setToolTip(tip)
+        for text, value in choices:
+            combo.addItem(text, value)
+        combo.setCurrentIndex(max(0, combo.findData(current)))
+        combo.setEnabled(enabled)
+        combo.activated.connect(lambda k: combo.itemData(k) is not None and combo.itemData(k) != current and
+                                self._emit(action, guid, combo.itemData(k)))
+        self._set_type_combo(combo, None)
+        self.editors[action] = combo
+        return combo
+
     def _element_type_editor(self, doc, kind, guid):
         """(0.414, the owner: «quero todos os elementos IFC tenham tipo, guardado e aplicado a outros elementos») On
         top, as Revit's Type Selector, the types saved for its kind — one chosen is put on it (on all of them, several
@@ -1768,15 +1784,22 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             button.clicked.connect(lambda _c=False: self._emit("register_tile", guid, info["type"]))
             self.tree.setItemWidget(item, 1, button)
             self.editors["register_tile"] = button
-        elif kind in ("ramp", "stair", "railing", "curtain_wall", "ceiling", "cladding", "light",
-                      "air_terminal", "equipment", "fixture", "electrical", "profile"):                  # (shown only)
-            spec = p.get("spec")
-            self._row(t("props.type"), _type_name(spec) if spec is not None else "")
+        elif kind in element_types.KINDS:          # (0.414) its saved types: chosen on top, saved, brought up to date
+            self._element_type_editor(doc, kind, guid)
+            spec = p.get("spec")                   # (0.415: a stair's slab, a ceiling's board… from the catalogue)
+            if spec is not None:
+                self._row(t("props.catalog_type"), _type_name(spec))
+        elif kind == "railing":                    # (0.415) its railing types, on top
+            self._header_choice(t("props.railing_type"), "railing_style", guid,
+                                [(name, key) for key, name in p["types"]], p["type"])
+        elif kind in ("light", "air_terminal", "equipment", "fixture", "electrical", "profile"):    # (shown only)
+            spec = p.get("spec")                   # (0.415: on top too — a catalogue's, chosen when placed)
+            self._header_choice(t("props.type_fixed"), "type_fixed", guid,
+                                [(_type_name(spec) if spec is not None else info["type"] or "—", None)], None,
+                                enabled=False)
         elif kind == "roof":                       # (0.278) a roof type; made before: its slab type's name, listed
             spec = p.get("spec")
             self._type_editor(dict(info, type=info["type"] or (_type_name(spec) if spec is not None else "")), guid)
-        elif kind in element_types.KINDS:          # (0.414) its saved types: chosen on top, saved, brought up to date
-            self._element_type_editor(doc, kind, guid)
         elif kind and kind != "fitting":                # (a bend's type follows its pipe's: shown only)
             self._type_editor(info, guid)
         else:
@@ -1831,6 +1854,17 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p["bulkhead"] > 0:
                 self._length_editor(t("ctx.bulkhead_drop"), p["drop"], "ceiling_drop", guid)
             self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
+        elif kind == "flooring":                           # (0.415) a floor finish: its finish (material, thickness)
+            from ..ifc.coverings import FLOORINGS
+            self._choice_combo(t("ctx.flooring"), "flooring_finish", guid,
+                               [(t("flooring." + k), k) for k in FLOORINGS], p["finish"])
+            self._row(t("props.thickness"), _len(p["thickness"]))
+            self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
+            item = self._row(t("props.outline"), "")
+            button = QtWidgets.QPushButton(t("act.edit_outline"))                  # (0.410: its outline, as a slab's)
+            button.clicked.connect(lambda _c=False: self._emit("edit_outline", guid, None))
+            self.tree.setItemWidget(item, 1, button)
+            self.editors["edit_outline"] = button
         elif kind == "roof_tiles":                         # (0.279) a roof's tiles: its roof, how many, their weight
             item = self._row(t("props.tiles_roof"), p.get("roof_name") or "")
             if p.get("roof"):
@@ -2053,10 +2087,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p.get("panels"):                            # (0.181) the cells that are not glass
                 self._row(t("props.cw_panels"), ", ".join("{} × {}".format(n, t("cwpanel." + k).lower())
                                                           for k, n in p["panels"].items()))
-        elif kind == "railing":                            # (0.115) its type (0.258) and height
-            self._choice_combo(t("props.railing_type"), "railing_style", guid,
-                               [(name, key) for key, name in p["types"]], p["type"])
-            edit = self._row("", "")                       # (0.260) its type in the railing type editor
+        elif kind == "railing":                            # (0.115) its type (0.258; 0.415: on top) and height
+            edit = self._row(t("props.type"), "")          # (0.260) its type in the railing type editor
             button = QtWidgets.QPushButton(t("props.edit_type"))
             button.setToolTip(t("props.edit_railing_type_tip"))
             button.clicked.connect(lambda _c=False: self._emit("edit_railing_type", guid, p["type"]))

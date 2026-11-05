@@ -111,6 +111,20 @@ class CoveringMixin:
         else:
             self._set_flooring_body(covering)
 
+    def set_flooring(self, guid, finish, lang="pt"):
+        """(0.415) A floor finish's finish changed: its material and thickness (with its bed) the new one's, its body
+        again."""
+        floor, _ = self._require(guid, "flooring")
+        if finish not in FLOORINGS:
+            raise EditRefused("not_editable")
+        material, thickness = FLOORINGS[finish]
+        self._set_params(floor, {"Acabamento": finish, "Espessura": thickness})
+        wanted = self._material(material, lang)
+        if ifcopenshell.util.element.get_material(floor) != wanted:
+            api.material.unassign_material(self.file, products=[floor])
+            api.material.assign_material(self.file, products=[floor], type="IfcMaterial", material=wanted)
+        self._set_flooring_body(floor)
+
     def _set_flooring_body(self, floor):
         """(0.374) A floor finish's body: its plan («Contorno», «Furos») its finish's thickness thick, and its
         quantities."""

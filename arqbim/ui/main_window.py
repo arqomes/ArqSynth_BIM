@@ -6282,6 +6282,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.edit_circuit(doc, guid, **{action[8:]: value})
             elif action in ("ceiling_style", "ceiling_height", "ceiling_gap"):           # (0.118) a ceiling
                 bim.set_ceiling(doc, guid, **{action[8:]: value})
+            elif action == "flooring_finish":              # (0.415) a floor finish's finish
+                bim.set_flooring(doc, guid, value)
             elif action in ("ceiling_bulkhead", "ceiling_drop"):          # (0.119) its bulkhead: width, drop
                 params = ifc.describe(guid)["params"]
                 width = value if action == "ceiling_bulkhead" else params["bulkhead"]

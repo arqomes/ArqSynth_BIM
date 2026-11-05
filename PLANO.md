@@ -1093,8 +1093,10 @@ mostram o tipo; a superfície paramétrica, o piso (acabamento), os móveis e ou
    natureza: escolher um aplica-o ao elemento — ou a todos os escolhidos —; «Atualizar o tipo» leva as mudanças de um
    elemento ao tipo e a todos os elementos desse tipo (como «Editar tipo» no Revit). Na superfície, o tipo é a forma
    (operação, divisões), os modificadores, a construção e o uso — não as curvas, que são de cada uma.
-3. **Os outros elementos sem tipo**, um grupo de cada vez: piso e teto; escadas, rampas e guardas; móveis e cozinhas;
-   o resto (elevador, calha, nicho, painéis, iluminação, aparelhos).
+3. ~~**Os outros elementos sem tipo**~~ (0.415.0): piso, teto, revestimentos, escadas, rampas, paredes cortina e móveis
+   com tipos guardados; as guardas com os seus tipos no cabeçalho; luminárias, terminais, equipamentos e perfis com o
+   tipo do catálogo no cabeçalho (só mostrado). Ficam sem tipo, se o dono os quiser: elevador, calha, nicho, terreno,
+   ambientes e os aparelhos de catálogo (trocá-los no lugar pede refazer o corpo).
 
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.

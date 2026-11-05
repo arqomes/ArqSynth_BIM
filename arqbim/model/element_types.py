@@ -41,6 +41,101 @@ def _surface_apply(ifc, guid, values, language):
 KINDS = {"param_surface": KindTypes(_surface_values, _surface_apply)}
 
 
+# ---------------------------------------------------------------- (0.415) the others — what is the type's, not each one's
+
+def _params(ifc, guid):
+    return ifc._params(ifc.by_guid(guid))
+
+
+def _ceiling_values(ifc, guid):
+    """Its style, its shadow gap and bulkhead — not its height over the floor."""
+    p = _params(ifc, guid)
+    return {"style": ifc.ceiling_params(guid)["style"], "gap": float(p.get("Rasgo") or 0.0),
+            "bulkhead": float(p.get("SancaLargura") or 0.0), "drop": float(p.get("SancaAltura") or 0.0)}
+
+
+def _ceiling_apply(ifc, guid, v, language):
+    ifc.set_ceiling(guid, style=v.get("style"), gap=v.get("gap"),
+                    bulkhead=(float(v.get("bulkhead") or 0.0), float(v.get("drop") or 0.0)))
+
+
+def _flooring_values(ifc, guid):
+    """Its finish (material, thickness with its bed) — not its outline."""
+    return {"finish": _params(ifc, guid).get("Acabamento") or "ceramico"}
+
+
+def _flooring_apply(ifc, guid, v, language):
+    ifc.set_flooring(guid, v.get("finish") or "ceramico", language)
+
+
+CLADDING_KEYS = ("finish", "width", "gap", "direction", "diameter", "pitch", "margin", "amplitude", "wavelength",
+                 "shift", "depth", "hole", "grid", "sheet_w", "sheet_h", "joint", "mask")
+
+
+def _cladding_values(ifc, guid):
+    """Its finish and its pattern (slats, flutes, holes, waves…) — not where on its wall, nor how high."""
+    p = ifc.pattern_params(guid)
+    return {k: p[k] for k in CLADDING_KEYS if p.get(k) is not None}
+
+
+def _cladding_apply(ifc, guid, v, language):
+    values = {k: v[k] for k in CLADDING_KEYS if k in v}
+    finish = values.pop("finish", None)
+    ifc.set_cladding(guid, finish=finish, **values)
+
+
+def _stair_values(ifc, guid):
+    """Its flights' width and its tread — not its rise (the storey's) nor its form."""
+    p = ifc.stair_params(guid)
+    return {"width": p["width"], "going": p["going"]}
+
+
+def _stair_apply(ifc, guid, v, language):
+    ifc.set_stair(guid, width=float(v["width"]), going=float(v["going"]))
+
+
+def _ramp_values(ifc, guid):
+    """Its width — not its length nor its rise."""
+    return {"width": float(ifc.ramp_params(guid)[2])}
+
+
+def _ramp_apply(ifc, guid, v, language):
+    ifc.set_ramp(guid, width=float(v["width"]))
+
+
+def _curtain_values(ifc, guid):
+    """Its mullions' and transoms' spacing — not its length nor its height."""
+    p = ifc.curtain_params(guid)
+    return {"mullions": float(p["mullions"]), "transoms": float(p["transoms"])}
+
+
+def _curtain_apply(ifc, guid, v, language):
+    ifc.set_curtain_wall(guid, mullions=float(v["mullions"]), transoms=float(v["transoms"]))
+
+
+CABINET_KEYS = ("kind", "width", "height", "depth", "plinth", "elevation", "fronts", "doors", "drawers", "shelves",
+                "handle", "interior", "blind", "corner_side", "arm", "finish", "splits")
+
+
+def _cabinet_values(ifc, guid):
+    """All it is — a piece of furniture's type is its sizes, its fronts and what is inside (as Revit's families)."""
+    c = ifc.cabinet_params(guid)
+    return {k: getattr(c, k) for k in CABINET_KEYS if getattr(c, k, None) is not None}
+
+
+def _cabinet_apply(ifc, guid, v, language):
+    ifc.set_cabinet(guid, **{k: v[k] for k in CABINET_KEYS if k in v})
+
+
+KINDS.update({"ceiling": KindTypes(_ceiling_values, _ceiling_apply),
+              "flooring": KindTypes(_flooring_values, _flooring_apply),
+              "cladding": KindTypes(_cladding_values, _cladding_apply),
+              "stair": KindTypes(_stair_values, _stair_apply),
+              "ramp": KindTypes(_ramp_values, _ramp_apply),
+              "curtain_wall": KindTypes(_curtain_values, _curtain_apply),
+              "cabinet": KindTypes(_cabinet_values, _cabinet_apply)})
+
+
 def has_types(doc, guid):
     """This element's kind is one with saved types."""
     return doc.ifc.kind_of(guid) in KINDS

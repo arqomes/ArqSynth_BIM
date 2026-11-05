@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.414.0
+# Guia das ferramentas — ArqSynth BIM 0.415.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.414.0.
+ArqSynth BIM 0.415.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -924,7 +924,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Luminária (painel 60 × 60): clique sob um teto — fica embutida nele.
 - **Teclas:** Clique: uma luminária ali · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.343 «O render realista»
+- **Passos de teste (TESTAR.md):** 0.415 «Tipos para os outros elementos, no cabeçalho»; 0.343 «O render realista»
 
 ### Arquitetura ▸ Acabamentos
 
@@ -1782,4 +1782,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*240 comandos descritos, gerados do ArqSynth BIM 0.414.0.*
+*240 comandos descritos, gerados do ArqSynth BIM 0.415.0.*

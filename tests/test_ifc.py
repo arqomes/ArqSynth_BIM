@@ -12474,6 +12474,51 @@ class ElementTypesSaved(unittest.TestCase):
         self.assertIsNone(again.ifc.element_type_of(a))
         self.assertEqual(again.ifc.validate(express_rules=True), [])
 
+    def test_other_kinds_types(self):
+        """0.415 — the other elements that had no types: a floor finish, a ceiling, a wall's tiles, a stair, a ramp, a
+        curtain wall, a cabinet — each pair: the first changed, its type saved, applied to the second: the second takes
+        what is the type's (a finish, a style, a width, a spacing…) and keeps what is its own (its outline, its height,
+        its length); a valid IFC with IfcCoveringType, IfcStairType… on them."""
+        from arqbim.core import cabinets as core_cab
+        from arqbim.model import element_types
+        doc = Document()
+        floors = [bim.add_flooring(doc, [(x, 0), (x + 4, 0), (x + 4, 3), (x, 3)]) for x in (0.0, 10.0)]
+        bim.set_flooring(doc, floors[0], "madeira")
+        ceilings = [bim.add_ceiling(doc, [(x, 0), (x + 4, 0), (x + 4, 3), (x, 3)]) for x in (0.0, 10.0)]
+        bim.set_ceiling(doc, ceilings[0], style="tiles", gap=0.05)
+        wall = bim.add_wall(doc, np.array((0.0, -5.0, 0.0)), np.array((6.0, -5.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+        tiles = [bim.add_cladding(doc, wall, side, "azulejo", 1.2) for side in (1, -1)]
+        bim.set_cladding(doc, tiles[0], finish="pedra")
+        spec = catalog.BY_KEY["laje_15"]
+        stairs = [bim.add_stair(doc, np.array((x, 10.0, 0.0)), (0.0, 1.0), spec, rise=2.8) for x in (0.0, 10.0)]
+        bim.set_stair(doc, stairs[0], width=1.3, going=0.30)
+        ramps = [bim.add_ramp(doc, np.array((x, 20.0, 0.0)), np.array((x + 6.0, 20.0, 0.0)), spec, 1.2, 0.5)
+                 for x in (0.0, 10.0)]
+        bim.set_ramp(doc, ramps[0], width=1.6)
+        cws = [bim.add_curtain_wall(doc, np.array((x, 30.0, 0.0)), np.array((x + 5.0, 30.0, 0.0)), embed=False)
+               for x in (0.0, 10.0)]
+        bim.set_curtain_wall(doc, cws[0], mullions=1.0, transoms=0.7)
+        cabinets = [bim.add_cabinet(doc, np.array((x, 40.0, 0.0)), 0.0, core_cab.Cabinet.of("base")) for x in (0.0, 10.0)]
+        bim.set_cabinet(doc, cabinets[0], width=0.9, finish="oak")
+        pairs = {"flooring": floors, "ceiling": ceilings, "cladding": tiles, "stair": stairs, "ramp": ramps,
+                 "curtain_wall": cws, "cabinet": cabinets}
+        for kind, (first, second) in pairs.items():
+            self.assertEqual(doc.ifc.kind_of(first), kind)
+            made = element_types.save_type(doc, first, "Tipo " + kind)
+            element_types.apply_type(doc, [second], made)
+            self.assertEqual(doc.ifc.element_type_of(second), made, kind)
+            self.assertEqual(element_types.KINDS[kind].values(doc.ifc, second),
+                             element_types.KINDS[kind].values(doc.ifc, first), kind)
+        # what stays each one's own: the second floor's outline, the second ramp's length, the second stair's rise
+        self.assertAlmostEqual(min(x for x, _y in doc.ifc.ceiling_params(floors[1])["outline"]), 10.0)
+        self.assertEqual(doc.ifc._params(doc.ifc.by_guid(floors[1]))["Acabamento"], "madeira")
+        self.assertAlmostEqual(doc.ifc.stair_params(stairs[1])["width"], 1.3)
+        self.assertAlmostEqual(doc.ifc.stair_params(stairs[1])["rise"], 2.8)
+        self.assertAlmostEqual(doc.ifc.curtain_params(cws[1])["length"], 5.0)
+        self.assertTrue(doc.ifc.by_guid(element_types.types_of(doc, "stair")[0][0]).is_a("IfcStairType"))
+        self.assertTrue(doc.ifc.by_guid(element_types.types_of(doc, "flooring")[0][0]).is_a("IfcCoveringType"))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
 
 class ParamSurfacesIfc(unittest.TestCase):
     """0.395 — a parametric surface as an element: made of curves of the model (each followed: moved, the surface made

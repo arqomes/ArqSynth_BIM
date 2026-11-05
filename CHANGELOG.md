@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.415.0 — 2026-11-05
+
+**Tipos para os outros elementos, sempre no cabeçalho.** (Seguimento de «quero todos os elementos IFC tenham tipo,
+guardado e aplicado a outros elementos» e «os tipos devem ficar no cabeçalho como o da porta».)
+
+- **Tipos guardados e aplicados** (Guardar como tipo…, a lista no topo, Atualizar o tipo — como na superfície
+  paramétrica) também no **piso**, no **teto**, nos **revestimentos de parede** (azulejo, pedra, ripado, perfurado…),
+  nas **escadas**, nas **rampas**, nas **paredes cortina** e nos **móveis**. O tipo guarda o que é «de tipo» e não o
+  que é de cada um:
+  - piso: o acabamento (não o contorno);
+  - teto: o estilo, o rasgo e a sanca (não a altura);
+  - revestimento: o acabamento e o padrão (não a altura nem o sítio na parede);
+  - escada: a largura e o cobertor (não o desnível nem a forma);
+  - rampa: a largura (não o comprimento nem o desnível);
+  - parede cortina: o afastamento dos montantes e das travessas (não o comprimento nem a altura);
+  - móvel: tudo o que o define (medidas, frentes, interior, acabamento), como as famílias do Revit.
+- **Guardas:** a lista dos tipos de guarda passou para o cabeçalho; o «Editar tipo…» fica na linha «Tipo».
+- **Luminárias, terminais, equipamentos, aparelhos sanitários e elétricos e perfis:** o tipo (do catálogo, escolhido
+  ao colocar) aparece também no cabeçalho, a cinzento — para outro, coloca-se outro elemento.
+- **Piso:** o painel mostra agora o acabamento (para mudar), a espessura, a área e o botão «Editar contorno».
+
 ## 0.414.0 — 2026-11-05
 
 **Painel Propriedades mais arrumado, e tipos guardados e aplicados (começando pela superfície paramétrica).** (O

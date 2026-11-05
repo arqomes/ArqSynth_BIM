@@ -521,6 +521,13 @@ def set_ceiling(doc, guid, style=None, height=None, gap=None, bulkhead=None):
     _edit(doc, lambda ifc: [ifc.set_ceiling(g, style, z, gap, bulkhead) for g in gs], gs, "cmd.ceiling_edit")
 
 
+def set_flooring(doc, guid, finish):
+    """(0.415) A floor finish's finish (its material and thickness). In a group, every copy. One undo step."""
+    gs = _and_copies(doc, guid)
+    language = lang()
+    _edit(doc, lambda ifc: [ifc.set_flooring(g, finish, language) for g in gs], gs, "cmd.flooring_edit", plan=False)
+
+
 WALL_FINISH_HEIGHT = 2.10   # m: tiles up to the doors' heads (0.119)
 
 
