@@ -414,6 +414,34 @@ _STRINGS = {
     # the Properties panel's groups and tabs (0.185, the interface's panel 7)
     "props.g.identity": ("Identificação", "Identity"),
     "props.g.parameters": ("Restrições e dimensões", "Constraints and dimensions"),
+    "props.group_tip": ("Clique no título para recolher ou abrir o grupo", "Click the title to fold or open the group"),
+    # (0.414) types saved from an element and applied to others (model/element_types)
+    "props.no_type": ("(sem tipo)", "(no type)"),
+    "props.element_type_tip": ("O tipo deste elemento: escolha outro para lhe aplicar (com vários escolhidos, a todos)",
+                               "This element's type: choose another to apply it (several chosen: to all of them)"),
+    "props.type_save": ("Guardar como tipo…", "Save as type…"),
+    "props.type_save_tip": ("Faz um tipo novo com o que este elemento tem (sem a sua posição nem as suas curvas)",
+                            "Makes a new type of what this element has (not its place nor its curves)"),
+    "props.type_update": ("Atualizar o tipo", "Update the type"),
+    "props.type_update_tip": ("Leva as mudanças deste elemento ao tipo e a todos os elementos desse tipo",
+                              "Takes this element's changes to its type and to every element of that type"),
+    "ask.type_name": ("Nome do tipo:", "The type's name:"),
+    "type.default_name": ("{k} — tipo {n}", "{k} — type {n}"),
+    "info.element_type_saved": ("Tipo «{n}» guardado. Escolha-o no topo das Propriedades de outros elementos para "
+                                "lhes aplicar. Ctrl+Z desfaz.",
+                                "Type “{n}” saved. Choose it at the top of other elements' Properties to apply it. "
+                                "Ctrl+Z undoes."),
+    "info.type_applied": ("Tipo «{n}» aplicado a {k} elemento(s). Ctrl+Z desfaz.",
+                          "Type “{n}” applied to {k} element(s). Ctrl+Z undoes."),
+    "info.type_none": ("{n} elemento(s) sem tipo (os valores ficam como estão).",
+                       "{n} element(s) with no type (their values stay as they are)."),
+    "info.type_updated": ("Tipo «{n}» atualizado: {k} elemento(s) seguem-no. Ctrl+Z desfaz.",
+                          "Type “{n}” updated: {k} element(s) follow it. Ctrl+Z undoes."),
+    "cmd.type_save": ("Guardar como tipo", "Save as type"),
+    "cmd.type_apply": ("Aplicar o tipo", "Apply the type"),
+    "cmd.type_update": ("Atualizar o tipo", "Update the type"),
+    "refuse.type_name": ("o tipo precisa de um nome", "the type needs a name"),
+    "refuse.type_exists": ("já há um tipo com esse nome", "there is a type of that name already"),
     "props.g.materials": ("Materiais e acabamentos (do tipo)", "Materials and finishes (the type's)"),
     "props.g.phase": ("Fase", "Phase"),
     "props.g.ifc": ("Dados IFC e parâmetros", "IFC data and parameters"),
@@ -1356,6 +1384,22 @@ _STRINGS = {
     "props.view_kind.elevation": ("Alçado", "Elevation"),
     "props.view_kind.3d": ("Vista 3D", "3D view"),
     "props.view_template": ("Modelo de vista", "View template"),
+    # (0.414) the view's type on top: its view template
+    "props.view_template_tip": ("O tipo da vista (o seu modelo de vista): escolha outro para lhe aplicar. Os modelos "
+                                "editam-se em Visualizar ▸ Modelos de vista.",
+                                "The view's type (its view template): choose another to apply it. Templates are edited "
+                                "in View ▸ View templates."),
+    "props.view_template_save": ("Guardar como modelo…", "Save as template…"),
+    "props.view_template_save_tip": ("Faz um modelo de vista com o que esta vista mostra agora e dá-lho; escolha-o no "
+                                     "topo das Propriedades de outras vistas",
+                                     "Makes a view template of what this view shows now and gives it to it; choose it "
+                                     "at the top of other views' Properties"),
+    "ask.template_name": ("Nome do modelo de vista:", "The view template's name:"),
+    "cmd.view_template_save": ("Guardar como modelo de vista", "Save as view template"),
+    "info.view_template_saved": ("Modelo de vista «{n}» feito com esta vista e dado a ela. Escolha-o no topo das "
+                                 "Propriedades de outras vistas. Ctrl+Z desfaz.",
+                                 "View template “{n}” made of this view and given to it. Choose it at the top of other "
+                                 "views' Properties. Ctrl+Z undoes."),
     "props.view_style": ("Estilo visual", "Visual style"),
     "props.view_style.shaded": ("Sombreado", "Shaded"),
     "props.view_style.hidden": ("Linhas escondidas", "Hidden lines"),
@@ -1479,7 +1523,7 @@ _STRINGS = {
                         "View \"{name}\" made with this camera, look and section box (Project panel ▸ 3D views)."),
     "tree.views3d": ("Vistas 3D", "3D views"),
     "tree.remove_view3d": ("Apagar esta vista 3D", "Delete this 3D view"),
-    "props.view_no_template": ("(nenhum)", "(none)"),
+    "props.view_no_template": ("(sem modelo de vista)", "(no view template)"),
     "props.view_cut": ("Altura de corte", "Cut height"),
     "props.view_categories": ("Categorias", "Categories"),
     "props.view_all_shown": ("todas à vista", "all shown"),
@@ -1487,11 +1531,11 @@ _STRINGS = {
     "props.view_visibility": ("Visibilidade…", "Visibility…"),
     "props.view_visibility_tip": ("Escolher as categorias que se veem nesta vista (paredes, mobiliário…).",
                                   "Choose the categories this view shows (walls, furniture…)."),
-    "props.view_by_template": ("Estes valores vêm do modelo «{name}». Para os mudar só nesta vista, escolha Modelo "
-                               "de vista: (nenhum); para mudar todas as vistas desse modelo: Visualizar ▸ Aspeto ▸ "
+    "props.view_by_template": ("Estes valores vêm do modelo «{name}». Para os mudar só nesta vista, escolha no topo "
+                               "«(sem modelo de vista)»; para mudar todas as vistas desse modelo: Visualizar ▸ Aspeto ▸ "
                                "Modelos de vista…",
                                "These values come from the template \"{name}\". To change them for this view "
-                               "alone, choose View template: (none); to change every view of that template: "
+                               "alone, choose «(no view template)» on top; to change every view of that template: "
                                "View ▸ View templates…"),
     "props.view_hint": ("Com nada selecionado, este painel mostra a vista. Clique num elemento (ferramenta "
                         "Selecionar, Espaço) para ver as propriedades dele.",

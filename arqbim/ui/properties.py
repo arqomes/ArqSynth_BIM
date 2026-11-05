@@ -22,6 +22,7 @@ from ..core.units import format_angle, format_length, format_slope, parse_angle,
 from ..i18n import decimal_sep, has, lang, t
 from ..ifc import catalog
 from ..ifc.edit import VARIANTS
+from ..model import element_types
 from ..model import graphic_rules as rules_model
 from ..model import sheets as sheets_model
 from ..model import view_styles as view_styles_model
@@ -112,6 +113,8 @@ GROUP = QtCore.Qt.ItemDataRole.UserRole + 7     # (0.185) a group's row (left ou
 # (0.396) an element's groups in this order (Revit's: what is edited first, who it is after), whatever order made in
 GROUP_ORDER = ("props.g.parameters", "props.g.materials", "props.g.identity", "props.g.phase", "props.g.ifc")
 DIVIDER_DEFAULT, DIVIDER_LEAST, DIVIDER_MOST = 0.5, 0.25, 0.75   # the names' column: its share of the panel at most
+GROUP_EXTRA = 8                 # (0.414) px more for a group's title (a band of its own)
+SUB = QtCore.Qt.ItemDataRole.UserRole + 8       # (0.414) a subgroup's row (Forma, Nervuras…): a lighter band
 
 
 class _WrapDelegate(QtWidgets.QStyledItemDelegate):
@@ -122,6 +125,8 @@ class _WrapDelegate(QtWidgets.QStyledItemDelegate):
         base = super().sizeHint(option, index)
         view = self.parent()
         text = index.data(QtCore.Qt.ItemDataRole.DisplayRole)
+        if isinstance(view, QtWidgets.QTreeView) and index.sibling(index.row(), 0).data(GROUP):
+            return QtCore.QSize(base.width(), base.height() + GROUP_EXTRA)      # (0.414) a group's title: taller
         if not text or not isinstance(view, QtWidgets.QTreeView) or view.isFirstColumnSpanned(index.row(),
                                                                                               index.parent()):
             return base
@@ -182,6 +187,10 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self.tree.setWordWrap(True)
         self.tree.setUniformRowHeights(False)
         self.tree.setItemDelegate(_WrapDelegate(self.tree))
+        # (0.414, the owner: «destacando os títulos colapsáveis e com trama») the rows striped; a title folds with a
+        # click anywhere on it (a double click no longer folds and opens it again at once)
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setExpandsOnDoubleClick(False)
         # (0.396) the names' column as wide as its longest name, at most the share of the panel its divider was
         # dragged to (Revit's); a longer name, a longer value: in two lines, never cut ("…"); the groups folded by
         # hand stay folded (remembered)
@@ -273,10 +282,13 @@ class PropertiesPanel(QtWidgets.QDockWidget):
     # ------------------------------------------------------------ the header, the groups, the search (0.185)
 
     def _header_style(self):
-        """(0.338) Its header's icon box and second line in the theme's colours."""
+        """(0.338) Its header's icon box and second line in the theme's colours; (0.414) the rows' stripes, the
+        editors in them see-through (the stripe goes on under a value)."""
         self.header_icon.setStyleSheet("QLabel { background: %s; border: 1px solid %s; border-radius: 4px; }"
                                        % (theme.C["panel"], theme.C["line"]))
         self.header_sub.setStyleSheet("QLabel { color: %s; }" % theme.C["muted"])
+        self.tree.setStyleSheet("QTreeWidget { alternate-background-color: %s; }"
+                                "QTreeWidget QLineEdit { background: transparent; }" % theme.props_colours()["stripe"])
 
     def restyle(self):
         """(0.338) In the theme in use: its header; its rows' colours, made again (on_restyle: the window shows what
@@ -321,9 +333,13 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         item = QtWidgets.QTreeWidgetItem([title, ""])
         font = item.font(0)
         font.setBold(True)
+        font.setPointSizeF(font.pointSizeF() + 0.5 if font.pointSizeF() > 0 else 10.0)
         item.setFont(0, font)
+        colours = theme.props_colours()                  # (0.414) a band of its own, the theme's
         for col in (0, 1):
-            item.setBackground(col, QtGui.QBrush(theme.colour("panel")))
+            item.setBackground(col, QtGui.QBrush(QtGui.QColor(colours["group"])))
+            item.setForeground(col, QtGui.QBrush(QtGui.QColor(colours["group_text"])))
+        item.setToolTip(0, t("props.group_tip"))
         item.setData(0, GROUP, True)
         # (0.396) an element's groups in Revit's order — what is edited first (constraints and dimensions, materials),
         # then who it is (identification), its phase, its IFC data —, whatever the order they are made in: each put
@@ -402,7 +418,24 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         if obj is self.tree.viewport() and event.type() == QtCore.QEvent.Type.Resize and \
                 abs(self.tree.viewport().width() - getattr(self, "_fit_room", 0)) > 2:
             QtCore.QTimer.singleShot(0, self._fit_columns)       # (the panel made wider or narrower)
+        if obj is self.tree.viewport() and event.type() == QtCore.QEvent.Type.MouseButtonRelease and \
+                event.button() == QtCore.Qt.MouseButton.LeftButton and self._title_click(event.position().toPoint()):
+            return True
         return super().eventFilter(obj, event)
+
+    def _title_click(self, pos):
+        """(0.414) A click on a group's title — anywhere on its band —, or on a subgroup's name: it folds (or opens).
+        Not on its arrow (Qt's own) nor on a value's editor."""
+        index = self.tree.indexAt(pos)
+        item = self.tree.itemFromIndex(index) if index.isValid() else None
+        if item is None or not item.childCount():
+            return False
+        if not (item.data(0, GROUP) or (item.data(0, SUB) and index.column() == 0)):
+            return False
+        if pos.x() < self.tree.visualRect(index.sibling(index.row(), 0)).x():
+            return False                                 # (its arrow: Qt folds it)
+        item.setExpanded(not item.isExpanded())
+        return True
 
     @staticmethod
     def _fold_key(item):
@@ -445,6 +478,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             item = self.tree.topLevelItem(k)
             if item.data(0, GROUP) and item.childCount() == 0:
                 self.tree.takeTopLevelItem(k)
+        self._subgroups()
         self._fitting = True
         try:
             self.tree.expandAll()
@@ -461,6 +495,23 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._fit_columns()
         if self.search.text().strip():
             self.filter()
+
+    def _subgroups(self):
+        """(0.414) A row with rows under it, inside a group (a surface's Forma, Modificadores, Nervuras; a joinery's
+        cells…): a lighter band, its name bold — a title that folds as the groups' do."""
+        sub = QtGui.QBrush(QtGui.QColor(theme.props_colours()["sub"]))
+        it = QtWidgets.QTreeWidgetItemIterator(self.tree)
+        while it.value():
+            item = it.value()
+            it += 1
+            if item.parent() is None or not item.childCount() or item.isFirstColumnSpanned():
+                continue
+            item.setData(0, SUB, True)
+            font = item.font(0)
+            font.setBold(True)
+            item.setFont(0, font)
+            for col in (0, 1):
+                item.setBackground(col, sub)
 
     def filter(self):
         """Only the rows whose name or value has the search's text (any case), in their groups."""
@@ -1033,12 +1084,19 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         tpl = doc.template_of(view)
         s = doc.view_settings(view)
         self._set_header(label, t("props.view_kind." + kind), _kind_icon("view_" + kind))
+        self._view_type_header(doc, view, tpl)
         self._begin(t("props.g.view"))
         if kind == "section" or (kind == "3d" and len(view) > 1):     # (a named view: its name changes here)
             self._text_editor(t("props.view"), label, "view_name", view)
         else:
             self._row(t("props.view"), label, bold=True)
         self._row(t("props.view_kind"), t("props.view_kind." + kind))
+        item = self._row(t("props.view_template"), "")              # (0.414) a template made of this view
+        button = QtWidgets.QPushButton(t("props.view_template_save"))
+        button.setToolTip(t("props.view_template_save_tip"))
+        button.clicked.connect(lambda _c=False: self._emit("view_template_save", view, True))
+        self.tree.setItemWidget(item, 1, button)
+        self.editors["view_template_save"] = button
         styles = [(view_styles_model.label(vs, t), vs.uid) for vs in view_styles_model.all_styles(doc.view_styles)]
         if kind in ("plan", "section", "elevation"):       # (0.315) a drawing's: none — lines, as always — or one
             self._choice_combo(t("props.view_style"), "view_style", view,
@@ -1073,7 +1131,6 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         if kind in ("plan", "section", "elevation"):
             self._choice_combo(t("props.view_detail"), "view_detail", view,
                                [(t("props.view_detail." + k), k) for k in DETAILS], s.detail)
-        self._template_combo(doc, view, tpl)
         if tpl is not None:
             if kind != "3d":
                 self._row(t("tpl.scale"), "1:{}".format(s.scale) if s.scale else t("sheet.scale_auto"))
@@ -1384,18 +1441,27 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 note.setFirstColumnSpanned(True)
                 note.setForeground(0, QtGui.QBrush(QtGui.QColor(theme.C["attention"])))
                 note.setToolTip(0, w)
-            # its definition and its parts, as files
-            item = self._row(t("props.surface_file"), "", parent=saved)
+            # its definition and its parts, as files — (0.414) on a row of their own, the panel's whole width (in the
+            # values' column they were cut)
+            item = self._row("", "", parent=saved)
+            item.setFirstColumnSpanned(True)
             box = QtWidgets.QWidget()
-            grid = QtWidgets.QGridLayout(box)
-            grid.setContentsMargins(0, 0, 0, 0)
+            column = QtWidgets.QVBoxLayout(box)
+            column.setContentsMargins(4, 2, 4, 4)
+            column.setSpacing(2)
+            title = QtWidgets.QLabel(t("props.surface_file"))
+            title.setStyleSheet("QLabel { font-weight: 600; background: transparent; }")
+            column.addWidget(title)
+            grid = QtWidgets.QGridLayout()
             grid.setSpacing(2)
             for n, key in enumerate(("csv", "text", "export", "import")):
                 b = QtWidgets.QPushButton(t("props.surface_" + key))
                 b.clicked.connect(lambda _c=False, a="surface_" + key: self._emit(a, guid, True))
                 grid.addWidget(b, n // 2, n % 2)
                 self.editors["surface_" + key] = b
-            self.tree.setItemWidget(item, 1, box)
+            column.addLayout(grid)
+            item.setSizeHint(0, box.sizeHint())
+            self.tree.setItemWidget(item, 0, box)
         finally:
             self._group = saved
 
@@ -1412,9 +1478,26 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                            [(t("props.organic_material_auto", m=named(own)), "")] +
                            [(named(k), k) for k in keys if k in catalog.MATERIALS], value or "")
 
-    def _template_combo(self, doc, view, tpl):
-        choices = [(t("props.view_no_template"), None)] + [(x.name, x.uid) for x in doc.templates]
-        self._choice_combo(t("props.view_template"), "view_template", view, choices, tpl.uid if tpl else None)
+    def _view_type_header(self, doc, view, tpl):
+        """(0.414, the owner: «os tipos devem ficar no cabeçalho como o da porta») A view's type — its view template,
+        what a view's settings are kept in and given to other views — chosen on top, under its name, as an element's
+        type is."""
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName("props_type")
+        combo.setToolTip(t("props.view_template_tip"))
+        combo.addItem(t("props.view_no_template"), None)
+        for x in doc.templates:
+            combo.addItem(x.name, x.uid)
+        combo.setCurrentIndex(max(0, combo.findData(tpl.uid if tpl else None)))
+
+        def chosen(index):
+            uid = combo.itemData(index)
+            if uid != (tpl.uid if tpl else None):
+                self._emit("view_template", view, uid)
+
+        combo.activated.connect(chosen)
+        self._set_type_combo(combo, None)
+        self.editors["view_template"] = combo
 
     def _scale_combo(self, view, scale):
         choices = [(t("sheet.scale_auto"), None)] + [("1:{}".format(n), n) for n in sheets_model.SCALES]
@@ -1553,6 +1636,48 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self.tree.setItemWidget(row, 1, button)
             self.editors["joinery"] = button
 
+    def _element_type_editor(self, doc, kind, guid):
+        """(0.414, the owner: «quero todos os elementos IFC tenham tipo, guardado e aplicado a outros elementos») On
+        top, as Revit's Type Selector, the types saved for its kind — one chosen is put on it (on all of them, several
+        chosen) —, «(sem tipo)» first; under it «Guardar como tipo…» (a new type from it) and «Atualizar o tipo»
+        (its changes taken to its type and to the other elements of it)."""
+        current = doc.ifc.element_type_of(guid)
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName("props_type")
+        combo.setToolTip(t("props.element_type_tip"))
+        combo.addItem(t("props.no_type"), "")
+        for type_guid, name in element_types.types_of(doc, kind):
+            combo.addItem(name, type_guid)
+        combo.setCurrentIndex(max(0, combo.findData(current or "")))
+
+        def chosen(index):
+            value = combo.itemData(index) or ""
+            if value != (current or "") or combo.property("varies"):
+                self._emit("element_type", guid, value or None)
+
+        combo.activated.connect(chosen)
+        self._set_type_combo(combo, None)
+        self.editors["type"] = combo
+        item = self._row(t("props.type"), "")
+        box = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        save = QtWidgets.QPushButton(t("props.type_save"))
+        save.setToolTip(t("props.type_save_tip"))
+        save.clicked.connect(lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
+            0, lambda: self.on_edit("element_type_save", guid, None)))
+        row.addWidget(save)
+        self.editors["element_type_save"] = save
+        update = QtWidgets.QPushButton(t("props.type_update"))
+        update.setToolTip(t("props.type_update_tip"))
+        update.setEnabled(current is not None and element_types.differs(doc, guid))
+        update.clicked.connect(lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
+            0, lambda: self.on_edit("element_type_update", guid, None)))
+        row.addWidget(update)
+        self.editors["element_type_update"] = update
+        self.tree.setItemWidget(item, 1, box)
+
     def _phase_editor(self, status, guid):
         """The element's phase in a renovation project (IFC Status): existing, new, to demolish…"""
         item = self._row(t("props.phase"), "")
@@ -1650,6 +1775,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         elif kind == "roof":                       # (0.278) a roof type; made before: its slab type's name, listed
             spec = p.get("spec")
             self._type_editor(dict(info, type=info["type"] or (_type_name(spec) if spec is not None else "")), guid)
+        elif kind in element_types.KINDS:          # (0.414) its saved types: chosen on top, saved, brought up to date
+            self._element_type_editor(doc, kind, guid)
         elif kind and kind != "fitting":                # (a bend's type follows its pipe's: shown only)
             self._type_editor(info, guid)
         else:

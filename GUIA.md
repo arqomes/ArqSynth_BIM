@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.412.0
+# Guia das ferramentas — ArqSynth BIM 0.414.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.412.0.
+ArqSynth BIM 0.414.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -302,7 +302,7 @@ Operações gerais de criação e edição geométrica.
 
 - **Como se usa:** Plano vertical ao longo do eixo vermelho (XZ): clique no ponto por onde passa. Na barra: XY, YZ ou Face. Esc: sair.
 - **Teclas:** XY / XZ / YZ: clique onde o plano fica · Face: clique numa face · Esc: sair
-- **Passos de teste (TESTAR.md):** 0.412 «Rodar à volta de X, Y ou Z; planos de trabalho»
+- **Passos de teste (TESTAR.md):** 0.413 «O plano de trabalho fica guardado com o projeto»; 0.412 «Rodar à volta de X, Y ou Z; planos de trabalho»
 
 #### Push/Pull  ·  tecla P
 
@@ -885,7 +885,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Guarda (barras verticais, 1,00 m): clique nos pontos do caminho; Enter termina, Delete apaga o último. (Tab muda.)
 - **Teclas:** Tab: caminho → vazio → escada · Enter: terminar o caminho · Delete: último ponto · Esc: cancelar
-- **Passos de teste (TESTAR.md):** 0.261 «Guardas de escada contínuos»; 0.260 «O editor de tipos de guarda»; 0.259 «As cores dos guardas no 3D»; 0.258 «Tipos de guarda-corpo»
+- **Passos de teste (TESTAR.md):** 0.414 «Painel Propriedades arrumado; tipos guardados e aplicados»; 0.413 «O plano de trabalho fica guardado com o projeto»; 0.261 «Guardas de escada contínuos»; 0.260 «O editor de tipos de guarda»; 0.259 «As cores dos guardas no 3D»; 0.258 «Tipos de guarda-corpo»
 
 #### Tipos de guarda…
 
@@ -1782,4 +1782,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*240 comandos descritos, gerados do ArqSynth BIM 0.412.0.*
+*240 comandos descritos, gerados do ArqSynth BIM 0.414.0.*

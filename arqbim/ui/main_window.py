@@ -2076,6 +2076,56 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message(t("info.edit_platform", name=self.doc.get(guid).name))
         return True
 
+    # ------------------------------------------------------------ (0.414) types saved and applied
+
+    def save_element_type(self, guid, name=None):
+        """«Guardar como tipo…»: a type made from this element (model/element_types), named (asked when not given) —
+        the element tied to it. Returns its GlobalId, or None."""
+        from ..model import element_types
+        kind = self.doc.ifc.kind_of(guid)
+        if kind not in element_types.KINDS:
+            return None
+        if name is None:
+            n = len(element_types.types_of(self.doc, kind)) + 1
+            name, ok = QtWidgets.QInputDialog.getText(self, t("props.type_save").rstrip("…"), t("ask.type_name"),
+                                                      text=t("type.default_name", k=t("elem." + kind), n=n))
+            if not ok or not name.strip():
+                return None
+        try:
+            made = element_types.save_type(self.doc, guid, name.strip())
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return None
+        self._refresh_properties()
+        self.message(t("info.element_type_saved", n=name.strip()))
+        return made
+
+    def apply_element_type(self, guids, type_guid):
+        """A saved type put on these elements (and them tied to it) — None: tied to no type, their values kept."""
+        from ..model import element_types
+        done = element_types.apply_type(self.doc, guids, type_guid)
+        if not done:
+            return []
+        if type_guid is None:
+            self.message(t("info.type_none", n=len(done)))
+        else:
+            self.message(t("info.type_applied", n=self.doc.ifc.by_guid(type_guid).Name or "", k=len(done)))
+        return done
+
+    def update_element_type(self, guid):
+        """«Atualizar o tipo»: this element's values taken to its type and to every other element of it."""
+        from ..model import element_types
+        type_guid = self.doc.ifc.element_type_of(guid)
+        try:
+            done = element_types.update_type(self.doc, guid)
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return []
+        if done:
+            self._refresh_properties()
+            self.message(t("info.type_updated", n=self.doc.ifc.by_guid(type_guid).Name or "", k=len(done)))
+        return done
+
     def set_work_plane(self, plane):
         """(0.412) The work plane the drawing tools start on in the 3D view (model/work_plane) — None: the active
         storey's level again. Shown as a blue grid."""
@@ -3475,6 +3525,34 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.template_assigned", view=label, tpl=tpl.name) if tpl is not None
                          else t("info.template_none", view=label))
         QtCore.QTimer.singleShot(0, self._refresh_view_settings)
+
+    def save_view_template(self, view, name=None):
+        """(0.414) «Guardar como modelo…»: a view template made of what this view shows now (its cut height, the
+        categories it hides, its colours, scale, phases and style), given to it — the view's type, chosen on top of
+        the Properties of other views. One undo step. Returns the template, or None."""
+        view = tuple(view)
+        if name is None:
+            label = self.view_label(view[0], view[1] if len(view) > 1 else None)
+            name, ok = QtWidgets.QInputDialog.getText(self, t("props.view_template_save").rstrip("…"),
+                                                      t("ask.template_name"), text=label)
+            if not ok or not name.strip():
+                return None
+        name = name.strip()
+        if any(x.name.lower() == name.lower() for x in self.doc.templates):
+            self.message(t("err.edit_refused", e=t("refuse.type_exists")), warning=True)
+            return None
+        s = self.doc.view_settings(view)
+        tpl = templates_model.ViewTemplate(name, cut_height=s.cut_height, hidden=sorted(s.hidden), rule=s.rule,
+                                           scale=s.scale, phases=s.phases,
+                                           style=s.style if view[0] == "3d" else s.drawn_style)
+        mark = self.doc.undo_mark()
+        self.doc.set_templates(list(self.doc.templates) + [tpl])
+        self.doc.assign_template(view, tpl.uid)
+        self.doc.join_since(mark, t("cmd.view_template_save"))
+        QtCore.QTimer.singleShot(0, self._refresh_view_settings)
+        self._refresh_properties()
+        self.message(t("info.view_template_saved", n=name))
+        return tpl
 
     def _refresh_view_settings(self):
         """The view shown takes its template's settings again if they changed (a template was
@@ -6114,6 +6192,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_mark(doc, guid, value)
             elif action == "type":
                 bim.set_type(doc, guid, value)
+            elif action == "element_type":                 # (0.414) a saved type put on it — or none
+                self.apply_element_type([guid], value)
+            elif action == "element_type_save":
+                self.save_element_type(guid)
+                return
+            elif action == "element_type_update":
+                self.update_element_type(guid)
+                return
             elif action == "room_name":                    # (0.99) a room's name, number, finishes
                 bim.set_room(doc, guid, name=str(value))
             elif action == "room_number":
@@ -6496,6 +6582,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if action == "view_template":
             self.template_action("assign", view, value)
+            return
+        if action == "view_template_save":                 # (0.414) a template made of this view, given to it
+            self.save_view_template(view)
             return
         if action == "view_cut" and not 0.10 - 1e-9 <= value <= 5.00 + 1e-9:
             self.message(t("err.cut_height"), warning=True)

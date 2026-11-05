@@ -52,6 +52,7 @@ from .coverings import CoveringMixin  # noqa: E402
 from .architecture import ArchitectureMixin  # noqa: E402
 from .organic_roofs import OrganicRoofMixin  # noqa: E402
 from .param_surfaces import ParamSurfaceMixin  # noqa: E402
+from .element_types import ElementTypeMixin  # noqa: E402
 from .services import ServicesMixin  # noqa: E402
 from .terminals import TerminalMixin  # noqa: E402
 from .equipment import EquipmentMixin  # noqa: E402
@@ -361,7 +362,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CoveringMixin, TerminalMixin, EquipmentMixin, SanitaryMixin, SystemMixin, BranchMixin,
                ElectricalMixin, CircuitMixin, ConduitMixin, TerrainMixin, StructuralMixin, RebarMixin,
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
-               RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin):
+               RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
+               ElementTypeMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)

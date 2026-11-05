@@ -111,6 +111,8 @@ class ParamSurfaceMixin:
         if usage is not None and usage in USAGES and usage != self.surface_usage(guid):
             cls, predefined = USAGES[usage]
             if not element.is_a(cls):
+                if hasattr(self, "element_type_of") and self.element_type_of(guid) is not None:
+                    self.tie_element_type(guid, None)    # (0.414: its type's class no longer its — IFC4 wants them alike)
                 element = api.root.reassign_class(self.file, product=element, ifc_class=cls,
                                                   predefined_type=predefined)
             self._set_params(element, {"Uso": usage})

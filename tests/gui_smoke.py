@@ -821,6 +821,7 @@ def bim_flow():
     paint_flow()                      # (0.391)
     param_surface_flow()              # (0.395)
     properties_layout_flow()          # (0.396)
+    properties_types_flow()           # (0.414)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -3408,6 +3409,9 @@ def work_plane_rotate_flow():
     # (the click comes onto the alignments found nearby, as any click does: within ~10 cm here)
     xz = plane is not None and plane.kind == "xz" and abs(float(plane.origin[1]) - 3.0) < 0.15 and \
         win.tool.name == "select" and vp.work_grid.visible
+    put = "{} {} {} {} {}".format(plane.kind if plane else None,
+                                  [round(float(c), 2) for c in plane.origin] if plane else None, win.tool.name,
+                                  vp.work_grid.visible, win.last_message[:50])
     # (0.413, the owner: «Sim, guardar») the project marked changed; saved and opened again: the same plane, shown
     marked = doc.modified and win.windowTitle().endswith("*")
     import tempfile
@@ -3511,7 +3515,8 @@ def work_plane_rotate_flow():
           and refused,
           "deitada={} eixo_x={} eixo_visto={} de_pe={} eixo_y={} roda_y={} fita={}/1536:{} xz={} guardado={} "
           "linha={} bezier={} planta={} face={} nivel={} parede={} ({})".format(flat, axis_x, drawn_axis, up, axis_y,
-                                                                             about_y, on_ribbon, open_1536, xz, kept,
+                                                                             about_y, on_ribbon, open_1536,
+                                                                             "{} [{}]".format(xz, put), kept,
                                                    on_plane, bezier_on, hidden_in_plan, by_face, none_again, refused,
                                                    line_pts))
     doc.modified = False
@@ -14874,6 +14879,115 @@ def properties_layout_flow():
     doc.modified = False
 
 
+def properties_types_flow():
+    """0.414 (the owner, with a capture of a parametric surface's Properties: «pode ser mais bem organizado,
+    destacando os títulos colapsáveis e com trama para melhorar a distinção de parâmetros. Quero todos os elementos IFC
+    tenham tipo, guardado e aplicado a outros elementos»): two parametric surfaces; the first chosen — its groups'
+    titles on a band, taller, the subgroups (Forma…) on a lighter one, the rows striped; a click on a title folds it, a
+    click again opens it; the definition's buttons on a row of their own. «Guardar como tipo…»: a type of it, listed on
+    top; the second chosen, that type chosen on top: it takes the first's construction (its own curves kept); the
+    first changed, «Atualizar o tipo»: the second follows. Captured: 414_propriedades.png, 415_tipos.png."""
+    from arqbim.core import curves as cc
+    from arqbim.core import surface_build as sb
+    from arqbim.core.mesh import PolyMesh
+    from arqbim.i18n import t as t_
+    from arqbim.model import bim as B
+    from arqbim.model.document import AddObject, SketchObject
+    from arqbim.ui import properties as props_mod
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.views.open(("3d",))
+
+    def ring(cx, r, z):
+        curve = {"kind": "arc", "centre": [cx, 5.0, z], "normal": [0, 0, 1], "start": [cx + r, 5.0, z],
+                 "angle": 360.0, "segments": 32}
+        pts = cc.curve_points(curve)
+        sk = SketchObject("anel", np.eye(4), PolyMesh(pts, [], lines=[(k, (k + 1) % len(pts))
+                                                                      for k in range(len(pts))]), curve=curve)
+        doc.execute(AddObject(sk, "add"))
+        return sk.id
+
+    a = B.surface_from_sketches(doc, [(ring(5.0, r, z), None) for r, z in ((5.0, 3.0), (2.0, 6.0))],
+                                build={"gridshell": dict(sb.TEMPLATES["gridshell"])})
+    b = B.surface_from_sketches(doc, [(ring(20.0, r, z), None) for r, z in ((4.0, 3.0), (1.5, 5.0))])
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    vp.set_selection({a})
+    pump(600)
+    panel = win.props
+    tree = panel.tree
+    base = tree.palette().color(QtGui.QPalette.ColorRole.Base).name()
+    first = tree.topLevelItem(0)
+    band = first.data(0, props_mod.GROUP) and first.background(0).color().name() != base and \
+        tree.visualItemRect(first).height() >= tree.fontMetrics().height() + props_mod.GROUP_EXTRA
+    subs = []
+    it = QtWidgets.QTreeWidgetItemIterator(tree)
+    while it.value():
+        if it.value().data(0, props_mod.SUB):
+            subs.append(it.value().text(0))
+        it += 1
+    sub_band = t_("props.surface_form") in subs
+    striped = tree.alternatingRowColors() and "alternate-background-color" in tree.styleSheet()
+    # a click on the title (to the right of its arrow): folded; again: open
+    rect = tree.visualItemRect(first)
+    spot = QtCore.QPoint(rect.left() + rect.width() // 2, rect.center().y())
+    QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, spot)
+    pump(150)
+    folded = not first.isExpanded()
+    QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, spot)
+    pump(150)
+    opened = first.isExpanded()
+    buttons_row = "surface_export" in panel.editors and panel.editors["surface_export"].isVisible()
+    shot("414_propriedades.png")
+    # «Guardar como tipo…» (the name given), listed on top
+    made = win.save_element_type(a, "Cúpula com gridshell")
+    pump(400)
+    combo = panel.editors.get("type")
+    listed = made is not None and combo is not None and combo.findData(made) >= 0 and combo.currentData() == made
+    # the second chosen, that type on top: it takes the gridshell, keeps its curves
+    curves_b = doc.ifc.surface_definition(b)["curves"]
+    vp.set_selection({b})
+    pump(500)
+    combo = panel.editors.get("type")
+    if combo is not None and made is not None:
+        combo.setCurrentIndex(combo.findData(made))
+        combo.activated.emit(combo.currentIndex())
+        pump(600)
+    db = doc.ifc.surface_definition(b)
+    applied = "gridshell" in (db.get("build") or {}) and db["curves"] == curves_b and doc.ifc.element_type_of(b) == made
+    # the first changed (a twist added), «Atualizar o tipo»: the second follows
+    win._on_property_edit("surface_mod_add", a, "twist")
+    pump(500)
+    vp.set_selection({a})
+    pump(500)
+    update = panel.editors.get("element_type_update")
+    can_update = update is not None and update.isEnabled()
+    if update is not None:
+        update.click()
+        pump(800)
+    followed = [m["op"] for m in doc.ifc.surface_definition(b).get("modifiers") or []] == ["twist"]
+    shot("415_tipos.png")
+    # (the owner: «os tipos devem ficar no cabeçalho como o da porta») nothing chosen: the view's type — its view
+    # template — on top; «Guardar como modelo…»: one made of this view, given to it, shown on top
+    vp.set_selection(set())
+    pump(500)
+    header = panel.type_combo is not None and panel.editors.get("view_template") is panel.type_combo
+    view = vp.current_view() or ("3d",)
+    tpl = win.save_view_template(view, "Vista geral da cúpula")
+    pump(500)
+    given = doc.template_of(view)
+    view_typed = tpl is not None and given is not None and given.uid == tpl.uid and panel.type_combo is not None and \
+        panel.type_combo.currentText() == "Vista geral da cúpula"
+    shot("414_tipo_da_vista.png")
+    check("propriedades_tipos", band and sub_band and striped and folded and opened and buttons_row and listed
+          and applied and can_update and followed and header and view_typed and doc.ifc.validate() == [],
+          "faixa={} subgrupo={} listras={} recolhe={} abre={} botoes={} tipo={} aplicado={} atualizar={} segue={} "
+          "vista_no_cabecalho={}/{} ({})".format(band, sub_band, striped, folded, opened, buttons_row, listed, applied,
+                                                  can_update, followed, header, view_typed, win.last_message[:70]))
+    doc.modified = False
+
+
 def paint_flow():
     """0.391 (the owner: «já tem o comando de pintura, quero que seja com fluxo como do SketchUp»): B — the Paint
     bucket, the Materials Browser in front; Tinta terracota clicked in it (one click); the south wall's outer face
@@ -17037,7 +17151,8 @@ def properties_panel_flow():
     props.tabs.setCurrentIndex(0)
     vp.set_selection(set())
     pump(300)
-    view = props.header_title.text() == "3D" and "Vista:" in props.text().split("\n")[0]
+    # (0.414: the view's type — its view template — on top, first; then its rows)
+    view = props.header_title.text() == "3D" and "Vista:" in " ".join(props.text().split("\n")[:2])
     check("painel_de_propriedades", header and groups and searched and listed and seen.get("opened") and view,
           "cabecalho={} grupos={} pesquisa={} materiais={} abre={} vista={} ({})".format(
               header, groups, searched, listed, seen.get("opened"), view, props.text().split("\n")[:2]))

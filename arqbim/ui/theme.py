@@ -175,6 +175,23 @@ def colour(key):
     return qcolor(C[key])
 
 
+def _hex(key, fallback):
+    """The theme's colour as «#rrggbb» (an «rgba(…)» one: its colour, opaque)."""
+    return qcolor(C.get(key, fallback)).name()
+
+
+def props_colours():
+    """(0.414, the owner: «destacando os títulos colapsáveis e com trama para melhorar a distinção de parâmetros») The
+    Properties panel's: its groups' titles on a band of the selection's colour over the panel's, the subgroups' on a
+    lighter one, the rows striped a shade off the fields' — all from the theme in use."""
+    field, panel = _hex("input", "#ffffff"), _hex("panel", "#eef1f5")
+    select, text = _hex("select", "#2f6fe4"), _hex("text", "#1f2a37")
+    dark = _dark(field)
+    return {"group": _mix(panel, select, 0.30 if dark else 0.20), "group_text": text,
+            "sub": _mix(field, select, 0.14 if dark else 0.09), "stripe": _mix(field, text, 0.08 if dark else 0.07),
+            "group_rule": _mix(panel, select, 0.55 if dark else 0.45)}
+
+
 def saved():
     """The theme chosen on this computer ("light" when none was)."""
     name = str(QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(KEY, "light") or "light")

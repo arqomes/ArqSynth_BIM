@@ -12400,6 +12400,81 @@ class JoinsByMaterial(unittest.TestCase):
             doc.modified = False
 
 
+class ElementTypesSaved(unittest.TestCase):
+    """0.414 (the owner: «quero todos os elementos IFC tenham tipo, guardado e aplicado a outros elementos»): a
+    parametric surface's type saved (its form, modifiers, construction, use — not its curves), applied to another
+    surface (it takes them, keeps its own curves, becomes a roof as the type says), the first changed and «Atualizar o
+    tipo»: the other follows; none again: values kept; one undo step each; kept in the IFC, valid."""
+
+    def test_surface_types(self):
+        from arqbim.core import curves as cc
+        from arqbim.core import surface_build as sb
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model import element_types, surface_edits
+        from arqbim.model.document import AddObject, SketchObject
+        doc = Document()
+
+        def ring(cx, r, z):
+            curve = {"kind": "arc", "centre": [cx, 5.0, z], "normal": [0, 0, 1], "start": [cx + r, 5.0, z],
+                     "angle": 360.0, "segments": 32}
+            pts = cc.curve_points(curve)
+            sk = SketchObject("anel", np.eye(4), PolyMesh(pts, [], lines=[(k, (k + 1) % len(pts))
+                                                                          for k in range(len(pts))]), curve=curve)
+            doc.execute(AddObject(sk, "add"))
+            return sk.id
+
+        a = bim.surface_from_sketches(doc, [(ring(5.0, r, z), None) for r, z in ((5.0, 3.0), (2.0, 6.0))],
+                                      build={"gridshell": dict(sb.TEMPLATES["gridshell"])})
+        b = bim.surface_from_sketches(doc, [(ring(20.0, r, z), None) for r, z in ((4.0, 3.0), (1.5, 5.0))])
+        self.assertTrue(element_types.has_types(doc, a))
+        self.assertIsNone(doc.ifc.element_type_of(a))
+        bim.set_param_surface(doc, a, surface_edits.apply_action(doc.ifc.surface_definition(a), "surface_mod_add",
+                                                                  "twist"), usage="cobertura")
+        kind_a = doc.ifc.by_guid(a).is_a()
+        made = element_types.save_type(doc, a, "Cobertura torcida")
+        self.assertEqual(doc.ifc.element_type_of(a), made)
+        self.assertEqual(element_types.types_of(doc, "param_surface"), [(made, "Cobertura torcida")])
+        self.assertTrue(doc.ifc.by_guid(made).is_a("IfcRoofType") and kind_a == "IfcRoof")
+        self.assertNotIn("curves", doc.ifc.element_type_values(made)["definition"])
+        with self.assertRaises(ValueError):                              # (a name already used)
+            element_types.save_type(doc, a, "cobertura torcida")
+        # applied to the other: its form, twist and gridshell, a roof — its own curves (around x = 20) kept
+        curves_b = doc.ifc.surface_definition(b)["curves"]
+        self.assertEqual(element_types.apply_type(doc, [b], made), [b])
+        db = doc.ifc.surface_definition(b)
+        self.assertEqual(db["curves"], curves_b)
+        self.assertEqual([m["op"] for m in db["modifiers"]], ["twist"])
+        self.assertIn("gridshell", db["build"])
+        self.assertTrue(doc.ifc.by_guid(b).is_a("IfcRoof") and doc.ifc.element_type_of(b) == made)
+        self.assertFalse(element_types.differs(doc, b))
+        doc.undo()                                                       # (one step)
+        self.assertNotIn("gridshell", doc.ifc.surface_definition(b).get("build") or {})
+        self.assertIsNone(doc.ifc.element_type_of(b))
+        doc.redo()
+        # the first changed by hand, «Atualizar o tipo»: the other follows
+        d = surface_edits.apply_action(doc.ifc.surface_definition(a), "surface_mod:0:angle", "60*v")
+        bim.set_param_surface(doc, a, d)
+        self.assertTrue(element_types.differs(doc, a))
+        self.assertEqual(sorted(element_types.update_type(doc, a)), sorted([a, b]))
+        self.assertEqual(doc.ifc.surface_definition(b)["modifiers"][0]["angle"], "60*v")
+        self.assertFalse(element_types.differs(doc, a))
+        # none: tied to no type, its values kept
+        element_types.apply_type(doc, [b], None)
+        self.assertIsNone(doc.ifc.element_type_of(b))
+        self.assertEqual(doc.ifc.surface_definition(b)["modifiers"][0]["angle"], "60*v")
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        path = os.path.join(tempfile.mkdtemp(), "tipos.ifc")
+        doc.save(path)
+        again = Document()
+        again.open(path)
+        self.assertEqual(again.ifc.element_types("param_surface"), [(made, "Cobertura torcida")])
+        self.assertEqual(again.ifc.element_type_of(a), made)
+        # its use changed by hand (a roof no more): its type let go — IFC4 wants an IfcRoofType on roofs only
+        bim.set_param_surface(again, a, usage="estrutura")
+        self.assertIsNone(again.ifc.element_type_of(a))
+        self.assertEqual(again.ifc.validate(express_rules=True), [])
+
+
 class ParamSurfacesIfc(unittest.TestCase):
     """0.395 — a parametric surface as an element: made of curves of the model (each followed: moved, the surface made
     again in the same step; Ctrl+Z takes both back), its use its class (the same element), its construction in its

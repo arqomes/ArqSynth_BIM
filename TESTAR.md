@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.414 — Painel Propriedades arrumado; tipos guardados e aplicados
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.414.0**. Abra um projeto com duas superfícies
+   paramétricas (ou faça-as: Massa e Estudos ▸ Formas livres ▸ Superfície paramétrica).
+2. Clique numa superfície. No painel **Propriedades**: os títulos dos grupos têm uma faixa própria, os subgrupos
+   (Forma, Modificadores, Construção…) uma faixa mais leve, e as linhas alternam de tom.
+3. Clique no meio do título **Restrições e dimensões**: o grupo recolhe-se. Clique outra vez: abre-se.
+4. Em baixo, a **Definição** tem os quatro botões numa linha inteira, com os nomes à vista.
+5. Em **Identificação**, na linha **Tipo**, clique em **Guardar como tipo…**, escreva um nome e **OK**: no topo do
+   painel, a lista dos tipos mostra esse tipo.
+6. Clique na **outra superfície**. No topo, abra a lista e escolha o tipo: ela fica com a forma, os modificadores e a
+   construção da primeira, mas nas suas próprias curvas.
+7. Volte à primeira e mude alguma coisa (por exemplo, acrescente um modificador). O botão **Atualizar o tipo**
+   acende: clique — a segunda superfície muda também.
+8. Escolha as duas superfícies (Ctrl+clique) e, no topo, **(sem tipo)**: ficam sem tipo, como estão.
+9. Clique num sítio vazio (nada escolhido): o painel mostra a vista e, no topo, a lista do seu **modelo de vista**
+   (o tipo da vista). Na linha **Modelo de vista**, clique em **Guardar como modelo…**, escreva um nome e **OK**: o
+   topo passa a mostrar esse modelo. Abra a planta (F4): no topo pode escolher o mesmo modelo para ela.
+
 ## 0.413 — O plano de trabalho fica guardado com o projeto
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.413.0**. Abra um projeto e a vista **3D**.

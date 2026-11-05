@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.414.0 — 2026-11-05
+
+**Painel Propriedades mais arrumado, e tipos guardados e aplicados (começando pela superfície paramétrica).** (O
+dono, com a captura das propriedades de uma superfície paramétrica: «pode ser mais bem organizado, destacando os
+títulos colapsáveis e com trama para melhorar a distinção de parâmetros. Quero todos os elementos IFC tenham tipo,
+guardado e aplicado a outros elementos».)
+
+- **O painel Propriedades:**
+  - os títulos dos grupos (Restrições e dimensões, Identificação, Fase…) numa faixa própria, em negrito e mais
+    altos;
+  - os subgrupos (Forma, Modificadores, Construção, Nervuras, Camadas…) numa faixa mais leve, em negrito;
+  - as linhas em faixas alternadas, para separar bem cada parâmetro;
+  - **um clique em qualquer sítio do título** recolhe ou abre o grupo (antes era só na seta);
+  - na superfície paramétrica, os botões da «Definição» ficam numa linha inteira, sem cortar os nomes;
+  - tudo com as cores do tema, no claro, no escuro e nas paletas.
+- **Tipos guardados e aplicados** (por agora na superfície paramétrica; os outros elementos sem tipo vêm a seguir):
+  - **Guardar como tipo…** faz um tipo com o que o elemento tem — na superfície: a forma, os modificadores, a
+    construção e o uso (não as curvas, que são de cada uma);
+  - no **topo das Propriedades**, como o seletor de tipos do Revit, a lista dos tipos guardados: escolher um aplica-o
+    ao elemento — ou a todos os escolhidos;
+  - **Atualizar o tipo** leva as mudanças de um elemento ao tipo e a todos os elementos desse tipo;
+  - «(sem tipo)» solta o elemento do tipo (os valores ficam);
+  - **as vistas também têm o tipo no cabeçalho** (o dono: «os tipos devem ficar no cabeçalho como o da porta»): com
+    nada escolhido, o topo das Propriedades mostra o **modelo de vista** da vista, numa lista, como o tipo de uma
+    parede ou porta — escolher outro aplica-o; **Guardar como modelo…** faz um modelo com o que a vista mostra agora
+    e dá-lho;
+  - no IFC, cada tipo é um tipo IFC da classe do elemento (IfcRoofType numa cobertura, …), e os elementos ficam
+    ligados a ele.
+
 ## 0.413.0 — 2026-11-05
 
 **O plano de trabalho fica guardado com o projeto.** (O dono: «Sim, guardar».)

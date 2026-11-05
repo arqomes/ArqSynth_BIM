@@ -1085,10 +1085,10 @@ melhorar a distinção de parâmetros. Quero todos os elementos IFC tenham tipo,
 Até aqui têm tipos (TypeSpec do catálogo, escolhidos no topo do painel e editados no editor de tipos) as paredes, lajes,
 pilares, vigas, sapatas, portas, janelas, tubos, condutas e coberturas; as escadas, rampas, guardas, tetos e outros só
 mostram o tipo; a superfície paramétrica, o piso (acabamento), os móveis e outros não têm.
-1. **O painel Propriedades:** os títulos dos grupos numa faixa própria, em negrito e mais altos, recolhíveis com um
+1. ~~**O painel Propriedades:**~~ (0.414.0) os títulos dos grupos numa faixa própria, em negrito e mais altos, recolhíveis com um
    clique em todo o título; os subgrupos (Forma, Nervuras…) numa faixa mais leve; as linhas em faixas alternadas
    («trama»); os botões que não cabem na coluna dos valores em linha inteira. Cores só do tema, nos dois temas.
-2. **Tipos guardados e aplicados — o mecanismo e a superfície paramétrica:** «Guardar como tipo…» (nome) faz um tipo
+2. ~~**Tipos guardados e aplicados — o mecanismo e a superfície paramétrica:**~~ (0.414.0) «Guardar como tipo…» (nome) faz um tipo
    do elemento (IfcTypeObject da classe dele, os valores do tipo num pset); no topo do painel, a lista dos tipos dessa
    natureza: escolher um aplica-o ao elemento — ou a todos os escolhidos —; «Atualizar o tipo» leva as mudanças de um
    elemento ao tipo e a todos os elementos desse tipo (como «Editar tipo» no Revit). Na superfície, o tipo é a forma
