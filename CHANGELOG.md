@@ -1,6 +1,25 @@
 # Changelog
 
-## 0.426.0 — 2026-11-06
+## 0.427.0 — 2026-11-06
+
+**Arrastar para mover** (Aprender com o Hestia, passo 1 — «gostei de poder simplesmente selecionar e pegar qualquer
+elemento e arrastar para reposicionar»).
+
+- **Com o Selecionar, carregue num elemento — escolhido ou não — e arraste:** ele vai com o rato, na planta e no 3D.
+  Por baixo é o trabalho do Mover:
+  - o ponto agarrado e o destino prendem-se aos snaps, e aparece o fantasma com a distância;
+  - Shift prende a direção, e pode escrever a distância e carregar em Enter;
+  - as paredes ligadas esticam para continuar ligadas;
+  - uma porta ou janela desliza na sua parede, sem sair dela;
+  - **Ctrl ao largar faz uma cópia**, e **Esc** deixa tudo onde estava;
+  - um só Ctrl+Z desfaz.
+- Se o elemento estava numa seleção de vários, vão todos; se faz parte de um grupo, vai a cópia do grupo.
+- **A partir do vazio**, arrastar continua a fazer a caixa (ou o laço). Na planta, lajes, pisos, coberturas e terreno
+  só se agarram pela borda: dentro deles, arrastar faz a caixa, para os poder selecionar por cima.
+- **Arrastar elementos** (o ícone da parede com a seta, na barra da seleção, a seguir ao Laço livre; e em Editar ▸
+  Seleção) liga e desliga isto. O programa lembra-se da escolha.
+- **Corrigido:** a 0.426 tinha mudado o nome do painel «Regras gráficas» para «Editor de regulamentos». Um teste novo
+  impede que os textos do Verificador voltem a trocar os do programa.
 
 **O Verificador, passo 9 (2.ª parte): o editor de regulamentos.** Com isto fica feito o plano do Verificador.
 

@@ -1134,7 +1134,11 @@ O que se viu, ponto a ponto (Hestia → ArqSynth 0.415):
   ao largar, com o exato a seguir.
 
 Passos propostos (a ordem decide-a o dono):
-1. **Arrastar para mover, à nossa maneira:** com o Selecionar, carregar num elemento — escolhido ou não — e arrastar
+1. ~~**Arrastar para mover, à nossa maneira:**~~ (0.427.0: com o Mover por baixo — snaps, distância escrita, Shift,
+   Ctrl ao largar copia, Esc, paredes ligadas esticam, portas e janelas deslizam na parede; lajes, pisos, coberturas e
+   terreno pela borda na planta; «Arrastar elementos» na barra da seleção. Por fazer: as cotas temporárias aos
+   vizinhos durante o arraste, Alt para soltar as paredes ligadas, o fantasma das paredes que esticam.) Com o
+   Selecionar, carregar num elemento — escolhido ou não — e arrastar
    move-o, na planta e no 3D (no plano de trabalho); a partir do vazio continua a ser a caixa; mais de 6 px conta como
    arraste. O ponto agarrado prende-se aos snaps e o destino também; cotas temporárias aos vizinhos durante o arraste e
    a distância pode escrever-se; as paredes ligadas acompanham (Alt solta-as); portas e janelas deslizam na parede, com

@@ -731,6 +731,17 @@ class UsersPacks(unittest.TestCase):
         self.assertIn("AO-CTE-30-1a", {f.rule.id for f in result.failures})
 
 
+class Texts(unittest.TestCase):
+    def test_the_verifiers_words_never_replace_the_programs(self):
+        """0.427: the Verifier's texts (verify/texts.py) are added to the program's — a key already there would
+        change a word elsewhere (0.426's «rules.title» renamed the «Regras gráficas» panel)."""
+        import re
+        from arqbim.verify import texts
+        with open(os.path.join(os.path.dirname(__file__), "..", "arqbim", "i18n.py"), encoding="utf-8") as f:
+            programs = set(re.findall(r'^\s+"([A-Za-z0-9_.]+)":', f.read(), re.M))
+        self.assertEqual(sorted(set(texts.STRINGS) & programs), [])
+
+
 class Steps(unittest.TestCase):
     def test_the_check_in_steps(self):
         """0.424: the check as a generator — a stop after the reading and after each rule (the watcher goes on between

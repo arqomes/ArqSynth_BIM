@@ -831,6 +831,7 @@ def bim_flow():
     verifier_lot_flow()               # (0.423)
     verifier_sheet_flow()             # (0.425)
     rules_editor_flow()               # (0.426)
+    drag_elements_flow()              # (0.427)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -20064,7 +20065,11 @@ def pick_flow():
     vp.set_selection(set())
     win.tool_actions["mirror"].trigger()
     pump(200)
-    mirror_asked = win.tool.name == "select" and win.pick_request is not None and n.title.text() == "Espelhar"
+    # (0.427: the balloon says it at once — or, when what was just said is still fresh, after it: the request kept)
+    mirror_asked = win.tool.name == "select" and win.pick_request is not None and (
+        n.title.text() == "Espelhar" or (n._ask is not None and n._ask[0] == "Espelhar"))
+    mirror_why = (win.tool.name, win.pick_request is not None, n.title.text(), len(vp.selection),
+                  len(vp.line_selection), len(vp.face_selection))
     pick_click((6.1, 2.0, 0.8))
     key(Qt.Key.Key_Return)
     pump(200)
@@ -20095,9 +20100,9 @@ def pick_flow():
     check("escolher_dentro_do_comando", south is not None and east is not None and asked and one and two and out
           and back and refused and second and attached and mirror_asked and mirror and cancelled and right and few,
           "paredes={} pede={} uma={} duas={} tira={} volta={} recusa={} laje={} ligadas={} espelhar_pede={} "
-          "espelhar={} esc={} direito={} faltam={} ligar={} laje:{}".format(
+          "espelhar={} esc={} direito={} faltam={} ligar={} laje:{} espelhar:{}".format(
               bool(south and east), asked, one, two, out, back, refused, second, attached, mirror_asked, mirror,
-              cancelled, right, few, tied, second_why))
+              cancelled, right, few, tied, second_why, mirror_why))
 
 
 def environments_flow():
@@ -21167,6 +21172,78 @@ def rules_editor_flow():
     ok = seen.get("limit") == 20 and seen.get("yours") and before == "CTE ✗ 2 ⚠ 1" and after == "CTE ✗ 3 ⚠ 1" \
         and seen.get("made") == ["AO-CTE"] and seen.get("angola") and back == before
     check("editor_regulamentos", ok, "{} | antes={} depois={} reposto={}".format(seen, before, after, back))
+
+
+def drag_elements_flow():
+    """0.427 (the owner, of the Hestia: «gostei de poder simplesmente selecionar e pegar qualquer elemento e arrastar
+    para reposicionar»): in the T2 house's plan, with Selecionar, the button pressed on the east wall (not chosen
+    before) and dragged 1 m to the right: it moves (about 1 m — the snaps may take it a little), the front and back
+    walls joined to it at the corners stretch with it; one Ctrl+Z puts all back. Pressed on the wall, dragged, Esc:
+    nothing moves. A drag from empty space: still the box (the house chosen, nothing moved). «Arrastar elementos» off:
+    a drag on the wall is a box. Captured: 427_arrastar.png."""
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    win.set_tool("select")
+    pump(200)
+
+    def axis_x(guid):
+        start, end, _t = doc.ifc.wall_axis(guid)
+        return float(start[0]), float(end[0])
+
+    walls = [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class in ("IfcWall", "IfcWallStandardCase")]
+    middle = next(g for g in walls if all(abs(v - 10.0) < 0.15 for v in axis_x(g)))           # (the east wall)
+    left = next(g for g in walls if abs(axis_x(g)[0] - axis_x(g)[1]) > 9.0
+                and abs(doc.ifc.wall_axis(g)[0][1]) < 0.15)                                    # (the front wall)
+    east0, front0 = axis_x(middle)[0], max(axis_x(left))
+    vp.set_selection(set())
+    pump(100)
+    move(at(np.array((10.0, 6.0, 0.0))), 3)
+    press()
+    move(at(np.array((10.5, 6.0, 0.0))), 3)
+    move(at(np.array((11.0, 6.0, 0.0))), 3)
+    pump(150)
+    shot("427_arrastar.png")
+    release()
+    pump(500)
+    moved = abs(axis_x(middle)[0] - east0 - 1.0) < 0.35
+    stretched = abs(max(axis_x(left)) - axis_x(middle)[0]) < 0.12
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    back = abs(axis_x(middle)[0] - east0) < 1e-6 and abs(max(axis_x(left)) - front0) < 1e-6
+    move(at(np.array((10.0, 6.0, 0.0))), 3)
+    press()
+    move(at(np.array((11.5, 6.0, 0.0))), 4)
+    key(Qt.Key.Key_Escape)
+    release()
+    pump(400)
+    escaped = abs(axis_x(middle)[0] - east0) < 1e-6
+    vp.set_selection(set())
+    move(at(np.array((-2.0, -2.0, 0.0))), 3)
+    press()
+    move(at(np.array((12.0, 10.0, 0.0))), 5)
+    release()
+    pump(400)
+    boxed = middle in vp.selection and abs(axis_x(middle)[0] - east0) < 1e-6
+    win.set_drag_elements(False)
+    vp.set_selection(set())
+    move(at(np.array((10.0, 6.0, 0.0))), 3)
+    press()
+    move(at(np.array((11.0, 6.0, 0.0))), 3)
+    release()
+    pump(400)
+    off = abs(axis_x(middle)[0] - east0) < 1e-6
+    win.set_drag_elements(True)
+    win.open_view("3d", None)
+    pump(300)
+    check("arrastar_elementos", moved and stretched and back and escaped and boxed and off,
+          "moveu={} esticou={} desfeito={} esc={} caixa={} desligado={} | eixo {}".format(
+              moved, stretched, back, escaped, boxed, off, axis_x(middle)))
 
 
 def wheel(steps):

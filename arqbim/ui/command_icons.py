@@ -293,6 +293,17 @@ def _verify_sheet(d):
             _tick(d, 23, y, 0.5)
 
 
+def _drag_elements(d):
+    """(0.427) Dragging an element: a wall, its place further on dashed, the arrow between them."""
+    d.fill("#c9c7c1").ink(1.2)
+    d.rect(3, 9, 7, 16, 1)
+    d.fill(None).pen(BLUE, 1.3, dash=[2.0, 1.5])
+    d.rect(21, 9, 7, 16, 1)
+    d.pen(BLUE, 2.0)
+    d.line(11, 17, 19, 17)
+    d.lines((16, 14), (19, 17), (16, 20))
+
+
 def _rules_editor(d):
     """(0.426) The rules editor: a law's sheet with § and a pencil across it."""
     _sheet(d, 4, 3, 18, 25)
@@ -993,6 +1004,7 @@ DRAWN = {"wall_rect": _wall_rect, "wall_circle": _wall_circle, "wall_arc": _wall
          "check_ids": _check_ids, "check_ifc": _check_ifc, "clashes": _clashes, "close_view": _close_view,
          "verify_settings": _verify_settings, "verify_panel": _verify_panel,                           # (0.417)
          "verify_sheet": _verify_sheet, "rules_editor": _rules_editor,                                 # (0.425, 0.426)
+         "drag_elements": _drag_elements,                                                              # (0.427)
          "cloud_links": _cloud_links, "component_close": _component_close, "component_edit": _component_edit,
          "component_make": _component_make, "delete": _delete, "dimension_style": _dimension_style,
          "electrical_check": _electrical_check, "element_hatches": _element_hatches, "export_image": _export_image,

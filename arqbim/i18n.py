@@ -6403,6 +6403,16 @@ _STRINGS = {
     "act.pick_fence": ("Cerca", "Fence"),
     "tip.drag_box": ("Arrastar faz um retângulo de seleção", "Dragging draws a selection box"),
     "tip.drag_lasso": ("Arrastar faz um laço livre à mão", "Dragging draws a free-hand lasso"),
+    "act.drag_elements": ("Arrastar elementos", "Drag elements"),                                  # (0.427)
+    "tip.drag_elements": ("Ligado: carregar num elemento e arrastar move-o (Ctrl ao largar: uma cópia; Esc: fica "
+                          "onde estava); a partir do vazio continua a ser a caixa. Desligado: arrastar faz sempre a "
+                          "caixa.",
+                          "On: pressing on an element and dragging moves it (Ctrl as you let go: a copy; Esc: it stays "
+                          "where it was); from empty space it is still the box. Off: dragging always draws the box."),
+    "hint.select_drag": ("A arrastar: largue onde o quer (os snaps ajudam; Shift prende a direção; Ctrl ao largar "
+                         "copia; escreva a distância e Enter). Esc: fica onde estava.",
+                         "Dragging: let go where you want it (the snaps help; Shift holds the direction; Ctrl as you "
+                         "let go copies; type the distance and Enter). Esc: it stays where it was."),
     "tip.pick_polygon": ("Selecionar com um polígono clicado ponto a ponto", "Select with a polygon clicked point by "
                          "point"),
     "tip.pick_fence": ("Selecionar o que uma linha corta", "Select what a line crosses"),

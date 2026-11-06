@@ -30,7 +30,15 @@ Grid axes (0.72): a click on an axis's bubble, or on its line where nothing else
 is, selects it (Shift: more). Its end grips slide it along itself — the ends of
 the parallel axes lined up with it go too, as Revit keeps bubbles aligned (Ctrl:
 this one only); its middle grip moves it across; its temporary dimensions give
-the distance to the axes beside it; Delete removes it."""
+the distance to the axes beside it; Delete removes it.
+
+Dragging an element (0.427, as Revit's and the Hestia's): the button pressed on an element — chosen or not — and the
+mouse moved more than a few pixels: it (its group copy; the selection, if it was in it) moves with the mouse — the
+Move tool's work underneath: the point taken and the point it goes to on the snaps, the ghost, the distance typed,
+Shift holding the direction; the walls joined to it stretch, a door or window slides along its wall; Ctrl held when
+the button comes up: a copy; Esc: nothing moved; one undo step. From empty space the drag is still the box / lasso;
+slabs, floors and the terrain are taken in a plan by their edge only (inside them a drag is a box). The selection bar's
+«Arrastar elementos» switches it off."""
 
 import time
 from dataclasses import dataclass
@@ -71,6 +79,7 @@ def _later(fn):
 CLOSE_PX = 10               # a polygon's point clicked this near its first one: closed (0.75)
 LINE_PX = 7                 # (0.373) a click this near a loose line on the screen picks it
 DOUBLE_CLICK_S = 0.6        # two clicks on a view's mark this close in time: a double click (0.121)
+BY_EDGE = ("IfcSlab", "IfcCovering", "IfcGeographicElement", "IfcRoof")   # (0.427) dragged in a plan by the edge only
 
 
 @dataclass
@@ -446,6 +455,9 @@ class SelectTool(Tool):
         self._part_click = None      # (0.310) ((obj_id, its faces), when, clicks in a row) of the face clicked last
         self._dim_click = None       # (0.402) (the dimension string clicked last, when): a second click is a double
         self._dim_grips = None       # (0.402) a dimension string chosen: (its pieces, witness count, middles' kinds)
+        self.drag_elements = True    # (0.427) a drag that starts on an element moves it («Arrastar elementos»)
+        self._press_obj = None       # (0.427) the element the button was pressed on (to drag it), or None
+        self._drag = None            # (0.427) the Move tool moving what is dragged, while the button is held
         host.viewport.selection_listeners.append(lambda _ids: self._refresh_dims(keep=False))
         host.viewport.axes_listeners.append(lambda _axes: self._refresh_dims(keep=False))
         host.viewport.annotation_listeners.append(lambda _anns: self._refresh_dims(keep=False))
@@ -453,8 +465,8 @@ class SelectTool(Tool):
 
     @property
     def accepts_typing(self):
-        """Typing goes to the temporary dimension clicked, or is how far a grip moves."""
-        return self._active is not None or self._move is not None
+        """Typing goes to the temporary dimension clicked, or is how far a grip (or what is dragged) moves."""
+        return self._active is not None or self._move is not None or self._drag is not None
 
     def _refresh_dims(self, keep=True):
         """The selection's temporary dimensions and grips shown again (keep: the dimension clicked stays
@@ -1297,6 +1309,12 @@ class SelectTool(Tool):
         self._refresh_dims(keep=False)
 
     def typed(self, text):
+        if self._drag is not None:                        # (0.427) how far what is dragged goes, the way it goes
+            mover, self._drag = self._drag, None
+            self._press = self._press_obj = None
+            mover.typed(text)
+            self._after_drag()
+            return
         if self._move is not None:                        # how far the grip goes, the way the mouse shows
             values = parse_lengths(text, 1)
             move = self._move
@@ -1336,6 +1354,9 @@ class SelectTool(Tool):
             self.viewport.move_box_face(axis, side, start[axis] + s)
 
     def pointer_move(self, x, y, modifiers):
+        if self._drag is not None:                        # (0.427) an element dragged: it follows the mouse
+            self._drag.pointer_move(x, y, modifiers)
+            return
         if self._box_drag is not None:
             self._drag_box(x, y)
         elif self._move is not None:
@@ -1346,6 +1367,9 @@ class SelectTool(Tool):
         elif self._press is not None:                     # the button held: a box / lasso being drawn
             start = self._press[:2]
             if self._region is None and not moved_enough(start, (x, y)):
+                return
+            if self._region is None and self._press_obj is not None and self._start_drag():
+                self._drag.pointer_move(x, y, modifiers)  # (0.427: pressed on an element: it is dragged)
                 return
             if self._region is None or self.drag_shape != "lasso":
                 self._region = [start, (float(x), float(y))]
@@ -1369,7 +1393,63 @@ class SelectTool(Tool):
         if self._active is not None and self._move is None:
             self.viewport.show_temp_dims(self._dims, active=self._active, hover=self._hover, typed=text)
 
+    # ------------------------------------------------------------ (0.427) dragging an element
+
+    def _grab_at(self, x, y):
+        """The element a drag from (x, y) would move — or None (empty space; a slab, floor or terrain inside its
+        outline in a plan: there a drag is a box)."""
+        obj_id = self._object_at(x, y)
+        obj = self.doc.get(obj_id) if obj_id is not None else None
+        if obj is None or not getattr(obj, "is_bim", False):
+            return obj_id
+        if self.viewport.plan and obj.ifc_class in BY_EDGE:
+            snap, _hit = self.viewport.snap(x, y)
+            if snap is None or snap.obj_id != obj_id or snap.kind not in (ENDPOINT, MIDPOINT, ON_EDGE):
+                return None
+        return obj_id
+
+    def _start_drag(self):
+        """The element pressed on (its group copy; or the whole selection it is in) taken by the Move tool, its base
+        the point pressed (on the snaps). True if it is being dragged."""
+        mover = (getattr(self.host, "tools", None) or {}).get("move")
+        obj_id, press = self._press_obj, self._press
+        self._press_obj = None
+        if mover is None or press is None or self.doc.get(obj_id) is None:
+            return False
+        if obj_id not in self.viewport.selection:
+            self.viewport.set_selection(self._clicked(obj_id))
+        from .base import start_plane
+        mover.cancel()
+        mover.copy = False
+        if not mover._take(press[0], press[1]):
+            return False
+        plane = start_plane(self.host, press[0], press[1])
+        if plane is None:
+            return False
+        mover._base = plane.point.copy()
+        self._drag = mover
+        self.viewport.show_temp_dims([])
+        self.viewport.show_grips([], [])
+        self.host.set_hint(t("hint.select_drag"))
+        return True
+
+    def _after_drag(self):
+        self.host.set_hint(self.hint())
+        self._refresh_dims(keep=False)
+
     def pointer_up(self, x, y, button, modifiers):
+        if self._drag is not None and button == LEFT:     # (0.427) the dragged element put down there
+            mover, self._drag = self._drag, None
+            self._press = self._press_obj = None
+            mover.pointer_move(x, y, modifiers)
+            if mover._target is not None:
+                held = any(m in ("Control", "Ctrl") for m in (modifiers or ()))
+                mover._finish(mover._delta(mover._target), mover.copy or held)
+            else:
+                mover.cancel()
+            self._after_drag()
+            return
+        self._press_obj = None
         if self._press is not None and button == LEFT:    # a click, or the end of a box / lasso (0.75)
             press, self._press = self._press, None
             if self._region is None:
@@ -1605,9 +1685,12 @@ class SelectTool(Tool):
             self.viewport.select_annotations(picked)
             self.host.message(t("info.annotation_selected", k=t("draft." + ann.kind).lower(), n=len(picked)))
             return
-        # a click selects when the button comes up; dragged, it draws a box / lasso (0.75)
+        # a click selects when the button comes up; dragged, it draws a box / lasso (0.75) — (0.427) or, started on
+        # an element, moves it
         self._press = (float(x), float(y), tuple(modifiers or ()))
         self._region = None
+        shift = "Shift" in (modifiers or ())
+        self._press_obj = self._grab_at(x, y) if self.drag_elements and not asked and not shift else None
 
     def _open_mark(self, x, y):
         """In a plan, a click on a section's or an elevation's head says what it is; a second one at once (a
@@ -1955,6 +2038,12 @@ class SelectTool(Tool):
         self.viewport.show_grips()
 
     def cancel(self):
+        if self._drag is not None:                        # (0.427) Esc while dragging: nothing moved
+            mover, self._drag = self._drag, None
+            self._press = self._press_obj = None
+            mover.cancel()
+            self._after_drag()
+            return
         if self._picking is not None or self._region is not None:     # Esc: the region drawn goes, nothing else
             self._picking = self._region = self._press = None
             self.viewport.show_region()

@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.427 — Arrastar para mover
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.427.0**. Abra a casa T2 da 0.417 e carregue em F4.
+   Confirme que o separador da esquerda volta a dizer «Regras gráficas».
+2. Com o **Selecionar** (Espaço) e nada escolhido, carregue com o botão esquerdo na parede da direita (fachada leste),
+   não largue, e arraste 1 m para a direita.
+   - Aparece a parede a azul, a acompanhar o rato, com a distância escrita.
+   - Largue: a parede fica lá, e as paredes da frente e de trás esticam até ela.
+3. Carregue em Ctrl+Z uma vez: tudo volta ao sítio.
+4. Carregue outra vez na parede, arraste, e **sem largar** carregue em **Esc**. Largue: nada mudou.
+5. Arraste a parede e escreva `0,5` e Enter enquanto arrasta: ela anda exatamente 0,50 m. Ctrl+Z.
+6. Carregue numa porta e arraste ao longo da parede: a porta desliza nela e não sai. Ctrl+Z.
+7. Arraste uma parede e carregue em **Ctrl** ao largar: fica uma cópia, e a original fica onde estava. Ctrl+Z.
+8. Carregue num sítio vazio fora da casa e arraste por cima dela: continua a fazer a caixa de seleção.
+9. Na barra da seleção, a seguir a «Laço livre», clique no ícone **Arrastar elementos** (uma parede com uma seta) para
+   o desligar. Arrastar sobre a parede faz agora a caixa. Volte a ligar.
+
 ## 0.426 — O editor de regulamentos
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.426.0**. Abra a casa T2 da 0.417 (país Cabo

@@ -792,6 +792,16 @@ class MainWindow(QtWidgets.QMainWindow):
         for act in (self.act_drag_box, self.act_drag_lasso):
             shapes.addAction(act)
         self.act_drag_box.setChecked(True)
+        self.act_drag_elements = self._action(t("act.drag_elements"), lambda on=False: self.set_drag_elements(on),
+                                              checkable=True)                 # (0.427)
+        self.act_drag_elements.setToolTip(t("act.drag_elements") + " — " + t("tip.drag_elements"))
+        from . import command_icons
+        drawn = command_icons.icon("drag_elements")
+        if drawn is not None:
+            self.act_drag_elements.setIcon(drawn)
+        self.act_drag_elements.setChecked(str(QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(
+            "selecao/arrastar", "true")).lower() == "true")
+        self.tools["select"].drag_elements = self.act_drag_elements.isChecked()
         faces = QtGui.QActionGroup(self)                    # (0.361) a wall's temporary dimensions: axes or faces
         self.act_dims_axes = self._action(t("act.dims_axes"), lambda: self.set_dim_faces(False), checkable=True)
         self.act_dims_faces = self._action(t("act.dims_faces"), lambda: self.set_dim_faces(True), checkable=True)
@@ -900,6 +910,8 @@ class MainWindow(QtWidgets.QMainWindow):
         sel.addActions([self.act_select_all, self.act_select_invert, self.act_select_none])
         sel.addSeparator()
         sel.addActions([self.act_drag_box, self.act_drag_lasso, self.act_pick_polygon, self.act_pick_fence])
+        sel.addSeparator()
+        sel.addActions([self.act_drag_elements])                # (0.427)
         sel.addSeparator()
         sel.addActions([self.act_filter_selection, self.act_select_by, self.act_selectable])
         m = mb.addMenu(t("menu.view"))
@@ -1844,6 +1856,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return items
         items = [("title", t("menu.selection") + ":", self.tool_actions["select"].icon()),
                  ("action", self.act_drag_box), ("action", self.act_drag_lasso),
+                 ("icon_action", self.act_drag_elements),                       # (0.427: its icon — the bar's room)
                  ("separator",), ("action", self.act_pick_polygon), ("action", self.act_pick_fence), ("separator",),
                  ("action", self.act_filter_selection), ("action", self.act_select_by), ("action", self.act_selectable),
                  ("separator",), ("action", self.act_select_all), ("action", self.act_select_invert)]
@@ -4290,6 +4303,15 @@ class MainWindow(QtWidgets.QMainWindow):
             select._refresh_dims(keep=False)
             self.set_hint(select.hint())
         self.message(t("info.dims_faces" if self.dim_faces else "info.dims_axes"))
+
+    def set_drag_elements(self, on):
+        """(0.427) «Arrastar elementos»: whether a drag that starts on an element moves it (else it draws a box, as
+        before) — kept for the next time."""
+        on = bool(on)
+        self.tools["select"].drag_elements = on
+        if self.act_drag_elements.isChecked() != on:
+            self.act_drag_elements.setChecked(on)
+        QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("selecao/arrastar", "true" if on else "false")
 
     def set_drag_shape(self, shape):
         """What dragging with the Select tool draws: "box" or "lasso"."""

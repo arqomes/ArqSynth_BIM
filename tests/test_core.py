@@ -6067,7 +6067,8 @@ class Disciplines(unittest.TestCase):
         # (what is left out: the edit, selection and navigation actions — the header, the contextual bar, the
         # status bar have them)
         elsewhere = {"undo", "redo", "delete_guides", "select_all", "select_invert", "select_none", "drag_box",
-                     "drag_lasso", "pick_polygon", "pick_fence", "same_type", "filter_selection", "select_by",
+                     "drag_lasso", "drag_elements", "pick_polygon", "pick_fence", "same_type", "filter_selection",
+                     "select_by",
                      "selectable",
                      "zoom_all", "zoom_selection", "view_back", "view_forward", "tool_type",
                      # (0.402: a dimension string's — on the contextual bar and its right button, as Revit's)

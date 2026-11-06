@@ -27,7 +27,7 @@ def _limit_text(data):
             return "{} {}{}".format(t("verify.side." + key), _number(data[key]), " " + unit if unit else "")
     for key in ("min_table", "max_table", "min_rank"):
         if key in data:
-            return t("rules.table_limit")
+            return t("regs.table_limit")
     return ""
 
 
@@ -50,7 +50,7 @@ def _number(value):
 class RulesEditor(QtWidgets.QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle(t("rules.title"))
+        self.setWindowTitle(t("regs.title"))
         self.resize(1240, 640)
         self.data = None                # the pack shown, as its JSON (a dict) — changed here until saved
         self.path = None                # where it is read from
@@ -62,8 +62,8 @@ class RulesEditor(QtWidgets.QDialog):
         self.packs.setHeaderHidden(True)
         self.packs.currentItemChanged.connect(lambda *_a: self._choose())
         lbox.addWidget(self.packs, 1)
-        for key, slot in (("rules.duplicate", self._duplicate), ("rules.new_country", self._new_country),
-                          ("rules.restore", self._restore), ("rules.folder", self._open_folder)):
+        for key, slot in (("regs.duplicate", self._duplicate), ("regs.new_country", self._new_country),
+                          ("regs.restore", self._restore), ("regs.folder", self._open_folder)):
             button = QtWidgets.QPushButton(t(key))
             button.clicked.connect(slot)
             lbox.addWidget(button)
@@ -75,12 +75,12 @@ class RulesEditor(QtWidgets.QDialog):
         self.head.setWordWrap(True)
         rbox.addWidget(self.head)
         self.table = QtWidgets.QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels([t("rules.col." + c) for c in COLUMNS])
+        self.table.setHorizontalHeaderLabels([t("regs.col." + c) for c in COLUMNS])
         self.table.horizontalHeader().setStretchLastSection(False)
         self.table.verticalHeader().setVisible(False)
         self.table.itemChanged.connect(self._edited)
         rbox.addWidget(self.table, 1)
-        note = QtWidgets.QLabel(t("rules.note"))
+        note = QtWidgets.QLabel(t("regs.note"))
         note.setWordWrap(True)
         note.setStyleSheet("color: %s;" % theme.C["note"])
         rbox.addWidget(note)
@@ -103,14 +103,14 @@ class RulesEditor(QtWidgets.QDialog):
         for pack in rules_mod.packs(again=True).values():
             by_country.setdefault(pack.country, []).append(pack)
         for country in sorted(by_country, key=lambda c: (c == "*", c)):
-            name = project.country_name(country, language) if country != "*" else t("rules.any_country")
+            name = project.country_name(country, language) if country != "*" else t("regs.any_country")
             top = QtWidgets.QTreeWidgetItem([name])
             top.setFlags(top.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
             self.packs.addTopLevelItem(top)
             for pack in sorted(by_country[country], key=lambda p: p.id):
                 own = rules_mod.is_users(pack)
                 item = QtWidgets.QTreeWidgetItem(["{}{}".format(pack.short,
-                                                                "  ({})".format(t("rules.yours")) if own else "")])
+                                                                "  ({})".format(t("regs.yours")) if own else "")])
                 item.setData(0, QtCore.Qt.ItemDataRole.UserRole, pack.id)
                 item.setToolTip(0, "{}\n{}\n{}".format(pack.title, pack.instrument, pack.path))
                 top.addChild(item)
@@ -138,8 +138,8 @@ class RulesEditor(QtWidgets.QDialog):
         with open(pack.path, encoding="utf-8") as f:
             self.data = json.load(f)
         self.path = pack.path
-        self.head.setText(t("rules.head", short=pack.short, title=pack.title, instrument=pack.instrument,
-                            whose=t("rules.yours") if rules_mod.is_users(pack) else t("rules.programs")))
+        self.head.setText(t("regs.head", short=pack.short, title=pack.title, instrument=pack.instrument,
+                            whose=t("regs.yours") if rules_mod.is_users(pack) else t("regs.programs")))
         self.restore_button.setEnabled(rules_mod.is_users(pack) and rules_mod.has_builtin(pack.id))
         self._rules()
 
@@ -155,7 +155,7 @@ class RulesEditor(QtWidgets.QDialog):
                 if key == "severity":
                     combo = QtWidgets.QComboBox()
                     for s in rules_mod.SEVERITIES:
-                        combo.addItem(t("rules.severity." + s), s)
+                        combo.addItem(t("regs.severity." + s), s)
                     combo.setCurrentIndex(max(0, combo.findData(rule.get("severity", "error"))))
                     combo.currentIndexChanged.connect(lambda _k, r=row, c=combo: self._set(r, "severity",
                                                                                            c.currentData()))
@@ -168,7 +168,7 @@ class RulesEditor(QtWidgets.QDialog):
                     item.setCheckState(QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
                 elif key == "limit" and any(k in rule for k in ("min", "max")):
                     item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
-                    item.setToolTip(t("rules.limit_tip"))
+                    item.setToolTip(t("regs.limit_tip"))
                 else:
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
                 if key == "title":
@@ -226,12 +226,12 @@ class RulesEditor(QtWidgets.QDialog):
         self.dirty = False
         rules_mod.packs(again=True)
         self._fill(select=self.data["id"])
-        QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), t("rules.saved", path=path))
+        QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), t("regs.saved", path=path))
         return True
 
     def _ask_save(self):
         answer = QtWidgets.QMessageBox.question(
-            self, t("rules.title"), t("rules.ask_save"),
+            self, t("regs.title"), t("regs.ask_save"),
             QtWidgets.QMessageBox.StandardButton.Save | QtWidgets.QMessageBox.StandardButton.Discard
             | QtWidgets.QMessageBox.StandardButton.Cancel)
         if answer == QtWidgets.QMessageBox.StandardButton.Cancel:
@@ -247,7 +247,7 @@ class RulesEditor(QtWidgets.QDialog):
             return
         data = copy.deepcopy(self.data)
         data["id"] = rules_mod.free_id(data["id"] + "-COPIA")
-        data["short"] = "{} ({})".format(data.get("short", data["id"]), t("rules.copy"))
+        data["short"] = "{} ({})".format(data.get("short", data["id"]), t("regs.copy"))
         for rule in data.get("rules", []):
             rule["id"] = "{}~{}".format(data["id"], rule["id"])
         rules_mod.save_users(data)
@@ -289,7 +289,7 @@ class RulesEditor(QtWidgets.QDialog):
 class NewCountry(QtWidgets.QDialog):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setWindowTitle(t("rules.new_country"))
+        self.setWindowTitle(t("regs.new_country"))
         form = QtWidgets.QFormLayout(self)
         self.code = QtWidgets.QLineEdit()
         self.code.setMaxLength(3)
@@ -300,10 +300,10 @@ class NewCountry(QtWidgets.QDialog):
         language = lang()
         for code in project.countries():
             self.source.addItem(project.country_name(code, language), code)
-        form.addRow(t("rules.country_code"), self.code)
-        form.addRow(t("rules.country_name"), self.name)
-        form.addRow(t("rules.country_from"), self.source)
-        note = QtWidgets.QLabel(t("rules.country_note"))
+        form.addRow(t("regs.country_code"), self.code)
+        form.addRow(t("regs.country_name"), self.name)
+        form.addRow(t("regs.country_from"), self.source)
+        note = QtWidgets.QLabel(t("regs.country_note"))
         note.setWordWrap(True)
         form.addRow(note)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok

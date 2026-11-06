@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.426.0
+# Guia das ferramentas — ArqSynth BIM 0.427.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.426.0.
+ArqSynth BIM 0.427.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -314,6 +314,7 @@ Operações gerais de criação e edição geométrica.
 #### Mover  ·  tecla M
 
 - **Como se usa:** Clique no ponto de base (move o que está selecionado, ou o objeto sob o cursor).
+- **Passos de teste (TESTAR.md):** 0.427 «Arrastar para mover»
 
 #### Copiar
 
@@ -1605,7 +1606,7 @@ Vistas, estilos gráficos, câmaras e painéis.
 
 #### Painéis
 
-- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Editor de regulamentos · Requisitos (IDS) · Notas (BCF) · Verificação
+- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Regras gráficas · Requisitos (IDS) · Notas (BCF) · Verificação
 - **Passos de teste (TESTAR.md):** 0.280 «Chapas e painéis»; 0.181 «Painéis da fachada de vidro»
 
 #### Vista seguinte  ·  tecla Ctrl+Tab
@@ -1810,4 +1811,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*245 comandos descritos, gerados do ArqSynth BIM 0.426.0.*
+*245 comandos descritos, gerados do ArqSynth BIM 0.427.0.*
