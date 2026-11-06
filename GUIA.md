@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.431.0
+# Guia das ferramentas — ArqSynth BIM 0.432.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.431.0.
+ArqSynth BIM 0.432.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -758,7 +758,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Retangular
 
 - **O que faz:** Paredes à volta de um retângulo: dois cantos, ou as medidas digitadas (ex.: 5;4).
-- **Passos de teste (TESTAR.md):** 0.424 «Alturas das fachadas e afastamentos da lei»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
+- **Passos de teste (TESTAR.md):** 0.432 ««W + letra» e «Editar tipo…» no topo»; 0.424 «Alturas das fachadas e afastamentos da lei»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
 
 #### Circular
 
@@ -1816,4 +1816,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*246 comandos descritos, gerados do ArqSynth BIM 0.431.0.*
+*246 comandos descritos, gerados do ArqSynth BIM 0.432.0.*

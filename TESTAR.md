@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.432 — «W + letra» e «Editar tipo…» no topo
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.432.0**. Desenhe quatro paredes em retângulo com
+   **Arquitetura ▸ Paredes ▸ Retangular** e carregue em F4.
+2. Com o Selecionar, clique numa das paredes. Carregue em **W** e logo a seguir em **L**: ficam escolhidas as quatro
+   paredes (estão ligadas). A faixa em cima da vista mostra as letras quando carrega no W.
+3. Carregue em **W** e logo a seguir em **T**: entra «Aparar e estender» (não a Fita métrica).
+4. Carregue em Esc. Espere um pouco e carregue só em **T**: entra a Fita métrica, como sempre.
+5. Experimente **W** + **O** (ortogonalizar) com uma parede um pouco torta escolhida.
+6. Carregue em **W**, depois em **Esc** e logo a seguir em **R**: entra o Retângulo (o Esc acabou com a espera do W).
+7. Carregue em Esc, escolha o **Selecionar** e clique numa parede. No topo das Propriedades, por baixo da lista com o
+   tipo da parede, está o botão **Editar tipo…**, encostado à direita. Clique nele: abre o editor de tipos com o tipo
+   desta parede.
+8. Faça o mesmo com uma porta, uma laje e uma cota: o **Editar tipo…** está sempre por baixo da lista do tipo, e já não
+   há a linha «Tipo» no grupo Identificação.
+9. Escolha duas paredes (Ctrl+clique na segunda): o botão **Editar tipo…** não aparece.
+
 ## 0.431 — Avisos do modelo
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.431.0**. Abra a casa T2 da 0.417 (país Cabo Verde)

@@ -836,6 +836,7 @@ def bim_flow():
     type_section_flow()               # (0.429)
     quick_properties_flow()           # (0.430)
     model_warnings_flow()             # (0.431)
+    wall_chord_flow()                 # (0.432)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21487,6 +21488,50 @@ def model_warnings_flow():
     check("avisos_do_modelo", before == "CTE ✗ 2 ⚠ 1" and after == "CTE ✗ 2 ⚠ 3" and "Paredes sobrepostas" in said
           and listed and back,
           "antes={} depois={} faixa={!r} painel={} desfeito={}".format(before, after, said[:90], listed, back))
+
+
+def wall_chord_flow():
+    """0.432 («W + letra», as the addon's): four walls joined in a loop, one chosen — W then L at once: the Select tool
+    and the four chosen; W then T: Aparar e estender (not the Tape); T alone, later: the Tape, as always."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    loop = B.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                       (0.0, 4.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    win.open_view("plan", doc.active_storey)
+    pump(300)
+    win.set_tool("select")
+    vp.set_selection({loop[0]})
+    pump(200)
+    key(Qt.Key.Key_W)
+    walled = win.tool.name == "wall"
+    key(Qt.Key.Key_L)
+    pump(200)
+    linked = win.tool.name == "select" and vp.selection == set(loop)
+    key(Qt.Key.Key_W)
+    key(Qt.Key.Key_T)
+    pump(200)
+    trim = win.tool.name == "trim_extend"
+    win.set_tool("select")
+    pump(1400)                                               # (the second letter's time gone)
+    key(Qt.Key.Key_T)
+    pump(200)
+    tape = win.tool.name == "tape"
+    win.set_tool("select")
+    vp.set_selection(set())
+    pump(1400)
+    key(Qt.Key.Key_W)                                        # (another key between — W, Esc, R —: the Rectangle)
+    key(Qt.Key.Key_Escape)
+    key(Qt.Key.Key_R)
+    pump(200)
+    after_esc = win.tool.name
+    rect = after_esc == "rectangle"
+    win.set_tool("select")
+    win.open_view("3d", None)
+    pump(300)
+    check("w_mais_letra", walled and linked and trim and tape and rect,
+          "W={} W+L={} W+T={} T={} W,Esc,R={}".format(walled, linked, trim, tape, after_esc))
 
 
 def wheel(steps):

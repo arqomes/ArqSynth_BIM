@@ -258,6 +258,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             texts.addWidget(label)
         self.header_texts = texts
         self.type_combo = None       # (0.313) its type, chosen on top from the types' miniatures (ui/type_thumbs)
+        self._header_buttons = []    # (0.432) «Editar tipo…» under it
         row.addWidget(self.header_icon)
         row.addLayout(texts, 1)
         self.search = QtWidgets.QLineEdit()
@@ -350,10 +351,48 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         """(0.313) The type's list on top, under the name — as Revit's Type Selector —, its miniature beside it."""
         self._drop_type_combo()
         self.type_combo = combo
-        self.header_texts.addWidget(combo)
+        self.header_texts.insertWidget(2, combo)        # (under the name and its line; over «Editar tipo…»)
         if picture is not None:
             self.header_icon.setPixmap(picture.pixmap(36, 36))
         self._sub_shown()
+
+    def _header_button(self, action, text, tip, clicked, into=None):
+        """(0.432, the owner: «coloque o editar tipo abaixo da aba do tipo») A button on top, right under the type's
+        list — «Editar tipo…» —, as Revit's «Edit Type» under its Type Selector (no more a row of its own in the
+        Identification group); `into`: a row of them (put on top by _header_add)."""
+        button = QtWidgets.QPushButton(text)
+        button.setObjectName("props_edit_type")
+        button.setToolTip(tip)
+        button.clicked.connect(clicked)
+        if into is None:
+            self._header_add(button)
+        else:
+            into.addWidget(button)
+        self.editors[action] = button
+        return button
+
+    def _header_add(self, widget):
+        self.header_texts.addWidget(widget, 0, QtCore.Qt.AlignmentFlag.AlignRight)
+        self._header_buttons.append(widget)
+
+    def _drop_header_buttons(self):
+        if not self._header_buttons:
+            return
+        shown = self._header_buttons
+
+        def gone(w):
+            return any(w is b or b.isAncestorOf(w) for b in shown)
+
+        for action, widget in list(self.editors.items()):
+            if isinstance(widget, QtWidgets.QWidget) and gone(widget):
+                dict.__delitem__(self.editors, action)
+        self.editors.made = [(a, w) for a, w in self.editors.made
+                             if not (isinstance(w, QtWidgets.QWidget) and gone(w))]
+        for widget in shown:
+            self.header_texts.removeWidget(widget)
+            widget.hide()
+            widget.deleteLater()
+        self._header_buttons = []
 
     def _drop_type_combo(self):
         if self.type_combo is not None:
@@ -500,6 +539,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._many = None
         self._current_type = None                    # (0.430)
         self._drop_type_combo()
+        self._drop_header_buttons()
         self.editors = _Editors()
         self.tree.clear()
 
@@ -923,6 +963,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self.editors.made = [(a, w) for a, w in self.editors.made if id(w) not in gone]
         for item in reversed(drop):
             (item.parent() or self.tree.invisibleRootItem()).removeChild(item)
+        self._drop_header_buttons()                     # (0.432: «Editar tipo…» edits one type, of one element)
         if self.type_combo is not None:                 # (0.313) the type on top: theirs, blank, or none to choose
             key = self._type_key()
             if any(key not in s for s in snaps):        # (of several kinds: no list of types for all of them)
@@ -1058,13 +1099,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self.editors["dim_type"] = combo
         if current is None:
             self._varies(combo, "dim_type")
-        self._begin(t("props.g.dim_type"))
-        item = self._row(t("props.type"), "")
-        button = QtWidgets.QPushButton(t("props.edit_type"))
-        button.setToolTip(t("props.dim_edit_type_tip"))
-        button.clicked.connect(lambda _c=False: self._emit("dim_edit_type", list(dims), current or None))
-        self.tree.setItemWidget(item, 1, button)
-        self.editors["dim_edit_type"] = button
+        self._header_button("dim_edit_type", t("props.edit_type"), t("props.dim_edit_type_tip"),
+                            lambda _c=False: self._emit("dim_edit_type", list(dims), current or None))
         self._begin(t("props.g.dim_values"))
         lengths = []
         if plane is not None:
@@ -1756,13 +1792,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         combo.activated.connect(chosen)
         self._set_type_combo(combo, type_thumbs.icon(shown) if shown is not None else None)
         self.editors["type"] = combo
-        if current is not None:                                          # (0.87) its type in the type editor
-            edit = self._row(t("props.type"), "")
-            button = QtWidgets.QPushButton(t("props.edit_type"))
-            button.setToolTip(t("props.edit_type_tip"))
-            button.clicked.connect(lambda _c=False: self._emit("edit_type", guid, current))
-            self.tree.setItemWidget(edit, 1, button)
-            self.editors["edit_type"] = button
+        if current is not None:                     # (0.87) its type in the type editor (0.432: under the list)
+            self._header_button("edit_type", t("props.edit_type"), t("props.edit_type_tip"),
+                                lambda _c=False: self._emit("edit_type", guid, current))
         if current is not None and kind in ("door", "window"):          # (0.289) its type in the generator
             row = self._row("", "")
             button = QtWidgets.QPushButton(t("joinery.button"))
@@ -1809,25 +1841,18 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         combo.activated.connect(chosen)
         self._set_type_combo(combo, None)
         self.editors["type"] = combo
-        item = self._row(t("props.type"), "")
-        box = QtWidgets.QWidget()
+        box = QtWidgets.QWidget()                       # (0.432: on top, under the list, as «Editar tipo…»)
         row = QtWidgets.QHBoxLayout(box)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(2)
-        save = QtWidgets.QPushButton(t("props.type_save"))
-        save.setToolTip(t("props.type_save_tip"))
-        save.clicked.connect(lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
-            0, lambda: self.on_edit("element_type_save", guid, None)))
-        row.addWidget(save)
-        self.editors["element_type_save"] = save
-        update = QtWidgets.QPushButton(t("props.type_update"))
-        update.setToolTip(t("props.type_update_tip"))
+        self._header_button("element_type_save", t("props.type_save"), t("props.type_save_tip"),
+                            lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
+                                0, lambda: self.on_edit("element_type_save", guid, None)), into=row)
+        update = self._header_button("element_type_update", t("props.type_update"), t("props.type_update_tip"),
+                                     lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
+                                         0, lambda: self.on_edit("element_type_update", guid, None)), into=row)
         update.setEnabled(current is not None and element_types.differs(doc, guid))
-        update.clicked.connect(lambda _c=False: self.on_edit and QtCore.QTimer.singleShot(
-            0, lambda: self.on_edit("element_type_update", guid, None)))
-        row.addWidget(update)
-        self.editors["element_type_update"] = update
-        self.tree.setItemWidget(item, 1, box)
+        self._header_add(box)
 
     def _phase_editor(self, status, guid):
         """The element's phase in a renovation project (IFC Status): existing, new, to demolish…"""
@@ -2223,12 +2248,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 self._row(t("props.cw_panels"), ", ".join("{} × {}".format(n, t("cwpanel." + k).lower())
                                                           for k, n in p["panels"].items()))
         elif kind == "railing":                            # (0.115) its type (0.258; 0.415: on top) and height
-            edit = self._row(t("props.type"), "")          # (0.260) its type in the railing type editor
-            button = QtWidgets.QPushButton(t("props.edit_type"))
-            button.setToolTip(t("props.edit_railing_type_tip"))
-            button.clicked.connect(lambda _c=False: self._emit("edit_railing_type", guid, p["type"]))
-            self.tree.setItemWidget(edit, 1, button)
-            self.editors["edit_railing_type"] = button
+            self._header_button("edit_railing_type", t("props.edit_type"),   # (0.260) in the railing type editor
+                                t("props.edit_railing_type_tip"),             # (0.432: under its list)
+                                lambda _c=False: self._emit("edit_railing_type", guid, p["type"]))
             self._length_editor(t("props.height"), p["height"], "railing_height", guid)
             self._row(t("props.length"), _len(p["length"]))
             if not p["closed"]:                            # (0.282) its handrail on past its ends (DL 163/2006)

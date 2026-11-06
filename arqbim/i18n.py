@@ -6429,6 +6429,28 @@ _STRINGS = {
     "tip.drag_lasso": ("Arrastar faz um laço livre à mão", "Dragging draws a free-hand lasso"),
     "act.drag_elements": ("Arrastar elementos", "Drag elements"),                                  # (0.427)
     "act.thin_lines": ("Linhas finas", "Thin lines"),                                              # (0.428)
+    # (0.432) «W + letra»: the walls' commands by a second letter, as the addon's
+    "chord.walls": ("W · Paredes — a seguir: W desenhar · T aparar · E estender · A alinhar · O ortogonalizar · "
+                    "R rodar · S dividir · M espelhar · J / C junções · U ligar ao topo · B ligar à base · G pegas · "
+                    "L as ligadas · Q edição rápida",
+                    "W · Walls — then: W draw · T trim · E extend · A align · O orthogonalize · R rotate · S split · "
+                    "M mirror · J / C joins · U attach top · B attach base · G grips · L the joined ones · Q quick "
+                    "edit"),
+    "chord.done": ("W + letra: {c}.", "W + letter: {c}."),
+    "chord.no_walls": ("W L: escolha primeiro uma parede.", "W L: choose a wall first."),
+    "chord.cmd.wall": ("Parede", "Wall"),
+    "chord.cmd.trim_extend": ("Aparar e estender", "Trim and extend"),
+    "chord.cmd.align": ("Alinhar", "Align"),
+    "chord.cmd.orthogonalize": ("Ortogonalizar", "Orthogonalize"),
+    "chord.cmd.rotate": ("Rodar", "Rotate"),
+    "chord.cmd.split_wall": ("Dividir parede", "Split wall"),
+    "chord.cmd.mirror": ("Espelhar", "Mirror"),
+    "chord.cmd.wall_joins": ("Junções de paredes", "Wall joins"),
+    "chord.cmd.attach_top": ("Ligar o topo", "Attach top"),
+    "chord.cmd.attach_base": ("Ligar a base", "Attach base"),
+    "chord.cmd.select": ("Selecionar (pegas)", "Select (grips)"),
+    "chord.cmd.select_linked": ("as paredes ligadas escolhidas", "the joined walls chosen"),
+    "chord.cmd.quick_edit": ("Edição rápida", "Quick edit"),
     "tip.thin_lines": ("No ecrã, as linhas do corte com 1 píxel, seja qual for o zoom (para desenhar com rigor). "
                        "Desligado: com as canetas do papel — o corte grosso, as camadas e a trama finas, que mudam com "
                        "o zoom. O papel e o PDF não mudam.",

@@ -8821,6 +8821,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True                         # (Alt alone: not the hidden menu bar's)
         if et == QtCore.QEvent.Type.MouseButtonPress:
             self._ctrl_alone = False
+        if et in (QtCore.QEvent.Type.ShortcutOverride, QtCore.QEvent.Type.KeyPress) and self._owns_keys(obj) \
+                and self._wall_chord(event, et):
+            return True                             # (0.432: «W + letra», the walls' second letter)
         if et in (QtCore.QEvent.Type.ShortcutOverride, QtCore.QEvent.Type.KeyPress) and self._owns_keys(obj):
             name = self._common_key_name(event)
             if name is not None:                    # a placement key the tool uses (0.86): not a shortcut
@@ -8834,6 +8837,74 @@ class MainWindow(QtWidgets.QMainWindow):
             if et == QtCore.QEvent.Type.KeyPress and self._handle_key(event):
                 return True
         return super().eventFilter(obj, event)
+
+    # ------------------------------------------------------------ (0.432) «W + letra», as the addon's
+    WALL_CHORD_S = 1.25
+    # (W W is the Wall tool itself — W is not a second letter: the same press, passed up the widgets, would be taken
+    # for its own second letter)
+    WALL_CHORD = {"T": "trim_extend", "E": "trim_extend", "A": "align", "O": "orthogonalize",
+                  "R": "rotate", "S": "split_wall", "M": "mirror", "J": "wall_joins", "C": "wall_joins",
+                  "U": "attach_top", "B": "attach_base", "G": "select", "L": "select_linked", "Q": "quick_edit"}
+
+    def _wall_chord(self, event, et):
+        """(0.432) W pressed alone: the Wall tool as always — and for 1,25 s a second letter is a walls' command (T
+        trim, E extend, A align, O orthogonalize, R rotate, S split, M mirror, J / C joins, U / B attach top / base, G
+        grips, L the walls joined, Q quick edit), the balloon saying them. True when the key was the second letter."""
+        import time as _time
+        Key = QtCore.Qt.Key
+        if event.key() in (Key.Key_Shift, Key.Key_Control, Key.Key_Alt, Key.Key_Meta, Key.Key_AltGr):
+            return False                            # (a modifier pressed alone: the window stays open)
+        held = event.modifiers() & (Mod.ControlModifier | Mod.AltModifier | Mod.ShiftModifier | Mod.MetaModifier)
+        letter = QtGui.QKeySequence(event.key()).toString().upper()
+        now = _time.monotonic()
+        until = getattr(self, "_chord_until", 0.0)
+        if not held and now < until and letter in self.WALL_CHORD and not self._typed:
+            if et == QtCore.QEvent.Type.ShortcutOverride:
+                event.accept()                      # (its own shortcut — T is the Tape's — not this time)
+                return True
+            self._chord_until = 0.0
+            self.wall_command(self.WALL_CHORD[letter])
+            return True
+        if letter == "W" and not held:
+            if et == QtCore.QEvent.Type.ShortcutOverride and not self._typed and self._common_key_name(event) is None:
+                self._chord_until = now + self.WALL_CHORD_S    # (the shortcut goes on: the Wall tool)
+                QtCore.QTimer.singleShot(0, lambda: self.message(t("chord.walls")))
+            return False
+        if now < until:                             # (another key between — W, F1, R —: no second letter; R the
+            self._chord_until = 0.0                 #  Rectangle, as always)
+        return False
+
+    def wall_command(self, name):
+        """(0.432) A walls' command by its name (the second letter of «W + letra»)."""
+        acts = {"orthogonalize": self.act_orthogonalize, "attach_top": self.act_attach_top,
+                "attach_base": self.act_attach_base}
+        if name in acts:
+            acts[name].trigger()
+        elif name == "select_linked":
+            self.select_linked_walls()
+        elif name == "quick_edit":
+            self.quick_edit()
+        elif name in self.tools:
+            self.set_tool(name)
+        label = t("chord.cmd." + name)
+        self.message(t("chord.done", c=label))
+
+    def select_linked_walls(self):
+        """(0.432) W L: the walls joined to the ones chosen, and those joined to them, all chosen."""
+        walls = {g for g in self.viewport.selection if self.doc.ifc.kind_of(g) == "wall"}
+        if not walls:
+            self.message(t("chord.no_walls"), warning=True)
+            return 0
+        seen, todo = set(walls), list(walls)
+        while todo:
+            for g in self.doc.ifc.joined_walls([todo.pop()]):
+                if g not in seen and self.doc.get(g) is not None:
+                    seen.add(g)
+                    todo.append(g)
+        if self.tool is None or self.tool.name != "select":
+            self.set_tool("select")
+        self.viewport.set_selection(seen)
+        return len(seen)
 
     def _handle_key(self, event):
         key = event.key()

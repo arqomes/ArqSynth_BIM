@@ -532,7 +532,8 @@ clique dentro das paredes. Falta, pela ordem do estudo:
    as afinar e guardar, como no estudo~~ (0.374.0).
 10. **Do inventário, ainda por fazer** (fora da fita do estudo): escadas a colocar já feitas (arrastar a escada pronta),
     pisos com declive por vértice, fachada de vidro em arco e por face, Steel/Wood frame, mobiliário solto de catálogo,
-    o «W + letra» das paredes, ripado como ferramenta própria. ~~Painel perfurado como ferramenta própria~~ (0.389.0:
+    ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ripado
+    como ferramenta própria. ~~Painel perfurado como ferramenta própria~~ (0.389.0:
     furos redondos/quadrados, malha reta/45°, placas com junta, imagem, retângulo na face). ~~Cobertura orgânica~~
     (0.390.0: cúpula/abóbada/onda tiradas do contorno; casca, gridshell, envidraçada, pérgola curva; aro e apoios).
     ~~Da cobertura orgânica fica por fazer: o loft entre 2+ curvas e a superfície por 4 bordos (o addon tem), nós

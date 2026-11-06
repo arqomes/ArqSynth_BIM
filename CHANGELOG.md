@@ -1,6 +1,32 @@
 # Changelog
 
-## 0.431.0 — 2026-11-06
+## 0.432.0 — 2026-11-06
+
+**«W + letra» — os comandos das paredes por uma segunda letra**, como no addon.
+
+- Carregue em **W**: entra a ferramenta Parede, como sempre, e a faixa mostra as letras. Durante 1,25 s, uma segunda
+  letra escolhe um comando das paredes:
+  - **T** e **E**: Aparar e estender;
+  - **A**: Alinhar;
+  - **O**: Ortogonalizar;
+  - **R**: Rodar;
+  - **S**: Dividir parede;
+  - **M**: Espelhar;
+  - **J** e **C**: Junções de paredes;
+  - **U** e **B**: Ligar o topo e Ligar a base;
+  - **G**: Selecionar, para as pegas;
+  - **L**: escolhe as paredes ligadas às escolhidas, e as ligadas a essas (novo);
+  - **Q**: Edição rápida.
+- Fora desse tempo, as letras são os atalhos de sempre: T continua a ser a Fita métrica.
+- Outra tecla pelo meio (Esc, F1…) acaba com a espera: W, Esc, R é o Retângulo, não Rodar.
+
+**«Editar tipo…» por baixo da lista de tipos**, no topo das Propriedades, como o «Edit Type» do Revit (pedido do
+dono). Deixa de ser uma linha «Tipo» no grupo Identificação.
+
+- Vale para paredes, lajes, coberturas, portas e janelas, guardas e cotas.
+- Nos elementos com «Guardar como tipo…» e «Atualizar o tipo» (superfícies, móveis, luminárias…), estes dois botões
+  também passam para baixo da lista.
+- Com vários elementos escolhidos, os botões não aparecem: editam o tipo de um elemento só.
 
 **Avisos do modelo** (Aprender com o Hestia, passo 5): o que está mal desenhado, não o que a lei pede. Estes são os
 avisos mais comuns do Revit.
