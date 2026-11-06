@@ -33,10 +33,65 @@ def settings(doc, default_country=None):
 
 def active(settings_, all_packs=None):
     """[(Pack, its own: True | supplementary: False)] the project checks: those chosen, else the country's own and those
-    they name as supplementary."""
+    they name as supplementary — and (0.423) the town plan's values for this project."""
     all_packs = all_packs if all_packs is not None else rules_mod.packs()
     if not settings_.get("on", True):
         return []
+    return _laws(settings_, all_packs) + [(plan_pack(settings_), True)]
+
+
+# (0.423) the town plan's values for this project — what the municipality sets for the lot (a PDM, a «plano de
+# pormenor», an allotment's permit): settings["pdm"] = {"name": "PDM da Praia", "ios_max": 0.5, …}
+PLAN_PACK = "PLANO"
+PLAN_FIELDS = (                         # (its key, the lot's measure, min | max, unit)
+    ("lote_min", "area_lote", "min", "m2"),
+    ("ios_max", "indice_ocupacao", "max", ""),
+    ("iu_max", "indice_utilizacao", "max", ""),
+    ("implantacao_max", "area_implantacao", "max", "m2"),
+    ("construcao_max", "area_construcao", "max", "m2"),
+    ("pisos_max", "pisos_acima_solo", "max", ""),
+    ("caves_max", "pisos_abaixo_solo", "max", ""),
+    ("cercea_max", "cercea", "max", "m"),
+    ("altura_max", "altura_edificio", "max", "m"),
+    ("frontal_min", "afastamento_frontal", "min", "m"),
+    ("lateral_min", "afastamento_lateral", "min", "m"),
+    ("posterior_min", "afastamento_posterior", "min", "m"),
+    ("impermeabilizacao_max", "impermeabilizacao", "max", ""),
+)
+SIDE_FLAG = {"afastamento_frontal": "tem_frente", "afastamento_lateral": "tem_lateral",
+             "afastamento_posterior": "tem_posterior"}
+
+
+def plan_pack(settings_):
+    """The rules of the town plan's values set for this project — and, always, the building inside the lot."""
+    from ..i18n import t
+    values = settings_.get("pdm") or {}
+    name = (values.get("name") or "").strip() or t("verify.plan.short")
+    pack = rules_mod.Pack(id=PLAN_PACK, country=settings_.get("country") or "*", short=name,
+                          title=t("verify.plan.title"), instrument=name, source=t("verify.plan.source"))
+    pack.rules = [rules_mod.Rule(
+        id="PLANO-dentro", pack=PLAN_PACK, article=t("verify.plan.article_lot"), title=t("verify.plan.inside"),
+        subject="lot", measure="fora_do_lote", text=t("verify.plan.inside_text"), where={"tem_lote": True},
+        limit={"max": 0.0}, severity="error", confirmed=True, unit="m2", topic="urbanismo.dentro_do_lote")]
+    for key, measure, side, unit in PLAN_FIELDS:
+        value = values.get(key)
+        if value is None:
+            continue
+        where = {SIDE_FLAG[measure]: True} if measure in SIDE_FLAG else {}
+        pack.rules.append(rules_mod.Rule(
+            id="PLANO-" + key, pack=PLAN_PACK, article=t("verify.plan.article"), title=t("verify.plan.f." + key),
+            subject="lot", measure=measure, text=t("verify.plan.text", name=name), where=where,
+            limit={side: float(value)}, severity="error", confirmed=True, unit=unit, topic="urbanismo." + key))
+    rules_mod.GENERATED[PLAN_PACK] = pack
+    return pack
+
+
+def plan_values(settings_):
+    """The town plan's values set ({key: value}), without its name."""
+    return {k: v for k, v in (settings_.get("pdm") or {}).items() if k != "name" and v is not None}
+
+
+def _laws(settings_, all_packs):
     chosen = settings_.get("packs")
     if chosen:
         return [(all_packs[p], True) for p in chosen if p in all_packs]

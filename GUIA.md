@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.422.0
+# Guia das ferramentas — ArqSynth BIM 0.423.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.422.0.
+ArqSynth BIM 0.423.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -106,7 +106,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 2. [Modelagem](#2-modelagem) — 34 comandos
 3. [Gerenciar](#3-gerenciar) — 21 comandos
 4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
-5. [Terreno](#5-terreno) — 10 comandos
+5. [Terreno](#5-terreno) — 11 comandos
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
@@ -683,6 +683,14 @@ Topografia, plataformas, curvas de nível e movimentação de terras.
 
 - **Como se usa:** Escreva a cota do ponto (ex.: 12,50) e clique onde ele fica. Enter faz o terreno.
 - **Passos de teste (TESTAR.md):** 0.155 «Terreno por pontos»
+
+### Terreno ▸ Lote
+
+#### Lote
+
+- **Como se usa:** Lote: clique num canto (Tab: polígono, contorno do terreno).
+- **Teclas:** Tab: retângulo → polígono → círculo → varinha mágica · X / Y: bloquear o eixo · N: soltar · Delete: apagar o último canto
+- **Passos de teste (TESTAR.md):** 0.423 «O lote e o plano municipal»
 
 ### Terreno ▸ Plataformas
 
@@ -1327,7 +1335,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Regulamentos do projeto…
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
-- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+- **Passos de teste (TESTAR.md):** 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 ### Colaborar ▸ Notas
 
@@ -1792,4 +1800,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*242 comandos descritos, gerados do ArqSynth BIM 0.422.0.*
+*243 comandos descritos, gerados do ArqSynth BIM 0.423.0.*

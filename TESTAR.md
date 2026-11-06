@@ -644,6 +644,32 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.423 — O lote e o plano municipal
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.423.0**. Abra a casa T2 da 0.417 (país Cabo
+   Verde) e carregue em F4.
+2. No separador **Terreno**, clique em **Lote**. Clique na planta num ponto a uns 5 m à esquerda e abaixo da casa,
+   afaste o rato para cima e para a direita, escreva `20;30` e carregue em Enter. A barra de baixo diz «Lote com
+   600,00 m² e 4 estremas».
+3. Carregue em Esc e depois em Shift+Z (**Enquadrar tudo**). O lote aparece a traço-ponto-ponto à volta da casa, com
+   os números 1 a 4 e «via pública» no lado da entrada.
+4. Clique no indicador do rodapé ▸ **Regulamentos do projeto…** e abra a página **Lote e plano municipal**. Confirme
+   que diz «Lote: 600,00 m², 4 estremas. Implantação 83,64 m²…».
+5. Ainda nessa página, escreva:
+   - **Plano:** «PDM da Praia»;
+   - **Índice de ocupação do solo máximo:** `0,10`;
+   - **Afastamento frontal mínimo:** `5`.
+
+   Carregue em OK. O rodapé passa a dizer **CTE, PDM da Praia ✗ 4 ⚠ 1**.
+6. Abra o painel **Verificação**, **Por regulamento**. Em «PDM da Praia» aparecem:
+   - «Lote — Índice de ocupação do solo máximo ✗ 0,14»;
+   - «Afastamento frontal mínimo ✗ 4,90 m».
+7. Volte aos **Regulamentos do projeto ▸ Lote e plano municipal**. Ponha um visto na **Estrema 3** (a de trás) e OK. O
+   «via pública» passa para o outro lado na planta, e o afastamento frontal passa a 16,90 m, ✓.
+8. Com a ferramenta **Lote**, desenhe outro retângulo que deixe metade da casa de fora. O painel mostra «Construção
+   dentro do lote ✗» com a área que sai.
+9. Carregue em Ctrl+Z as vezes precisas até o lote desaparecer.
+
 ## 0.422 — Materiais e boas práticas
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.422.0**. Abra a casa T2 da 0.417 (país Cabo

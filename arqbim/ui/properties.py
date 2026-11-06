@@ -1089,7 +1089,6 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         found = [f for f in result.findings if f.subject.id == element]
         if not found:
             return
-        packs = rules_mod.packs()
         self._begin(t("verify.props.group"))
         for f in sorted(found, key=lambda f: (f.status != "fail", f.rule.article)):
             rule = f.rule
@@ -1098,7 +1097,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                           limit=check_mod.number(f.limit, rule.unit))
             text = t({"ok": "verify.props.ok", "fail": "verify.props.fail"}.get(f.status, "verify.props.unknown"),
                      **values)
-            pack = packs.get(rule.pack)
+            pack = rules_mod.find(rule.pack)
             item = self._row("{} — {}".format(pack.short if pack else rule.pack, rule.title), text)
             item.setToolTip(0, "{} — {}\n\n{}".format(rule.article, rule.title, rule.text))
             item.setToolTip(1, check_mod.message(f))

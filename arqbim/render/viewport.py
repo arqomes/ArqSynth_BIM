@@ -94,6 +94,7 @@ AUTO_ALIGN_PX = 400                        # corners this near the cursor (pixel
 AUTO_ALIGN_MOST = 60                       # …the nearest of them
 UNDERLAY_COLOR = (0.62, 0.62, 0.62, 1.0)   # a plan's underlay storey
 GRID_COLOR = "#4a6a8a"                     # the structural grid's axes and bubbles
+LOT_COLOR = "#9a4f2c"                      # (0.423) the lot's sides (a property line, dash-dot-dot)
 MARK_COLOR = "#2a2a2a"                     # the sections' and elevations' marks, the levels (0.121)
 GRID_BUBBLE = 0.35                         # m: the radius of an axis's bubble
 # rooms in a plan (0.99): a light fill just over the floor, their outline, the selection's tint
@@ -339,6 +340,8 @@ class Viewport:
         self.crop = None            # a plan's crop region (x0, y0, x1, y1), or None
         self._underlay = None       # a plan's underlay storey: grey lines
         self._grid_objects = []     # the structural grid's axes, bubbles and tags (0.67)
+        self._lot_objects = []      # (0.423) the lot's sides, their numbers, «via pública» on the front
+        self._lot_key = None
         self.selected_axes = set()  # grid axes picked (indices in Document.grids; 0.72)
         self.unselectable = set()   # categories that cannot be selected (0.76): IFC classes, "sketch", "grid"
         self.axes_listeners = []    # (indices) -> None, when they change
@@ -967,6 +970,10 @@ class Viewport:
                 p = wobj.geometry.positions.data
                 if len(p):
                     pts += [tuple(map(float, p.min(axis=0))), tuple(map(float, p.max(axis=0)))]
+            shown = self.lot_shown()                        # (0.423: the lot too)
+            if shown is not None:
+                z = self.grid_level()
+                pts += [(float(x), float(y), z) for x, y in shown[0]]
             if pts:
                 pts = np.array(pts + ([] if box is None else [box[0], box[1]]), dtype=float)
                 box = pts.min(axis=0), pts.max(axis=0)
@@ -1374,6 +1381,66 @@ class Viewport:
             self.scene.add(wobj)
         if self.plan:
             self._clip(*[w.material for w in self._grid_objects])
+        self.redraw()
+
+    def lot_shown(self):
+        """(0.423) (outline, fronts) of the lot as drawn — its front the one chosen, else the Verifier's (the side
+        nearest the entrance) —, or None."""
+        if getattr(self.doc, "loading", False) or self.section is not None:
+            return None
+        try:
+            from ..verify import measures as ms
+            from ..verify import reader, urban
+            if self.doc.ifc.lot() is None:
+                return None
+            info = urban.lot_info(ms.Context(self.doc, reader.read(self.doc)))
+        except Exception:                                   # noqa: BLE001 (the plan is drawn without it)
+            return None
+        return (info["outline"], info["fronts"]) if info is not None else None
+
+    def _show_lot(self):
+        """(0.423) The lot: its sides a dash-dot-dot line (a property line on a drawing), the front thicker with «via
+        pública» outside it, each side's number inside — at the active storey's level, over everything in a plan.
+        Made again only when the lot, the level or the view changed."""
+        shown = self.lot_shown()
+        z = self.grid_level()
+        key = None if shown is None else (tuple(shown[0]), tuple(shown[1]), round(z, 4), self.plan)
+        if key == self._lot_key and (key is None or self._lot_objects):
+            return
+        for wobj in self._lot_objects:
+            self.scene.remove(wobj)
+        self._lot_objects = []
+        self._lot_key = key
+        if shown is None:
+            self.redraw()
+            return
+        from ..core import lot as core_lot
+        outline, fronts = shown
+        overlay = dict(depth_test=False, depth_write=False, render_queue=OVERLAY_QUEUE) if self.plan else {}
+        plain, front = [], []
+        for k, (a, b) in enumerate(core_lot.sides(outline)):
+            pa, pb = np.array((a[0], a[1], z)), np.array((b[0], b[1], z))
+            (front if k in fronts else plain).extend((pa, pb))
+            middle = (pa + pb) / 2.0
+            n = core_lot.outward(a, b)
+            number = gfx.Text(text=str(k + 1), font_size=12, screen_space=True, anchor="middle-center",
+                              material=_mat(gfx.TextMaterial, color=LOT_COLOR, **overlay))
+            number.local.position = tuple(float(c) for c in middle - np.array((n[0], n[1], 0.0)) * 0.6)
+            self._lot_objects.append(number)
+            if k in fronts:
+                label = gfx.Text(text=t("lot.street"), font_size=12, screen_space=True, anchor="middle-center",
+                                 material=_mat(gfx.TextMaterial, color=LOT_COLOR, **overlay))
+                label.local.position = tuple(float(c) for c in middle + np.array((n[0], n[1], 0.0)) * 1.2)
+                self._lot_objects.append(label)
+        for segs, width in ((plain, 1.4), (front, 2.6)):
+            if segs:
+                self._lot_objects.append(gfx.Line(gfx.Geometry(positions=_f32(segs)), _mat(
+                    gfx.LineSegmentMaterial, thickness=width, color=LOT_COLOR, dash_pattern=(12, 3, 2, 3, 2, 3),
+                    aa=True, **overlay)))
+        for wobj in self._lot_objects:
+            self.scene.add(wobj)
+        if self.plan:
+            self._clip(*[w.material for w in self._lot_objects])
         self.redraw()
 
     # ------------------------------------------------------------ rooms (0.99)
@@ -2513,6 +2580,7 @@ class Viewport:
         self._show_dimensions()
         self._show_view_marks()
         self._show_grid()
+        self._show_lot()
         self._show_rooms()
         self._show_images()
         self._show_cad()

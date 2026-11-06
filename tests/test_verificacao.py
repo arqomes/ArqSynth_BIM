@@ -396,7 +396,7 @@ class Portugal(unittest.TestCase):
         self.assertEqual(sorted(failed), ["PT-DL163-3.3.4", "PT-DL163-4.9.1-compartimentos",
                                           "PT-DL163-4.9.1-entrada", "PT-RGEU-68"])
         self.assertEqual(len(failed["PT-DL163-4.9.1-compartimentos"]), 3)
-        self.assertEqual({p.id for p, own in result.packs if own}, {"PT-RGEU", "PT-DL163"})
+        self.assertEqual({p.id for p, own in result.packs if own}, {"PT-RGEU", "PT-DL163", "PLANO"})   # (0.423)
         self.assertEqual({p.id for p, own in result.packs if not own}, {"BOAS-PRATICAS"})      # (0.422)
         passed = {f.rule.id for f in result.findings if f.status == "ok"}
         self.assertTrue({"PT-RGEU-66-sala", "PT-RGEU-66-quartos", "PT-RGEU-67", "PT-RGEU-71-area", "PT-RGEU-72",
@@ -412,7 +412,8 @@ class Portugal(unittest.TestCase):
         t2_house(doc)
         result = check.check(doc, dict(CV), force=True)
         self.assertEqual([(p.id, own) for p, own in result.packs],
-                         [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False), ("BOAS-PRATICAS", False)])
+                         [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False), ("BOAS-PRATICAS", False),
+                          ("PLANO", True)])
         self.assertEqual({f.rule.pack for f in result.findings} - {"BOAS-PRATICAS"}, {"CV-CTE"})
         supplementary = {r.id for r in project.active_rules(dict(CV)) if r.pack.startswith("PT-")}
         self.assertEqual(supplementary, {"PT-DL163-3.3.6"})
@@ -469,6 +470,94 @@ class Materials(unittest.TestCase):
         ids = {f.rule.id for f in result.findings if f.subject.id == slab}
         self.assertIn("CV-CTE-99-1a", ids)
         self.assertNotIn("BP-pavimento-solo", ids)                     # (the CTE says it: the law's, not good practice)
+
+
+class TownPlanning(unittest.TestCase):
+    """0.423: the lot (the IfcSite's footprint) and the town plan's values for the project."""
+
+    def test_the_lot_in_the_ifc(self):
+        """Drawn counter-clockwise or not, kept counter-clockwise; its front chosen; saved as the IfcSite's FootPrint
+        (a closed polyline) and read again; undone step by step."""
+        doc = Document()
+        bim.set_lot(doc, list(reversed(square(-5.0, -6.0, 15.0, 20.0))))
+        lot = doc.ifc.lot()
+        self.assertAlmostEqual(lot["area"], 520.0)
+        self.assertEqual((len(lot["outline"]), lot["fronts"], lot["chosen"]), (4, [], False))
+        self.assertGreater(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(lot["outline"],
+                                                                         lot["outline"][1:] + lot["outline"][:1])), 0)
+        bim.set_lot_fronts(doc, [1])
+        self.assertEqual(doc.ifc.lot()["fronts"], [1])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "lote.ifc")
+            doc.save(path)
+            site = ifcopenshell.open(path).by_type("IfcSite")[0]
+            reps = [r for r in site.Representation.Representations if r.RepresentationIdentifier == "FootPrint"]
+            self.assertEqual((len(reps), reps[0].RepresentationType, reps[0].Items[0].is_a()),
+                             (1, "Curve2D", "IfcPolyline"))
+            again = Document()
+            again.open(path)
+            self.assertAlmostEqual(again.ifc.lot()["area"], 520.0)
+            self.assertEqual(again.ifc.lot()["fronts"], [1])
+            self.assertEqual(again.ifc.validate(), [])
+        doc.undo()
+        self.assertEqual(doc.ifc.lot()["fronts"], [])
+        doc.undo()
+        self.assertIsNone(doc.ifc.lot())
+
+    def test_sides_front_back(self):
+        from arqbim.core import lot as core_lot
+        outline = square(0.0, 0.0, 20.0, 30.0)
+        self.assertEqual(core_lot.auto_fronts(outline, (10.0, 0.5)), [0])
+        self.assertEqual(core_lot.roles(outline, [0]), {0: "frente", 1: "lateral", 2: "posterior", 3: "lateral"})
+        self.assertEqual(core_lot.auto_fronts(outline), [1])                    # (no entrance: the longest side)
+
+    def test_indices_setbacks_and_the_plan(self):
+        """The T2 house (10 × 8 m, walls 20 cm) on a lot of 20 × 30 m: its footprint 10,2 × 8,2 m (the walls' outer
+        faces: 83,64 m²), one storey above the ground; the front (the side nearest the entrance, in the wall at y = 0)
+        4,9 m away, the sides 4,9 m, the back 16,9 m. The plan asks IOS ≤ 0,10 and 5 m to the front: both fail;
+        moved back the lot passes the front; a lot that leaves the house half out: «outside the lot»."""
+        from arqbim.verify import check, measures as ms, urban
+        doc = Document()
+        t2_house(doc)
+        bim.set_lot(doc, square(-5.0, -5.0, 15.0, 25.0))
+        settings = dict(CV, pdm={"name": "PDM da Praia", "ios_max": 0.10, "frontal_min": 5.0, "pisos_max": 2})
+        result = check.check(doc, settings, force=True)
+        ctx = ms.Context(doc, reader.read(doc), settings)
+        values = urban.summary(ctx)
+        self.assertAlmostEqual(values["area_lote"], 600.0)
+        self.assertAlmostEqual(values["area_implantacao"], 83.64, places=1)
+        self.assertAlmostEqual(values["indice_ocupacao"], 83.64 / 600.0, places=3)
+        self.assertEqual(values["pisos_acima_solo"], 1.0)
+        self.assertAlmostEqual(values["afastamento_frontal"], 4.9, places=2)
+        self.assertAlmostEqual(values["afastamento_lateral"], 4.9, places=2)
+        self.assertAlmostEqual(values["afastamento_posterior"], 16.9, places=2)
+        self.assertEqual(values["fora_do_lote"], 0.0)
+        self.assertGreater(values["cercea"], 2.5)
+        by_rule = {f.rule.id: f for f in result.findings if f.subject.kind == "lot"}
+        self.assertEqual(by_rule["PLANO-ios_max"].status, "fail")
+        self.assertEqual(by_rule["PLANO-frontal_min"].status, "fail")
+        self.assertEqual(by_rule["PLANO-pisos_max"].status, "ok")
+        self.assertEqual(by_rule["PLANO-dentro"].status, "ok")
+        self.assertIn("Lote: afastamento à frente do lote 4,90 m — PDM da Praia, parâmetro do plano: mínimo 5,00 m",
+                      check.message(by_rule["PLANO-frontal_min"]))
+        bim.set_lot(doc, square(-5.0, -5.5, 15.0, 25.0))
+        result = check.check(doc, settings, force=True)
+        self.assertEqual(next(f for f in result.findings if f.rule.id == "PLANO-frontal_min").status, "ok")
+        bim.set_lot(doc, square(5.0, -5.0, 25.0, 25.0))
+        result = check.check(doc, settings, force=True)
+        inside = next(f for f in result.findings if f.rule.id == "PLANO-dentro")
+        self.assertEqual(inside.status, "fail")
+        self.assertAlmostEqual(inside.value, 5.1 * 8.2, places=0)
+
+    def test_no_lot_but_a_plan(self):
+        """The plan's values written and no lot drawn: its indices «not measured» (the panel says to draw it)."""
+        from arqbim.verify import check
+        doc = Document()
+        t2_house(doc)
+        result = check.check(doc, dict(CV, pdm={"ios_max": 0.5}), force=True)
+        ios = next(f for f in result.findings if f.rule.id == "PLANO-ios_max")
+        self.assertEqual(ios.status, "unknown")
+        self.assertFalse(any(f.rule.id == "PLANO-dentro" for f in result.findings))
 
 
 class Exceptions(unittest.TestCase):

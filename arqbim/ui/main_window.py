@@ -282,6 +282,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pick_request = None                  # (0.322) a command waiting for elements to be picked (_Pick)
         self._pick_busy = False
         self._help = None                         # (0.327) the Help window, made when first asked for
+        self._verify_dialog = None                # (0.423) the Project regulations dialog while it is open
         from ..render import canvas as views_canvas            # (0.341) the views light or dark, as chosen last
         views_canvas.set_dark(theme.dark_views())
         self.viewport = Viewport(self.canvas, self.doc)
@@ -848,7 +849,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
-                "work_plane": ""}                                     # (0.412)
+                "work_plane": "",                                     # (0.412)
+                "lot": ""}                                            # (0.423)
         for name in self.tools:
             key = keys[name]
             shown = ("Espaço" if lang() == "pt" else "Space") if key == "Space" else key
@@ -3075,15 +3077,22 @@ class MainWindow(QtWidgets.QMainWindow):
         """«Regulamentos do projeto…»: the country, the building's use, the kind of work, its height — one undo step;
         the check made again."""
         from ..verify import check as check_mod
+        from ..verify import measures as ms
+        from ..verify import reader, urban
         from . import verify_settings as dialog
         height, _n = check_mod._building_height(self.doc)
         current = self.verifier.settings()
-        values = dialog.ask(self, current, height)
-        if values is None:
+        lot = self.doc.ifc.lot()                   # (0.423: the lot and what is built on it, for the plan's page)
+        summary = urban.summary(ms.Context(self.doc, reader.read(self.doc), current)) if lot is not None else {}
+        answer = dialog.ask(self, current, height, lot, summary)
+        if answer is None:
             return None
+        values, fronts = answer
         merged = dict(current)                     # (0.418: the exceptions kept)
         merged.update(values)
         bim.set_verify_settings(self.doc, merged)
+        if lot is not None and fronts is not None and sorted(fronts) != (sorted(lot["fronts"]) if lot["chosen"] else []):
+            bim.set_lot_fronts(self.doc, fronts)
         self.verifier.run()
         return merged
 

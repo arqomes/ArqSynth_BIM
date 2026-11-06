@@ -828,6 +828,7 @@ def bim_flow():
     verifier_reader_flow()            # (0.416)
     verifier_footer_flow()            # (0.417)
     verifier_panel_flow()             # (0.418)
+    verifier_lot_flow()               # (0.423)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -20968,6 +20969,84 @@ def verifier_panel_flow():
     check("verificador_painel", listed and chosen and counted and excepted and back,
           "lista={} escolhida={} contada={} exceção={} desfeito={} | {!r}".format(
               listed, chosen, counted, excepted, back, text[:400]))
+
+
+def verifier_lot_flow():
+    """0.423: the lot and the town plan — Terreno ▸ Lote, a click at a corner and «20;30» typed: a lot of 600 m² round
+    the T2 house, drawn dash-dot-dot with its sides numbered and «via pública» on the side by the entrance; the Project
+    regulations, page «Lote e plano municipal»: the lot's area and the house's footprint said; the plan's values typed
+    (IOS 0,10 — the house's 0,14 fails —, front 5 m — 4,9 m fails): the footer «CTE, PDM da Praia ✗ 4 ⚠ 1»; the panel
+    lists them under the plan; Ctrl+Z (the settings), Ctrl+Z (the lot): as before. Captured: 423_lote.png,
+    423_lote_regulamentos.png."""
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(200)
+    vp.zoom_extents()
+    win.set_tool("lot")
+    pump(300)
+    move(at(np.array((-5.0, -5.0, 0.0))), 3)
+    click()
+    move(at(np.array((6.0, 6.0, 0.0))), 3)
+    type_text("20;30")
+    key(Qt.Key.Key_Return)
+    pump(700)
+    lot = doc.ifc.lot()
+    drawn = lot is not None and abs(lot["area"] - 600.0) < 0.5 and \
+        min(np.hypot(x + 5.0, y + 5.0) for x, y in lot["outline"]) < 0.3
+    win.set_tool("select")
+    vp.zoom_extents()
+    pump(700)
+    shown = bool(vp._lot_objects) and vp._lot_key is not None and vp._lot_key[1] == (0,)
+    shot("423_lote.png")
+    seen = {}
+
+    def fill():
+        d = win._verify_dialog
+        if d is None:
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.tabs.setCurrentIndex(1)
+        pump(200)
+        seen["summary"] = d.lot_label.text()
+        seen["sides"] = d.fronts.count()
+        d.plan_name.setText("PDM da Praia")
+        d.plan_fields["ios_max"].setText("0,10")
+        d.plan_fields["frontal_min"].setText("5")
+        pump(100)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "423_lote_regulamentos.png"))
+        d.accept()
+    QtCore.QTimer.singleShot(300, fill)
+    win.verify_settings()
+    pump(900)
+    summary = "600,00 m²" in seen.get("summary", "") and "83,64 m²" in seen.get("summary", "") \
+        and seen.get("sides") == 4
+    footer = win.verifier.button.text()
+    counted = footer == "CTE, PDM da Praia ✗ 4 ⚠ 1"
+    win.ribbon_item("verify_panel").trigger()
+    pump(600)
+    panel = win.verify_panel
+    panel.group.setCurrentIndex(panel.group.findData("law"))
+    pump(300)
+    text = panel.text()
+    listed = "PDM da Praia — " in text and "Lote — Afastamento frontal mínimo | ✗ 4,90 m" in text
+    panel.hide()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(900)
+    back = doc.ifc.lot() is None and not vp._lot_objects and win.verifier.button.text() == "CTE ✗ 2 ⚠ 1"
+    win.open_view("3d", None)
+    pump(300)
+    check("verificador_lote", drawn and shown and summary and counted and listed and back,
+          "lote={} vista={} resumo={} rodapé={} painel={} desfeito={} | {!r} | {!r} | {!r}".format(
+              drawn, shown, summary, counted, listed, back, seen.get("summary"), footer, text[:300]))
 
 
 def wheel(steps):

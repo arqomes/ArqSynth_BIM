@@ -62,6 +62,7 @@ PANELS = {
     "terrain": (("select", ("select",)),
                 ("location", ("site_location",)),
                 ("survey", ("terrain_points", "terrain_dxf", "terrain")),
+                ("lot", ("lot",)),                                   # (0.423) the lot, for the town plan's checks
                 ("platforms", ("platform", "terrain_ramp", "edit_platform")),
                 ("earthworks", ("earthworks", "slopes"))),
     # (0.374) as the owner's study (proposta-interface-arqsynth.html): the walls' shapes in sight, the niche, the floor

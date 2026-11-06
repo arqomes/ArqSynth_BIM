@@ -104,6 +104,12 @@ def load_pack(path):
 
 
 _READ = {}
+GENERATED = {}              # (0.423) packs made from the project's own values (the town plan's: project.plan_pack)
+
+
+def find(pack_id):
+    """A pack by its id: the program's (or the user's), else one made for the project — or None."""
+    return packs().get(pack_id) or GENERATED.get(pack_id)
 
 
 def packs(folders=None, again=False):

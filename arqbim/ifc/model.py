@@ -74,6 +74,7 @@ from .carpentry import CarpentryMixin  # noqa: E402
 from .roof_tiles import RoofTilesMixin  # noqa: E402
 from .joinery import JoineryMixin  # noqa: E402
 from .dwellings import DwellingMixin  # noqa: E402
+from .lot import LotMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -364,7 +365,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                ElectricalMixin, CircuitMixin, ConduitMixin, TerrainMixin, StructuralMixin, RebarMixin,
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
-               ElementTypeMixin, DwellingMixin):
+               ElementTypeMixin, DwellingMixin, LotMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)

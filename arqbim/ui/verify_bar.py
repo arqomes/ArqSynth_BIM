@@ -220,7 +220,8 @@ class Verifier(QtCore.QObject):
             text, colour, tip = t("verify.foot.off"), theme.C["neutral"], t("verify.foot.tip_off")
         else:
             packs = self.result.packs if self.result is not None else project.active(s)
-            laws = ", ".join(p.short for p, own in packs if own) or "—"
+            laws = ", ".join(p.short for p, own in packs if own and (    # (0.423: the town plan once it has values)
+                p.id != project.PLAN_PACK or project.plan_values(s))) or "—"
             tip = t("verify.foot.tip", country=project.label(project.COUNTRIES, country, language), laws=laws)
             r = self.result
             n_err = r.count("error") if r is not None else 0
@@ -250,7 +251,7 @@ class Verifier(QtCore.QObject):
     def why(self, finding):
         from ..verify import rules as rules_mod
         rule = finding.rule
-        pack = rules_mod.packs().get(rule.pack)
+        pack = rules_mod.find(rule.pack)
         side = "min" if any(k.startswith("min") for k in rule.limit) else "max"
         text = t("verify.why.text", title=rule.title, text=rule.text, value=check_mod.number(finding.value, rule.unit),
                  side=t("verify.side." + side), limit=check_mod.number(finding.limit, rule.unit),

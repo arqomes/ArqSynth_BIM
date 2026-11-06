@@ -1300,8 +1300,14 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    projeto não diz nada, que se desliga nos Regulamentos do projeto; a verificação de um edifício de 2161 elementos
    em ~0,6 s por edição). Por fazer: **as espessuras do Anexo II** do CTE (preciso do quadro — o B.O. que li não o
    traz legível) e os materiais pela sua posição em altura (o corte de humidade na base das paredes).
-8. **Urbanismo:** lote e estremas (do terreno), índices, alturas de fachada, afastamentos, os valores do regulamento
-   municipal / PDM por projeto.
+8. **Urbanismo:** ~~lote e estremas (do terreno), índices, os valores do regulamento municipal / PDM por projeto~~
+   (0.423.0: a ferramenta Lote — retângulo, polígono, contorno do terreno — no `IfcSite` «FootPrint»; a frente
+   escolhida ou a estrema mais perto da entrada; o pacote «Plano municipal» feito dos valores escritos para o projeto:
+   índices, áreas, pisos, cércea, altura, afastamentos, impermeabilização; a construção dentro do lote). Falta (0.424):
+   as **alturas de fachada e os afastamentos da lei** — CTE arts. 21.º (H ≤ L à fachada oposta), 22.º (11 m entre
+   fachadas para a via pública; H/2 ≥ 5 m ou 1,5 m à estrema conforme os vãos), 23.º (pátios), 24.º (corpos salientes a
+   3 m); RGEU arts. 59.º (45°), 60.º (10 m) e 62.º (logradouro). Por fazer depois: o lote escolhido com o rato e as
+   suas pegas (hoje redesenha-se), e o lote contado nas tabelas.
 9. **A ficha de verificação** (PDF e XLSX) e o **editor de regulamentos** (duplicar um país para outro).
 
 **Decisões do dono antes do passo 1** (formato dos dados, difíceis de desfazer):

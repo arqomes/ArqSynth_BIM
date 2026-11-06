@@ -11,6 +11,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..i18n import t
 from ..verify import check as check_mod
+from ..verify import project
 from ..verify import reader
 from ..verify import rules as rules_mod
 from . import theme
@@ -99,18 +100,18 @@ class VerifyPanel(QtWidgets.QDockWidget):
             self.summary.setText(t("verify.panel.none"))
             return
         c = r.counts()
-        laws = ", ".join(p.short for p, own in r.packs if own) or "—"
+        laws = ", ".join(p.short for p, own in r.packs if own and (     # (0.423: the town plan once it has values)
+            p.id != project.PLAN_PACK or project.plan_values(r.settings))) or "—"
         self.summary.setText(t("verify.panel.summary", laws=laws, e=c["error"], w=c["warning"], x=c["excepted"],
                                ok=c["ok"], u=c["unknown"]))
         facts = reader.read(self.doc) if self.doc is not None else None
-        packs = rules_mod.packs()
         heads = {}
         by_law = self.group.currentData() == "law"
         for f in sorted(r.findings, key=lambda f: (f.status != "fail", f.rule.severity != "error", f.subject.name)):
             if not self._wanted(f):
                 continue
             if by_law:
-                pack = packs.get(f.rule.pack)
+                pack = rules_mod.find(f.rule.pack)
                 head = "{} — {}".format(pack.short, pack.title) if pack else f.rule.pack
             else:
                 head = (r.dwelling_of(f, facts) if facts is not None else None) or t("verify.panel.building")

@@ -868,6 +868,11 @@ MEASURES = {
 }
 
 
+from . import urban as _urban  # noqa: E402 (0.423: the lot's measures — urban.py reads this module's)
+
+MEASURES["lot"] = _urban.MEASURES
+
+
 def measure(ctx, subject, name):
     fn = MEASURES.get(subject.kind, {}).get(name)
     if fn is None:

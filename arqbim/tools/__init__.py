@@ -16,6 +16,7 @@ from .image import CalibrateImageTool
 from .join_geometry import JoinGeometryTool, UnjoinGeometryTool
 from .terrain import TerrainTool
 from .platform import PlatformTool, TerrainRampTool
+from .lot import LotTool                          # (0.423)
 from .detail import DetailTool
 from .dimension import DimensionTool
 from .auto_dims import ExteriorDimsTool, InteriorDimsTool
@@ -58,4 +59,4 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              SplitGapTool, TrimExtendTool, WallJoinsTool, WallOpeningTool, WallSweepTool, WallRevealTool,
              CopyTool, ArrayTool, JoinGeometryTool, UnjoinGeometryTool, ArcTool, FreehandTool, BezierTool,
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
-             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool)
+             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool)

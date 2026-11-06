@@ -73,7 +73,18 @@ def subjects(ctx):
     building_use = settings.get("building_use", "habitacao")
     language = lang()
     out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": [],
-           "window": [], "wall": [], "slab": [], "roof": []}
+           "window": [], "wall": [], "slab": [], "roof": [], "lot": []}
+    # (0.423) the lot, and the building on it — when there is one, or the town plan has values to check
+    from ..core import lot as core_lot
+    from . import urban
+    lot = urban.lot_info(ctx)
+    if lot is not None or project.plan_values(settings):
+        roles = set((lot or {}).get("roles", {}).values())
+        name = (lot or {}).get("name") or t("verify.kind.lot")
+        out["lot"].append(ms.Subject("lot", "lot", name, [], props={
+            "building_use": building_use, "work": settings.get("work", "nova"), "tem_lote": lot is not None,
+            "tem_frente": core_lot.FRONT in roles, "tem_lateral": core_lot.SIDE in roles,
+            "tem_posterior": core_lot.BACK in roles, "multifamiliar": len(facts.dwellings) > 1}))
     ranks = {}
     for d in facts.dwellings:
         bedrooms = sorted((g for g in d.rooms if g in facts.rooms and uses.is_bedroom(facts.rooms[g].use)
@@ -237,8 +248,10 @@ def check(doc, settings=None, all_packs=None, default_country=None, force=False)
     chosen = project.active(settings, all_packs)
     rules = project.active_rules(settings, all_packs)
     ctx = ms.Context(doc, facts, settings)
-    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and (facts.rooms or _elements(doc))
-                    else [], chosen, settings)
+    from . import urban
+    something = facts.rooms or _elements(doc) or project.plan_values(settings) or urban.lot_info(ctx) is not None
+    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and something else [], chosen,
+                    settings)
     exceptions = settings.get("exceptions") or {}
     for f in result.findings:                            # (0.418: what the architect accepted, with why)
         if f.status == "fail" and f.key in exceptions:
@@ -259,7 +272,7 @@ def number(value, unit):
 def message(finding, packs_by_id=None):
     """«Sala (Fogo A): área útil 12,40 m² — CTE, art. 40.º e Anexo I: mínimo 14,00 m²»."""
     rule, s = finding.rule, finding.subject
-    pack = (packs_by_id if packs_by_id is not None else rules_mod.packs()).get(rule.pack)
+    pack = (packs_by_id.get(rule.pack) if packs_by_id is not None else None) or rules_mod.find(rule.pack)
     short = pack.short if pack is not None else rule.pack
     side = "min" if any(k.startswith("min") for k in rule.limit) else "max"
     text = t("verify.message", subject=s.name, measure=t("verify.m." + rule.measure),

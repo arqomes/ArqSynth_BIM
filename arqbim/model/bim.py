@@ -4029,6 +4029,41 @@ def set_verify_settings(doc, values):
     doc.execute(IfcCommand(t("cmd.verify_settings"), lambda ifc: ifc.set_verify_settings(values), plan=False))
 
 
+def set_lot(doc, outline, fronts=None, name=None):
+    """(0.423) The lot drawn (its outline in plan): the IfcSite's footprint. One undo step. fronts: the sides facing
+    the street (None: kept as they were, when it has as many sides)."""
+    outline = [(float(x), float(y)) for x, y in outline]
+    doc.execute(IfcCommand(t("cmd.lot"), lambda ifc: ifc.set_lot(outline, fronts, name), plan=False))
+
+
+def set_lot_fronts(doc, fronts):
+    """(0.423) The lot's sides facing the street (indices), or [] (found from the entrance). One undo step."""
+    fronts = [int(k) for k in (fronts or ())]
+    doc.execute(IfcCommand(t("cmd.lot_fronts"), lambda ifc: ifc.set_lot_fronts(fronts), plan=False))
+
+
+def remove_lot(doc):
+    """(0.423) The lot taken away. One undo step."""
+    doc.execute(IfcCommand(t("cmd.remove_lot"), lambda ifc: ifc.remove_lot(), plan=False))
+
+
+def lot_from_terrain(doc, guid=None):
+    """(0.423) The outline of a terrain in plan (the one given, else the only one): the lot it was surveyed for — or
+    None (no terrain, or more than one and none given)."""
+    from ..core import lot as core_lot
+    if guid is None:
+        terrains = [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcGeographicElement"]
+        if len(terrains) != 1:
+            return None
+        guid = terrains[0]
+    try:
+        points = doc.ifc.terrain_survey(guid)
+    except Exception:                                   # noqa: BLE001 (not a terrain of this program)
+        obj = doc.get(guid)
+        points = np.asarray(obj.mesh.verts, dtype=float).reshape(-1, 3) if obj is not None else None
+    return core_lot.from_terrain(points) if points is not None and len(points) >= 3 else None
+
+
 def set_room_program(doc, needs):
     """(0.357) The project's programme (model/room_program: [Need]) kept in it. One undo step."""
     doc.execute(IfcCommand(t("cmd.room_program"), lambda ifc: ifc.set_room_program(needs)))

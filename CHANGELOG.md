@@ -1,6 +1,38 @@
 # Changelog
 
-## 0.422.0 — 2026-11-06
+## 0.423.0 — 2026-11-06
+
+**O Verificador, passo 8 (1.ª parte): o lote e o plano municipal.**
+
+- **Ferramenta Lote** (Terreno ▸ Lote): o lote em planta, como a «linha de propriedade» do Revit — um retângulo (dois
+  cantos, ou as medidas escritas «20;30»), um polígono (canto a canto; Enter ou um clique no primeiro fecha) ou o
+  contorno do terreno (um clique). Um lote por projeto: desenhado outra vez, substitui o que lá está. Fica no IFC como
+  o contorno do terreno (`IfcSite`, representação «FootPrint»), que os outros programas leem.
+- **Na planta**, o lote aparece a traço-ponto-ponto, com o número de cada estrema e «via pública» do lado da frente (mais
+  grosso). «Enquadrar tudo» (Shift+Z) mostra-o inteiro.
+- **A frente para a via pública** escolhe-se nos Regulamentos do projeto; sem escolha, é a estrema mais perto da
+  entrada do edifício. As outras estremas são laterais, e a que fica de costas para a frente é o fundo (posterior).
+- **Regulamentos do projeto ▸ Lote e plano municipal**: o nome do plano (PDM, plano de pormenor, alvará de loteamento)
+  e os seus valores para o lote:
+  - área mínima do lote;
+  - índices de ocupação, de utilização e de impermeabilização;
+  - áreas de implantação e de construção máximas;
+  - pisos acima e abaixo do solo;
+  - cércea e altura máximas;
+  - afastamentos mínimos frontal, lateral e posterior.
+
+  O Verificador mede cada um no projeto e diz no rodapé o que falha, por exemplo «CTE, PDM da Praia ✗ 4». Só se
+  verifica o que tiver valor. Ao lado de cada campo, ao passar o rato, aparece o valor que o projeto tem agora.
+- **Sempre, com um lote desenhado:** nada do edifício pode ficar fora do lote.
+- **Como se mede:**
+  - **Implantação:** as paredes e pilares do rés-do-chão e dos pisos de cima, com o que fecham, menos os ambientes
+    exteriores (um pátio fechado conta até ter um ambiente exterior).
+  - **Construção:** a soma desses pisos.
+  - **Cércea:** do chão ao alto das paredes, guardas e fachadas-cortina da fachada. Não conta um telhado inclinado
+    acima do beirado.
+  - **Altura:** até ao ponto mais alto.
+  - **Afastamentos:** contam também as varandas dos pisos de cima (CTE art. 22.º n.º 4).
+  - **Chão:** o piso mais perto da cota 0; os que estão abaixo dele são caves.
 
 **O Verificador, passo 7: os materiais e as boas práticas.**
 

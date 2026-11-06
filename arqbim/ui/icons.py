@@ -1127,6 +1127,25 @@ def platform_icon():
     return theme.icon(pm)
 
 
+def lot_icon():
+    """(0.423) Lot: a plot drawn with a property line (dash, dot, dot) round a small house, and its corner marks."""
+    pm, p = _canvas()
+    p.setBrush(QtGui.QColor("#e8eed8"))
+    pen = _pen(QtGui.QColor("#9a4f2c"), 1.6)
+    pen.setDashPattern([5.0, 2.0, 1.0, 2.0, 1.0, 2.0])
+    p.setPen(pen)
+    corners = [QtCore.QPointF(4, 8), QtCore.QPointF(27, 4), QtCore.QPointF(29, 27), QtCore.QPointF(3, 28)]
+    p.drawPolygon(QtGui.QPolygonF(corners))
+    p.setPen(_pen(INK, 1.2))
+    p.setBrush(QtGui.QColor("#ffffff"))
+    p.drawRect(QtCore.QRectF(11, 13, 10, 8))
+    p.setPen(_pen(BLUE, 2.0))
+    for c in corners:
+        p.drawPoint(c)
+    p.end()
+    return theme.icon(pm)
+
+
 def earthworks_icon():
     """Cut and fill (0.157): earth taken away (down arrow) and brought (up arrow) on a pad."""
     pm, p = _canvas()
@@ -2670,4 +2689,5 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
     "param_surface": param_surface_icon,                                      # (0.395)
               "paint": paint_icon,                                                      # (0.391)
               "dim_exterior": dimension_facades_icon,                                   # (0.399)
-              "dim_interior": dimension_rooms_icon}                                     # (0.400)
+              "dim_interior": dimension_rooms_icon,                                     # (0.400)
+              "lot": lot_icon}                                                          # (0.423)
