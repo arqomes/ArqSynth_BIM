@@ -502,6 +502,22 @@ class IfcDataMixin:
         written = self.update_external(storeys)
         return written + self.fill_ifc_data([e.GlobalId for e in self.file.by_type("IfcElement")])
 
+    def ifc_type_data(self, guid):
+        """(0.430) {property: value} an element's type gives in its standard set (a length in metres) — what «usar o
+        valor do tipo» brings back when the element has its own."""
+        e = self.by_guid(guid)
+        name = common_pset(e.is_a()) if e is not None else None
+        type_ = _type_of(e) if name is not None else None
+        if type_ is None:
+            return {}
+        kinds = {prop: kind for prop, kind, _choices in template(name)}
+        out = {}
+        for prop, value in own_values(type_, name).items():
+            if kinds.get(prop) == "length" and isinstance(value, (int, float)):
+                value = float(value) * self.unit_scale
+            out[prop] = value
+        return out
+
     def ifc_data(self, guid):
         """An element's standard property set, every property of it: (its name, [(property, kind, choices, value,
         how)]) — value None if not set (a length in metres); how "manual" (written by hand), "auto" (the

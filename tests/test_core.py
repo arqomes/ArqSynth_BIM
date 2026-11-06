@@ -57,6 +57,22 @@ class Units(unittest.TestCase):
         for bad in ("", "abc", "3,2,1", "--1", "3cmm", "m"):
             self.assertIsNone(parse_length(bad), bad)
 
+    def test_sums(self):
+        """0.430: a sum typed in a length's field is worked out (each number in its unit or the display one)."""
+        for text, value in [("3,50+0,15", 3.65), ("2*1,20", 2.4), ("2×1,20", 2.4), ("(4-0,2)/2", 1.9),
+                            ("3m+15cm", 3.15), ("1,20 + 0,05", 1.25), ("-0,5+1", 0.5), ("10÷4", 2.5)]:
+            self.assertAlmostEqual(parse_length(text), value, msg=text)
+        for bad in ("3+", "(1+2", "1/0", "2**3", "1+a", "import os"):
+            self.assertIsNone(parse_length(bad), bad)
+        from arqbim.core import units
+        try:
+            units.set_display_unit("cm")
+            self.assertAlmostEqual(parse_length("300+15"), 3.15)
+            self.assertAlmostEqual(parse_length("2*120"), 2.4)
+            self.assertAlmostEqual(parse_length("3m+15"), 3.15)
+        finally:
+            units.set_display_unit("m")
+
     def test_pairs(self):
         self.assertEqual(parse_lengths("3,20;4,50", 2), [3.2, 4.5])
         self.assertEqual(parse_lengths("3.2x4.5", 2), [3.2, 4.5])

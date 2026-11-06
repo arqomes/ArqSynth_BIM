@@ -1970,6 +1970,11 @@ _STRINGS = {
                             "It opens to the other side of the wall (hinges on the same jamb)."),
     "props.sill": ("Peitoril", "Sill"),
     "props.by_type": ("{v} (do tipo)", "{v} (from the type)"),
+    "props.type_tag": ("tipo", "type"),                                                           # (0.430)
+    "props.type_tag_tip": ("Este valor é do tipo: vale para todos os elementos dele. Clique para editar o tipo.",
+                           "This value is the type's: it holds for all its elements. Click to edit the type."),
+    "props.use_type_value": ("Usar o valor do tipo ({v}): apaga o deste elemento.",
+                             "Use the type's value ({v}): clears this element's own."),
     "cmd.void": ("Vão", "Opening"),
     "cmd.void_size": ("Medida do vão", "Opening size"),
     "info.void_size": ("{name}: {what} = {v}.", "{name}: {what} = {v}."),

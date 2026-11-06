@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.430 — Propriedades mais rápidas
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.430.0**. Faça Ctrl+N e desenhe uma parede de 4 m
+   (Arquitetura ▸ Parede). Com o Selecionar, clique nela.
+2. Nas Propriedades, no **Comprimento**, escreva `3,50+0,15` e carregue em Enter: a parede fica com 3,65 m.
+3. Clique outra vez no Comprimento e carregue na seta **↑** do teclado: aparece 3,66 m. Enter: a parede fica com 3,66 m.
+   Experimente Shift+↑ (10 cm) e a roda do rato com o cursor no campo.
+4. Na linha **Espessura** há um selo azul «tipo». Clique nele: abre o editor de tipos nesse tipo de parede. Feche.
+5. Em **Gerenciar ▸ Tipos…**, nos Dados IFC do tipo, escreva «REI 60» em **Resistência ao fogo** e Aplicar. Feche.
+6. Nas Propriedades da parede, nos dados IFC, escreva «REI 90» na **Resistência ao fogo** e Enter. Aparece «↺» ao lado;
+   passe o rato por cima: diz «Usar o valor do tipo (REI 60)». Clique: volta a «REI 60».
+
 ## 0.429 — Editar tipo com o corte ao vivo
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.429.0**. Faça Ctrl+N e desenhe duas paredes do tipo

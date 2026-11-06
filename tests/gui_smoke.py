@@ -834,6 +834,7 @@ def bim_flow():
     drag_elements_flow()              # (0.427)
     paper_pens_flow()                 # (0.428)
     type_section_flow()               # (0.429)
+    quick_properties_flow()           # (0.430)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21378,6 +21379,72 @@ def type_section_flow():
           and seen.get("closed") and applied and undone and chosen and replaced and back,
           "{} aplicado={} desfeito={} onde={} substituido={} volta={}".format(seen, applied, undone, chosen, replaced,
                                                                              back))
+
+
+def quick_properties_flow():
+    """0.430 (Aprender com o Hestia, passo 4): a wall chosen — its length typed «3,50+0,15»: 3,65 m; ↑ in the field:
+    3,66 m written, Enter: 3,66 m; its thickness «0,20 m» with the «tipo» tag, which opens its type in the type editor;
+    its type's fire rating «REI 60», the wall's own «REI 90»: a «↺» beside it, which puts the type's back."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    w20 = catalog.BY_KEY["parede_alv_20"]
+    wall = B.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), w20)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    pump(400)
+
+    def length():
+        return doc.ifc.wall_params(wall)[0]
+
+    edit = win.props.editors.get("length")
+    edit.setText("3,50+0,15")
+    edit.editingFinished.emit()
+    pump(500)
+    summed = abs(length() - 3.65) < 1e-6
+    edit = win.props.editors.get("length")
+    edit.setFocus()
+    QtTest.QTest.keyClick(edit, Qt.Key.Key_Up)
+    stepped_text = edit.text()
+    edit.editingFinished.emit()
+    pump(500)
+    stepped = stepped_text.startswith("3,66") and abs(length() - 3.66) < 1e-6
+    tag = win.props.editors.get("type_tag")
+    opened = {}
+
+    def look_type():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, look_type)
+            return
+        opened["key"] = d.current.key if d.current is not None else None
+        d.reject()
+    if tag is not None:
+        QtCore.QTimer.singleShot(100, look_type)
+        tag.click()
+        pump(600)
+    tagged = tag is not None and opened.get("key") == "parede_alv_20"
+    win._save_type_data(w20, "FireRating", "REI 60")
+    pump(300)
+    vp.set_selection(set())
+    vp.set_selection({wall})
+    pump(300)
+    win.props._emit("pset", wall, ("Pset_WallCommon", "FireRating", "REI 90"))
+    pump(500)
+    back = win.props.editors.get(("ifc_back", "FireRating"))
+    rows = {r[0]: r for r in doc.ifc.ifc_data(wall)[1]}
+    has_back = back is not None and rows["FireRating"][3] == "REI 90"
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        win.props.grab().save(os.path.join(OUT, "430_propriedades.png"))
+    if back is not None:
+        back.click()
+        pump(500)
+    rows = {r[0]: r for r in doc.ifc.ifc_data(wall)[1]}
+    restored = rows["FireRating"][3] == "REI 60" and rows["FireRating"][4] == "type"
+    check("propriedades_rapidas", summed and stepped and tagged and has_back and restored,
+          "conta={} seta={} ({!r}) tipo={} ↺={} reposto={}".format(summed, stepped, stepped_text, tagged, has_back,
+                                                                   restored))
 
 
 def wheel(steps):

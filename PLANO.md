@@ -1159,7 +1159,9 @@ Passos propostos (a ordem decide-a o dono):
    Ctrl+Z; Duplicar já partia do rascunho.) Na parede, laje, piso e cobertura, o corte das camadas desenhado no editor (face
    exterior / interior, núcleo, espessuras, total), que muda a cada valor; rascunho com Aplicar / OK / Cancelar;
    Duplicar a partir do rascunho; tipo em uso: «Substituir por… e apagar»; «Onde se usa» (escolhe e enquadra).
-4. **Propriedades mais rápidas:** selo «tipo» nos valores do tipo (clique → Editar tipo); exceções por elemento com
+4. ~~**Propriedades mais rápidas:**~~ (0.430.0: contas em `parse_length` — nas Propriedades, nos dados IFC e nas
+   Medidas; ↑ ↓ e a roda nos comprimentos; o selo «tipo» que abre o tipo; «↺» para voltar ao valor do tipo nos dados
+   IFC. As áreas e volumes já não atrasavam o clique.) Selo «tipo» nos valores do tipo (clique → Editar tipo); exceções por elemento com
    «usar o valor do tipo»; contas nos campos (3,50+0,15; 2*1,20; com unidades); setas ↑↓ e roda a ajustar; áreas e
    volumes calculados sem atrasar o clique.
 5. **Avisos do modelo sempre à vista:** no rodapé «⚠ 3 avisos» / «✓ sem avisos»; a lista por gravidade e categoria;

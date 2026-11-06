@@ -2440,4 +2440,5 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             info["kind"], info["params"] = None, {}
         info["psets"] = ifcopenshell.util.element.get_psets(e)
         info["ifc_data"] = self.ifc_data(guid)                         # (0.266) its standard set, all of it
+        info["ifc_type_data"] = self.ifc_type_data(guid)               # (0.430) …and its type's, to go back to
         return info

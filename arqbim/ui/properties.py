@@ -172,6 +172,43 @@ def _kind_icon(kind):
     return make() if make is not None else None
 
 
+class StepEdit(QtWidgets.QLineEdit):
+    """(0.430) A length's field: ↑ / ↓ — and the mouse wheel, while it has the keyboard — step its value by 1 cm
+    (Shift: 10 cm, Ctrl: 1 mm), written in it; Enter (or leaving it) applies it, one undo step. A sum typed
+    (3,50+0,15) is worked out (core/units.parse_length)."""
+
+    def __init__(self, text, least=0.0):
+        super().__init__(text)
+        self.least = least
+
+    def step(self, n, modifiers=QtCore.Qt.KeyboardModifier.NoModifier):
+        value = parse_length(self.text())
+        if value is None:
+            return
+        mods = QtCore.Qt.KeyboardModifier
+        size = 0.1 if modifiers & mods.ShiftModifier else 0.001 if modifiers & mods.ControlModifier else 0.01
+        new = round((value + n * size) / 0.001) * 0.001
+        if self.least is not None and new < self.least:
+            new = self.least
+        self.setText(_len(new).replace("~ ", ""))
+
+    def keyPressEvent(self, event):                                 # noqa: N802 (Qt's name)
+        if event.key() in (QtCore.Qt.Key.Key_Up, QtCore.Qt.Key.Key_Down):
+            self.step(1 if event.key() == QtCore.Qt.Key.Key_Up else -1, event.modifiers())
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def wheelEvent(self, event):                                    # noqa: N802 (Qt's name)
+        if not self.hasFocus():                    # (scrolling the panel over it: the panel scrolls)
+            event.ignore()
+            return
+        delta = event.angleDelta().y()
+        if delta:
+            self.step(1 if delta > 0 else -1, event.modifiers())
+        event.accept()
+
+
 class PropertiesPanel(QtWidgets.QDockWidget):
     def __init__(self, parent, quick=False):
         """quick (0.354): the TAB's quick edit's (ui/quick_edit.py) — its type on top and its «Parâmetros» rows only,
@@ -461,6 +498,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
     def _clear(self):
         self._group = None
         self._many = None
+        self._current_type = None                    # (0.430)
         self._drop_type_combo()
         self.editors = _Editors()
         self.tree.clear()
@@ -626,9 +664,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         elif self.on_edit is not None:
             QtCore.QTimer.singleShot(0, lambda: self.on_edit(action, guid, value))
 
-    def _text_editor(self, key, text, action, guid, parse=None):
+    def _text_editor(self, key, text, action, guid, parse=None, least=None):
         item = self._row(key, "")
-        edit = QtWidgets.QLineEdit(text)
+        edit = StepEdit(text, least) if least is not None else QtWidgets.QLineEdit(text)   # (0.430: ↑ ↓ and the wheel)
         edit.setFrame(False)
 
         def finished():
@@ -655,12 +693,41 @@ class PropertiesPanel(QtWidgets.QDockWidget):
 
     def _length_editor(self, key, meters, action, guid):
         return self._text_editor(key, _len(meters).replace("~ ", ""), action, guid,
-                                 parse=lambda s: (lambda v: v if v is not None and v > 0 else None)(parse_length(s)))
+                                 parse=lambda s: (lambda v: v if v is not None and v > 0 else None)(parse_length(s)),
+                                 least=0.001)
 
     def _length0_editor(self, key, meters, action, guid):
         """A length that may be 0 (a gap, a margin, a height over the floor)."""
         return self._text_editor(key, _len(meters).replace("~ ", ""), action, guid,
-                                 parse=lambda s: (lambda v: v if v is not None and v >= 0 else None)(parse_length(s)))
+                                 parse=lambda s: (lambda v: v if v is not None and v >= 0 else None)(parse_length(s)),
+                                 least=0.0)
+
+    def _by_type_row(self, key, value, guid):
+        """(0.430) A value that comes from the element's type: written with a «tipo» tag beside it — a click on the tag
+        opens the type in the type editor (Editar tipo), as the Hestia's. (Its row's text: «0,20 m (do tipo)».)"""
+        item = self._row(key, t("props.by_type", v=value))
+        spec = getattr(self, "_current_type", None)
+        if spec is None:
+            return item
+        box = QtWidgets.QWidget()
+        box.setAutoFillBackground(True)                  # (its own text over the row's, not both)
+        row = QtWidgets.QHBoxLayout(box)
+        row.setContentsMargins(4, 0, 2, 0)
+        row.setSpacing(6)
+        row.addWidget(QtWidgets.QLabel(value))
+        row.addStretch(1)
+        tag = QtWidgets.QToolButton()
+        tag.setText(t("props.type_tag"))
+        tag.setToolTip(t("props.type_tag_tip"))
+        tag.setAutoRaise(True)
+        tag.setStyleSheet("QToolButton { color: %s; border: 1px solid %s; border-radius: 7px; padding: 0 6px; "
+                          "font-size: 11px; }" % (theme.C["link"], theme.C["link"]))
+        tag.clicked.connect(lambda _c=False: self._emit("edit_type", guid, spec))
+        row.addWidget(tag)
+        self.tree.setItemWidget(item, 1, box)
+        if "type_tag" not in self.editors:
+            self.editors["type_tag"] = tag
+        return item
 
     def text(self):
         """All rows as plain text, editors included (used by tests) — (0.313) the type on top first."""
@@ -669,6 +736,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         while it.value():
             item = it.value()
             widget = self.tree.itemWidget(item, 1)
+            if widget is not None and not item.text(1) and not isinstance(
+                    widget, (QtWidgets.QLineEdit, QtWidgets.QComboBox, QtWidgets.QCheckBox)):
+                widget = widget.findChild(QtWidgets.QLineEdit) or widget.findChild(QtWidgets.QComboBox) or widget
             if isinstance(widget, QtWidgets.QLineEdit):
                 value = widget.text()
             elif isinstance(widget, QtWidgets.QComboBox):
@@ -1663,6 +1733,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if base.endswith(suffix):
                 base = base[:-len(suffix)]
         current = next((s for s, n in zip(specs, names) if n == base), None)
+        self._current_type = current                # (0.430: the «tipo» tags of its values open it)
         shown = current                             # (its miniature: a variant's the mirror image of its type's)
         if current is not None and base != (info["type"] or "") and kind in ("door", "window"):
             shown = catalog.with_design(current, core_joinery.mirrored(catalog.design_of(current)))
@@ -1878,7 +1949,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         if kind == "wall":
             self._length_editor(t("props.length"), p["length"], "length", guid)
             self._constraint_rows(doc, info, guid, "height")
-            self._row(t("props.thickness"), t("props.by_type", v=_len(p["thickness"])))
+            self._by_type_row(t("props.thickness"), _len(p["thickness"]), guid)
             item = self._row(t("props.profile_drawn") if p.get("profiled") else t("props.profile_wall"), "")
             button = QtWidgets.QPushButton(t("act.edit_profile"))                     # (0.109)
             button.setToolTip(t("tip.edit_profile"))
@@ -1892,7 +1963,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 self._length_editor(t("props.ly"), p["ly"], "ly", guid)
             elif shape == "circulo":                       # (0.100) a round slab: its radius
                 self._length_editor(t("props.radius"), p["radius"], "slab_radius", guid)
-            self._row(t("props.thickness"), t("props.by_type", v=_len(p["thickness"])))
+            self._by_type_row(t("props.thickness"), _len(p["thickness"]), guid)
             if p.get("area") is not None:
                 self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
             self._choice_combo(t("props.slab_function"), "slab_function", guid,
@@ -2199,7 +2270,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._text_editor(t("props.overhang"), _len(p["overhang"]).replace("~ ", ""), "roof_overhang", guid,
                               parse=lambda s: (lambda v: v if v is not None and v >= 0 else None)(parse_length(s)))
             self._signed_length_editor(t("props.eave"), p["eave"], "roof_eave", guid)
-            self._row(t("props.thickness"), t("props.by_type", v=_len(p["thickness"])))
+            self._by_type_row(t("props.thickness"), _len(p["thickness"]), guid)
             self._row(t("props.roof_area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
             self._row(t("props.projected"), "{:.2f} m²".format(p["projected"]).replace(".", decimal_sep()))
             for k, v in (p.get("edges") or {}).items():    # (0.265) by blocks: its eaves', ridges'… lengths
@@ -2238,14 +2309,14 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                                       parse_angle(s)))
             self._row(t("props.length_axis"), _len(p["length"]))
             self._length_editor(t("props.height"), p["height"], "cw_height", guid)
-            self._row(t("props.thickness"), t("props.by_type", v=_len(p["thickness"])))
+            self._by_type_row(t("props.thickness"), _len(p["thickness"]), guid)
         elif kind == "ramp":                               # (0.101) its length, width, rise; its slope
             self._length_editor(t("props.length"), p["length"], "ramp_length", guid)
             self._length_editor(t("props.width"), p["width"], "ramp_width", guid)
             self._text_editor(t("props.rise"), _len(p["rise"]).replace("~ ", ""), "ramp_rise", guid,
                               parse=lambda s: (lambda v: v if v is not None and v >= 0 else None)(parse_length(s)))
             self._row(t("props.slope"), "{:.1f} %".format(100 * p["slope"]).replace(".", decimal_sep()))
-            self._row(t("props.thickness"), t("props.by_type", v=_len(p["thickness"])))
+            self._by_type_row(t("props.thickness"), _len(p["thickness"]), guid)
         elif kind == "column":
             self._constraint_rows(doc, info, guid, "column_height")
         elif kind == "beam":                               # (0.66)
@@ -2265,7 +2336,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p["strip"]:
                 self._length_editor(t("props.length"), p["length"], "footing_length", guid)
             else:
-                self._row(t("props.size"), t("props.by_type", v="{} × {}".format(_len(p["length"]), _len(p["width"]))))
+                self._by_type_row(t("props.size"), "{} × {}".format(_len(p["length"]), _len(p["width"])), guid)
             self._length_editor(t("props.footing_top"), p["top"], "footing_top", guid)
         elif kind in ("door", "window"):
             self._text_editor(t("props.mark"), p.get("mark", ""), "mark", guid)         # (0.110)
@@ -2309,7 +2380,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         scale = doc.ifc.unit_scale
         standard = info.get("ifc_data")
         if standard is not None and kind is not None:      # (0.266) its standard set: every property, in place
-            self._ifc_data_rows(guid, standard, scale)
+            self._ifc_data_rows(guid, standard, scale, info.get("ifc_type_data") or {})
         for pset_name, props in sorted(info["psets"].items()):
             if pset_name in _INTERNAL_PSETS or (standard is not None and kind is not None
                                                 and pset_name == standard[0]):
@@ -2347,7 +2418,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self.editors["add_property"] = button
         self.tree.setCurrentItem(None)
 
-    def _ifc_data_rows(self, guid, standard, scale):
+    def _ifc_data_rows(self, guid, standard, scale, of_type=None):
         """(0.266) The element's standard IFC set (Pset_…Common), every property of it: the ones set and the empty
         ones, each with its editor — a yes / no / "—" list, a list of the enumeration's values, a text, a number or a
         length (m). "—" or an empty field: not set (the program's value back, if it has one). Its words in
@@ -2386,6 +2457,26 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 edit.editingFinished.connect(lambda e=edit, p=prop, k=kind, old=shown: self._ifc_data_done(
                     e, guid, pset_name, p, k, old, scale))
                 widget = edit
+            if how in ("manual", "") and value is not None and (of_type or {}).get(prop) is not None:
+                # (0.430) the element's own value where its type has one: «↺» puts the type's back
+                holder = QtWidgets.QWidget()
+                row = QtWidgets.QHBoxLayout(holder)
+                row.setContentsMargins(0, 0, 0, 0)
+                row.setSpacing(2)
+                row.addWidget(widget, 1)
+                back = QtWidgets.QToolButton()
+                back.setText("↺")
+                back.setAutoRaise(True)
+                shown_type = of_type[prop]
+                shown_type = _len(shown_type) if kind == "length" and isinstance(shown_type, (int, float)) else \
+                    (t("rules.yes") if shown_type is True else t("rules.no") if shown_type is False else str(shown_type))
+                back.setToolTip(t("props.use_type_value", v=shown_type))
+                back.clicked.connect(lambda _c=False, p=prop: self._emit("pset", guid, (pset_name, p, None)))
+                row.addWidget(back)
+                self.editors[("ifc_back", prop)] = back
+                self.tree.setItemWidget(item, 1, holder)
+                self.editors[("ifc", prop)] = widget
+                continue
             self.tree.setItemWidget(item, 1, widget)
             self.editors[("ifc", prop)] = widget
 

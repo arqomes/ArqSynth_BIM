@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.429.0 — 2026-11-06
+## 0.430.0 — 2026-11-06
+
+**Propriedades mais rápidas** (Aprender com o Hestia, passo 4).
+
+- **Contas nos campos de medidas**: «3,50+0,15», «2*1,20» (ou «2×1,20»), «(4-0,2)/2», «3m+15cm». Cada número está na sua
+  unidade, ou na unidade do rodapé, e o resultado também. Vale nas Propriedades, nos dados IFC e na caixa das Medidas.
+  Duas setas seguidas («--1») continuam a ser um engano, não uma conta.
+- **Setas ↑ ↓ nos comprimentos das Propriedades**: sobem ou descem 1 cm (Shift: 10 cm; Ctrl: 1 mm). A **roda do rato**
+  faz o mesmo enquanto o campo tem o cursor; fora dele, a roda continua a deslizar o painel. **Enter** aplica, num só
+  Ctrl+Z.
+- **O selo «tipo»** ao lado dos valores que vêm do tipo (a espessura de uma parede, de uma laje, de uma cobertura; o
+  tamanho de uma sapata). Clicar nele abre esse tipo no editor de tipos.
+- **«↺» nos dados IFC**: quando o elemento tem um valor seu (por exemplo a resistência ao fogo) e o tipo também tem um,
+  aparece «↺» ao lado. Clicar nele apaga o valor do elemento e volta ao do tipo. A dica diz qual é o valor do tipo.
 
 **Editar tipo com o corte ao vivo** (Aprender com o Hestia, passo 3).
 

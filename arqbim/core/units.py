@@ -32,16 +32,92 @@ def display_unit():
 
 def parse_length(text, unit=None):
     """Return the length in meters, or None if `text` is not a valid length. A bare number is in `unit` (None:
-    the display unit)."""
+    the display unit). (0.430) A sum is worked out — 3,50+0,15   2*1,20   (4-0,2)/2   3m+15cm   2×1,20 — each
+    number in its unit or the display one, the result in the display one (as a person reckons on paper)."""
     t = text.strip().lower().replace(" ", "")
+    base = unit or _display["unit"]
     m = _VALUE_RE.match(t)
     if not m:
-        return None
+        value = _reckon(t, base)
+        return value * _UNIT_FACTORS[base] if value is not None else None
     sign, number, typed = m.groups()
     value = float(number.replace(",", "."))
     if sign == "-":
         value = -value
-    return value * _UNIT_FACTORS[typed or unit or _display["unit"]]
+    return value * _UNIT_FACTORS[typed or base]
+
+
+_TOKEN_RE = re.compile(r"(\d+(?:[.,]\d*)?|[.,]\d+)(mm|cm|m)?|([-+*/×÷()])")
+
+
+def _reckon(text, base):
+    """(0.430) A sum of lengths in the unit `base` (each number with a unit turned into it), or None: + − × ÷ and
+    brackets, nothing else (not code: a small reckoner)."""
+    if not text or not any(c in text for c in "+-*/×÷()"):
+        return None
+    tokens, pos = [], 0
+    while pos < len(text):
+        m = _TOKEN_RE.match(text, pos)
+        if m is None:
+            return None
+        number, typed, op = m.groups()
+        if number is not None:
+            value = float(number.replace(",", "."))
+            if typed:
+                value = value * _UNIT_FACTORS[typed] / _UNIT_FACTORS[base]
+            tokens.append(("n", value))
+        else:
+            tokens.append(("o", {"×": "*", "÷": "/"}.get(op, op)))
+        pos = m.end()
+    tokens.append(("end", None))
+    at = [0]
+
+    def peek():
+        return tokens[at[0]]
+
+    def take():
+        at[0] += 1
+        return tokens[at[0] - 1]
+
+    def expr():
+        value = term()
+        while peek() in (("o", "+"), ("o", "-")):
+            op = take()[1]
+            right = term()
+            value = value + right if op == "+" else value - right
+        return value
+
+    def term():
+        value = unary()
+        while peek() in (("o", "*"), ("o", "/")):
+            op = take()[1]
+            right = unary()
+            if op == "/" and abs(right) < 1e-12:
+                raise ValueError("division by zero")
+            value = value * right if op == "*" else value / right
+        return value
+
+    def unary():
+        sign = 1.0
+        if peek() in (("o", "-"), ("o", "+")):              # (one sign — «--1» is a slip of the finger, not a sum)
+            sign = -1.0 if take()[1] == "-" else 1.0
+        kind, value = take()
+        if kind == "n":
+            return sign * value
+        if (kind, value) == ("o", "("):
+            inside = expr()
+            if take() != ("o", ")"):
+                raise ValueError("bracket")
+            return sign * inside
+        raise ValueError("token")
+
+    try:
+        value = expr()
+        if peek()[0] != "end":
+            return None
+        return float(value)
+    except (ValueError, IndexError):
+        return None
 
 
 def split_values(text):
