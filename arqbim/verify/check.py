@@ -3,6 +3,7 @@ rules filter on, the rules of the project's laws evaluated on them — a Result:
 be measured; and each finding said in words («Sala (Fogo A): área 12,40 m² — CTE, art. 40.º e Anexo I: mínimo
 14,00 m²»)."""
 
+import weakref
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -176,7 +177,8 @@ def subjects(ctx):
         e = ctx.doc.ifc.by_guid(obj.id)
         if e is None:
             continue
-        props = {"building_use": building_use, "work": work, "intervencao": "sim" if work != "nova" else "nao"}
+        props = {"building_use": building_use, "work": work, "intervencao": "sim" if work != "nova" else "nao",
+                 "tem_lote": lot is not None}                       # (0.424)
         if kind == "wall":
             props["exterior"] = _is_external(e)
         elif kind == "slab":
@@ -200,7 +202,8 @@ def subjects(ctx):
         out["window"].append(ms.Subject("window", w.guid, name, [w.guid], w.storey,
                                         props={"habitable": uses.is_habitable(room.use),
                                                "in_dwelling": room.guid in facts.of_room,
-                                               "use": room.use, "building_use": building_use}))
+                                               "use": room.use, "building_use": building_use,
+                                               "tem_lote": lot is not None}))          # (0.424)
     return out
 
 
@@ -228,7 +231,8 @@ def _locator(facts):
     return room_at
 
 
-_KEPT = {}
+_KEPT = weakref.WeakKeyDictionary()     # document -> (its IFC, key, Result) — (0.424) by the document itself and its
+#                                         IFC, not by id(): a new document may have an old one's id and revision
 
 
 def _elements(doc):
@@ -238,25 +242,44 @@ def _elements(doc):
 
 def check(doc, settings=None, all_packs=None, default_country=None, force=False):
     """The Result for the document as it is now (kept until it changes)."""
+    job = steps(doc, settings, all_packs, default_country, force)
+    while True:
+        try:
+            next(job)
+        except StopIteration as done:
+            return done.value
+
+
+def steps(doc, settings=None, all_packs=None, default_country=None, force=False):
+    """(0.424) The check in steps — a generator that stops after the reading and after each rule, its Result the
+    value it returns: the watcher goes on with it between the window's events (a big model checked without the
+    window standing still); check() runs it through."""
     revision = getattr(doc, "revision", 0)
     settings = settings if settings is not None else project.settings(doc, default_country)
     key = (revision, repr(sorted(settings.items())))
-    kept = _KEPT.get(id(doc))
-    if kept is not None and kept[0] == key and not force:
-        return kept[1]
+    kept = _KEPT.get(doc)
+    if kept is not None and kept[0]() is getattr(doc, "ifc", None) and kept[1] == key and not force:
+        return kept[2]
     facts = reader.read(doc)
     chosen = project.active(settings, all_packs)
     rules = project.active_rules(settings, all_packs)
     ctx = ms.Context(doc, facts, settings)
     from . import urban
     something = facts.rooms or _elements(doc) or project.plan_values(settings) or urban.lot_info(ctx) is not None
-    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and something else [], chosen,
-                    settings)
+    findings = []
+    if rules and something:
+        found = subjects(ctx)
+        yield
+        for rule in rules:
+            findings += rules_mod.run(ctx, [rule], found)
+            yield
+    result = Result(revision, findings, chosen, settings)
     exceptions = settings.get("exceptions") or {}
     for f in result.findings:                            # (0.418: what the architect accepted, with why)
         if f.status == "fail" and f.key in exceptions:
             f.excepted = dict(exceptions[f.key])
-    _KEPT[id(doc)] = (key, result)
+    ifc = getattr(doc, "ifc", None)
+    _KEPT[doc] = (weakref.ref(ifc) if ifc is not None else (lambda: None), key, result)
     return result
 
 

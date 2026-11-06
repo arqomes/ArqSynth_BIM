@@ -297,6 +297,52 @@
       "unit": "m", "severity": "error"
     },
     {
+      "id": "CV-CTE-21-1", "topic": "fachada.altura_afastamento", "article": "art. 21.º, n.º 1",
+      "title": "Altura da fachada e afastamento à fachada oposta",
+      "text": "As edificações devem garantir o princípio de que a altura das respectivas fachadas seja igual ou inferior ao afastamento entre o plano de fachada e planos de fachada opostos.",
+      "subject": "wall", "where": {"exterior": true},
+      "measure": "afastamento_fachada_oposta", "min": "altura_fachada", "absent_ok": true,
+      "unit": "m", "severity": "error",
+      "fix": "Afastar as fachadas ou baixar a mais alta (os elementos recuados contam se estiverem mais perto do que a sua altura — n.º 2)."
+    },
+    {
+      "id": "CV-CTE-22-1", "topic": "fachada.distancia", "article": "art. 22.º, n.º 1",
+      "title": "Afastamento entre fachadas fronteiras a espaços públicos",
+      "text": "Sem prejuízo do disposto no n.º 1 do artigo 21.º, o afastamento mínimo entre fachadas fronteiras a espaços de utilização pública é fixado em 11,00 m (onze metros), salvo no caso de alinhamentos preexistentes, quando forem de manter.",
+      "subject": "wall", "where": {"exterior": true},
+      "measure": "afastamento_fachada_via", "min": 11.0, "absent_ok": true, "unit": "m", "severity": "error",
+      "fix": "Só se mede com a fachada do outro lado da rua desenhada. Num alinhamento preexistente a manter: Exceção…"
+    },
+    {
+      "id": "CV-CTE-22-2", "topic": "afastamento.estrema_habitavel", "article": "art. 22.º, n.os 2 e 4",
+      "title": "Afastamento ao lote vizinho (vãos de compartimentos habitáveis)",
+      "text": "O afastamento entre qualquer fachada onde existam vãos de compartimentos habitáveis e outro lote ou parcela confinante deve ser igual ou superior a metade da sua altura, com o valor mínimo de 5,00 m (cinco metros).",
+      "subject": "window", "where": {"habitable": true, "tem_lote": true},
+      "measure": "afastamento_estrema", "min": "max(5; altura_fachada / 2)", "absent_ok": true,
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-22-3", "topic": "afastamento.estrema_nao_habitavel", "article": "art. 22.º, n.º 3",
+      "title": "Afastamento ao lote vizinho (vãos de compartimentos não habitáveis)",
+      "text": "O afastamento entre qualquer fachada onde existam vãos de compartimentos não habitáveis e outro lote ou parcela confinante deve ser igual ou superior a 1,50 m (um metro e meio).",
+      "subject": "window", "where": {"habitable": false, "tem_lote": true},
+      "measure": "afastamento_estrema", "min": 1.5, "absent_ok": true, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-23-1a", "topic": "patio.cilindro", "article": "art. 23.º, n.º 1, al. a)",
+      "title": "Pátio interior: cilindro inscrito",
+      "text": "O afastamento mínimo entre as fachadas que definem o pátio deve permitir a inscrição de um cilindro com o diâmetro igual ou superior a metade da altura da fachada mais alta, com um mínimo de 4 m (quatro metros).",
+      "subject": "room", "where": {"use": ["patio"], "building_use": ["habitacao", "servicos", "misto"]},
+      "measure": "circulo_inscrito", "min": "max(4; altura_patio / 2)", "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-24-2", "topic": "saliente.altura_via", "article": "art. 24.º, n.º 2",
+      "title": "Corpos salientes sobre a via pública: altura ao solo",
+      "text": "A distância destes elementos ao solo medida na vertical, não pode ser inferior a 3,00 m da face inferior.",
+      "subject": "slab", "where": {"tem_lote": true},
+      "measure": "altura_sobre_via", "min": 3.0, "absent_ok": true, "unit": "m", "severity": "error"
+    },
+    {
       "id": "CV-CTE-92-3", "topic": "parede.pano_exterior", "article": "art. 92.º, n.º 3",
       "title": "Pano exterior das paredes duplas (0,15 m)",
       "text": "Nas paredes exteriores duplas de alvenaria, o pano exterior deve ter a espessura mínima, em tosco, de 0,15 m.",

@@ -188,6 +188,16 @@ STRINGS = {
     "verify.props.unknown": ("— sem medida ({side} {limit})", "— not measured ({side} {limit})"),
     # (0.423) the lot and the town plan
     "verify.kind.lot": ("Lote", "Lot"),
+    # (0.424) the law's façade heights and setbacks
+    "verify.m.altura_fachada": ("altura da fachada", "façade height"),
+    "verify.m.afastamento_fachada_oposta": ("afastamento à fachada oposta", "distance to the façade opposite"),
+    "verify.m.afastamento_fachada_via": ("afastamento à fachada do outro lado da via", "distance to the façade across "
+                                                                                       "the street"),
+    "verify.m.afastamento_estrema": ("afastamento ao lote vizinho", "distance to the next lot"),
+    "verify.m.afastamento_fachada_fronteira": ("afastamento à fachada em frente", "distance to the façade in front"),
+    "verify.m.altura_patio": ("altura da fachada mais alta do pátio", "highest façade round the courtyard"),
+    "verify.m.altura_sobre_via": ("altura sobre a via pública (face inferior)", "height over the street (underside)"),
+    "verify.m.area_logradouro": ("área do logradouro", "backyard area"),
     "verify.m.area_lote": ("área do lote", "lot area"),
     "verify.m.area_implantacao": ("área de implantação", "footprint area"),
     "verify.m.area_construcao": ("área de construção (acima do solo)", "gross floor area (above ground)"),

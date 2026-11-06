@@ -644,6 +644,30 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.424 — Alturas das fachadas e afastamentos da lei
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.424.0**. Abra a casa T2 da 0.417 (país Cabo
+   Verde) e carregue em F4.
+2. Com **Terreno ▸ Lote**, clique num ponto 5 m à esquerda e 5 m abaixo do canto de baixo da casa. Afaste o rato para
+   cima e para a direita, escreva `20;16,1` e carregue em Enter. O fundo do lote fica 3 m atrás da fachada de trás.
+3. Abra o painel **Verificação**. Em «CTE» aparece «Afastamento ao lote vizinho (vãos de compartimentos habitáveis) ✗
+   3,00 m (mínimo 5,00 m)» para as quatro janelas e portas de sacada dos quartos.
+4. Carregue em Ctrl+Z e desenhe o lote outra vez com `20;18,3`. As linhas passam a ✓ (5,20 m).
+5. Escolha **Arquitetura ▸ Paredes ▸ Retangular** e, na barra de cima, ponha a altura **9,00**.
+   - Leve o rato ao canto de trás, à esquerda, da casa e suba a direito: aparece a guia.
+   - Escreva `4` e carregue em Enter. O primeiro canto fica 4 m atrás da casa.
+   - Afaste o rato para cima e para a direita, escreva `10;4` e carregue em Enter.
+
+   No painel, na parede do bloco virada para a casa, aparece «Altura da fachada e afastamento à fachada oposta ✗ cerca
+   de 3,8 m (mínimo 9,00 m)». A fachada de trás da casa, mais baixa, cumpre.
+6. Mude o país para **Portugal** (rodapé ▸ Regulamentos do projeto…). No painel aparecem o art. 59.º do RGEU (a mesma
+   parede) e o art. 60.º nas janelas dos quartos: «afastamento à fachada em frente ✗ 3,80 m (mínimo 10,00 m)». Volte a
+   Cabo Verde.
+7. Faça um ambiente e chame-lhe «Pátio» (Propriedades ▸ Nome). Nas Propriedades, o **Uso** diz «Automático — Pátio
+   (pelo nome)».
+8. Num modelo grande (por exemplo um IFC com mais de 2000 elementos), mova uma parede. O programa continua a responder
+   enquanto o indicador do rodapé se atualiza, cerca de um segundo depois.
+
 ## 0.423 — O lote e o plano municipal
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.423.0**. Abra a casa T2 da 0.417 (país Cabo

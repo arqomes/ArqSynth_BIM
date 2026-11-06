@@ -36,8 +36,10 @@ def region(obstacles, point, gap=GAP):
 
 def regions(obstacles, gap=GAP):
     """(0.422) All the enclosed free regions between the obstacles at once ([Polygon]) — what region() finds for one
-    point, for every point (the union of the walls made once, not once per point)."""
-    polys = [Polygon(p).buffer(0) for p in obstacles if len(p) >= 3]
+    point, for every point (the union of the walls made once, not once per point). (0.424) Shapely polygons are taken
+    as they are."""
+    polys = [p if hasattr(p, "geom_type") else Polygon(p).buffer(0)
+             for p in obstacles if hasattr(p, "geom_type") or len(p) >= 3]
     polys = [p for p in polys if not p.is_empty]
     if not polys:
         return []

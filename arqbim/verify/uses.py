@@ -22,6 +22,7 @@ USES = {
     "vestibulo": ("Vestíbulo", "Entrance hall", False, False, False, False, False),
     "arrumos": ("Arrumos", "Storage", False, False, False, False, False),
     "varanda": ("Varanda", "Balcony", False, False, False, False, True),
+    "patio": ("Pátio", "Courtyard", False, False, False, False, True),          # (0.424: CTE art. 23.º)
     "garagem": ("Garagem", "Garage", False, False, False, False, False),
     "comum": ("Espaço comum", "Common area", False, False, False, True, False),
     "comercio": ("Comércio", "Shop", False, False, False, False, False),
@@ -50,6 +51,7 @@ NAME_WORDS = (
     ("corredor", ("corredor", "circulacao", "passagem", "corridor", "hallway")),
     ("vestibulo", ("vestibulo", "hall", "entrada", "atrio", "foyer", "entrance")),
     ("arrumos", ("arrumos", "arrumo", "arrecadacao", "despensa", "closet", "rouparia", "storage", "pantry")),
+    ("patio", ("patio", "saguao", "logradouro", "courtyard")),              # (0.424)
     ("varanda", ("varanda", "terraco", "alpendre", "balcony", "terrace", "porch")),
     ("garagem", ("garagem", "estacionamento", "garage", "parking")),
     ("comercio", ("loja", "comercio", "shop", "store")),
@@ -145,3 +147,8 @@ def is_wet(key):
 
 def is_common(key):
     return bool(USES.get(key, USES["outro"])[5])
+
+
+def is_exterior(key):
+    """(0.424) A use outside the building's envelope: a balcony, a terrace, a courtyard."""
+    return bool(USES.get(key, USES["outro"])[6])

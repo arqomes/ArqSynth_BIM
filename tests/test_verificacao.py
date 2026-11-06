@@ -560,6 +560,109 @@ class TownPlanning(unittest.TestCase):
         self.assertFalse(any(f.rule.id == "PLANO-dentro" for f in result.findings))
 
 
+class FacadesAndSetbacks(unittest.TestCase):
+    """0.424: the law's façade heights and setbacks — CTE arts. 21.º–24.º, RGEU arts. 59.º, 60.º, 62.º."""
+
+    def test_windows_near_the_next_lot(self):
+        """The T2 house's bedrooms look out to the back: with the lot's back side 3 m from that façade, their windows
+        fail the CTE's art. 22.º n.º 2 (5 m at least, the façade being under 10 m high); at 5,2 m they pass; the front
+        windows look at the street (art. 22.º n.º 1's, not measured: nothing drawn across it)."""
+        from arqbim.verify import check
+        doc = Document()
+        rooms, walls = t2_house(doc)
+        bim.set_lot(doc, square(-5.0, -5.0, 15.0, 11.1))
+        result = check.check(doc, dict(CV), force=True)
+        near = [f for f in result.findings if f.rule.id == "CV-CTE-22-2"]
+        failed = [f for f in near if f.status == "fail"]
+        self.assertEqual(len(failed), 4)                                # (two windows in each bedroom, at the back)
+        self.assertAlmostEqual(failed[0].value, 3.0, places=2)
+        self.assertAlmostEqual(failed[0].limit, 5.0, places=3)
+        self.assertTrue(all(f.status == "ok" for f in near if f not in failed))
+        bim.set_lot(doc, square(-5.0, -5.0, 15.0, 13.3))
+        result = check.check(doc, dict(CV), force=True)
+        self.assertFalse([f for f in result.failures if f.rule.id == "CV-CTE-22-2"])
+
+    def test_a_tall_block_behind(self):
+        """A block 9 m high, 10 × 4 m, 3,8 m behind the house: its façade facing the house is higher than the distance
+        between them (CTE art. 21.º n.º 1: H ≤ L) — it fails; the house's own back façade (2,7 m high, lower than
+        3,8 m) passes. In Portugal the RGEU's art. 59.º says the same, and art. 60.º asks the bedrooms' windows for
+        10 m to the façade in front."""
+        from arqbim.verify import check
+        doc = Document()
+        _rooms, walls = t2_house(doc)
+        spec = catalog.BY_KEY["parede_alv_20"]
+        block = bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 12.0, 0.0), (10.0, 12.0, 0.0),
+                                                              (10.0, 16.0, 0.0), (0.0, 16.0, 0.0))], spec, height=9.0)
+        result = check.check(doc, dict(CV), force=True)
+        by_wall = {f.subject.id: f for f in result.findings if f.rule.id == "CV-CTE-21-1"}
+        tall = by_wall[block[0]]
+        self.assertEqual(tall.status, "fail")
+        self.assertAlmostEqual(tall.value, 3.8, places=2)
+        self.assertAlmostEqual(tall.limit, 9.0, places=2)
+        back = by_wall[walls["outer"][2]]
+        self.assertEqual(back.status, "ok")
+        self.assertAlmostEqual(back.value, 3.8, places=2)
+        result = check.check(doc, dict(PT), force=True)
+        ids = {f.rule.id for f in result.failures}
+        self.assertIn("PT-RGEU-59", ids)
+        windows = [f for f in result.failures if f.rule.id == "PT-RGEU-60"]
+        self.assertEqual(len(windows), 4)
+
+    def test_a_courtyard_and_a_balcony_over_the_street(self):
+        """A courtyard of 3 × 3 m (the use «Pátio» from its name) in walls 6 m high: the CTE asks for a circle of
+        max(4; 6/2) = 4 m — it fails; a slab on the upper floor jutting 1 m past the lot's front, its underside 2,7 m
+        above the ground: art. 24.º n.º 2 (3 m) fails."""
+        from arqbim.verify import check, uses as uses_mod
+        self.assertEqual(uses_mod.from_name("Pátio"), "patio")
+        doc = Document()
+        spec = catalog.BY_KEY["parede_alv_20"]
+        bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (3.0, 0.0, 0.0), (3.0, 3.0, 0.0),
+                                                      (0.0, 3.0, 0.0))], spec, height=6.0)
+        patio = bim.add_room(doc, (1.5, 1.5), "Pátio")
+        result = check.check(doc, dict(CV), force=True)
+        found = next(f for f in result.findings if f.rule.id == "CV-CTE-23-1a" and f.subject.id == patio)
+        self.assertEqual(found.status, "fail")
+        self.assertAlmostEqual(found.limit, 4.0, places=3)
+        doc = Document()
+        t2_house(doc)
+        bim.set_lot(doc, square(-5.0, -0.5, 15.0, 25.0))           # (the front 0,6 m before the house's front face)
+        upper = bim.add_storey(doc, "Piso 1", 2.7)
+        slab = bim.add_slab(doc, np.array((1.0, -1.5, 2.7)), 3.0, 1.5, catalog.BY_KEY["laje_12"], storey=upper)
+        result = check.check(doc, dict(CV), force=True)
+        over = next((f for f in result.findings if f.rule.id == "CV-CTE-24-2" and f.subject.id == slab), None)
+        self.assertIsNotNone(over)
+        self.assertEqual(over.status, "fail")
+        self.assertLess(over.value, 3.0)
+
+
+class Steps(unittest.TestCase):
+    def test_the_check_in_steps(self):
+        """0.424: the check as a generator — a stop after the reading and after each rule (the watcher goes on between
+        the window's events) — gives what check() gives; a document made anew is never given an old one's reading."""
+        from arqbim.verify import check
+        doc = Document()
+        t2_house(doc)
+        job = check.steps(doc, dict(CV), force=True)
+        stops = 0
+        while True:
+            try:
+                next(job)
+                stops += 1
+            except StopIteration as done:
+                result = done.value
+                break
+        self.assertGreater(stops, 10)
+        again = check.check(doc, dict(CV), force=True)
+        self.assertEqual(sorted(f.key for f in result.failures), sorted(f.key for f in again.failures))
+        revision = doc.revision
+        del doc, job, again
+        fresh = Document()
+        while fresh.revision < revision:                # (a new document at the old one's revision)
+            fresh.revision += 1
+        self.assertEqual(reader.read(fresh).rooms, {})
+        self.assertEqual(check.check(fresh, dict(CV)).findings, [])
+
+
 class Exceptions(unittest.TestCase):
     def test_an_exception_is_not_counted(self):
         """0.418: the entrance door's failure accepted (the reason kept in the project's settings): no longer a

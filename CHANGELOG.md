@@ -1,6 +1,35 @@
 # Changelog
 
-## 0.423.0 — 2026-11-06
+## 0.424.0 — 2026-11-06
+
+**O Verificador, passo 8 (2.ª parte): as alturas das fachadas e os afastamentos da lei.**
+
+- **CTE de Cabo Verde, mais 6 regras:**
+  - **art. 21.º n.º 1:** a altura de cada fachada não passa o afastamento à fachada oposta (H ≤ L). Mede-se do meio
+    da face exterior de cada parede exterior, a direito para fora, até à primeira parede ou fachada-cortina com
+    2,20 m de altura ou mais. Um muro solto olha para os dois lados.
+  - **art. 22.º n.º 1:** 11 m entre fachadas viradas à via pública. Só se mede com a fachada do outro lado da rua
+    desenhada. Para um alinhamento preexistente a manter, usa-se Exceção….
+  - **art. 22.º n.os 2 e 4:** as janelas de compartimentos habitáveis ficam a metade da altura da fachada, e a 5 m no
+    mínimo, do lote vizinho (a estrema que está à frente delas, quando não é a via pública).
+  - **art. 22.º n.º 3:** as janelas de compartimentos não habitáveis ficam a 1,50 m do lote vizinho.
+  - **art. 23.º n.º 1 a):** um pátio interior deixa inscrever um círculo de metade da altura da fachada mais alta,
+    com 4 m no mínimo.
+  - **art. 24.º n.º 2:** o que sai sobre a via pública (uma varanda, uma pala para lá da frente do lote) fica com a face
+    de baixo a 3 m do chão.
+- **RGEU, mais 4 regras:**
+  - art. 59.º: a linha a 45° desde a fachada fronteira;
+  - art. 60.º: 10 m entre fachadas com janelas de habitação;
+  - art. 62.º § 2.º: o logradouro da habitação multifamiliar, com metade da altura da fachada e 6 m no mínimo de
+    fundo, e 40 m² livres.
+
+  Em Cabo Verde não entram, porque o CTE trata os mesmos temas (arts. 21.º e 22.º).
+- **Novo uso de ambiente: Pátio** (pelo nome «Pátio», «Saguão», «Logradouro»). É exterior: não conta na implantação.
+- **A verificação já não prende a janela:** corre aos bocados de 40 ms entre os cliques. Num edifício de 2161
+  elementos demora cerca de 1,1 s por edição, mas o programa continua a responder enquanto isso.
+- **Corrigido:** o Verificador podia dar a um documento novo a leitura de um antigo, quando o Python lhe dava a mesma
+  identidade e o mesmo número de revisão. Apareceu na bateria completa de testes. Agora a leitura guarda-se com o
+  próprio documento e o seu IFC.
 
 **O Verificador, passo 8 (1.ª parte): o lote e o plano municipal.**
 

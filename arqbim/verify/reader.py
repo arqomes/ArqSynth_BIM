@@ -6,6 +6,7 @@ What the architect chose (a room's use, the dwelling a room is in) is in the IFC
 found here each time the model changes, and written to the IFC file when it is saved (the use in IfcSpace.ObjectType,
 each dwelling an IfcZone with its type)."""
 
+import weakref
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -39,7 +40,24 @@ class Facts:
         return self.dwelling(self.of_room.get(room))
 
 
-_KEPT = {}                  # id(document) -> Facts (the last read)
+_KEPT = weakref.WeakKeyDictionary()     # document -> (its IFC, Facts): the last read (0.424: by the document itself
+#                                         and its IFC — an id is used again by a new one, its revision may be the same)
+
+
+def _kept(doc, revision):
+    found = _KEPT.get(doc)
+    if found is None:
+        return None
+    ifc, facts = found
+    return facts if ifc() is getattr(doc, "ifc", None) and facts.revision == revision else None
+
+
+def _keep(doc, facts):
+    ifc = getattr(doc, "ifc", None)
+    try:
+        _KEPT[doc] = (weakref.ref(ifc) if ifc is not None else (lambda: None), facts)
+    except TypeError:                                   # (an object that cannot be weakly referred to: not kept)
+        pass
 
 # an IFC class (and PredefinedType) -> what the reader calls it inside a room
 SANITARY = {"TOILETPAN": "toilet", "WCSEAT": "toilet", "URINAL": "toilet", "SHOWER": "shower", "BATH": "bath",
@@ -91,8 +109,8 @@ INSIDE = ("IfcSanitaryTerminal", "IfcElectricAppliance", "IfcFurniture", "IfcSys
 def read(doc, force=False):
     """The project's Facts, read again only when the document changed since the last time."""
     revision = getattr(doc, "revision", 0)
-    kept = _KEPT.get(id(doc))
-    if kept is not None and kept.revision == revision and not force:
+    kept = _kept(doc, revision)
+    if kept is not None and not force:
         return kept
     facts = Facts(revision=revision)
     try:
@@ -100,7 +118,7 @@ def read(doc, force=False):
     except Exception:                                   # (the IFC still being read)
         infos = []
     if not infos:
-        _KEPT[id(doc)] = facts
+        _keep(doc, facts)
         return facts
     from shapely.geometry import Point, Polygon
     polys = {}
@@ -165,7 +183,7 @@ def read(doc, force=False):
     facts.dwellings, facts.of_room = dw.find(facts.rooms.values(), doors, language, enclosure)
     facts.sides = dw.door_sides(facts.rooms.values(), doors, enclosure)
     facts.window_sides = dw.door_sides(facts.rooms.values(), facts.windows, enclosure)
-    _KEPT[id(doc)] = facts
+    _keep(doc, facts)
     return facts
 
 
@@ -207,4 +225,7 @@ def _door(doc, obj):
 
 
 def forget(doc):
-    _KEPT.pop(id(doc), None)
+    try:
+        _KEPT.pop(doc, None)
+    except TypeError:
+        pass

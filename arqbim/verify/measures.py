@@ -871,6 +871,9 @@ MEASURES = {
 from . import urban as _urban  # noqa: E402 (0.423: the lot's measures — urban.py reads this module's)
 
 MEASURES["lot"] = _urban.MEASURES
+for _kind, _more in (("wall", _urban.WALL), ("window", _urban.WINDOW), ("room", _urban.ROOM),   # (0.424)
+                     ("slab", _urban.SLAB)):
+    MEASURES[_kind].update(_more)
 
 
 def measure(ctx, subject, name):

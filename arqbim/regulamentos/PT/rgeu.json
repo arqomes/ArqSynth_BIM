@@ -11,6 +11,35 @@
   "notes": "Em vigor: a revogação do DL 10/2024 foi adiada pelo DL 108/2026 até ao diploma das regras técnicas (o Código da Construção). O DL 10/2024 alterou o art. 66.º (n.os 6 e 7) e revogou o art. 70.º e os das escadas (45.º e 46.º) — a confirmar no texto consolidado. Valores lidos em 2026-11-06.",
   "rules": [
     {
+      "id": "PT-RGEU-59", "topic": "fachada.altura_afastamento", "article": "art. 59.º",
+      "title": "Altura da edificação: a linha a 45° desde a fachada fronteira",
+      "text": "A altura de qualquer edificação será fixada de forma que em todos os planos verticais perpendiculares à fachada nenhum dos seus elementos, com excepção de chaminés e acessórios decorativos, ultrapasse o limite definido pela linha recta a 45º, traçada em cada um desses planos a partir do alinhamento da edificação fronteira, definido pela intersecção do seu plano com o terreno exterior.",
+      "subject": "wall", "where": {"exterior": true},
+      "measure": "afastamento_fachada_oposta", "min": "altura_fachada", "absent_ok": true,
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-60", "topic": "fachada.distancia", "article": "art. 60.º",
+      "title": "Distância entre fachadas com vãos de compartimentos de habitação",
+      "text": "Independentemente do estabelecido no artigo anterior, a distância mínima entre fachadas de edificações nas quais existam vãos de compartimentos de habitação não poderá ser inferior a 10 metros.",
+      "subject": "window", "where": {"habitable": true, "in_dwelling": true},
+      "measure": "afastamento_fachada_fronteira", "min": 10.0, "absent_ok": true, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-62-profundidade", "topic": "afastamento.estrema_habitavel", "article": "art. 62.º, § 2.º",
+      "title": "Logradouro da habitação multifamiliar: profundidade",
+      "text": "O logradouro a que alude o parágrafo anterior deverá ter em todos os seus pontos profundidade não inferior a metade da altura correspondente da fachada adjacente, medida na perpendicular a esta fachada no ponto mais desfavorável, com o mínimo de 6 metros e sem que a área livre e descoberta seja inferior a 40 metros quadrados.",
+      "subject": "lot", "where": {"multifamiliar": true, "tem_posterior": true},
+      "measure": "afastamento_posterior", "min": "max(6; cercea / 2)", "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-62-area", "topic": "afastamento.estrema_habitavel", "article": "art. 62.º, § 2.º",
+      "title": "Logradouro da habitação multifamiliar: área livre",
+      "text": "(…) sem que a área livre e descoberta seja inferior a 40 metros quadrados.",
+      "subject": "lot", "where": {"multifamiliar": true, "tem_posterior": true},
+      "measure": "area_logradouro", "min": 40.0, "unit": "m2", "severity": "error"
+    },
+    {
       "id": "PT-RGEU-65-1", "topic": "pe_direito.habitacao", "article": "art. 65.º, n.os 1 e 4",
       "title": "Pé-direito livre da habitação",
       "text": "A altura mínima, piso a piso, em edificações destinadas à habitação é de 2,70 m, não podendo ser o pé-direito livre mínimo inferior a 2,40 m. Nos tectos com vigas, inclinados, abobadados (…) devem ser mantidos, pelo menos, em 80% da superfície do tecto.",

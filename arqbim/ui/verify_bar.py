@@ -20,6 +20,7 @@ from ..verify import project
 from . import theme
 
 DELAY_MS = 300
+SLICE_S = 0.04              # (0.424) s: the check goes on this long at a time, then lets the window answer
 COUNTRY_KEY = "verificacao/pais"            # (QSettings: the country last chosen, for new projects)
 MARKS_KEY = "verificacao/marcas"
 
@@ -124,6 +125,7 @@ class Verifier(QtCore.QObject):
         self.on_panel = None                # fn(): (0.418) the Verification panel shown
         self.on_result = None               # fn(result): (0.418) each new result (the panel follows)
         self._model = getattr(doc, "ifc", None)
+        self._job = None                    # (0.424) (the check's steps under way, the revision they are of)
         self.timer = QtCore.QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.run)
@@ -156,15 +158,49 @@ class Verifier(QtCore.QObject):
         return project.settings(self.doc, default_country())
 
     def run(self):
+        """The check started — (0.424) in slices of 40 ms between the window's events (check_mod.steps): a big model
+        is checked without the window standing still; a result kept is shown at once."""
         if getattr(self.doc, "loading", False):
             self.timer.start(DELAY_MS)
             return
         try:
-            result = check_mod.check(self.doc, self.settings())
+            self._job = (check_mod.steps(self.doc, self.settings()), getattr(self.doc, "revision", 0))
         except Exception:                                   # noqa: BLE001 (never in the way of the drawing)
             import logging
             logging.getLogger("arqbim").exception("verifier")
             return
+        self._slice()
+
+    def _slice(self):
+        import time
+        job = getattr(self, "_job", None)
+        if job is None:
+            return
+        steps, revision = job
+        if getattr(self.doc, "revision", 0) != revision:   # (changed meanwhile: started again, after the change)
+            self._job = None
+            self.timer.start(DELAY_MS)
+            return
+        end = time.perf_counter() + SLICE_S
+        try:
+            while time.perf_counter() < end:
+                next(steps)
+        except StopIteration as done:
+            self._job = None
+            self._show(done.value)
+            return
+        except Exception:                                   # noqa: BLE001 (never in the way of the drawing)
+            import logging
+            logging.getLogger("arqbim").exception("verifier")
+            self._job = None
+            return
+        QtCore.QTimer.singleShot(0, self._slice)
+
+    def busy(self):
+        """Whether a check is under way (its slices still to come)."""
+        return getattr(self, "_job", None) is not None
+
+    def _show(self, result):
         if self._model is not getattr(self.doc, "ifc", None):     # (another project: what it has is not «new»)
             self._model = getattr(self.doc, "ifc", None)
             self.result, self.known = None, set()
