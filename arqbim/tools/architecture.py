@@ -30,6 +30,22 @@ class GutterTool(Tool):
     def __init__(self, host):
         super().__init__(host)
         self._eaves = None              # (roof id, its mesh, [(a, b, outward)])
+        self.shape = "caixa"            # (0.438) caixa / meia_cana
+        self.downpipes = "nenhum"       # (0.438) nenhum / inicio / fim / ambos
+
+    def options(self):
+        from ..ifc.architecture import DOWNPIPES, GUTTER_SHAPES
+        return [Option("shape", t("ctx.gutter_shape"), "choice", self.shape,
+                       tuple((s, t("guttershape." + s)) for s in GUTTER_SHAPES)),
+                Option("downpipes", t("ctx.downpipes"), "choice", self.downpipes,
+                       tuple((d, t("downpipes." + d)) for d in DOWNPIPES))]
+
+    def set_option(self, key, value):
+        from ..ifc.architecture import DOWNPIPES, GUTTER_SHAPES
+        if key == "shape" and value in GUTTER_SHAPES:
+            self.shape = value
+        elif key == "downpipes" and value in DOWNPIPES:
+            self.downpipes = value
 
     def hint(self):
         return t("hint.gutter")
@@ -79,7 +95,8 @@ class GutterTool(Tool):
             return
         roof, a, b, out = found
         joins = bim.gutter_joins(self.doc, a, b, out)
-        bim.add_gutter(self.doc, a, b, out, storey=self.doc.ifc.storey_of(roof))
+        bim.add_gutter(self.doc, a, b, out, storey=self.doc.ifc.storey_of(roof), shape=self.shape,
+                       downpipes=self.downpipes)
         text = t("info.gutter", l=_fmt(float(np.linalg.norm((b - a)[:2]))), roof=self.doc.get(roof).name)
         if joins:
             text += " " + t("info.gutter_joined", n=len(joins))

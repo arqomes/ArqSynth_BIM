@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.437.0
+# Guia das ferramentas — ArqSynth BIM 0.438.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.437.0.
+ArqSynth BIM 0.438.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -758,7 +758,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Retangular
 
 - **O que faz:** Paredes à volta de um retângulo: dois cantos, ou as medidas digitadas (ex.: 5;4).
-- **Passos de teste (TESTAR.md):** 0.432 ««W + letra» e «Editar tipo…» no topo»; 0.424 «Alturas das fachadas e afastamentos da lei»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
+- **Passos de teste (TESTAR.md):** 0.438 «Calha em meia-cana e tubos de queda»; 0.432 ««W + letra» e «Editar tipo…» no topo»; 0.424 «Alturas das fachadas e afastamentos da lei»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
 
 #### Circular
 
@@ -854,7 +854,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Calha
 
 - **Como se usa:** Calha: passe o rato por uma cobertura — mostra o beirado mais próximo — e clique: a calha fica ao longo dele, por fora, sob a aresta de cima. Clique nos beirados vizinhos: as calhas ligam-se nos cantos. Esc: Selecionar.
-- **Passos de teste (TESTAR.md):** 0.384 «A calha à altura certa e ligada nos cantos»
+- **Passos de teste (TESTAR.md):** 0.438 «Calha em meia-cana e tubos de queda»; 0.384 «A calha à altura certa e ligada nos cantos»
 
 #### Editar contorno
 
@@ -1192,7 +1192,7 @@ Redes elétricas, de água, de esgoto e AVAC.
 
 - **Como se usa:** Tubo PVC Ø50, eixo a 0,30 m: clique no início (snaps e alinhamentos). Digite a cota do eixo (ex.: 0,30) e Enter para a mudar.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.195 «Ramais a outra altura descem até ao tubo»
+- **Passos de teste (TESTAR.md):** 0.438 «Calha em meia-cana e tubos de queda»; 0.195 «Ramais a outra altura descem até ao tubo»
 
 #### Ligar à rede
 
@@ -1822,4 +1822,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*247 comandos descritos, gerados do ArqSynth BIM 0.437.0.*
+*247 comandos descritos, gerados do ArqSynth BIM 0.438.0.*

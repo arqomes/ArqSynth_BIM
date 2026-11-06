@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.438.0 — 2026-11-06
+
+**Calha em meia-cana e tubos de queda.**
+
+- Na ferramenta **Calha** (Arquitetura ▸ Pisos e coberturas), a barra de cima tem agora:
+  - **Secção**: **Caixa (U)**, como até aqui, ou **Meia-cana** (redonda, aberta em cima);
+  - **Tubos de queda**: nenhum, no início, no fim ou nas duas pontas.
+- Os tubos de queda são redondos, de 8 cm, de alumínio. Ficam por baixo da calha, a 15 cm da ponta, e descem até ao
+  chão (o nível do pavimento mais baixo). No IFC são IfcPipeSegment.
+- Nas Propriedades de uma calha também se mudam a secção e os tubos de queda.
+- Apagar a calha apaga os seus tubos de queda.
+
 ## 0.437.0 — 2026-11-06
 
 **Estrutura leve das paredes (Steel frame e Wood frame)**, como no addon.

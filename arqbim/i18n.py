@@ -626,6 +626,16 @@ _STRINGS = {
     "tool.gutter": ("Calha", "Gutter"),
     "elem.gutter": ("Calha", "Gutter"),
     "cmd.gutter": ("Calha", "Gutter"),
+    # (0.438) a gutter's section — a box or a half-round — and its downpipes
+    "cmd.gutter_edit": ("Calha", "Gutter"),
+    "ctx.gutter_shape": ("Secção", "Section"),
+    "guttershape.caixa": ("Caixa (U)", "Box (U)"),
+    "guttershape.meia_cana": ("Meia-cana", "Half-round"),
+    "ctx.downpipes": ("Tubos de queda", "Downpipes"),
+    "downpipes.nenhum": ("Nenhum", "None"),
+    "downpipes.inicio": ("No início", "At its start"),
+    "downpipes.fim": ("No fim", "At its end"),
+    "downpipes.ambos": ("Nas duas pontas", "At both ends"),
     "hint.gutter": ("Calha: passe o rato por uma cobertura — mostra o beirado mais próximo — e clique: a calha fica ao "
                     "longo dele, por fora, sob a aresta de cima. Clique nos beirados vizinhos: as calhas ligam-se nos "
                     "cantos. Esc: Selecionar.",

@@ -6582,6 +6582,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_use(doc, [guid], value or "")
             elif action == "slab_radius":
                 bim.set_slab_radius(doc, guid, value)
+            elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes
+                bim.set_gutter(doc, guid, **{action[7:]: value})
             elif action in ("wall_framing", "wall_framing_spacing", "wall_framing_blocking"):   # (0.437)
                 if action == "wall_framing":
                     bim.set_wall_framing(doc, guid, kind=value or "")

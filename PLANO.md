@@ -520,8 +520,9 @@ clique dentro das paredes. Falta, pela ordem do estudo:
    IFC que o Push/Pull já fazia, agora direto~~ (0.374.0).
 4. ~~**Piso:** o revestimento de piso de um ambiente (clique dentro) ou de um polígono — IfcCovering FLOORING, com
    espessura e material, nas quantidades~~ (0.374.0).
-5. ~~**Calha:** num beirado da cobertura, a calha ao longo dele~~ (0.374.0, uma caixa em U de alumínio); fica por
-   fazer: a meia-cana e o tubo de queda.
+5. ~~**Calha:** num beirado da cobertura, a calha ao longo dele~~ (0.374.0, uma caixa em U de alumínio);
+   ~~a meia-cana e o tubo de queda~~ (0.438.0: Secção e Tubos de queda na barra e nas Propriedades; fica por fazer o
+   cotovelo do tubo até à parede).
 6. ~~**Elevador:** a caixa e a cabina (IfcTransportElement ELEVATOR) em planta, por pavimentos~~ (0.374.0, a frente
    aberta); fica por fazer: as portas de patamar e abrir as lajes por cima sozinho.
 7. ~~**Ambientes — Separador, Identificar, Áreas:** linhas que separam ambientes sem paredes (contam como limite);

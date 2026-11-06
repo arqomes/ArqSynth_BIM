@@ -3776,10 +3776,10 @@ def gutter_joins(doc, a, b, outward):
     return joins
 
 
-def add_gutter(doc, a, b, outward, storey=None):
+def add_gutter(doc, a, b, outward, storey=None, shape="caixa", downpipes="nenhum"):
     """(0.374, the study's «Calha») A gutter along the eave a-b (world), outside it towards `outward`. (0.384) Its ends
-    that meet another gutter's at a corner: both mitred there, one gutter round the corner. One undo step. Its
-    GlobalId."""
+    that meet another gutter's at a corner: both mitred there, one gutter round the corner. (0.438) Its section (caixa /
+    meia_cana) and its downpipes (nenhum / inicio / fim / ambos). One undo step. Its GlobalId."""
     prefix, language = t("elem.gutter"), lang()
     joins = gutter_joins(doc, a, b, outward)
     out = np.asarray(outward, dtype=float)
@@ -3789,7 +3789,7 @@ def add_gutter(doc, a, b, outward, storey=None):
         name = "{} {}".format(prefix, sum(1 for e in ifc.file.by_type("IfcFlowSegment")
                                           if ifc.kind_of(e.GlobalId) == "gutter") + 1)
         guid = ifc.add_gutter(a, b, outward, name, storey=storey, lang=language, cut_a=cut.get("a"),
-                              cut_b=cut.get("b")).GlobalId
+                              cut_b=cut.get("b"), shape=shape, downpipes=downpipes).GlobalId
         lines = {g: (ca, cb) for g, _a, _b, _o, ca, cb in ifc.gutter_lines()}
         for _mine, other, theirs, _gout in joins:                  # (the other one mitred to this one too)
             ca, cb = lines.get(other, (None, None))
@@ -3799,6 +3799,13 @@ def add_gutter(doc, a, b, outward, storey=None):
         return guid
 
     return doc.execute(IfcCommand(t("cmd.gutter"), action, changed=sorted({g for _m, g, _t, _o in joins}))).result
+
+
+def set_gutter(doc, guid, shape=None, downpipes=None):
+    """(0.438) A gutter's section (caixa / meia_cana) or its downpipes (nenhum / inicio / fim / ambos) changed. One undo
+    step."""
+    language = lang()
+    _edit(doc, lambda ifc: ifc.set_gutter(guid, shape, downpipes, language), [guid], "cmd.gutter_edit")
 
 
 def paint_face(doc, guid, normal, point, key):

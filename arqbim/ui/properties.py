@@ -2080,6 +2080,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p["bulkhead"] > 0:
                 self._length_editor(t("ctx.bulkhead_drop"), p["drop"], "ceiling_drop", guid)
             self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
+        elif kind == "gutter":                             # (0.438) its section and its downpipes
+            from ..ifc.architecture import DOWNPIPES, GUTTER_SHAPES
+            self._choice_combo(t("ctx.gutter_shape"), "gutter_shape", guid,
+                               [(t("guttershape." + s), s) for s in GUTTER_SHAPES], p["shape"])
+            self._choice_combo(t("ctx.downpipes"), "gutter_downpipes", guid,
+                               [(t("downpipes." + d), d) for d in DOWNPIPES], p["downpipes"])
         elif kind == "flooring":                           # (0.415) a floor finish: its finish (material, thickness)
             from ..ifc.coverings import FLOORINGS
             self._choice_combo(t("ctx.flooring"), "flooring_finish", guid,

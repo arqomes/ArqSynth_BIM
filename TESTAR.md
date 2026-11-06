@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.438 — Calha em meia-cana e tubos de queda
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.438.0**. Faça Ctrl+N, desenhe quatro paredes em
+   retângulo (**Arquitetura ▸ Paredes ▸ Retangular**) e ponha-lhes uma cobertura (**Arquitetura ▸ Pisos e coberturas ▸
+   Cobertura**).
+2. Clique em **Arquitetura ▸ Pisos e coberturas ▸ Calha**. Na barra de cima, escolha **Secção ▸ Meia-cana** e **Tubos
+   de queda ▸ Nas duas pontas**.
+3. Passe o rato pela cobertura e clique perto de um beirado: fica a calha, redonda, e dois tubos de queda até ao chão.
+4. Carregue em Esc, escolha o **Selecionar** e clique na calha. Nas Propriedades, mude **Tubos de queda** para **No
+   fim**: fica só um. Mude a **Secção** para **Caixa (U)**: a calha passa a ser em U.
+5. Carregue em Delete com a calha escolhida: a calha e o tubo de queda desaparecem.
+
 ## 0.437 — Estrutura leve (Steel frame e Wood frame)
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.437.0**. Faça Ctrl+N e desenhe uma parede de 4 m

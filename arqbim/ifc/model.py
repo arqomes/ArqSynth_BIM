@@ -1589,6 +1589,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             for rel in list(getattr(element, "IsNestedBy", None) or ()):      # a pipe's / bend's ports (0.74)
                 for port in [o for o in rel.RelatedObjects if o.is_a("IfcDistributionPort")]:
                     api.root.remove_product(f, product=port)
+            if self.kind_of(guid) == "gutter":
+                self.drop_downpipes(guid)                                   # (its downpipes with it, 0.438)
             if element.is_a("IfcWall"):
                 self.drop_framing(guid)                                     # (its light frame with it, 0.437)
             if element.is_a("IfcRoof"):
@@ -2293,6 +2295,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                                   "gap": float(pp.get("Rasgo") or 0.0),                 # (0.119)
                                   "bulkhead": float(pp.get("SancaLargura") or 0.0),
                                   "drop": float(pp.get("SancaAltura") or 0.0)}
+            elif kind == "gutter":                                      # (0.438) its section, its downpipes
+                info["params"] = {"shape": self.gutter_shape(guid), "downpipes": self.gutter_downpipes(guid)}
             elif kind == "flooring":                                    # (0.415) a floor finish: its finish
                 pp = self._params(e)
                 q = ifcopenshell.util.element.get_psets(e).get("Qto_CoveringBaseQuantities", {})

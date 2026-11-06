@@ -18,10 +18,17 @@ import ifcopenshell.api.pset
 import ifcopenshell.api.root
 import ifcopenshell.api.spatial
 
+from .edit import EditRefused
+
 api = ifcopenshell.api
 GUTTER = (0.15, 0.10, 0.006)        # m: a gutter's width (out from the eave), depth, sheet
 GUTTER_DROP = 0.02                  # m: (0.384) its top under the eave's upper edge — the water falls in
 GUTTER_JOIN = 0.03                  # m: (0.384) two gutters' ends this near (in plan) meet at a corner
+GUTTER_SHAPES = ("caixa", "meia_cana")      # (0.438) a box (U) section, or a half-round one
+DOWNPIPES = ("nenhum", "inicio", "fim", "ambos")    # (0.438) its downpipes: none, at its start, its end, both
+DOWNPIPE = 0.08                     # m: (0.438) a downpipe's diameter
+DOWNPIPE_IN = 0.15                  # m: …its axis this far in from the gutter's end
+ARC_STEPS = 12                      # a half-round section's arc in this many sides
 SHAFT_WALL = 0.15                   # m: an elevator shaft's walls
 CAR_HEIGHT = 2.20                   # m
 SEPARATOR = 0.005                   # m: how thick a room separator counts in the rooms' outlines
@@ -91,14 +98,27 @@ class ArchitectureMixin:
             return -x, out, b, length, True
         return x, out, a, length, False
 
-    def _gutter_items(self, a, b, outward, cut_a=None, cut_b=None):
+    @staticmethod
+    def _gutter_ring(shape):
+        """(0.438) A gutter's section (out from the eave, up from its top): a U (caixa), or a half-round (meia_cana)
+        as wide, open at the top."""
+        w, h, s = GUTTER
+        if shape != "meia_cana":
+            return [(0.0, -h), (w, -h), (w, 0.0), (w - s, 0.0), (w - s, -h + s), (s, -h + s), (s, 0.0), (0.0, 0.0)]
+        r = w / 2.0
+        outer = [(r + r * np.cos(a), r * np.sin(a)) for a in np.linspace(np.pi, 2 * np.pi, ARC_STEPS + 1)]
+        inner = [(r + (r - s) * np.cos(a), (r - s) * np.sin(a)) for a in np.linspace(2 * np.pi, np.pi, ARC_STEPS + 1)]
+        return [(float(y), float(z)) for y, z in outer + inner]
+
+    def _gutter_items(self, a, b, outward, cut_a=None, cut_b=None, shape="caixa"):
         """(its placement, its body's items, the body's kind): a U section swept from a to b, its top GUTTER_DROP under
         the eave line, outside it; (0.384) an end meeting another gutter at a corner (cut_a / cut_b: that gutter's
-        outward way) carried on to the corner's outer point and mitred there, as the two halves of one gutter."""
+        outward way) carried on to the corner's outer point and mitred there, as the two halves of one gutter; (0.438)
+        a half-round section (shape «meia_cana»)."""
         f, u = self.file, 1.0 / self.unit_scale
         x, out, start, length, flipped = self._gutter_frame(a, b, outward)
         w, h, s = GUTTER
-        ring = [(0.0, -h), (w, -h), (w, 0.0), (w - s, 0.0), (w - s, -h + s), (s, -h + s), (s, 0.0), (0.0, 0.0)]
+        ring = self._gutter_ring(shape)
         cuts = (cut_b, cut_a) if flipped else (cut_a, cut_b)    # (at its own start, at its own end)
         reach, planes = [0.0, 0.0], []
         for k, cut in enumerate(cuts):
@@ -134,15 +154,19 @@ class ArchitectureMixin:
         m[:3, 3] = np.asarray(start, dtype=float) - np.array((0.0, 0.0, GUTTER_DROP))
         return m, [solid], ("Clipping" if planes else "SweptSolid")
 
-    def add_gutter(self, a, b, outward, name, storey=None, lang="pt", cut_a=None, cut_b=None):
+    def add_gutter(self, a, b, outward, name, storey=None, lang="pt", cut_a=None, cut_b=None, shape="caixa",
+                   downpipes="nenhum"):
         """A gutter from a to b (world, the eave's line — (0.384) its upper edge), hanging outside it towards `outward`
-        (horizontal); cut_a / cut_b: the outward way of a gutter its end meets at a corner (mitred to it)."""
+        (horizontal); cut_a / cut_b: the outward way of a gutter its end meets at a corner (mitred to it); (0.438) its
+        section's shape (caixa / meia_cana) and its downpipes (nenhum / inicio / fim / ambos)."""
         f = self.file
+        if shape not in GUTTER_SHAPES or downpipes not in DOWNPIPES:
+            raise EditRefused("not_editable")
         a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
         ifc_class = "IfcFlowSegment" if f.schema == "IFC2X3" else "IfcPipeSegment"
         gutter = api.root.create_entity(f, ifc_class=ifc_class, name=name,
                                         **({} if ifc_class == "IfcFlowSegment" else {"predefined_type": "GUTTER"}))
-        m, items, kind = self._gutter_items(a, b, outward, cut_a, cut_b)
+        m, items, kind = self._gutter_items(a, b, outward, cut_a, cut_b, shape)
         self._place(gutter, m)
         self._body(gutter, items, kind)
         self._contain(gutter, storey, a[2])
@@ -153,8 +177,104 @@ class ArchitectureMixin:
         self._set_params(gutter, {"Inicio": "{:.6f},{:.6f},{:.6f}".format(*a),
                                   "Fim": "{:.6f},{:.6f},{:.6f}".format(*b), "Largura": w, "Altura": h,
                                   "Fora": _xy_text(outward), "CorteInicio": _xy_text(cut_a),
-                                  "CorteFim": _xy_text(cut_b)})
+                                  "CorteFim": _xy_text(cut_b), "Forma": shape})
+        if downpipes != "nenhum":
+            self.set_gutter(gutter.GlobalId, downpipes=downpipes, lang=lang)
         return gutter
+
+    # ------------------------------------------------------------ (0.438) its shape, its downpipes
+
+    def gutter_shape(self, guid):
+        e = self.by_guid(guid)
+        shape = self._params(e).get("Forma") if e is not None else None
+        return shape if shape in GUTTER_SHAPES else "caixa"
+
+    def downpipes_of(self, guid):
+        """The downpipes of a gutter: [(its end "inicio" / "fim", the IfcPipeSegment)]."""
+        out = []
+        for e in self.file.by_type("IfcFlowSegment"):
+            p = self._params(e)
+            if p.get("Elemento") == "downpipe" and p.get("Calha") == guid:
+                out.append((p.get("Ponta") or "inicio", e))
+        return sorted(out, key=lambda pe: pe[0])
+
+    def gutter_downpipes(self, guid):
+        """nenhum / inicio / fim / ambos: where a gutter's downpipes are."""
+        ends = {end for end, _e in self.downpipes_of(guid)}
+        return "ambos" if ends == {"inicio", "fim"} else (ends.pop() if ends else "nenhum")
+
+    def set_gutter(self, guid, shape=None, downpipes=None, lang="pt"):
+        """(0.438) A gutter's section (caixa / meia_cana) and its downpipes (nenhum / inicio / fim / ambos) changed:
+        its body made again; its downpipes — round, DOWNPIPE wide, DOWNPIPE_IN in from its ends, under its middle —
+        from its bottom down to the ground (its lowest storey's level), aluminium (IfcPipeSegment RIGIDSEGMENT)."""
+        line = next((g for g in self.gutter_lines() if g[0] == guid), None)
+        if line is None:
+            raise EditRefused("not_editable")
+        gutter = self.by_guid(guid)
+        _g, a, b, out, cut_a, cut_b = line
+        if shape is not None:
+            if shape not in GUTTER_SHAPES:
+                raise EditRefused("not_editable")
+            _m, items, kind = self._gutter_items(a, b, out, cut_a, cut_b, shape)
+            for rep in list(gutter.Representation.Representations if gutter.Representation else ()):
+                api.geometry.unassign_representation(self.file, product=gutter, representation=rep)
+                api.geometry.remove_representation(self.file, representation=rep)
+            self._body(gutter, items, kind)
+            self._set_params(gutter, {"Forma": shape})
+        if downpipes is None:
+            return
+        if downpipes not in DOWNPIPES:
+            raise EditRefused("not_editable")
+        for _end, pipe in self.downpipes_of(guid):
+            api.root.remove_product(self.file, product=pipe)
+        ends = {"nenhum": (), "inicio": ("inicio",), "fim": ("fim",), "ambos": ("inicio", "fim")}[downpipes]
+        x = (b - a) * np.array((1.0, 1.0, 0.0))
+        length = float(np.linalg.norm(x))
+        if not ends or length < 2 * DOWNPIPE_IN + DOWNPIPE:
+            return
+        x /= length
+        o = np.asarray(out, dtype=float).copy()
+        o[2] = 0.0
+        o = o - float(o @ x) * x
+        o /= np.linalg.norm(o)
+        w, h, _s = GUTTER
+        levels = [z for _g2, _n, z in self.storeys()]
+        ground = min(levels) if levels else 0.0
+        storey = self.storey_of(guid)
+        f = self.file
+        for end in ends:
+            base = (a + x * DOWNPIPE_IN) if end == "inicio" else (b - x * DOWNPIPE_IN)
+            top = float(base[2]) - GUTTER_DROP - h + 0.005               # (into the gutter's bottom)
+            if top - ground < 0.3:
+                continue
+            centre = np.array((base[0], base[1], ground)) + o * (w / 2.0)
+            pipe = api.root.create_entity(f, ifc_class="IfcFlowSegment" if f.schema == "IFC2X3" else "IfcPipeSegment",
+                                          name="{} {} ({})".format(
+                                              "Tubo de queda" if lang == "pt" else "Downpipe",
+                                              (gutter.Name or "").rsplit(" ", 1)[-1],
+                                              {"inicio": ("início", "start"), "fim": ("fim", "end")}[end][
+                                                  0 if lang == "pt" else 1]),
+                                          **({} if f.schema == "IFC2X3" else {"predefined_type": "RIGIDSEGMENT"}))
+            m = np.eye(4)
+            m[:3, 3] = centre
+            self._place(pipe, m)
+            ring = [(DOWNPIPE / 2.0 * np.cos(t_), DOWNPIPE / 2.0 * np.sin(t_))
+                    for t_ in np.linspace(0.0, 2 * np.pi, 24, endpoint=False)]
+            hole = [(r_[0] * 0.92, r_[1] * 0.92) for r_ in reversed(ring)]
+            self._body(pipe, [self._profile_solid(ring, top - ground, holes=[hole])])
+            if storey is not None:
+                api.spatial.assign_container(f, products=[pipe], relating_structure=self.storey(storey))
+            else:
+                self._contain(pipe, None, ground)
+            api.material.assign_material(f, products=[pipe], type="IfcMaterial",
+                                         material=self._material("aluminio", lang))
+            self._mark(pipe, "downpipe")
+            self._set_params(pipe, {"Calha": guid, "Ponta": end, "Diametro": DOWNPIPE})
+
+    def drop_downpipes(self, guid):
+        """A gutter being removed: its downpipes with it."""
+        for _end, pipe in self.downpipes_of(guid):
+            api.root.remove_product(self.file, product=pipe)
 
     def gutter_lines(self):
         """(0.384) The gutters: [(GlobalId, a, b, outward, cut_a, cut_b)] — their eave lines (world) and ways."""
@@ -181,7 +301,7 @@ class ArchitectureMixin:
             return
         gutter = self.by_guid(guid)
         _g, a, b, out, _ca, _cb = line
-        _m, items, kind = self._gutter_items(a, b, out, cut_a, cut_b)
+        _m, items, kind = self._gutter_items(a, b, out, cut_a, cut_b, self.gutter_shape(guid))
         for rep in list(gutter.Representation.Representations if gutter.Representation else ()):
             api.geometry.unassign_representation(self.file, product=gutter, representation=rep)
             api.geometry.remove_representation(self.file, representation=rep)

@@ -842,6 +842,7 @@ def bim_flow():
     stair_ready_flow()                # (0.435)
     curtain_shapes_flow()             # (0.436)
     wall_framing_flow()               # (0.437)
+    gutter_downpipes_flow()           # (0.438)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6529,6 +6530,45 @@ def wall_framing_flow():
     doc.set_view_props(("3d",), hidden=None)
     pump(200)
     check("estrutura_leve", made and listed and two, "feita={} lista={} travamentos2={}".format(made, listed, two))
+
+
+def gutter_downpipes_flow():
+    """0.438: a roof over four walls, a gutter on its longest eave — chosen, in its Properties «Secção» Meia-cana and
+    «Tubos de queda» Nas duas pontas: its section half-round, two downpipes down to the ground; the Gutter tool's bar has
+    both. Captured: 438_calha_tubos.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0, 0), (10, 0)), ((10, 0), (10, 6)), ((10, 6), (0, 6)), ((0, 6), (0, 0))):
+        B.add_wall(doc, np.array(a + (0.0,), dtype=float), np.array(b + (0.0,), dtype=float), spec, height=3.0)
+    roof = B.add_roof(doc, [(-0.1, -0.1), (10.1, -0.1), (10.1, 6.1), (-0.1, 6.1)], catalog.BY_KEY.get(
+        "cobertura_telha", next(s for s in catalog.types() if s.kind == "roof")))
+    a, b, out = max(B.roof_eaves(doc, roof), key=lambda e: float(np.linalg.norm(e[1] - e[0])))
+    gutter = B.add_gutter(doc, a, b, out)
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection({gutter})
+    pump(400)
+    for action, value in (("gutter_shape", "meia_cana"), ("gutter_downpipes", "ambos")):
+        combo = win.props.editors.get(action)
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData(value))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+    shape, pipes = doc.ifc.gutter_shape(gutter), len(doc.ifc.downpipes_of(gutter))
+    vp.set_selection(set())
+    win.tool_actions["gutter"].trigger()
+    pump(100)
+    bar = [o.key for o in win.tool.options()]
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("438_calha_tubos.png")
+    check("calha_meia_cana_tubos", shape == "meia_cana" and pipes == 2 and "shape" in bar and "downpipes" in bar,
+          "seccao={} tubos={} barra={}".format(shape, pipes, bar))
 
 
 def stair_waist_flow():
