@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.421 — Portugal: RGEU e DL 163/2006
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.421.0**. Abra a casa T2 da 0.417.
+2. Clique no indicador do rodapé ▸ **Regulamentos do projeto…** e escolha **Portugal**: a lista mostra «RGEU …» e
+   «DL 163/2006 …». OK. O rodapé passa a dizer **RGEU, DL 163/2006** e a contagem muda.
+3. Abra o painel **Verificação** (Colaborar ▸ Verificação), **Por regulamento**: em «DL 163/2006» todas as portas de 90
+   aparecem com «✗ 0,76 m (mínimo 0,77 m)» — uma folha aberta a 90° deixa 0,76 m. Escolha uma porta e, em
+   Propriedades, mude o tipo para uma porta maior (ou para a **Porta de sacada 140**): passa a ✓.
+4. Em «RGEU»: «Área mínima das instalações sanitárias ✗ 0,00 m² (mínimo 3,50 m²)». Faça uma casa de banho de 3,5 m²
+   com lavatório, sanita, bidé e banheira (Instalações ▸ Louça sanitária): passam as duas regras (RGEU 68.º e
+   NTA 3.3.4).
+5. Faça uma **Rampa** (Arquitetura ▸ Circulação ▾ ▸ Rampa) com 0,50 m de desnível e 7 m de comprimento: «Inclinação
+   das rampas ✗ 7,14 % (máximo 7,00 %)» — o valor interpolado entre 8 % (0,40 m) e 6 % (0,60 m). Alongue-a para 8,5 m:
+   passa a ✓.
+6. Volte a **Cabo Verde**: no painel, por regulamento, só aparece o CTE — o RGEU e o DL 163/2006 entram apenas no que o
+   CTE não trata (por exemplo, uma rampa dentro de uma habitação).
+
 ## 0.420 — Iluminação, ventilação e o que está em frente das janelas
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.420.0**. Faça Ctrl+N, escolha o país Cabo Verde

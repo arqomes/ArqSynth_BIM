@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.421.0 — 2026-11-06
+
+**O Verificador, passo 6: Portugal — o RGEU e as acessibilidades (DL 163/2006).**
+
+- **RGEU** (`regulamentos/PT/rgeu.json`, 19 regras, lido no texto da Ordem dos Arquitectos e no consolidado da PGD
+  Lisboa — continua em vigor; a revogação foi adiada pelo DL 108/2026):
+  - pé-direito (art. 65.º): 2,40 m livres na habitação em 80 % do teto, 2,20 m em vestíbulos, corredores,
+    instalações sanitárias, despensas e arrecadações e na superfície restante, 3 m no comércio;
+  - quadro do art. 66.º: sala (T0–T1 10 m², T2–T4 12, T5–T6 16), cozinha 6 m², quartos do maior para o menor (10,5
+    e 9, e 6,5 nos simples), sala + cozinha + suplemento de área obrigatório;
+  - área bruta (art. 67.º): T0 35, T1 52, T2 72, T3 91, T4 105, T5 122, T6 134 m²;
+  - instalações sanitárias (art. 68.º): 3,5 m² até T2, 4,5 m² em dois espaços no T3–T4, 6 m² em dois espaços a
+    partir do T5;
+  - dimensões (art. 69.º): 2,10 m abaixo de 9,5 m², um círculo de 2,40 m entre 9,5 e 12 m², de 2,70 m a partir de 12
+    m², 1,70 m na cozinha;
+  - vãos (art. 71.º): pelo menos um para o exterior e 1/10 da área do compartimento, 1,08 m² no mínimo, **medidos no
+    tosco** (a largura × a altura do vão — não o vidro, como no CTE);
+  - ventilação transversal (art. 72.º, aviso) e afastamento a muros e fachadas (art. 73.º).
+- **DL 163/2006, normas técnicas** (`regulamentos/PT/dl163_2006.json`, 16 regras): **portas com 0,77 m úteis**
+  (a folha aberta a 90°) e 2,00 m de altura; escadas comuns com 1,20 m, das habitações com 1,00 m, espelho até 0,18 m,
+  cobertor de 0,28 m, patim a cada 2,40 m; rampas até **6 % para 0,60 m de desnível e 8 % para 0,40 m (com os valores
+  intermédios)**, lanços de 10 a 5 m, largura de 1,20 m (0,90 m se curtas ou dentro da habitação); entrada da
+  habitação e cozinha com rotação de 360° (Ø 1,50 m livre de móveis); corredores com 1,10 m; uma instalação sanitária
+  com lavatório, sanita, **bidé** e banheira (ou base de duche).
+- **Cabo Verde chama Portugal** (CTE art. 4.º): os dois pacotes portugueses entram como supletivos, mas só as regras de
+  temas que o CTE não trata (por agora, a largura das rampas dentro das habitações). Novo no CTE: a ventilação por
+  fachadas de orientação diferente (art. 76.º n.º 4, nota).
+- Medidas novas: a área dos vãos no tosco, a área e o número das instalações sanitárias (e as que têm bidé), as
+  janelas em fachadas opostas ou de orientação diferente. O bidé deixou de contar como sanita.
+- Por fazer em Portugal: a térmica (REH, os U máximos pela zona climática) e a segurança contra incêndio (SCIE).
+
 ## 0.420.0 — 2026-11-06
 
 **O Verificador, passo 5: iluminação e ventilação naturais, e o que está em frente das janelas** (CTE arts. 76.º e

@@ -1291,7 +1291,10 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    obstáculos fronteiros~~ (0.420.0; os círculos e quadrados vieram na 0.419). Por fazer: as **horas de sol** (art.
    78.º: cinco horas entre as 7 e as 17 horas solares — o texto não diz em que dia do ano; perguntar ao dono) e a
    **profundidade face à fachada** (art. 41.º a).
-6. **Portugal:** RGEU, DL 163/2006 e o U do REH, tirados do texto oficial com o dono; Cabo Verde → Portugal supletivo.
+6. ~~**Portugal:** RGEU, DL 163/2006; Cabo Verde → Portugal supletivo~~ (0.421.0; o RGEU do texto da Ordem dos
+   Arquitectos — redação do DL 650/75 — e do consolidado da PGD Lisboa até ao DL 108/2026; o DL 163/2006 do texto de
+   2006: confirmar com o dono as alterações do DL 10/2024 ao art. 66.º e as de 2014–2019 às normas técnicas). Por
+   fazer: o **U do REH** (os máximos pela zona climática, Portaria 138-I/2021 — preciso do quadro) e a **SCIE**.
 7. **Materiais e boas práticas:** as famílias, as camadas em contacto, o material no seu sítio, as espessuras do Anexo II.
 8. **Urbanismo:** lote e estremas (do terreno), índices, alturas de fachada, afastamentos, os valores do regulamento
    municipal / PDM por projeto.

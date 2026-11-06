@@ -7,7 +7,7 @@
   "published": "2012-01-12",
   "source": "Boletim Oficial, I Série, n.º 2, de 12 de janeiro de 2012 (arquitectos.org.cv)",
   "status": "em_vigor",
-  "fallback": ["PT-RGEU"],
+  "fallback": ["PT-RGEU", "PT-DL163"],
   "notes": "Art. 4.º: nas situações não cobertas aplica-se a regulamentação portuguesa. Valores lidos do texto publicado em 2012 (2026-11-06); revisões posteriores por confirmar.",
   "rules": [
     {
@@ -272,6 +272,13 @@
       "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
       "measure": "area_sem_luz", "max": 0.5, "unit": "m2", "severity": "warning",
       "fix": "Uma janela do outro lado, ou um compartimento menos fundo."
+    },
+    {
+      "id": "CV-CTE-76-4", "topic": "ventilacao.transversal", "article": "art. 76.º, n.º 4",
+      "title": "Ventilação por fachadas de orientação diferente",
+      "text": "A ventilação natural definida nos números anteriores deve ser conseguida de preferência através de aberturas em fachadas de orientação diferente.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "fachadas_diferentes", "min": 1, "unit": "", "severity": "info"
     },
     {
       "id": "CV-CTE-76-6b", "topic": "ventilacao.extracao", "article": "art. 76.º, n.º 6, al. b)",

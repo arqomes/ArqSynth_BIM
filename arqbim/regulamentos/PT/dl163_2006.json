@@ -1,0 +1,129 @@
+{
+  "id": "PT-DL163",
+  "country": "PT",
+  "short": "DL 163/2006",
+  "title": "Regime da acessibilidade — Normas técnicas (anexo)",
+  "instrument": "Decreto-Lei n.º 163/2006, de 8 de agosto (alterado pelos DL n.os 136/2014, 125/2017 e 95/2019)",
+  "published": "2006-08-08",
+  "source": "Transcrição da Ordem dos Arquitectos (texto de 2006) — confirmar as alterações de 2014, 2017 e 2019 no Diário da República",
+  "status": "em_vigor",
+  "fallback": [],
+  "notes": "Normas técnicas de acessibilidade (NTA): capítulo 2 (edifícios em geral), 3.2 e 3.3 (edifícios de habitação), 4.9 (portas). Valores lidos em 2026-11-06.",
+  "rules": [
+    {
+      "id": "PT-DL163-4.9.1-entrada", "topic": "porta.entrada_edificio", "article": "NTA 4.9.1 (e 3.3.8)",
+      "title": "Largura útil das portas de entrada (0,77 m)",
+      "text": "Os vãos de porta devem possuir uma largura útil não inferior a 0,77 m, medida entre a face da folha da porta quando aberta e o batente ou guarnição do lado oposto; se a porta for de batente ou pivotante, deve considerar-se a porta na posição aberta a 90º.",
+      "subject": "door", "where": {"role": ["entrada_edificio", "acesso_comum"]},
+      "measure": "largura_util", "min": 0.77, "unit": "m", "severity": "error",
+      "fix": "Uma folha de 0,85 m (vão de cerca de 1,00 m) deixa 0,77 m livres."
+    },
+    {
+      "id": "PT-DL163-4.9.1-compartimentos", "topic": "porta.compartimento", "article": "NTA 4.9.1 e 3.3.8",
+      "title": "Largura útil das portas dos compartimentos (0,77 m)",
+      "text": "Os vãos de entrada/saída do fogo, bem como de acesso a compartimentos, varandas, terraços e arrecadações, devem satisfazer o especificado na secção 4.9: largura útil não inferior a 0,77 m (folha aberta a 90º).",
+      "subject": "door", "where": {"role": ["compartimento", "secundaria"]},
+      "measure": "largura_util", "min": 0.77, "unit": "m", "severity": "error",
+      "fix": "Uma folha de 0,85 m (vão de cerca de 1,00 m) deixa 0,77 m livres."
+    },
+    {
+      "id": "PT-DL163-4.9.2", "topic": "porta.altura", "article": "NTA 4.9.2",
+      "title": "Altura útil das portas (2,00 m)",
+      "text": "Os vãos de porta devem ter uma altura útil de passagem não inferior a 2 m.",
+      "subject": "door",
+      "measure": "altura_util", "min": 2.00, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.4.1", "topic": "escada.largura_comum", "article": "NTA 2.4.1",
+      "title": "Largura das escadas (1,20 m)",
+      "text": "A largura dos lanços, patins e patamares das escadas não deve ser inferior a 1,2 m.",
+      "subject": "stair", "where": {"common": true},
+      "measure": "largura_util", "min": 1.20, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.5", "topic": "escada.largura_habitacao", "article": "NTA 3.3.5",
+      "title": "Largura das escadas dentro das habitações (1,00 m)",
+      "text": "Se existirem escadas nas habitações que dêem acesso a compartimentos habitáveis e se não existirem rampas ou dispositivos mecânicos de elevação alternativos (…) a largura dos lanços, patamares e patins não deve ser inferior a 1 m.",
+      "subject": "stair", "where": {"common": false},
+      "measure": "largura_util", "min": 1.00, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.4.3-cobertor", "topic": "escada.cobertor", "article": "NTA 2.4.3",
+      "title": "Profundidade do degrau (cobertor ≥ 0,28 m)",
+      "text": "Os degraus das escadas devem ter uma profundidade (cobertor) não inferior a 0,28 m.",
+      "subject": "stair", "measure": "cobertor", "min": 0.28, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.4.3-espelho", "topic": "escada.espelho", "article": "NTA 2.4.3",
+      "title": "Altura do degrau (espelho ≤ 0,18 m)",
+      "text": "Os degraus das escadas devem ter uma altura (espelho) não superior a 0,18 m.",
+      "subject": "stair", "measure": "espelho", "max": 0.18, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.4.2", "topic": "escada.desnivel_lanco", "article": "NTA 2.4.2",
+      "title": "Patim intermédio quando o desnível passa de 2,40 m",
+      "text": "As escadas devem possuir patins intermédios com uma profundidade (…) não inferior a 0,7 m, se os desníveis a vencer (…) forem superiores a 2,4 m.",
+      "subject": "stair", "where": {"common": true},
+      "measure": "desnivel_lanco", "max": 2.40, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.5.1", "topic": "rampa.inclinacao", "article": "NTA 2.5.1",
+      "title": "Inclinação das rampas (6 % até 0,60 m de desnível; 8 % até 0,40 m)",
+      "text": "As rampas devem ter a menor inclinação possível e satisfazer uma das seguintes situações ou valores interpolados: 1) inclinação não superior a 6%, desnível não superior a 0,6 m e projecção horizontal não superior a 10 m; 2) inclinação não superior a 8%, desnível não superior a 0,4 m e projecção horizontal não superior a 5 m.",
+      "subject": "ramp",
+      "measure": "inclinacao", "max": "max(6; min(8; 8 - 10 * (desnivel - 0.4)))", "unit": "%", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.5.1-lanco", "topic": "rampa.lanco", "article": "NTA 2.5.1 e 2.5.5",
+      "title": "Projeção horizontal de cada lanço (10 m a 6 %; 5 m a 8 %)",
+      "text": "(…) projecção horizontal não superior a 10 m (6%) / 5 m (8%) ou valores interpolados; as rampas devem possuir plataformas horizontais de descanso na base e no topo de cada lanço quando tiverem uma projecção horizontal superior ao especificado para cada inclinação.",
+      "subject": "ramp",
+      "measure": "comprimento_lanco", "max": "max(5; min(10; 10 - 2.5 * (inclinacao - 6)))", "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-2.5.4", "topic": "rampa.largura", "article": "NTA 2.5.4",
+      "title": "Largura das rampas (1,20 m; 0,90 m se o lanço tiver até 5 m)",
+      "text": "As rampas devem possuir uma largura não inferior a 1,2 m, excepto (…) se as rampas tiverem uma projecção horizontal não superior a 5 m, podem ter uma largura não inferior a 0,9 m.",
+      "subject": "ramp", "where": {"in_dwelling": false},
+      "measure": "largura_util", "min_table": {"by": "rampa_curta", "values": {"sim": 0.90, "nao": 1.20}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.6", "topic": "rampa.largura_habitacao", "article": "NTA 3.3.6",
+      "title": "Largura das rampas dentro das habitações (0,90 m)",
+      "text": "Se existirem rampas que façam parte do percurso de acesso a compartimentos habitáveis, devem satisfazer o especificado na secção 2.5, com excepção da largura que pode ser não inferior a 0,9 m.",
+      "subject": "ramp", "where": {"in_dwelling": true},
+      "measure": "largura_util", "min": 0.90, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.1", "topic": "circulacao.entrada", "article": "NTA 3.3.1",
+      "title": "Rotação de 360º na entrada da habitação (Ø 1,50 m)",
+      "text": "Nos espaços de entrada das habitações deve ser possível inscrever uma zona de manobra para rotação de 360º.",
+      "subject": "room", "where": {"use": ["vestibulo"], "in_dwelling": true},
+      "measure": "circulo_livre", "min": 1.50, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.2", "topic": "circulacao.largura", "article": "NTA 3.3.2",
+      "title": "Largura dos corredores das habitações (1,10 m; 0,90 m até 1,50 m)",
+      "text": "Os corredores e outros espaços de circulação horizontal das habitações devem ter uma largura não inferior a 1,1 m; podem existir troços (…) com uma largura não inferior a 0,9 m, se tiverem uma extensão não superior a 1,5 m e se não derem acesso lateral a portas de compartimentos.",
+      "subject": "room", "where": {"use": ["corredor", "vestibulo"], "in_dwelling": true},
+      "measure": "largura_min", "min_table": {"by": "curto", "values": {"sim": 0.90, "nao": 1.10}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.3", "topic": "forma.cozinha_livre", "article": "NTA 3.3.3",
+      "title": "Rotação de 360º na cozinha depois das bancadas (Ø 1,50 m)",
+      "text": "Após a instalação das bancadas deve existir um espaço livre que permita inscrever uma zona de manobra para a rotação de 360º (…); a distância entre bancadas ou entre as bancadas e as paredes não deve ser inferior a 1,2 m.",
+      "subject": "room", "where": {"use": ["cozinha", "sala_cozinha"], "in_dwelling": true},
+      "measure": "circulo_livre", "min": 1.50, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-DL163-3.3.4", "topic": "is.completa", "article": "NTA 3.3.4",
+      "title": "Uma instalação sanitária com lavatório, sanita, bidé e banheira (ou base de duche)",
+      "text": "Em cada habitação deve existir pelo menos uma instalação sanitária (…) equipada com, pelo menos, um lavatório, uma sanita, um bidé e uma banheira; em alternativa à banheira, pode ser instalada uma base de duche com 0,8 m por 0,8 m desde que fique garantido o espaço para eventual instalação da banheira.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "n_is_acessiveis", "min": 1, "unit": "", "severity": "error",
+      "fix": "Pôr numa instalação sanitária o lavatório, a sanita, o bidé e a banheira (ou a base de duche) — Instalações ▸ Louça sanitária."
+    }
+  ]
+}

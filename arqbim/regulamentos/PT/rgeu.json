@@ -1,0 +1,156 @@
+{
+  "id": "PT-RGEU",
+  "country": "PT",
+  "short": "RGEU",
+  "title": "Regulamento Geral das Edificações Urbanas",
+  "instrument": "Decreto-Lei n.º 38 382, de 7 de agosto de 1951 (arts. 65.º a 73.º na redação do DL n.º 650/75; última alteração: DL n.º 108/2026)",
+  "published": "1951-08-07",
+  "source": "Texto do RGEU da Ordem dos Arquitectos (Secção Regional Sul) e texto consolidado da PGD Lisboa (pgdlisboa.pt)",
+  "status": "em_vigor",
+  "fallback": [],
+  "notes": "Em vigor: a revogação do DL 10/2024 foi adiada pelo DL 108/2026 até ao diploma das regras técnicas (o Código da Construção). O DL 10/2024 alterou o art. 66.º (n.os 6 e 7) e revogou o art. 70.º e os das escadas (45.º e 46.º) — a confirmar no texto consolidado. Valores lidos em 2026-11-06.",
+  "rules": [
+    {
+      "id": "PT-RGEU-65-1", "topic": "pe_direito.habitacao", "article": "art. 65.º, n.os 1 e 4",
+      "title": "Pé-direito livre da habitação",
+      "text": "A altura mínima, piso a piso, em edificações destinadas à habitação é de 2,70 m, não podendo ser o pé-direito livre mínimo inferior a 2,40 m. Nos tectos com vigas, inclinados, abobadados (…) devem ser mantidos, pelo menos, em 80% da superfície do tecto.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio", "tratamento_roupa"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_80", "min": 2.40, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-65-2", "topic": "pe_direito.secundarios", "article": "art. 65.º, n.º 2",
+      "title": "Pé-direito de vestíbulos, corredores, instalações sanitárias, despensas e arrecadações",
+      "text": "Excepcionalmente, em vestíbulos, corredores, instalações sanitárias, despensas e arrecadações será admissível que o pé-direito se reduza ao mínimo de 2,20 m.",
+      "subject": "room", "where": {"use": ["vestibulo", "corredor", "instalacao_sanitaria", "arrumos"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_80", "min": 2.20, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-65-4", "topic": "pe_direito.resto", "article": "art. 65.º, n.º 4",
+      "title": "Pé-direito na superfície restante (tetos inclinados ou com vigas)",
+      "text": "(…) admitindo-se na superfície restante que o pé-direito livre possa descer até ao mínimo de 2,20 m ou de 2,70 m, respectivamente, nos casos de habitação e de comércio.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio", "tratamento_roupa", "vestibulo", "corredor", "instalacao_sanitaria", "arrumos"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_min", "min": 2.20, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-65-3", "topic": "pe_direito.servicos", "article": "art. 65.º, n.os 3 e 4",
+      "title": "Pé-direito dos estabelecimentos comerciais",
+      "text": "O pé-direito livre mínimo dos pisos destinados a estabelecimentos comerciais é de 3 m.",
+      "subject": "room", "where": {"use": ["comercio"]},
+      "measure": "pe_direito_80", "min": 3.00, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-66-sala", "topic": "area.sala", "article": "art. 66.º, n.º 1",
+      "title": "Área mínima da sala",
+      "text": "Os compartimentos de habitação não poderão ser em número e área inferiores aos indicados no quadro: sala — T0 e T1 10 m²; T2 a T4 12 m²; T5, T6 e Tx 16 m².",
+      "subject": "room", "where": {"use": ["sala"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min_table": {"by": "typology", "values": {"T0": 10, "T1": 10, "T2": 12, "T3": 12, "T4": 12, "T5": 16, "T6": 16}, "else": 16},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-66-cozinha", "topic": "area.cozinha", "article": "art. 66.º, n.º 1",
+      "title": "Área mínima da cozinha",
+      "text": "Cozinha: 6 m² em todas as tipologias (quadro do art. 66.º).",
+      "subject": "room", "where": {"use": ["cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min": 6.0, "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-66-quartos", "topic": "area.quartos", "article": "art. 66.º, n.º 1",
+      "title": "Áreas mínimas dos quartos",
+      "text": "Quarto casal 10,5 m²; quartos duplos 9 m²; quartos simples 6,5 m² (T1: 10,5; T2: 10,5 e 9; T3: 10,5, 9 e 9; T4: 10,5, 9, 9 e 6,5; T5: 10,5, 9, 9, 9 e 6,5; T6: 10,5, 9, 9, 9, 6,5 e 6,5; Tx: restantes quartos de 9 m²).",
+      "subject": "room", "where": {"use": ["quarto"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min_rank": {"by": "typology", "values": {"T1": [10.5], "T2": [10.5, 9], "T3": [10.5, 9, 9], "T4": [10.5, 9, 9, 6.5], "T5": [10.5, 9, 9, 9, 6.5], "T6": [10.5, 9, 9, 9, 6.5, 6.5]}, "rest": 6.5},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-66-suplemento", "topic": "area.suplementos", "article": "art. 66.º, n.os 1 e 3",
+      "title": "Sala, cozinha e suplemento de área obrigatório",
+      "text": "O suplemento de área obrigatório (T0 6; T1 4; T2 6; T3 a T5 8; T6 10; Tx x+4 m²) não pode dar origem a um espaço autónomo e encerrado, deve distribuir-se pela cozinha e sala, e terá uma sua parcela afectada ao tratamento de roupa.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_sala_cozinha_suplementos", "min_table": {"by": "typology", "values": {"T0": 22, "T1": 20, "T2": 24, "T3": 26, "T4": 26, "T5": 30, "T6": 32}, "else": "26 + n_quartos"},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-67", "topic": "area.fogo_bruta", "article": "art. 67.º, n.º 1",
+      "title": "Área bruta mínima do fogo",
+      "text": "As áreas brutas dos fogos terão os seguintes valores mínimos: T0 35; T1 52; T2 72; T3 91; T4 105; T5 122; T6 134 m²; Tx > 6: 1,6 × Ah. Área bruta: medida pelo perímetro exterior das paredes exteriores e eixos das paredes separadoras dos fogos (inclui varandas privativas, locais acessórios e a quota-parte das circulações comuns).",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_bruta", "min_table": {"by": "typology", "values": {"T0": 35, "T1": 52, "T2": 72, "T3": 91, "T4": 105, "T5": 122, "T6": 134}, "else": "1.6 * area_habitavel"},
+      "unit": "m2", "severity": "error",
+      "fix": "O Verificador não soma ainda a quota-parte das circulações comuns: num prédio, o valor real é um pouco maior."
+    },
+    {
+      "id": "PT-RGEU-68", "topic": "is.completa", "article": "art. 68.º",
+      "title": "Área mínima das instalações sanitárias",
+      "text": "Nas habitações T0, T1 e T2, a área mínima para instalações sanitárias é de 3,5 m²; nas T3 e T4, 4,5 m², subdividida em dois espaços com acesso independente; nas T5 ou com mais de seis compartimentos, 6 m², desdobrada em dois espaços.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_is_total", "min_table": {"by": "typology", "values": {"T0": 3.5, "T1": 3.5, "T2": 3.5, "T3": 4.5, "T4": 4.5}, "else": 6.0},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-68-espacos", "topic": "is.numero", "article": "art. 68.º, n.os 2 e 4",
+      "title": "Instalações sanitárias em dois espaços (T3 ou mais)",
+      "text": "Nas habitações T3 e T4 (…) subdividida em dois espaços com acesso independente; nas T5 (…) desdobrada em dois espaços com acesso independente.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "n_is", "min_table": {"by": "t3_ou_mais", "values": {"sim": 2}}, "unit": "", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-69-1a", "topic": "forma.quartos", "article": "art. 69.º, n.º 1, al. a)",
+      "title": "Dimensão mínima de 2,10 m (compartimentos com menos de 9,5 m²)",
+      "text": "Quando a respectiva área for menor que 9,5 m², a dimensão mínima será 2,10 m.",
+      "subject": "room", "where": {"use": ["quarto", "sala"], "faixa_69": ["menos_9.5"], "in_dwelling": true},
+      "measure": "largura_min", "min": 2.10, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-69-quartos", "topic": "forma.quartos", "article": "art. 69.º, n.º 1, als. b) a d)",
+      "title": "Círculo inscrito no quarto (2,40 m a partir de 9,5 m²; 2,70 m a partir de 12 m²)",
+      "text": "Quando a respectiva área for maior ou igual a 9,5 m² e menor que 12 m², deverá inscrever-se nela um círculo de diâmetro não inferior a 2,40 m; maior ou igual a 12 m², não inferior a 2,70 m (…).",
+      "subject": "room", "where": {"use": ["quarto"], "in_dwelling": true},
+      "measure": "circulo_inscrito", "min_table": {"by": "faixa_69", "values": {"9.5_a_12": 2.40, "12_a_15": 2.70, "15_ou_mais": 2.70}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-69-sala", "topic": "forma.sala", "article": "art. 69.º, n.º 1, als. b) a d)",
+      "title": "Círculo inscrito na sala (2,40 m a partir de 9,5 m²; 2,70 m a partir de 12 m²)",
+      "text": "Quando a respectiva área for maior ou igual a 9,5 m² e menor que 12 m², deverá inscrever-se nela um círculo de diâmetro não inferior a 2,40 m; maior ou igual a 12 m², não inferior a 2,70 m (…).",
+      "subject": "room", "where": {"use": ["sala", "sala_cozinha"], "in_dwelling": true},
+      "measure": "circulo_inscrito", "min_table": {"by": "faixa_69", "values": {"9.5_a_12": 2.40, "12_a_15": 2.70, "15_ou_mais": 2.70}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-69-3", "topic": "forma.cozinha_largura", "article": "art. 69.º, n.º 3",
+      "title": "Dimensão mínima da cozinha",
+      "text": "Exceptua-se (…) o compartimento destinado a cozinha, em que a dimensão mínima admitida será de 1,70 m, sem prejuízo de que a distância mínima livre entre bancadas situadas em paredes opostas seja de 1,10 m.",
+      "subject": "room", "where": {"use": ["cozinha"], "in_dwelling": true},
+      "measure": "largura_min", "min": 1.70, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-71-vao", "topic": "luz.vao", "article": "art. 71.º, n.º 1",
+      "title": "Compartimento com vão para o exterior",
+      "text": "Os compartimentos das habitações referidos no n.º 1 do artigo 66.º serão sempre iluminados e ventilados por um ou mais vãos praticados nas paredes, em comunicação directa com o exterior (…).",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true},
+      "measure": "n_vaos_exteriores", "min": 1, "unit": "", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-71-area", "topic": "luz.area", "article": "art. 71.º, n.º 1",
+      "title": "Área dos vãos (1/10 da área do compartimento, 1,08 m² no mínimo, no tosco)",
+      "text": "(…) cuja área total não será inferior a um décimo da área do compartimento com o mínimo de 1,08 m² medidos no tosco.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true},
+      "measure": "area_vaos", "min": "max(1.08; area_util / 10)", "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "PT-RGEU-72", "topic": "ventilacao.transversal", "article": "art. 72.º",
+      "title": "Ventilação transversal do fogo",
+      "text": "Deverá ficar assegurada a ventilação transversal do conjunto de cada habitação, em regra por meio de janelas dispostas em duas fachadas opostas.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "fachadas_opostas", "min": 1, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "PT-RGEU-73", "topic": "luz.obstaculo", "article": "art. 73.º",
+      "title": "Afastamento das janelas a muros ou fachadas fronteiros",
+      "text": "As janelas dos compartimentos das habitações deverão ser sempre dispostas de forma que o seu afastamento de qualquer muro ou fachada fronteiros (…) não seja inferior a metade da altura desse muro ou fachada acima do nível do pavimento do compartimento, com o mínimo de 3 metros. Além disso não deverá haver a um e outro lado do eixo vertical da janela qualquer obstáculo à iluminação a distância inferior a 2 metros (…).",
+      "subject": "window", "where": {"habitable": true, "in_dwelling": true},
+      "measure": "afastamento_fronteiro", "min": "max(3; altura_fronteira / 2)", "absent_ok": true,
+      "unit": "m", "severity": "error"
+    }
+  ]
+}

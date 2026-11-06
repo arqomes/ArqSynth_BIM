@@ -375,6 +375,61 @@ class Daylight(unittest.TestCase):
         self.assertEqual(next(f for f in result.findings if f.rule.id == "CV-CTE-77-1").status, "ok")
 
 
+PT = {"country": "PT", "building_use": "habitacao", "work": "nova"}
+
+
+class Portugal(unittest.TestCase):
+    """0.421: the RGEU and the DL 163/2006."""
+
+    def test_the_t2_house_in_portugal(self):
+        """The same T2 house checked in Portugal: its «Porta 90» doors (0,76 m clear) under the DL 163/2006's 0,77 m
+        (NTA 4.9.1) — the entrance and the three inner ones; no bathroom: the RGEU's 3,5 m² (art. 68.º) and the NTA's
+        bathroom with basin, toilet, bidet and bath (3.3.4); its rooms, gross area (83,64 ≥ 72), openings (1/10, in the
+        rough) and cross ventilation (windows on the two long façades) pass."""
+        from arqbim.verify import check
+        doc = Document()
+        t2_house(doc)
+        result = check.check(doc, dict(PT), force=True)
+        failed = {}
+        for f in result.failures:
+            failed.setdefault(f.rule.id, []).append(f)
+        self.assertEqual(sorted(failed), ["PT-DL163-3.3.4", "PT-DL163-4.9.1-compartimentos",
+                                          "PT-DL163-4.9.1-entrada", "PT-RGEU-68"])
+        self.assertEqual(len(failed["PT-DL163-4.9.1-compartimentos"]), 3)
+        self.assertEqual({p.id for p, own in result.packs}, {"PT-RGEU", "PT-DL163"})
+        passed = {f.rule.id for f in result.findings if f.status == "ok"}
+        self.assertTrue({"PT-RGEU-66-sala", "PT-RGEU-66-quartos", "PT-RGEU-67", "PT-RGEU-71-area", "PT-RGEU-72",
+                         "PT-RGEU-69-sala", "PT-RGEU-66-suplemento"} <= passed)
+        door = failed["PT-DL163-4.9.1-entrada"][0]
+        self.assertIn("largura útil 0,76 m — DL 163/2006, NTA 4.9.1 (e 3.3.8): mínimo 0,77 m", check.message(door))
+
+    def test_cape_verde_takes_portugal_only_where_its_code_is_silent(self):
+        """Cabo Verde's CTE (art. 4.º): the Portuguese laws come as supplementary, and only their rules on topics the
+        CTE does not cover are checked — none of the house's (a ramp inside a dwelling would be one)."""
+        from arqbim.verify import check, project
+        doc = Document()
+        t2_house(doc)
+        result = check.check(doc, dict(CV), force=True)
+        self.assertEqual([(p.id, own) for p, own in result.packs],
+                         [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False)])
+        self.assertEqual({f.rule.pack for f in result.findings}, {"CV-CTE"})
+        supplementary = {r.id for r in project.active_rules(dict(CV)) if r.pack != "CV-CTE"}
+        self.assertEqual(supplementary, {"PT-DL163-3.3.6"})
+
+    def test_a_ramp_by_the_interpolated_rule(self):
+        """A ramp of 0,50 m in 7 m (7,1 %): the NTA allows 7 % for 0,50 m (between 8 % at 0,40 and 6 % at 0,60) —
+        fails by a little; in 8,5 m (5,9 %) it passes."""
+        from arqbim.verify import check
+        doc = Document()
+        ramp = bim.add_ramp(doc, np.array((0.0, 0.0, 0.0)), np.array((7.0, 0.0, 0.0)), catalog.BY_KEY["laje_15"],
+                            1.20, 0.50)
+        result = check.check(doc, dict(PT), force=True)
+        slope = next(f for f in result.findings if f.rule.id == "PT-DL163-2.5.1" and f.subject.id == ramp)
+        self.assertEqual(slope.status, "fail")
+        self.assertAlmostEqual(slope.limit, 7.0, places=3)
+        self.assertAlmostEqual(slope.value, 50 / 7.0, places=3)
+
+
 class Exceptions(unittest.TestCase):
     def test_an_exception_is_not_counted(self):
         """0.418: the entrance door's failure accepted (the reason kept in the project's settings): no longer a

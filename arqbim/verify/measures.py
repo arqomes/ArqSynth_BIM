@@ -361,6 +361,62 @@ def _complete_bathrooms(ctx, d):
     return out
 
 
+def _bathrooms(ctx, d, needs=()):
+    """The dwelling's bathrooms (rooms of that use) with all of `needs` inside (a need a tuple: any of them)."""
+    out = []
+    for g in d.rooms:
+        r = ctx.facts.rooms.get(g)
+        c = ctx.facts.contents.get(g, {})
+        if r is None or r.use != "instalacao_sanitaria":
+            continue
+        if all(any(c.get(k) for k in (need if isinstance(need, tuple) else (need,))) for need in needs):
+            out.append(float(r.area))
+    return out
+
+
+def rough_openings(ctx, room_id):
+    """(0.421) The area of a room's openings to the outside measured in the rough (RGEU art. 71.º: «medidos no
+    tosco»): each window's and glazed door's width × height."""
+    total = 0.0
+    s = ctx.doc.ifc.unit_scale
+    for w, _g in room_windows(ctx, room_id):
+        e = ctx.doc.ifc.by_guid(w.guid)
+        if e is not None:
+            total += float(e.OverallWidth or 0.0) * s * float(e.OverallHeight or 0.0) * s
+    return round(total, 4)
+
+
+def opposite_facades(ctx, d):
+    """(0.421) 1 when a dwelling has windows to the outside on two opposite façades (RGEU art. 72.º: cross
+    ventilation), else 0."""
+    found = []                                          # (across its wall, where it is)
+    for g in d.rooms:
+        for w, _glass in room_windows(ctx, g):
+            n = np.asarray(w.normal, dtype=float)
+            found.append((n / max(np.linalg.norm(n), 1e-9), np.asarray(w.middle, dtype=float)))
+    for i, (a, pa) in enumerate(found):
+        for b, pb in found[i + 1:]:
+            # two walls square to the same way (parallel), at least 2 m apart across it: two opposite façades
+            if abs(float(np.dot(a, b))) > 0.7 and abs(float(np.dot(pb - pa, a))) > 2.0:
+                return 1.0
+    return 0.0
+
+
+def different_facades(ctx, d):
+    """(0.421) 1 when a dwelling has windows to the outside on façades of different orientation (CTE art. 76.º n.º 4):
+    two walls not parallel, or parallel and apart (opposite façades); else 0."""
+    found = []
+    for g in d.rooms:
+        for w, _glass in room_windows(ctx, g):
+            n = np.asarray(w.normal, dtype=float)
+            found.append((n / max(np.linalg.norm(n), 1e-9), np.asarray(w.middle, dtype=float)))
+    for i, (a, pa) in enumerate(found):
+        for b, pb in found[i + 1:]:
+            if abs(float(np.dot(a, b))) < 0.7 or abs(float(np.dot(pb - pa, a))) > 2.0:
+                return 1.0
+    return 0.0
+
+
 def _storage_area(ctx, d):
     """The dwelling's storage (CTE art. 45.º): its storerooms and pantries, and its wardrobes' floor."""
     total = 0.0
@@ -554,6 +610,7 @@ MEASURES = {
         "area_iluminada": lambda ctx, s: lit_area(ctx, _room(ctx, s)),
         "area_sem_luz": lambda ctx, s: max(0.0, float(_room(ctx, s).area) - lit_area(ctx, _room(ctx, s))),
         "n_vaos_exteriores": lambda ctx, s: float(len(room_windows(ctx, s.id))),
+        "area_vaos": lambda ctx, s: rough_openings(ctx, s.id),                                    # (0.421)
     },
     "window": {                                                                                    # (0.420)
         "afastamento_fronteiro": lambda ctx, s: front_obstacle(ctx, s.id)[0],     # (None: nothing in front)
@@ -591,6 +648,12 @@ MEASURES = {
         "area_arrumos": lambda ctx, s: _storage_area(ctx, _dwelling(ctx, s)),                    # (0.419)
         "is_completa_maior": lambda ctx, s: max(_complete_bathrooms(ctx, _dwelling(ctx, s)), default=0.0),
         "n_is_completas": lambda ctx, s: float(len(_complete_bathrooms(ctx, _dwelling(ctx, s)))),
+        "area_is_total": lambda ctx, s: round(sum(_bathrooms(ctx, _dwelling(ctx, s))), 4),        # (0.421)
+        "n_is": lambda ctx, s: float(len(_bathrooms(ctx, _dwelling(ctx, s)))),
+        "n_is_acessiveis": lambda ctx, s: float(len(_bathrooms(ctx, _dwelling(ctx, s), (
+            "basin", "toilet", "bidet", ("bath", "shower"))))),
+        "fachadas_opostas": lambda ctx, s: opposite_facades(ctx, _dwelling(ctx, s)),
+        "fachadas_diferentes": lambda ctx, s: different_facades(ctx, _dwelling(ctx, s)),
     },
     "door": {
         "largura_util": lambda ctx, s: (door_clear(ctx, s.id) or (None,))[0],

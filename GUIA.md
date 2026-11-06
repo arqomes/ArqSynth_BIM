@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.420.0
+# Guia das ferramentas — ArqSynth BIM 0.421.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.420.0.
+ArqSynth BIM 0.421.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -1327,7 +1327,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Regulamentos do projeto…
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
-- **Passos de teste (TESTAR.md):** 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+- **Passos de teste (TESTAR.md):** 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 ### Colaborar ▸ Notas
 
@@ -1792,4 +1792,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*242 comandos descritos, gerados do ArqSynth BIM 0.420.0.*
+*242 comandos descritos, gerados do ArqSynth BIM 0.421.0.*

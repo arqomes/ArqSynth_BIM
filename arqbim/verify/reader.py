@@ -43,7 +43,7 @@ _KEPT = {}                  # id(document) -> Facts (the last read)
 
 # an IFC class (and PredefinedType) -> what the reader calls it inside a room
 SANITARY = {"TOILETPAN": "toilet", "WCSEAT": "toilet", "URINAL": "toilet", "SHOWER": "shower", "BATH": "bath",
-            "WASHHANDBASIN": "basin", "BIDET": "toilet", "SINK": "sink"}
+            "WASHHANDBASIN": "basin", "BIDET": "bidet", "SINK": "sink"}
 APPLIANCES = {"ELECTRICCOOKER": "cooker", "DISHWASHER": "cooker", "WASHINGMACHINE": "washer",
               "TUMBLEDRYER": "washer"}
 FURNITURE_WORDS = (("double_bed", ("cama de casal", "double bed", "cama casal")), ("bed", ("cama", "bed")),

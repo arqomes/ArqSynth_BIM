@@ -96,7 +96,7 @@ def from_contents(contents):
     kitchen sink, a hob or kitchen cabinets -> a kitchen (with a sofa: the living room and kitchen); a washing
     machine alone -> the laundry; a bed -> a bedroom."""
     c = contents or {}
-    if c.get("toilet") or c.get("shower") or c.get("bath"):
+    if c.get("toilet") or c.get("shower") or c.get("bath") or c.get("bidet"):
         return "instalacao_sanitaria"
     if c.get("sink") or c.get("cooker") or c.get("kitchen_cabinet"):
         return "sala_cozinha" if c.get("sofa") or c.get("bed") else "cozinha"

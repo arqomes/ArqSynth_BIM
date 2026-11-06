@@ -127,6 +127,9 @@ def subjects(ctx):
         area = facts.rooms[s.id].area
         s.props["faixa_area"] = "menos_de_7" if area < 7.0 - 1e-6 else ("7_a_10.5" if area < 10.5 - 1e-6
                                                                         else "10.5_ou_mais")
+        # (0.421) the RGEU's art. 69.º bands
+        s.props["faixa_69"] = "menos_9.5" if area < 9.5 - 1e-6 else ("9.5_a_12" if area < 12.0 - 1e-6 else (
+            "12_a_15" if area < 15.0 - 1e-6 else "15_ou_mais"))
     # (0.419) the stairs, ramps and railings: where they are — in a dwelling, or in common use
     band = "acima_28" if height is not None and height > 28.0 + 1e-6 else "ate_28"
     has_common = any(uses.is_common(r.use) for r in facts.rooms.values())
@@ -139,9 +142,12 @@ def subjects(ctx):
         room = locate(obj.storey, (lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0)
         in_dwelling = room is not None and room in facts.of_room
         common = (room is not None and uses.is_common(facts.rooms[room].use)) or (has_common and not in_dwelling)
+        props = {"common": common, "in_dwelling": in_dwelling, "height_band": band, "building_use": building_use}
+        if kind == "ramp":                                   # (0.421: DL 163/2006, 2.5.4 — a short ramp)
+            length = ms.measure(ctx, ms.Subject("ramp", obj.id, ""), "comprimento_lanco")
+            props["rampa_curta"] = "sim" if length is not None and length <= 5.0 + 1e-6 else "nao"
         out[kind].append(ms.Subject(kind, obj.id, obj.name or t("verify.kind." + kind), [obj.id], obj.storey,
-                                    props={"common": common, "in_dwelling": in_dwelling, "height_band": band,
-                                           "building_use": building_use}))
+                                    props=props))
     # (0.420) the windows (and glazed doors) to the outside, of the rooms they light
     from . import measures as _ms
     language_ = lang()
