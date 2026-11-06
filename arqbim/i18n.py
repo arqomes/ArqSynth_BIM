@@ -6404,6 +6404,13 @@ _STRINGS = {
     "tip.drag_box": ("Arrastar faz um retângulo de seleção", "Dragging draws a selection box"),
     "tip.drag_lasso": ("Arrastar faz um laço livre à mão", "Dragging draws a free-hand lasso"),
     "act.drag_elements": ("Arrastar elementos", "Drag elements"),                                  # (0.427)
+    "act.thin_lines": ("Linhas finas", "Thin lines"),                                              # (0.428)
+    "tip.thin_lines": ("No ecrã, as linhas do corte com 1 píxel, seja qual for o zoom (para desenhar com rigor). "
+                       "Desligado: com as canetas do papel — o corte grosso, as camadas e a trama finas, que mudam com "
+                       "o zoom. O papel e o PDF não mudam.",
+                       "On the screen, the cut's lines 1 pixel wide, whatever the zoom (to draw precisely). Off: with "
+                       "the paper's pens — the cut thick, the layers and hatches thin, changing with the zoom. Paper "
+                       "and PDF do not change."),
     "tip.drag_elements": ("Ligado: carregar num elemento e arrastar move-o (Ctrl ao largar: uma cópia; Esc: fica "
                           "onde estava); a partir do vazio continua a ser a caixa. Desligado: arrastar faz sempre a "
                           "caixa.",

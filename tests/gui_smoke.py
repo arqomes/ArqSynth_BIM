@@ -832,6 +832,7 @@ def bim_flow():
     verifier_sheet_flow()             # (0.425)
     rules_editor_flow()               # (0.426)
     drag_elements_flow()              # (0.427)
+    paper_pens_flow()                 # (0.428)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21244,6 +21245,56 @@ def drag_elements_flow():
     check("arrastar_elementos", moved and stretched and back and escaped and boxed and off,
           "moveu={} esticou={} desfeito={} esc={} caixa={} desligado={} | eixo {}".format(
               moved, stretched, back, escaped, boxed, off, axis_x(middle)))
+
+
+def paper_pens_flow():
+    """0.428 (the Hestia's walls in plan, «à nossa maneira»): the T2 house's plan — the cut's outline with the cut pen
+    (0,50 mm of paper at the view's scale and this zoom: wider than the seams between the plaster and the block and
+    than the hatch, 0,10 mm, at least 1 px); zoomed in four times, the outline wider; zoomed far out, the hatch and the
+    seams left out (a grey smudge else); «Linhas finas»: all 1 px. Captured: 428_canetas.png, 428_canetas_perto.png,
+    428_canetas_finas.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(500)
+    vp.zoom_extents()
+    pump(500)
+    lines = vp._pen_lines
+    k0 = vp.paper_mm_px()
+    width = lambda kind: lines[kind].material.thickness if kind in lines else None      # noqa: E731
+    first = (width("cut"), width("seam"), width("hatch"))
+    shot("428_canetas.png")
+    kinds = set(lines) == {"cut", "seam", "hatch"} and first[0] > first[1] >= 1.0 and first[2] >= 1.0 \
+        and abs(first[0] - max(2.0, min(0.5 * k0, 6.0))) < 0.05
+    centre = vp.project(np.array((5.0, 4.0, 0.0)))
+    mouse[:] = centre
+    move_event(canvas, qp(*centre))
+    wheel(+12)
+    pump(400)
+    k1 = vp.paper_mm_px()
+    near = (width("cut"), lines["hatch"].visible, width("seam"))
+    shot("428_canetas_perto.png")
+    closer = k1 > k0 * 3 and near[0] > first[0] and near[1] and near[2] < near[0]
+    wheel(-30)
+    pump(400)
+    k2 = vp.paper_mm_px()
+    far = (lines["hatch"].visible, lines["seam"].visible, width("cut"))
+    smudge = k2 < 2.0 and not far[0] and far[2] >= 1.0
+    vp.zoom_extents()
+    pump(300)
+    win.act_thin_lines.trigger()
+    pump(400)
+    thin = all(width(k) == 1.0 for k in ("cut", "seam", "hatch")) and vp.thin_lines
+    shot("428_canetas_finas.png")
+    win.act_thin_lines.trigger()
+    pump(300)
+    back = not vp.thin_lines and width("cut") > 1.0
+    win.open_view("3d", None)
+    pump(300)
+    check("canetas_do_papel_no_ecra", kinds and closer and smudge and thin and back,
+          "tipos={} 1.ª={} k={:.2f} perto={} k={:.2f} longe={} k={:.2f} finas={} volta={}".format(
+              sorted(lines), first, k0, near, k1, far, k2, thin, back))
 
 
 def wheel(steps):

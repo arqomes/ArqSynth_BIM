@@ -293,6 +293,14 @@ def _verify_sheet(d):
             _tick(d, 23, y, 0.5)
 
 
+def _thin_lines(d):
+    """(0.428) Thin lines: a wall's cut drawn thick above, the same thin below."""
+    d.fill(None).ink(3.0)
+    d.rect(5, 5, 22, 8)
+    d.ink(1.0)
+    d.rect(5, 19, 22, 8)
+
+
 def _drag_elements(d):
     """(0.427) Dragging an element: a wall, its place further on dashed, the arrow between them."""
     d.fill("#c9c7c1").ink(1.2)
@@ -1005,6 +1013,7 @@ DRAWN = {"wall_rect": _wall_rect, "wall_circle": _wall_circle, "wall_arc": _wall
          "verify_settings": _verify_settings, "verify_panel": _verify_panel,                           # (0.417)
          "verify_sheet": _verify_sheet, "rules_editor": _rules_editor,                                 # (0.425, 0.426)
          "drag_elements": _drag_elements,                                                              # (0.427)
+         "thin_lines": _thin_lines,                                                                    # (0.428)
          "cloud_links": _cloud_links, "component_close": _component_close, "component_edit": _component_edit,
          "component_make": _component_make, "delete": _delete, "dimension_style": _dimension_style,
          "electrical_check": _electrical_check, "element_hatches": _element_hatches, "export_image": _export_image,

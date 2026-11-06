@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.428 — Paredes em planta com as canetas do papel
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.428.0**. Abra a casa T2 da 0.417 e carregue em F4.
+2. Com a casa inteira à vista, as paredes aparecem com um contorno mais grosso (o corte) e linhas finas nas camadas,
+   sem trama.
+3. Aproxime com a roda do rato sobre uma parede: a trama aparece, e o contorno vai engrossando (até 6 píxeis) enquanto
+   as linhas das camadas ficam finas.
+4. Afaste muito: a trama e as camadas desaparecem, e fica só o contorno das paredes.
+5. No separador **Visualizar**, grupo Aspeto, clique em **Linhas finas**: todas as linhas do corte ficam finas, em
+   qualquer zoom. Clique outra vez para voltar.
+6. Faça **Imprimir / PDF** da planta: o PDF tem as mesmas canetas de antes (Linhas finas não o muda).
+
 ## 0.427 — Arrastar para mover
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.427.0**. Abra a casa T2 da 0.417 e carregue em F4.

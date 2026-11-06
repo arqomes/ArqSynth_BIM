@@ -106,7 +106,8 @@ PANELS = {
     "view": (("views3d", ("iso", ("top", "front", "view3d_new"))),
              ("plans", ("plan", "section", ("last_section", "box", "box_selection"))),
              ("look", ("view_styles", "graphic_styles", "symbol_styles", "templates", "element_hatches",
-                       ("images", "cad_links", "cloud_links"), ("show_analytical", "reset_patterns"))),
+                       ("images", "cad_links", "cloud_links"),
+                       ("show_analytical", "reset_patterns", "thin_lines"))),          # (0.428: «Linhas finas»)
              # (0.376: the theme beside the looks — at the end it folded first, out of sight on a 1536 px screen)
              ("theme", (("theme_light", "theme_dark", "canvas_dark"),             # (0.338; 0.341)
                         ("theme_bege", "theme_pedra", "theme_revit"),             # (0.374: the owner's study's palettes)

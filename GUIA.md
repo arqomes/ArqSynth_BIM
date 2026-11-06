@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.427.0
+# Guia das ferramentas — ArqSynth BIM 0.428.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.427.0.
+ArqSynth BIM 0.428.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -112,7 +112,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 8. [Instalações](#8-instalações) — 18 comandos
 9. [Colaborar](#9-colaborar) — 19 comandos
 10. [Anotar](#10-anotar) — 18 comandos
-11. [Visualizar](#11-visualizar) — 37 comandos
+11. [Visualizar](#11-visualizar) — 38 comandos
 12. [Render](#12-render) — 10 comandos
 13. [Modificar | Paredes](#13-modificar-paredes) — 36 comandos
 
@@ -747,7 +747,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.383 «As prévias das paredes em volume»; 0.380 «O perfil da parede com gestos (arrastar, Shift, Alt)»
+- **Passos de teste (TESTAR.md):** 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.383 «As prévias das paredes em volume»
 
 #### Fachada de vidro
 
@@ -1093,7 +1093,7 @@ Fundações, pilares, vigas, lajes, cálculo e armaduras.
 #### Paredes
 
 - **O que faz:** Paredes entre os pilares, sob as vigas selecionadas (nenhuma: todas as do pavimento): de face a face dos pilares, da base deles até à face de baixo da viga, com o tipo da ferramenta Parede. Ficam presas à viga: acompanham-na.
-- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»
+- **Passos de teste (TESTAR.md):** 0.428 «Paredes em planta com as canetas do papel»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»
 
 #### Lajes
 
@@ -1539,6 +1539,11 @@ Vistas, estilos gráficos, câmaras e painéis.
 - **O que faz:** Os padrões dos elementos selecionados (azulejo, tijolo…) voltam a ficar como estavam antes de alinhados à mão.
 - **Passos de teste (TESTAR.md):** 0.332 «Alinhar os padrões numa face»
 
+#### Linhas finas
+
+- **O que faz:** No ecrã, as linhas do corte com 1 píxel, seja qual for o zoom (para desenhar com rigor). Desligado: com as canetas do papel — o corte grosso, as camadas e a trama finas, que mudam com o zoom. O papel e o PDF não mudam.
+- **Passos de teste (TESTAR.md):** 0.428 «Paredes em planta com as canetas do papel»
+
 ### Visualizar ▸ Tema
 
 #### Tema claro
@@ -1811,4 +1816,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*245 comandos descritos, gerados do ArqSynth BIM 0.427.0.*
+*246 comandos descritos, gerados do ArqSynth BIM 0.428.0.*

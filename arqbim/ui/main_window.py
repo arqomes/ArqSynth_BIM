@@ -687,6 +687,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_analytical = self._action(t("act.analytical"), lambda: self.structure_check(),
                                            icon=icons.analytical_icon())                               # (0.163)
         self.act_show_analytical = self._action(t("act.show_analytical"), self.set_show_analytical, checkable=True)
+        self.act_thin_lines = self._action(t("act.thin_lines"), lambda on=False: self.set_thin_lines(on),
+                                           checkable=True)                    # (0.428)
+        self.act_thin_lines.setToolTip(t("tip.thin_lines"))
+        if str(QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("vista/linhas_finas", "false")).lower() == "true":
+            self.act_thin_lines.setChecked(True)
+            self.viewport.set_thin_lines(True)
         self.act_moments = self._action(t("act.moments"), self.show_moments, checkable=True)     # (0.220)
         self.act_moments.setToolTip(t("tip.moments"))
         self.act_actions = self._action(t("act.actions"), lambda: self.structure_actions(),
@@ -4303,6 +4309,15 @@ class MainWindow(QtWidgets.QMainWindow):
             select._refresh_dims(keep=False)
             self.set_hint(select.hint())
         self.message(t("info.dims_faces" if self.dim_faces else "info.dims_axes"))
+
+    def set_thin_lines(self, on):
+        """(0.428) «Linhas finas»: the cut's lines on the screen all 1 px (as Revit's Thin Lines) — or with their
+        pens' widths at the zoom. Kept for the next time; paper keeps its pens."""
+        on = bool(on)
+        self.viewport.set_thin_lines(on)
+        if self.act_thin_lines.isChecked() != on:
+            self.act_thin_lines.setChecked(on)
+        QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("vista/linhas_finas", "true" if on else "false")
 
     def set_drag_elements(self, on):
         """(0.427) «Arrastar elementos»: whether a drag that starts on an element moves it (else it draws a box, as

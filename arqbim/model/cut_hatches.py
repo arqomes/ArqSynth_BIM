@@ -12,6 +12,7 @@ from . import graphic_styles as styles_model
 WHITE = "#ffffff"
 INK = "#000000"
 DOT = 0.25            # mm on paper: a dot drawn as a stroke this long
+SEAMS = "~seams"      # (0.428) the owner of the lines between materials inside what is cut (None: the outline round it)
 
 
 def layers_of(key, own, gstyle):
@@ -57,7 +58,8 @@ def build(fills, whose, own, gstyle, scale, origin, u, v, lift):
     [(outline (N, 2), key)] (drawings.cut_fills): on the plane (origin, u, v), moved by `lift` (towards the viewer).
     scale: N of 1:N (a drafting pattern's mm on paper, so many mm on the building). (0.320) The outlines are of
     all elements at once, under the key None: round each material's parts joined (cut_joins.merged) — a line only
-    where the material changes, none where two walls of one material meet."""
+    where the material changes, none where two walls of one material meet. (0.428) Under None only the outline round
+    all that is cut (drawn with the cut pen); the lines between materials inside it under SEAMS (the hatch pen)."""
     import shapely
     from . import cut_joins
     origin, u, v, lift = (np.asarray(a, dtype=float) for a in (origin, u, v, lift))
@@ -122,20 +124,37 @@ def build(fills, whose, own, gstyle, scale, origin, u, v, lift):
         if segs:
             mine[2].append(np.concatenate(segs))
         mine[3].extend(seg_rgb)
-    segs = []
-    for key, region in cut_joins.merged(fills, whose).items():
-        if not layers_of(key, own, gstyle):
-            continue                                        # (the dark poché: as it is)
-        for part in _lines(region.boundary):                # (each material's outline: its seams and round all)
-            c = np.asarray(part.coords, dtype=float)
-            if len(c) >= 2:
-                segs.append(to3d(np.stack((c[:-1], c[1:]), axis=1)))
+    # (0.428) the outline round all that is cut — the cut pen —, apart from the seams between materials inside it —
+    # the hatch pen —, as on paper (ui/pdf.py)
+    regions = {key: region for key, region in cut_joins.merged(fills, whose).items() if layers_of(key, own, gstyle)}
+    segs, seams = [], []
+
+    def pairs(line):
+        c = np.asarray(line.coords, dtype=float)
+        return to3d(np.stack((c[:-1], c[1:]), axis=1)) if len(c) >= 2 else None
+
+    if regions:
+        from shapely.ops import unary_union
+        outer = unary_union(list(regions.values())).boundary
+        for part in _lines(outer):
+            p = pairs(part)
+            if p is not None:
+                segs.append(p)
+        if len(regions) > 1:                            # (a seam is two materials' edge: once, the lines joined)
+            inner = unary_union([region.boundary for region in regions.values()]).difference(outer.buffer(1e-5))
+            for part in _lines(inner) if not inner.is_empty else ():
+                p = pairs(part)
+                if p is not None:
+                    seams.append(p)
     breaks = getattr(fills, "breaks", None)                  # (0.333: between elements unjoined by hand)
     if breaks is not None and len(breaks):
         segs.append(to3d(np.asarray(breaks, dtype=float)))
     if segs:
         segs = np.concatenate(segs)
         out[None] = ([], [], [segs], [_rgb(INK)] * len(segs))
+    if seams:
+        seams = np.concatenate(seams)
+        out[SEAMS] = ([], [], [seams], [_rgb(INK)] * len(seams))
     return {owner: (np.array(t, dtype=float).reshape(-1, 3, 3), np.array(c, dtype=float).reshape(-1, 3),
                     np.concatenate(s) if s else np.zeros((0, 2, 3)), np.array(sc, dtype=float).reshape(-1, 3))
             for owner, (t, c, s, sc) in out.items()}

@@ -52,6 +52,10 @@ SUN = (0.45, -0.75, 1.0)          # where the fixed sun shines from (as in Sketc
 HATCH_SCALE = 50                  # (0.317) a plan's / section's hatches on screen: drawn at its scale, else at 1:50
 HATCH_DEPTH = 0.003               # m: …a hair beyond the cutting plane (kept by its clipping)
 HATCH_QUEUE = 2700                # …drawn after the batches and their poché (theirs is 2600), not hiding it from a click
+PEN_MAX_PX = 6.0                  # (0.428) a pen on the screen at most this wide, however close
+CUT_MIN_PX = 2.0                  # (0.428) the cut's outline at least this wide (thicker than the 1 px layers, far off)
+HATCH_MIN_PX_PER_MM = 2.0         # (0.428) the hatches shown while a mm of paper is at least this many pixels…
+SEAM_MIN_PX_PER_MM = 1.0          # …and the seams between the layers
 SEAMS_AT_ONCE = 300               # (0.320) more elements than this to look at for seams: a few after each image…
 SEAMS_BUDGET = 0.01               # s: …for so long each time…
 FLUSH_BUDGET = 0.03               # s (0.328): the batches made again for one image when many changed (a file opened)
@@ -342,6 +346,9 @@ class Viewport:
         self._grid_objects = []     # the structural grid's axes, bubbles and tags (0.67)
         self._lot_objects = []      # (0.423) the lot's sides, their numbers, «via pública» on the front
         self._lot_key = None
+        self.thin_lines = False     # (0.428) «Linhas finas»: the cut's lines all 1 px
+        self._pen_lines = {}        # (0.428) "cut" | "seam" | "hatch" -> its lines on the screen
+        self._pen_key = None
         self.selected_axes = set()  # grid axes picked (indices in Document.grids; 0.72)
         self.unselectable = set()   # categories that cannot be selected (0.76): IFC classes, "sketch", "grid"
         self.axes_listeners = []    # (indices) -> None, when they change
@@ -2320,6 +2327,7 @@ class Viewport:
                 self.after_next_draw(self._hatches_again)
                 self._assemble_cut_hatches()
                 return
+            self._cut_scale = float(settings.scale or HATCH_SCALE)          # (0.428: the pens' mm, at this scale)
             fills, own, whose = drawings.cut_fills(self.doc, objects, n, offset, origin, u, v, settings.rule,
                                                    settings.detail, look, settings.elements)
             gstyle = styles_model.clean(getattr(self.doc, "graphic_style", None))
@@ -2344,7 +2352,9 @@ class Viewport:
         self._hatch_objects = []
         if not self._hatch_parts:
             return
-        tris, tri_rgb, segs, seg_rgb = [], [], [], []
+        from ..model.cut_hatches import SEAMS
+        tris, tri_rgb = [], []
+        pens = {"hatch": ([], []), "seam": ([], []), "cut": ([], [])}     # (0.428: each its pen, as on paper)
         picked = np.array(gfx.Color(FACE_SELECTED).rgb[:3])
         ink = np.array(gfx.Color(EDGE_SELECTED).rgb[:3])
         for owner, (t, c, s, sc) in self._hatch_parts.items():
@@ -2353,6 +2363,7 @@ class Viewport:
                 tris.append(t)
                 tri_rgb.append(np.tile(picked, (len(t), 1)) if selected else c)
             if len(s):
+                segs, seg_rgb = pens["cut" if owner is None else "seam" if owner == SEAMS else "hatch"]
                 segs.append(s)
                 seg_rgb.append(np.tile(ink, (len(s), 1)) if selected else sc)
         planes = self.clipping_planes()
@@ -2366,7 +2377,10 @@ class Viewport:
                             _mat(gfx.MeshBasicMaterial, color_mode="vertex", side="both", alpha_mode="blend",
                                                   depth_write=False, render_queue=HATCH_QUEUE, pick_write=False))
             self._hatch_objects.append(fill)
-        if segs:
+        self._pen_lines = {}
+        for kind, (segs, seg_rgb) in pens.items():
+            if not segs:
+                continue
             s = np.concatenate(segs)
             colours = np.repeat(np.column_stack((physical(turn(np.concatenate(seg_rgb))), np.ones(len(s)))), 2, axis=0)
             lines = gfx.Line(gfx.Geometry(positions=_f32((s - (self._hatch_lift() * 0.5)).reshape(-1, 3)),
@@ -2374,6 +2388,9 @@ class Viewport:
                              _mat(gfx.LineSegmentMaterial, thickness=1.0, color_mode="vertex", aa=True, alpha_mode="blend",
                                                      depth_write=False, render_queue=HATCH_QUEUE + 1))
             self._hatch_objects.append(lines)
+            self._pen_lines[kind] = lines
+        self._pen_key = None                            # (0.428: their widths by the zoom, now and at each image)
+        self._follow_pens()
         for wobj in self._hatch_objects:
             wobj.material.clipping_planes = planes
             self.scene.add(wobj)
@@ -4299,10 +4316,62 @@ class Viewport:
                 tuple(self.logical_size()))
 
     def _follow_view(self):
-        """The temporary dimensions keep their offset and ticks in pixels: made again when the view moved."""
+        """The temporary dimensions keep their offset and ticks in pixels: made again when the view moved. (0.428)
+        The cut's lines their pens' widths at this zoom."""
         if self._tdim_args is not None and self._tdim_args[-1] != self._camera_key():
             dims, angles, active, hover, typed, _key = self._tdim_args
             self.show_temp_dims(dims, angles, active, hover, typed)
+        self._follow_pens()
+
+    def paper_mm_px(self):
+        """(0.428) How many pixels a millimetre of paper is, in the plan or section shown, at its scale (1:N) and this
+        zoom — or None (the 3D view)."""
+        if not self.cutting():
+            return None
+        wpp = self.world_per_pixel(self._focus)
+        if wpp <= 0:
+            return None
+        return float(getattr(self, "_cut_scale", HATCH_SCALE)) / 1000.0 / wpp
+
+    def pen_px(self, kind):
+        """(0.428) A pen's width on the screen (px): its mm on paper (the project's graphic style: cut 0,50, the seams
+        and hatches the hatch pen) at this zoom — at least 1 px (the cut CUT_MIN_PX: it reads as cut however far), at
+        most PEN_MAX_PX; 1 px all with «Linhas finas»."""
+        if self.thin_lines:
+            return 1.0
+        k = self.paper_mm_px()
+        if k is None:
+            return 1.0
+        mm = styles_model.pen(getattr(self.doc, "graphic_style", None), "cut" if kind == "cut" else "hatch")
+        least = CUT_MIN_PX if kind == "cut" else 1.0
+        return float(min(max(mm * k, least), PEN_MAX_PX))
+
+    def _follow_pens(self):
+        """(0.428) The cut's outline, seams and hatches with their pens' widths at this zoom — and the hatches and the
+        seams left out when the paper is so small on the screen that they would be a grey smudge (as on a drawing
+        printed small: walls drawn as their outline)."""
+        lines = getattr(self, "_pen_lines", None)
+        if not lines:
+            return
+        k = self.paper_mm_px()
+        key = (None if k is None else round(k, 2), self.thin_lines)
+        if key == getattr(self, "_pen_key", None):
+            return
+        self._pen_key = key
+        for kind, wobj in lines.items():
+            wobj.material.thickness = self.pen_px(kind)
+            if kind == "hatch":
+                wobj.visible = k is None or k >= HATCH_MIN_PX_PER_MM
+            elif kind == "seam":
+                wobj.visible = k is None or k >= SEAM_MIN_PX_PER_MM
+
+    def set_thin_lines(self, on):
+        """(0.428) «Linhas finas»: every line of the cut 1 px, whatever the zoom (the screen only — paper keeps its
+        pens)."""
+        if bool(on) != self.thin_lines:
+            self.thin_lines = bool(on)
+            self._pen_key = None
+            self.redraw()
 
     def temp_dim_at(self, x, y):
         """The temporary dimension whose value is under (x, y) — to type over it — or None. (0.361: the value is

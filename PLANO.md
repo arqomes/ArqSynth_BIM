@@ -1145,7 +1145,12 @@ Passos propostos (a ordem decide-a o dono):
    fantasma, sem sair dela; Ctrl copia; Shift prende a ortogonal; Esc cancela; um só Ctrl+Z. Lajes, pisos e terreno
    agarram-se pela borda na planta (para a caixa não os levar sem querer); interruptor «Arrastar elementos» na barra da
    seleção, como no Revit.
-2. **Paredes em planta no ecrã como no papel:** as canetas em mm por escala, convertidas a cada zoom (corte grosso,
+2. ~~**Paredes em planta no ecrã como no papel:**~~ (0.428.0: as canetas do estilo gráfico em mm de papel, pela escala
+   da vista e pelo zoom — o contorno do corte com a de corte, mínimo 2 px, as costuras entre camadas e a trama com a da
+   trama, mínimo 1 px, máximo 6 px; a trama sai quando 1 mm de papel tem menos de 2 px, as costuras com menos de 1;
+   «Linhas finas» no Visualizar. Por fazer: o fundo do corte na cor do material clareada — hoje é o do estilo gráfico
+   (branco na alvenaria), que o dono pode mudar em Estilos gráficos; as arestas vistas para lá do corte com a caneta
+   «vista».) As canetas em mm por escala, convertidas a cada zoom (corte grosso,
    camadas finas, mínimo 1 px); o fundo do corte na cor do material clareada, como na folha, em vez do cinzento fixo,
    com a trama por cima; trama e linhas das camadas somem quando a parede fica fina demais; o pormenor dos vãos pelo
    zoom; botão «Linhas finas» (só no ecrã). Cores do tema, papel branco.

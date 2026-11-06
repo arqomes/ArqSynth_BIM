@@ -438,6 +438,13 @@ class HatchesOnScreen(unittest.TestCase):
             self.assertIn((0x3c, 0x3c, 0x3c), {tuple(np.round(c * 255).astype(int)) for c in parts[column][1]})
             area = sum(abs(np.cross(t[1] - t[0], t[2] - t[0])[2]) / 2 for t in tris)
             self.assertAlmostEqual(area, 4.0 * 0.2, places=3)                   # (the wall's whole cut, filled)
+            # (0.428) the outline round all that is cut apart from the seams inside it (the plaster's on the block):
+            # the wall's 4 × 0,2 m and the column's 0,3 × 0,3 m round; two seams 4 m long along the wall
+            outline = parts[None][2]
+            seams = parts[cut_hatches.SEAMS][2]
+            length = lambda s: float(np.linalg.norm(s[:, 1] - s[:, 0], axis=1).sum())      # noqa: E731
+            self.assertAlmostEqual(length(outline), 2 * (4.0 + 0.2) + 4 * 0.3, places=2)
+            self.assertAlmostEqual(length(seams), 2 * 4.0, delta=0.05)
             coarse, own2, whose2 = drawings.cut_fills(doc, objs, n, -cut, origin, u, v, detail="coarse")
             self.assertEqual(cut_hatches.build(coarse, whose2, own2, gs.defaults(), 50, origin, u, v, n * 0.003), {})
         finally:

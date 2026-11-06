@@ -1,6 +1,22 @@
 # Changelog
 
-## 0.427.0 — 2026-11-06
+## 0.428.0 — 2026-11-06
+
+**As paredes em planta no ecrã com as canetas do papel** (Aprender com o Hestia, passo 2).
+
+- **Num corte, no ecrã**, cada tipo de linha tem a sua caneta, como no PDF:
+  - o **contorno do que é cortado** usa a caneta de corte (0,50 mm);
+  - as **linhas entre as camadas** (reboco e bloco) e a **trama** usam a caneta da trama (0,10 mm).
+- **As canetas seguem o zoom.** Os mm de papel passam a píxeis pela escala da vista e pelo zoom:
+  - de longe, o corte tem 2 píxeis e as camadas 1 píxel;
+  - aproximando, o corte engrossa até 6 píxeis e as camadas continuam finas.
+
+  As canetas são as dos Estilos gráficos do projeto.
+- **De longe, a trama sai.** Quando um milímetro de papel tem menos de 2 píxeis, deixa de se desenhar (era uma mancha
+  cinzenta); com menos de 1 píxel saem também as linhas das camadas. A parede fica desenhada pelo contorno, como num
+  desenho impresso pequeno. Aproximando, voltam.
+- **Visualizar ▸ Linhas finas**: todas as linhas do corte com 1 píxel, seja qual for o zoom, para desenhar com rigor (como
+  as «Thin Lines» do Revit). Só muda o ecrã: o papel e o PDF mantêm as canetas. O programa lembra-se da escolha.
 
 **Arrastar para mover** (Aprender com o Hestia, passo 1 — «gostei de poder simplesmente selecionar e pegar qualquer
 elemento e arrastar para reposicionar»).
