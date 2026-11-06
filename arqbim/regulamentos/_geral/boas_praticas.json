@@ -1,0 +1,92 @@
+{
+  "id": "BOAS-PRATICAS",
+  "country": "*",
+  "short": "Boas práticas",
+  "title": "Boas práticas de construção (não é lei)",
+  "instrument": "Regras de boa prática do ArqSynth BIM — avisos, nunca incumprimentos legais",
+  "published": "2026-11-06",
+  "source": "Prática corrente de construção (fichas técnicas dos fabricantes, LNEC, EN 1990–1996); cada uma diz porquê",
+  "status": "em_vigor",
+  "fallback": [],
+  "notes": "Entra em qualquer país, só nos temas que a lei do projeto não trata. Desliga-se nos Regulamentos do projeto.",
+  "rules": [
+    {
+      "id": "BP-gesso-humido", "topic": "gesso.humido", "article": "boa prática",
+      "title": "Gesso cartonado normal num local húmido",
+      "text": "Nas instalações sanitárias, cozinhas e lavandarias, a placa de gesso cartonado deve ser hidrófuga (tipo H1, a «verde»): a normal absorve a humidade, empena e cria bolor.",
+      "subject": "room", "where": {"use": ["instalacao_sanitaria", "cozinha", "sala_cozinha", "tratamento_roupa"]},
+      "measure": "gesso_normal_em_humido", "max": 0, "unit": "", "severity": "warning",
+      "fix": "Trocar, no tipo da parede, a camada de gesso do lado do local húmido por placa hidrófuga."
+    },
+    {
+      "id": "BP-pavimento-humido", "topic": "pavimento.humido", "article": "boa prática",
+      "title": "Pavimento de madeira ou alcatifa num local húmido",
+      "text": "Os pavimentos das instalações sanitárias, cozinhas e lavandarias devem ser estanques (cerâmico, pedra, vinílico): a madeira e a alcatifa estragam-se com a água.",
+      "subject": "room", "where": {"use": ["instalacao_sanitaria", "cozinha", "sala_cozinha", "tratamento_roupa"]},
+      "measure": "pavimento_nao_estanque", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-pavimento-solo", "topic": "pavimento.solo", "article": "boa prática",
+      "title": "Laje sobre o terreno sem camada estanque",
+      "text": "Uma laje térrea precisa de uma barreira contra a humidade que sobe do terreno por capilaridade (membrana de polietileno, betuminosa ou de PVC) — ou de caixa de ar ventilada.",
+      "subject": "slab", "where": {"on_ground": true},
+      "measure": "camada_estanque", "min": 1, "unit": "", "severity": "warning",
+      "fix": "Acrescentar ao tipo da laje uma camada de membrana (Gerenciar ▸ Tipos)."
+    },
+    {
+      "id": "BP-galvanico-parede", "topic": "material.galvanico", "article": "boa prática",
+      "title": "Metais em contacto que corroem (parede)",
+      "text": "Alumínio, zinco ou aço galvanizado em contacto com cobre (ou alumínio com aço) formam uma pilha e corroem: separar com uma camada isolante.",
+      "subject": "wall", "measure": "contactos_galvanicos", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-galvanico-laje", "topic": "material.galvanico", "article": "boa prática",
+      "title": "Metais em contacto que corroem (laje)",
+      "text": "Alumínio, zinco ou aço galvanizado em contacto com cobre (ou alumínio com aço) formam uma pilha e corroem: separar com uma camada isolante.",
+      "subject": "slab", "measure": "contactos_galvanicos", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-galvanico-cobertura", "topic": "material.galvanico", "article": "boa prática",
+      "title": "Metais em contacto que corroem (cobertura)",
+      "text": "Alumínio, zinco ou aço galvanizado em contacto com cobre (ou alumínio com aço) formam uma pilha e corroem: separar com uma camada isolante.",
+      "subject": "roof", "measure": "contactos_galvanicos", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-eps-betume-laje", "topic": "material.eps_betume", "article": "boa prática",
+      "title": "Poliestireno encostado a betume (laje)",
+      "text": "Os produtos betuminosos com solventes (e o betume quente) dissolvem o EPS e o XPS: entre os dois, uma camada de separação (geotêxtil, feltro).",
+      "subject": "slab", "measure": "contactos_eps_betume", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-eps-betume-cobertura", "topic": "material.eps_betume", "article": "boa prática",
+      "title": "Poliestireno encostado a betume (cobertura)",
+      "text": "Os produtos betuminosos com solventes (e o betume quente) dissolvem o EPS e o XPS: entre os dois, uma camada de separação (geotêxtil, feltro).",
+      "subject": "roof", "measure": "contactos_eps_betume", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-eps-betume-parede", "topic": "material.eps_betume", "article": "boa prática",
+      "title": "Poliestireno encostado a betume (parede)",
+      "text": "Os produtos betuminosos com solventes (e o betume quente) dissolvem o EPS e o XPS: entre os dois, uma camada de separação (geotêxtil, feltro).",
+      "subject": "wall", "measure": "contactos_eps_betume", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-cimento-cal", "topic": "material.cimento_cal", "article": "boa prática",
+      "title": "Argamassa de cimento sobre alvenaria antiga ou de cal (reabilitação)",
+      "text": "Numa alvenaria antiga de pedra ou assente a cal, o reboco de cimento não deixa a parede secar e acaba por se descolar: usar argamassas de cal.",
+      "subject": "wall", "where": {"intervencao": ["sim"]},
+      "measure": "contactos_cimento_cal", "max": 0, "unit": "", "severity": "warning"
+    },
+    {
+      "id": "BP-blondel-min", "topic": "escada.blondel_min", "article": "boa prática (Blondel)",
+      "title": "Conforto da escada: 2 espelhos + 1 cobertor de 0,60 m ou mais",
+      "text": "Uma escada é cómoda quando 2 espelhos mais 1 cobertor dão o passo de uma pessoa, entre 0,60 e 0,65 m (a regra de Blondel).",
+      "subject": "stair", "measure": "blondel", "min": 0.60, "unit": "m", "severity": "warning"
+    },
+    {
+      "id": "BP-blondel-max", "topic": "escada.blondel_max", "article": "boa prática (Blondel)",
+      "title": "Conforto da escada: 2 espelhos + 1 cobertor até 0,65 m",
+      "text": "Uma escada é cómoda quando 2 espelhos mais 1 cobertor dão o passo de uma pessoa, entre 0,60 e 0,65 m (a regra de Blondel).",
+      "subject": "stair", "measure": "blondel", "max": 0.65, "unit": "m", "severity": "warning"
+    }
+  ]
+}

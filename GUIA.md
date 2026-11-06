@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.421.0
+# Guia das ferramentas — ArqSynth BIM 0.422.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.421.0.
+ArqSynth BIM 0.422.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -440,7 +440,7 @@ Operações gerais de criação e edição geométrica.
 #### Materiais…
 
 - **O que faz:** A janela dos materiais: nome, cor, tramas da superfície e do corte, transparência, acabamento no render, densidade e condutibilidade térmica; novo, duplicar, apagar um sem uso.
-- **Passos de teste (TESTAR.md):** 0.397 «As duas listas de materiais iguais»; 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.314 «Os materiais com gráficos completos (superfície e corte)»; 0.164 «Ações e materiais»
+- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.397 «As duas listas de materiais iguais»; 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.314 «Os materiais com gráficos completos (superfície e corte)»; 0.164 «Ações e materiais»
 
 ---
 
@@ -823,7 +823,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Laje de concreto 12 cm: clique no primeiro canto. Na cota do pavimento = laje de piso; num canto do topo das paredes = laje de cobertura. (Tab muda a forma: polígono, círculo, varinha mágica.)
 - **Teclas:** Tab: retângulo → polígono → círculo → varinha mágica · X / Y: bloquear o eixo · N: soltar · Delete: apagar o último canto
-- **Passos de teste (TESTAR.md):** 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.343 «O render realista»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»; 0.256 «As escadas com laje por baixo dos degraus»
+- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.343 «O render realista»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»
 
 #### Cobertura
 
@@ -1327,7 +1327,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Regulamentos do projeto…
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
-- **Passos de teste (TESTAR.md):** 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 ### Colaborar ▸ Notas
 
@@ -1792,4 +1792,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*242 comandos descritos, gerados do ArqSynth BIM 0.421.0.*
+*242 comandos descritos, gerados do ArqSynth BIM 0.422.0.*

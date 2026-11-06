@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.421.0 — 2026-11-06
+## 0.422.0 — 2026-11-06
+
+**O Verificador, passo 7: os materiais e as boas práticas.**
+
+- **O que é cada material**, pelo nome (`verify/materials.py`): «Placa de gesso cartonado hidrófugo 12,5 mm» é gesso
+  cartonado e hidrófugo; reconhece alumínio, cobre, zinco, aço galvanizado, aço, poliestireno (EPS/XPS), betume,
+  membranas, argamassa de cimento, cal, alvenaria antiga e corrente, madeira, alcatifa e isolantes. Em português e
+  inglês, sem contar acentos nem maiúsculas.
+- **CTE de Cabo Verde, mais 3 regras:**
+  - art. 92.º n.º 3: o pano exterior das paredes exteriores duplas de alvenaria com 0,15 m em tosco;
+  - art. 98.º: pavimentos estanques nas instalações sanitárias, cozinhas e lavandarias (aviso — madeira ou alcatifa);
+  - art. 99.º n.º 1 a): a laje sobre o terreno com uma camada estanque contra a humidade (aviso).
+- **Boas práticas** (`regulamentos/_geral/boas_praticas.json`, um pacote para qualquer país, só avisos e **nunca nos
+  temas que a lei do projeto já trata**):
+  - gesso cartonado normal num local húmido (pede o hidrófugo, do lado do local húmido);
+  - metais em contacto que corroem (alumínio, zinco ou galvanizado com cobre; alumínio com aço), nas paredes, lajes e
+    coberturas — duas camadas encostadas no mesmo tipo;
+  - poliestireno encostado a betume;
+  - argamassa de cimento contra alvenaria antiga ou de cal, nas obras de reabilitação;
+  - o conforto da escada pela regra de Blondel (2 espelhos + 1 cobertor entre 0,60 e 0,65 m).
+- **Ligar e desligar as boas práticas** nos Regulamentos do projeto (Colaborar ▸ Verificação ▸ Regulamentos).
+- **Mais rápido:** num edifício de 2161 elementos e 72 ambientes, cada edição verifica-se em cerca de 0,6 s (era 2,5 s
+  na primeira versão destas regras): as paredes à volta, os vãos e o que está em frente das janelas procuram-se só
+  perto de cada coisa, e o que se mede uma vez fica guardado até ao fim da verificação.
 
 **O Verificador, passo 6: Portugal — o RGEU e as acessibilidades (DL 163/2006).**
 

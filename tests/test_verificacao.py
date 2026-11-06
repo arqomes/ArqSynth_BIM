@@ -396,7 +396,8 @@ class Portugal(unittest.TestCase):
         self.assertEqual(sorted(failed), ["PT-DL163-3.3.4", "PT-DL163-4.9.1-compartimentos",
                                           "PT-DL163-4.9.1-entrada", "PT-RGEU-68"])
         self.assertEqual(len(failed["PT-DL163-4.9.1-compartimentos"]), 3)
-        self.assertEqual({p.id for p, own in result.packs}, {"PT-RGEU", "PT-DL163"})
+        self.assertEqual({p.id for p, own in result.packs if own}, {"PT-RGEU", "PT-DL163"})
+        self.assertEqual({p.id for p, own in result.packs if not own}, {"BOAS-PRATICAS"})      # (0.422)
         passed = {f.rule.id for f in result.findings if f.status == "ok"}
         self.assertTrue({"PT-RGEU-66-sala", "PT-RGEU-66-quartos", "PT-RGEU-67", "PT-RGEU-71-area", "PT-RGEU-72",
                          "PT-RGEU-69-sala", "PT-RGEU-66-suplemento"} <= passed)
@@ -411,10 +412,13 @@ class Portugal(unittest.TestCase):
         t2_house(doc)
         result = check.check(doc, dict(CV), force=True)
         self.assertEqual([(p.id, own) for p, own in result.packs],
-                         [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False)])
-        self.assertEqual({f.rule.pack for f in result.findings}, {"CV-CTE"})
-        supplementary = {r.id for r in project.active_rules(dict(CV)) if r.pack != "CV-CTE"}
+                         [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False), ("BOAS-PRATICAS", False)])
+        self.assertEqual({f.rule.pack for f in result.findings} - {"BOAS-PRATICAS"}, {"CV-CTE"})
+        supplementary = {r.id for r in project.active_rules(dict(CV)) if r.pack.startswith("PT-")}
         self.assertEqual(supplementary, {"PT-DL163-3.3.6"})
+        practice = {r.id for r in project.active_rules(dict(CV)) if r.pack == "BOAS-PRATICAS"}
+        self.assertNotIn("BP-pavimento-humido", practice)              # (CTE art. 98.º says it)
+        self.assertIn("BP-gesso-humido", practice)
 
     def test_a_ramp_by_the_interpolated_rule(self):
         """A ramp of 0,50 m in 7 m (7,1 %): the NTA allows 7 % for 0,50 m (between 8 % at 0,40 and 6 % at 0,60) —
@@ -428,6 +432,43 @@ class Portugal(unittest.TestCase):
         self.assertEqual(slope.status, "fail")
         self.assertAlmostEqual(slope.limit, 7.0, places=3)
         self.assertAlmostEqual(slope.value, 50 / 7.0, places=3)
+
+
+class Materials(unittest.TestCase):
+    """0.422: materials and good practice."""
+
+    def test_families(self):
+        from arqbim.verify import materials as mat
+        self.assertTrue({"gesso_cartonado", "hidrofugo"} <= mat.families("Placa de gesso cartonado hidrófugo H1"))
+        self.assertEqual(mat.families("Placa de gesso") & {"hidrofugo"}, set())
+        self.assertIn("poliestireno", mat.families("XPS 40 mm"))
+        self.assertIn("membrana", mat.families("Membrana betuminosa"))
+        self.assertTrue(mat.galvanic({"aluminio"}, {"cobre"}))
+        self.assertTrue(mat.eps_bitumen({"betume", "membrana"}, {"poliestireno", "isolante"}))
+        self.assertTrue(mat.cement_on_lime(mat.families("Reboco de cimento"), mat.families("Alvenaria de pedra")))
+        self.assertFalse(mat.cement_on_lime(mat.families("Reboco"), mat.families("Bloco cerâmico")))
+
+    def test_drywall_bathroom_and_a_ground_slab(self):
+        """A bathroom of drywall (plain gypsum board, «Placa de gesso»): a good-practice warning in Portugal (no law
+        there says it); a concrete slab on the ground with no membrane: Cabo Verde's CTE art. 99.º (a warning) — and in
+        Portugal the good practice's own."""
+        from arqbim.verify import check
+        doc = Document()
+        dry = catalog.BY_KEY["parede_dry_10"]
+        bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (2.5, 0.0, 0.0), (2.5, 2.0, 0.0),
+                                                     (0.0, 2.0, 0.0))], dry)
+        wc = bim.add_room(doc, (1.25, 1.0), "WC")
+        slab = bim.add_slab(doc, np.array((0.0, 0.0, 0.0)), 2.5, 2.0, catalog.BY_KEY["laje_15"])
+        result = check.check(doc, dict(PT), force=True)
+        gypsum = next(f for f in result.findings if f.rule.id == "BP-gesso-humido" and f.subject.id == wc)
+        self.assertEqual((gypsum.status, gypsum.value), ("fail", 4.0))
+        self.assertEqual(gypsum.rule.severity, "warning")
+        ground = next(f for f in result.findings if f.subject.id == slab and f.rule.id == "BP-pavimento-solo")
+        self.assertEqual(ground.status, "fail")
+        result = check.check(doc, dict(CV), force=True)
+        ids = {f.rule.id for f in result.findings if f.subject.id == slab}
+        self.assertIn("CV-CTE-99-1a", ids)
+        self.assertNotIn("BP-pavimento-solo", ids)                     # (the CTE says it: the law's, not good practice)
 
 
 class Exceptions(unittest.TestCase):

@@ -297,6 +297,29 @@
       "unit": "m", "severity": "error"
     },
     {
+      "id": "CV-CTE-92-3", "topic": "parede.pano_exterior", "article": "art. 92.º, n.º 3",
+      "title": "Pano exterior das paredes duplas (0,15 m)",
+      "text": "Nas paredes exteriores duplas de alvenaria, o pano exterior deve ter a espessura mínima, em tosco, de 0,15 m.",
+      "subject": "wall", "where": {"exterior": true},
+      "measure": "pano_exterior_duplo", "min": 0.15, "absent_ok": true, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-98", "topic": "pavimento.humido", "article": "art. 98.º",
+      "title": "Pavimentos estanques nos locais húmidos",
+      "text": "Os pavimentos das casas de banho, retretes, copas, cozinhas e outros locais onde forem de recear infiltrações devem ser estanques.",
+      "subject": "room", "where": {"use": ["instalacao_sanitaria", "cozinha", "sala_cozinha", "tratamento_roupa"]},
+      "measure": "pavimento_nao_estanque", "max": 0, "unit": "", "severity": "warning",
+      "fix": "Um acabamento cerâmico, de pedra ou vinílico (Propriedades do ambiente ▸ Acabamento do piso)."
+    },
+    {
+      "id": "CV-CTE-99-1a", "topic": "pavimento.solo", "article": "art. 99.º, n.º 1, al. a)",
+      "title": "Pavimento sobre o terreno protegido da humidade",
+      "text": "Os pavimentos em contacto com o solo (…) quando assentes directamente sobre o terreno, devem ser convenientemente protegidos contra a eventual ascensão por capilaridade da água do solo.",
+      "subject": "slab", "where": {"on_ground": true},
+      "measure": "camada_estanque", "min": 1, "unit": "", "severity": "warning",
+      "fix": "Uma camada de membrana no tipo da laje (polietileno, betuminosa, PVC), ou caixa de ar ventilada."
+    },
+    {
       "id": "CV-CTE-131-3", "topic": "guarda.altura", "article": "art. 131.º, n.º 3",
       "title": "Altura das guardas (espaços comuns)",
       "text": "Em edifícios públicos, equipamentos colectivos, via pública e espaços comuns de prédios de habitação, deve assegurar-se que as guardas possuem uma altura mínima de 0,90 m, uma distância máxima entre prumos de 0,13 m (…).",

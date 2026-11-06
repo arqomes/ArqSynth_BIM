@@ -73,7 +73,7 @@ def subjects(ctx):
     building_use = settings.get("building_use", "habitacao")
     language = lang()
     out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": [],
-           "window": []}
+           "window": [], "wall": [], "slab": [], "roof": []}
     ranks = {}
     for d in facts.dwellings:
         bedrooms = sorted((g for g in d.rooms if g in facts.rooms and uses.is_bedroom(facts.rooms[g].use)
@@ -148,6 +148,32 @@ def subjects(ctx):
             props["rampa_curta"] = "sim" if length is not None and length <= 5.0 + 1e-6 else "nao"
         out[kind].append(ms.Subject(kind, obj.id, obj.name or t("verify.kind." + kind), [obj.id], obj.storey,
                                     props=props))
+    # (0.422) the walls, slabs and roofs: what their layers touch, a double wall's outer leaf, a slab on the ground
+    import ifcopenshell.util.element as ue
+    try:
+        storey_levels = {g: z for g, _n, z in ctx.doc.storeys()}
+        low = min(storey_levels.values()) if storey_levels else 0.0
+        lowest = {g for g, z in storey_levels.items() if abs(z - low) < 1e-6}
+    except Exception:                                   # noqa: BLE001
+        storey_levels, lowest = {}, set()
+    work = settings.get("work", "nova")
+    for obj in list(ctx.doc.objects.values()):
+        cls = getattr(obj, "ifc_class", "")
+        kind = "wall" if cls in ("IfcWall", "IfcWallStandardCase") else {"IfcSlab": "slab", "IfcRoof": "roof"}.get(cls)
+        if kind is None or getattr(obj, "mesh", None) is None:
+            continue
+        e = ctx.doc.ifc.by_guid(obj.id)
+        if e is None:
+            continue
+        props = {"building_use": building_use, "work": work, "intervencao": "sim" if work != "nova" else "nao"}
+        if kind == "wall":
+            props["exterior"] = _is_external(e)
+        elif kind == "slab":
+            lo, hi = (np.asarray(c, dtype=float) for c in obj.mesh.bounds())
+            level = storey_levels.get(obj.storey)
+            props["on_ground"] = obj.storey in lowest and level is not None and abs(float(hi[2]) - level) < 0.35
+        out[kind].append(ms.Subject(kind, obj.id, obj.name or t("verify.kind." + kind), [obj.id], obj.storey,
+                                    props=props))
     # (0.420) the windows (and glazed doors) to the outside, of the rooms they light
     from . import measures as _ms
     language_ = lang()
@@ -165,6 +191,18 @@ def subjects(ctx):
                                                "in_dwelling": room.guid in facts.of_room,
                                                "use": room.use, "building_use": building_use}))
     return out
+
+
+def _is_external(e):
+    """(0.422) A wall's Pset_WallCommon.IsExternal, read straight from its relations (get_pset is slower)."""
+    for rel in getattr(e, "IsDefinedBy", None) or ():
+        if rel.is_a("IfcRelDefinesByProperties"):
+            pset = rel.RelatingPropertyDefinition
+            if pset.is_a("IfcPropertySet") and pset.Name == "Pset_WallCommon":
+                for prop in pset.HasProperties or ():
+                    if prop.Name == "IsExternal" and prop.is_a("IfcPropertySingleValue"):
+                        return bool(prop.NominalValue.wrappedValue) if prop.NominalValue is not None else False
+    return False
 
 
 def _locator(facts):

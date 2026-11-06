@@ -49,6 +49,8 @@ def active(settings_, all_packs=None):
             if f in all_packs and f not in seen:
                 out.append((all_packs[f], False))
                 seen.add(f)
+    if own and settings_.get("good_practice", True):     # (0.422: good practice, any country — where the law is silent)
+        out += [(p, False) for p in all_packs.values() if p.country == "*" and p.id not in seen]
     return out
 
 

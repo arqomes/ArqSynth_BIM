@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.422 — Materiais e boas práticas
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.422.0**. Abra a casa T2 da 0.417 (país Cabo
+   Verde). Carregue em F4.
+2. Abra o painel **Verificação** (Colaborar ▸ Verificação), **Por regulamento**: além do CTE aparece «Boas práticas».
+   Em «CTE»: «Pavimento sobre o terreno protegido da humidade ⚠» na laje do rés-do-chão (se a casa não tiver laje,
+   faça uma por baixo dela com **Arquitetura ▸ Laje**).
+3. Clique na laje, em Propriedades clique **Editar tipo…**, depois **+ Camada** e escolha o material **Tela
+   impermeabilizante**. OK. A linha passa a ✓.
+4. Clique na cozinha (o ambiente) e, em Propriedades, escreva «Soalho de madeira» em **Acabamento do piso**: aparece
+   «Pavimentos estanques nos locais húmidos ⚠ — art. 98.º». Escreva «Ladrilho cerâmico»: passa a ✓.
+5. Com **Arquitetura ▸ Paredes**, tipo **Parede drywall 10 cm**, desenhe uma parede encostada à casa de banho por
+   dentro: em «Boas práticas» aparece «Gesso cartonado normal num local húmido ⚠». Clique na parede ▸ **Editar tipo…**
+   e troque as camadas de **Placa de gesso** por **Gesso cartonado hidrófugo**: passa a ✓.
+6. No mesmo **Editar tipo…** da parede, ponha encostadas uma camada de **Chapa de cobre** e outra de **Zinco**:
+   aparece «Metais em contacto que corroem ⚠». Ponha uma de **Lã de rocha** entre as duas: desaparece.
+7. Clique no indicador do rodapé ▸ **Regulamentos do projeto…** e desligue **Boas práticas (onde a lei não diz
+   nada)**. OK: o grupo «Boas práticas» sai do painel e o aviso do cobre e zinco também. Volte a ligar.
+
 ## 0.421 — Portugal: RGEU e DL 163/2006
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.421.0**. Abra a casa T2 da 0.417.

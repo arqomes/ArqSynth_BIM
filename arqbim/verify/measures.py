@@ -36,11 +36,52 @@ class Context:
         self.doc, self.facts, self.settings = doc, facts, settings or {}
         self.kept = {}
         self._solids = None
+        self._boxes = None
+        self._hulls = {}
 
     def keep(self, key, make):
         if key not in self.kept:
             self.kept[key] = make()
         return self.kept[key]
+
+    # ------------------------------------------------------------ (0.422) what is near, quickly
+    def boxes(self):
+        """[(object, lo (3,), hi (3,))] of the model's elements — made once per check (with their boxes as arrays,
+        for near())."""
+        if self._boxes is None:
+            out = []
+            for obj in self.doc.objects.values():
+                mesh = getattr(obj, "mesh", None)
+                if not getattr(obj, "is_bim", False) or mesh is None:
+                    continue
+                v = np.asarray(mesh.verts, dtype=float).reshape(-1, 3)
+                if len(v):
+                    out.append((obj, v.min(axis=0), v.max(axis=0)))
+            self._boxes = out
+            self._lo = np.array([b[1][:2] for b in out]).reshape(-1, 2)
+            self._hi = np.array([b[2][:2] for b in out]).reshape(-1, 2)
+        return self._boxes
+
+    def near(self, x0, y0, x1, y1, classes=None, storey=None):
+        """The elements (of these classes, on this storey) whose plan box meets the box x0…x1 × y0…y1:
+        [(object, lo, hi)]."""
+        boxes = self.boxes()
+        hit = np.nonzero((self._lo[:, 0] <= x1) & (self._hi[:, 0] >= x0)
+                         & (self._lo[:, 1] <= y1) & (self._hi[:, 1] >= y0))[0]
+        out = []
+        for i in hit:
+            o, lo, hi = boxes[i]
+            if (classes is None or o.ifc_class in classes) and (storey is None or o.storey == storey):
+                out.append((o, lo, hi))
+        return out
+
+    def hull(self, obj):
+        """An element's outline in plan (the convex hull of its points), made once."""
+        if obj.id not in self._hulls:
+            import shapely
+            v = np.asarray(obj.mesh.verts, dtype=float).reshape(-1, 3)
+            self._hulls[obj.id] = shapely.convex_hull(shapely.multipoints(v[:, :2]))
+        return self._hulls[obj.id]
 
     # ------------------------------------------------------------ the model's solids, for heights
     def solids(self):
@@ -62,27 +103,31 @@ class Context:
 # ------------------------------------------------------------------ vertical rays
 
 def _ray_hits(points, z0, verts, tris, up=True):
-    """For each (x, y) point, the z where a vertical ray from z0 (up or down) first meets the triangles (nan: none)."""
+    """For each (x, y) point, the z where a vertical ray from z0 (up or down) first meets the triangles (nan: none).
+    (0.422) All points against all triangles at once (P × T arrays)."""
     a, b, c = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
     out = np.full(len(points), np.nan)
-    # 2D barycentric test of each point in each triangle, then the plane's z there
     ab, ac = b - a, c - a
     det = ab[:, 0] * ac[:, 1] - ab[:, 1] * ac[:, 0]
     ok = np.abs(det) > 1e-12
-    if not ok.any():
+    if not ok.any() or not len(points):
         return out
     a, ab, ac, det = a[ok], ab[ok], ac[ok], det[ok]
-    for k, (x, y) in enumerate(points):
-        px, py = x - a[:, 0], y - a[:, 1]
-        u = (px * ac[:, 1] - py * ac[:, 0]) / det
-        v = (ab[:, 0] * py - ab[:, 1] * px) / det
-        inside = (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9)
-        if not inside.any():
-            continue
-        z = a[inside, 2] + u[inside] * ab[inside, 2] + v[inside] * ac[inside, 2]
-        z = z[z > z0 + 1e-6] if up else z[z < z0 - 1e-6]
-        if len(z):
-            out[k] = z.min() if up else z.max()
+    p = np.asarray(points, dtype=float).reshape(-1, 2)
+    px = p[:, 0:1] - a[None, :, 0]
+    py = p[:, 1:2] - a[None, :, 1]
+    u = (px * ac[None, :, 1] - py * ac[None, :, 0]) / det[None, :]
+    v = (ab[None, :, 0] * py - ab[None, :, 1] * px) / det[None, :]
+    inside = (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9)
+    z = a[None, :, 2] + u * ab[None, :, 2] + v * ac[None, :, 2]
+    if up:
+        z = np.where(inside & (z > z0 + 1e-6), z, np.inf)
+        best = z.min(axis=1)
+        out = np.where(np.isfinite(best), best, np.nan)
+    else:
+        z = np.where(inside & (z < z0 - 1e-6), z, -np.inf)
+        best = z.max(axis=1)
+        out = np.where(np.isfinite(best), best, np.nan)
     return out
 
 
@@ -144,6 +189,18 @@ def _height_measure(ctx, room, share):
 
 # ------------------------------------------------------------------ the dwellings' gross area
 
+def storey_walls(ctx, storey):
+    """(0.422) [(Polygon, its bounds)] of a storey's walls and columns in plan — read once per check."""
+    def make():
+        from shapely.geometry import Polygon
+        try:
+            polys = [Polygon(w).buffer(0) for w in ctx.doc.ifc.storey_obstacles(storey)]
+        except Exception:                               # noqa: BLE001
+            polys = []
+        return [(p, p.bounds) for p in polys if not p.is_empty]
+    return ctx.keep(("storey_walls", storey), make)
+
+
 def dwelling_gross_area(ctx, dwelling):
     """A dwelling's gross area (área bruta, CTE art. 40.º n.º 4): its rooms with the walls round them — the outer walls
     and those to the common areas whole, those to another dwelling half — on each storey, added. Measured from the
@@ -159,14 +216,13 @@ def dwelling_gross_area(ctx, dwelling):
             if r is not None and not r.external:
                 by_storey.setdefault(r.storey, []).append(r)
         for storey, rooms in by_storey.items():
-            mine = unary_union([Polygon(r.outline, r.holes).buffer(0) for r in rooms])
-            others = [Polygon(r.outline, r.holes).buffer(0) for r in facts.rooms.values()
+            mine = unary_union([_poly(r) for r in rooms])
+            x0, y0, x1, y1 = mine.bounds
+            others = [_poly(r) for r in facts.rooms.values()
                       if r.storey == storey and r.guid not in dwelling.rooms and not uses.is_common(r.use)]
-            try:
-                walls = [Polygon(w).buffer(0) for w in ctx.doc.ifc.storey_obstacles(storey)]
-            except Exception:                           # noqa: BLE001
-                walls = []
-            near = [w for w in walls if w.distance(mine) < 0.02]
+            near = [w for w, (a0, b0, a1, b1) in storey_walls(ctx, storey)
+                    if a0 <= x1 + 0.05 and a1 >= x0 - 0.05 and b0 <= y1 + 0.05 and b1 >= y0 - 0.05
+                    and w.distance(mine) < 0.02]
             around = unary_union(near).difference(mine) if near else None
             area = mine.area
             if around is not None and not around.is_empty:
@@ -281,23 +337,34 @@ def free_circle(ctx, room):
     return inscribed_circle(clear)
 
 
+_SHAPES = {}                # (0.422) (measure, a room's outline and holes) -> its value: kept from check to check
+
+
 def _room_shape(name):
     def fn(ctx, s):
         room = ctx.facts.rooms.get(s.id)
+        if name == "circulo_livre":                     # (what stands in it changes without the room changing)
+            return free_circle(ctx, room)
+        key = (name, tuple(map(tuple, room.outline)), tuple(tuple(map(tuple, h)) for h in room.holes))
+        if key in _SHAPES:
+            return _SHAPES[key]
         poly = _poly(room)
         if name == "circulo_inscrito":
-            return inscribed_circle(poly)
-        if name == "largura_min":
-            return narrowest(poly)
-        if name == "quadrado_inscrito":
-            return inscribed_square(poly)
-        if name == "circulo_livre":
-            return free_circle(ctx, room)
-        if name == "comprimento":
+            value = inscribed_circle(poly)
+        elif name == "largura_min":
+            value = narrowest(poly)
+        elif name == "quadrado_inscrito":
+            value = inscribed_square(poly)
+        elif name == "comprimento":
             box = poly.minimum_rotated_rectangle
             pts = np.asarray(box.exterior.coords)[:4]
-            return float(max(np.linalg.norm(pts[1] - pts[0]), np.linalg.norm(pts[2] - pts[1])))
-        return None
+            value = float(max(np.linalg.norm(pts[1] - pts[0]), np.linalg.norm(pts[2] - pts[1])))
+        else:
+            value = None
+        if len(_SHAPES) > 20000:
+            _SHAPES.clear()
+        _SHAPES[key] = value
+        return value
     return fn
 
 
@@ -501,20 +568,22 @@ def room_windows(ctx, room_id):
 
 def lit_area(ctx, room):
     """The part of a room within 6 m of its windows to the outside (m²)."""
-    from shapely.geometry import LineString
-    from shapely.ops import unary_union
-    windows = room_windows(ctx, room.guid)
-    if not windows:
-        return 0.0
-    poly = _poly(room)
-    reach = []
-    for w, _g in windows:
-        n = np.asarray(w.normal, dtype=float)
-        along = np.array((-n[1], n[0])) / max(np.linalg.norm(n), 1e-9)
-        m = np.asarray(w.middle, dtype=float)
-        half = max(w.width, 0.1) / 2.0
-        reach.append(LineString([tuple(m - along * half), tuple(m + along * half)]).buffer(LIGHT_REACH))
-    return float(poly.intersection(unary_union(reach)).area)
+    def make():
+        from shapely.geometry import LineString
+        from shapely.ops import unary_union
+        windows = room_windows(ctx, room.guid)
+        if not windows:
+            return 0.0
+        poly = _poly(room)
+        reach = []
+        for w, _g in windows:
+            n = np.asarray(w.normal, dtype=float)
+            along = np.array((-n[1], n[0])) / max(np.linalg.norm(n), 1e-9)
+            m = np.asarray(w.middle, dtype=float)
+            half = max(w.width, 0.1) / 2.0
+            reach.append(LineString([tuple(m - along * half), tuple(m + along * half)]).buffer(LIGHT_REACH))
+        return float(poly.intersection(unary_union(reach)).area)
+    return ctx.keep(("lit", room.guid), make)
 
 
 def front_obstacle(ctx, window_id):
@@ -551,19 +620,14 @@ def front_obstacle(ctx, window_id):
         except Exception:                                   # noqa: BLE001
             pass
         worst = None
-        for obj in ctx.doc.objects.values():
-            if not getattr(obj, "is_bim", False) or obj.ifc_class not in FRONT or obj.id in (window_id, own_wall):
+        x0, y0, x1, y1 = band.bounds
+        for obj, lo, hi in ctx.near(x0, y0, x1, y1, FRONT):          # (0.422: only what is in the band's box)
+            if obj.id in (window_id, own_wall) or obj is own:
                 continue
-            mesh = getattr(obj, "mesh", None)
-            if mesh is None or obj is own:
-                continue
-            v = np.asarray(mesh.verts, dtype=float).reshape(-1, 3)
-            if len(v) < 3:
-                continue
-            top = float(v[:, 2].max()) - floor
+            top = float(hi[2]) - floor
             if top <= 0.5:
                 continue
-            hull = MultiPoint([tuple(p) for p in v[:, :2]]).convex_hull
+            hull = ctx.hull(obj)
             if hull.geom_type != "Polygon" or not hull.intersects(band):
                 continue
             d = float(front.distance(hull.intersection(band)))
@@ -576,7 +640,140 @@ def front_obstacle(ctx, window_id):
     return ctx.keep(("front", window_id), make)
 
 
+# ------------------------------------------------------------------ materials (0.422)
+
+def layer_families(ctx, guid):
+    """[(material name, its families)] of an element's materials, in order (a wall's from one face to the other)."""
+    from . import materials as mat
+
+    def make():
+        try:
+            names = ctx.doc.ifc.material_names(guid)
+        except Exception:                               # noqa: BLE001
+            names = []
+        return [(n, mat.families(n)) for n in names]
+    return ctx.keep(("families", guid), make)
+
+
+def contacts(ctx, guid, test):
+    """How many pairs of layers side by side (an element's) the test finds harmful."""
+    layers = layer_families(ctx, guid)
+    return float(sum(1 for (_a, fa), (_b, fb) in zip(layers, layers[1:]) if test(fa, fb)))
+
+
+def _room_side(ctx, guid):
+    """The plan point of the room nearest a wall (its inside), or None."""
+    from shapely.geometry import Point
+    obj = ctx.doc.get(guid)
+    if obj is None or getattr(obj, "mesh", None) is None:
+        return None
+    lo, hi = (np.asarray(c, dtype=float) for c in obj.mesh.bounds())
+    centre = Point(float(lo[0] + hi[0]) / 2, float(lo[1] + hi[1]) / 2)
+    best = None
+    for r in ctx.facts.rooms.values():
+        if r.storey != obj.storey or r.external:
+            continue
+        poly = _poly(r)
+        d = poly.distance(centre)
+        if d < 1.0 and (best is None or d < best[0]):
+            best = (d, poly)
+    if best is None:
+        return None
+    return np.asarray(best[1].representative_point().coords[0], dtype=float)
+
+
+def outer_leaf(ctx, guid):
+    """(0.422) A double masonry wall's outer leaf (m) — the masonry layer on the side away from the rooms, when the
+    wall has two masonry leaves with something else between them (CTE art. 92.º n.º 3); None for any other wall."""
+    from . import materials as mat
+    if sum(1 for _n, f in layer_families(ctx, guid) if "alvenaria" in f) < 2:
+        return None                                     # (0.422: one leaf — said by its materials' names, quickly)
+    try:
+        bands = ctx.doc.ifc.layer_bands(guid)
+    except Exception:                                   # noqa: BLE001
+        bands = None
+    if not bands:
+        return None
+    fams = [mat.families(name) for name, _n, _d0, _d1 in bands]
+    masonry = [k for k, f in enumerate(fams) if "alvenaria" in f]
+    if len(masonry) < 2 or masonry[-1] - masonry[0] < 2 or \
+            not any("alvenaria" not in fams[k] for k in range(masonry[0] + 1, masonry[-1])):
+        return None
+    inside = _room_side(ctx, guid)
+    n = np.asarray(bands[0][1], dtype=float)
+    first, last = bands[masonry[0]], bands[masonry[-1]]
+    if inside is not None and float(np.dot(n[:2], inside)) < (bands[0][2] + bands[-1][3]) / 2:
+        outer = last                                    # (the room on the low side: the outside is the high one)
+    else:
+        outer = first
+    return round(float(outer[3] - outer[2]), 4)
+
+
+def damp_course(ctx, guid):
+    """(0.422) 1 when a slab on the ground has a membrane layer (polythene, bitumen, PVC…) against the damp rising
+    from the soil (CTE art. 99.º), else 0."""
+    return 1.0 if any("membrana" in f for _n, f in layer_families(ctx, guid)) else 0.0
+
+
+def plain_gypsum_in_wet(ctx, room_id):
+    """(0.422) How many walls round a wet room have, on its side, plain (not water-resistant) gypsum board."""
+    from shapely.geometry import MultiPoint
+    from . import materials as mat
+    room = ctx.facts.rooms.get(room_id)
+    poly = _poly(room)
+    inside = np.asarray(poly.representative_point().coords[0], dtype=float)
+    count = 0
+    x0, y0, x1, y1 = poly.bounds
+    for obj, _lo, _hi in ctx.near(x0 - 0.1, y0 - 0.1, x1 + 0.1, y1 + 0.1,
+                                  ("IfcWall", "IfcWallStandardCase", "IfcCovering"), room.storey):
+        if ctx.hull(obj).distance(poly) > 0.05:
+            continue
+        try:
+            bands = ctx.doc.ifc.layer_bands(obj.id)
+        except Exception:                               # noqa: BLE001
+            bands = None
+        if bands:
+            n = np.asarray(bands[0][1], dtype=float)
+            side = float(np.dot(n[:2], inside))
+            face = bands[0] if abs(side - bands[0][2]) < abs(side - bands[-1][3]) else bands[-1]
+            names = [face[0]]
+        else:
+            names = ctx.doc.ifc.material_names(obj.id)
+        for name in names:
+            f = mat.families(name)
+            if "gesso_cartonado" in f and "hidrofugo" not in f:
+                count += 1
+                break
+    return float(count)
+
+
+def floor_not_watertight(ctx, room_id):
+    """(0.422) 1 when a wet room's floor finish (its «Acabamento do piso», or a floor finish laid in it) is wood or
+    carpet — not watertight (CTE art. 98.º) —, else 0."""
+    from . import materials as mat
+    info = ctx.facts.infos.get(room_id) or {}
+    texts = [(info.get("finishes") or {}).get("FloorCovering") or ""]
+    room = ctx.facts.rooms.get(room_id)
+    poly = _poly(room)
+    from shapely.geometry import Point
+    x0, y0, x1, y1 = poly.bounds
+    for obj, lo, hi in ctx.near(x0, y0, x1, y1, ("IfcCovering",), room.storey):
+        if hi[2] - lo[2] < 0.2 and poly.contains(Point(float(lo[0] + hi[0]) / 2, float(lo[1] + hi[1]) / 2)):
+            texts += ctx.doc.ifc.material_names(obj.id)
+    return 1.0 if any({"madeira", "alcatifa"} & mat.families(t) for t in texts if t) else 0.0
+
+
 # ------------------------------------------------------------------ the registry
+
+def _layered(extra=None):
+    """(0.422) The measures of an element of layers: its harmful contacts — and those of its own kind."""
+    from . import materials as mat
+    out = {"contactos_galvanicos": lambda ctx, s: contacts(ctx, s.id, mat.galvanic),
+           "contactos_eps_betume": lambda ctx, s: contacts(ctx, s.id, mat.eps_bitumen),
+           "contactos_cimento_cal": lambda ctx, s: contacts(ctx, s.id, mat.cement_on_lime)}
+    out.update(extra or {})
+    return out
+
 
 def _room(ctx, subject):
     return ctx.facts.rooms.get(subject.id)
@@ -611,7 +808,12 @@ MEASURES = {
         "area_sem_luz": lambda ctx, s: max(0.0, float(_room(ctx, s).area) - lit_area(ctx, _room(ctx, s))),
         "n_vaos_exteriores": lambda ctx, s: float(len(room_windows(ctx, s.id))),
         "area_vaos": lambda ctx, s: rough_openings(ctx, s.id),                                    # (0.421)
+        "gesso_normal_em_humido": lambda ctx, s: plain_gypsum_in_wet(ctx, s.id),                  # (0.422)
+        "pavimento_nao_estanque": lambda ctx, s: floor_not_watertight(ctx, s.id),
     },
+    "wall": _layered(extra={"pano_exterior_duplo": lambda ctx, s: outer_leaf(ctx, s.id)}),     # (0.422)
+    "slab": _layered(extra={"camada_estanque": lambda ctx, s: damp_course(ctx, s.id)}),
+    "roof": _layered(),
     "window": {                                                                                    # (0.420)
         "afastamento_fronteiro": lambda ctx, s: front_obstacle(ctx, s.id)[0],     # (None: nothing in front)
         "altura_fronteira": lambda ctx, s: front_obstacle(ctx, s.id)[1],

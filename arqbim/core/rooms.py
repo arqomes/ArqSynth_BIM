@@ -34,6 +34,24 @@ def region(obstacles, point, gap=GAP):
     return None
 
 
+def regions(obstacles, gap=GAP):
+    """(0.422) All the enclosed free regions between the obstacles at once ([Polygon]) — what region() finds for one
+    point, for every point (the union of the walls made once, not once per point)."""
+    polys = [Polygon(p).buffer(0) for p in obstacles if len(p) >= 3]
+    polys = [p for p in polys if not p.is_empty]
+    if not polys:
+        return []
+    blocked = unary_union(polys)
+    if gap > 0:
+        blocked = blocked.buffer(gap / 2, join_style="mitre").buffer(-gap / 2, join_style="mitre")
+    x0, y0, x1, y1 = blocked.bounds
+    domain = box(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN)
+    free = domain.difference(blocked)
+    return [Polygon(part.exterior.coords, [h.coords for h in part.interiors])
+            for part in getattr(free, "geoms", [free])
+            if part.geom_type == "Polygon" and part.exterior.distance(domain.exterior) >= 1e-9]
+
+
 def outline(polygon):
     """([(x, y)] round its outside, counter-clockwise, without the repeated last point; [[(x, y)]] each hole)."""
     from shapely.geometry.polygon import orient

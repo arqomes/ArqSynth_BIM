@@ -1295,7 +1295,11 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    Arquitectos — redação do DL 650/75 — e do consolidado da PGD Lisboa até ao DL 108/2026; o DL 163/2006 do texto de
    2006: confirmar com o dono as alterações do DL 10/2024 ao art. 66.º e as de 2014–2019 às normas técnicas). Por
    fazer: o **U do REH** (os máximos pela zona climática, Portaria 138-I/2021 — preciso do quadro) e a **SCIE**.
-7. **Materiais e boas práticas:** as famílias, as camadas em contacto, o material no seu sítio, as espessuras do Anexo II.
+7. ~~**Materiais e boas práticas:** as famílias, as camadas em contacto, o material no seu sítio~~ (0.422.0; o CTE
+   arts. 92.º n.º 3, 98.º e 99.º n.º 1 a); um pacote «Boas práticas» para qualquer país, só avisos e só onde a lei do
+   projeto não diz nada, que se desliga nos Regulamentos do projeto; a verificação de um edifício de 2161 elementos
+   em ~0,6 s por edição). Por fazer: **as espessuras do Anexo II** do CTE (preciso do quadro — o B.O. que li não o
+   traz legível) e os materiais pela sua posição em altura (o corte de humidade na base das paredes).
 8. **Urbanismo:** lote e estremas (do terreno), índices, alturas de fachada, afastamentos, os valores do regulamento
    municipal / PDM por projeto.
 9. **A ficha de verificação** (PDF e XLSX) e o **editor de regulamentos** (duplicar um país para outro).

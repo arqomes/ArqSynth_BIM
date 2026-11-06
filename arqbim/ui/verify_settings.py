@@ -44,10 +44,14 @@ class VerifySettings(QtWidgets.QDialog):
         self.packs.setHeaderHidden(True)
         self.packs.setRootIsDecorated(False)
         self.packs.setMinimumHeight(110)
+        self.good_practice = QtWidgets.QCheckBox(t("verify.settings.good_practice"))      # (0.422)
+        self.good_practice.setChecked(bool(settings.get("good_practice", True)))
+        self.good_practice.toggled.connect(lambda _on: self._fill_packs())
         box = QtWidgets.QVBoxLayout(self)
         box.addLayout(form)
         box.addWidget(QtWidgets.QLabel(t("verify.settings.packs")))
         box.addWidget(self.packs)
+        box.addWidget(self.good_practice)
         note = QtWidgets.QLabel(t("verify.settings.note"))
         note.setWordWrap(True)
         note.setStyleSheet("color: %s;" % theme.C["note"])
@@ -62,7 +66,8 @@ class VerifySettings(QtWidgets.QDialog):
 
     def _fill_packs(self):
         self.packs.clear()
-        s = {"country": self.country.currentData(), "packs": None, "on": True}
+        s = {"country": self.country.currentData(), "packs": None, "on": True,
+             "good_practice": self.good_practice.isChecked() if hasattr(self, "good_practice") else True}
         for pack, own in project.active(s, self.all_packs):
             text = "{} — {} ({})".format(pack.short, pack.title, t("verify.settings.rules", n=len(pack.rules)))
             if not own:
@@ -76,7 +81,8 @@ class VerifySettings(QtWidgets.QDialog):
         text = self.height.text().strip()
         height = parse_length(text) if text else None
         return {"country": self.country.currentData(), "building_use": self.use.currentData(),
-                "work": self.work.currentData(), "height": height, "packs": None, "on": True}
+                "work": self.work.currentData(), "height": height, "packs": None, "on": True,
+                "good_practice": self.good_practice.isChecked()}
 
 
 def ask(parent, settings, auto_height):

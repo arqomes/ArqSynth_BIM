@@ -124,6 +124,8 @@ def read(doc, force=False):
     for obj in list(doc.objects.values()):
         if not getattr(obj, "is_bim", False) or getattr(obj, "mesh", None) is None:
             continue
+        if obj.ifc_class in ("IfcDoor", "IfcWindow") and obj.storey not in by_storey:
+            continue                                        # (0.422: a storey with no rooms: nothing to join or light)
         if obj.ifc_class == "IfcDoor":
             door = _door(doc, obj)
             if door is not None:
@@ -169,27 +171,24 @@ def read(doc, force=False):
 
 def _enclosures(doc):
     """enclosure(storey, x, y) for dwellings.door_sides: the place the walls close round a point in no room (its key,
-    «~storey~n»), or None (outside the walls). The storey's walls read once."""
+    «~storey~n»), or None (outside the walls). (0.422) A storey's enclosed places found once, all together."""
     from shapely.geometry import Point
+    from shapely.prepared import prep
     from ..core import rooms as core_rooms
-    found, walls = {}, {}
+    found = {}
 
     def enclosure(storey, x, y):
-        here = Point(x, y)
-        for key, poly in found.get(storey, ()):
-            if poly.contains(here):
-                return key
-        if storey not in walls:
+        if storey not in found:
             try:
-                walls[storey] = doc.ifc.storey_obstacles(storey, separators=True)
+                polys = core_rooms.regions(doc.ifc.storey_obstacles(storey, separators=True))
             except Exception:                           # noqa: BLE001
-                walls[storey] = []
-        poly = core_rooms.region(walls[storey], (x, y)) if walls[storey] else None
-        if poly is None:
-            return None
-        key = "~{}~{}".format(storey, len(found.get(storey, ())))
-        found.setdefault(storey, []).append((key, poly))
-        return key
+                polys = []
+            found[storey] = [("~{}~{}".format(storey, k), prep(p), p.bounds) for k, p in enumerate(polys)]
+        here = Point(x, y)
+        for key, poly, (x0, y0, x1, y1) in found[storey]:
+            if x0 <= x <= x1 and y0 <= y <= y1 and poly.contains(here):
+                return key
+        return None
     return enclosure
 
 
