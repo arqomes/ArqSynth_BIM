@@ -635,6 +635,37 @@ class FacadesAndSetbacks(unittest.TestCase):
         self.assertLess(over.value, 3.0)
 
 
+class Sheet(unittest.TestCase):
+    def test_the_verification_sheet(self):
+        """0.425: the T2 house with its entrance door accepted as an exception — the sheet's data: the CTE, the table
+        of areas (Fogo A, T2, its four rooms, 72,96 m² useful), every rule by article, the exception with its reason;
+        as an HTML page and an Excel workbook of four sheets."""
+        from arqbim.verify import check, sheet
+        doc = Document()
+        t2_house(doc)
+        settings = dict(CV)
+        door = next(f for f in check.check(doc, settings, force=True).failures if f.rule.id == "CV-CTE-30-1a")
+        settings["exceptions"] = {door.key: {"why": "Porta existente a manter", "when": "2026-11-06"}}
+        d = sheet.sheet(doc, settings, check.check(doc, settings, force=True))
+        self.assertEqual(d["laws"][0][0], "CTE")
+        self.assertFalse({"RGEU", "DL 163/2006"} & {law[0] for law in d["laws"]})    # (supplementary, not used here)
+        self.assertEqual([(w["name"], w["typology"], len(w["rooms"]), w["useful"]) for w in d["dwellings"]],
+                         [("Fogo A", "T2", 4, "72,96 m²")])
+        self.assertTrue(any(r["article"].startswith("art. 40.º") for r in d["rows"]))
+        self.assertEqual([(x["why"], x["state"]) for x in d["exceptions"]], [("Porta existente a manter", "excepted")])
+        self.assertGreater(d["unconfirmed"], 0)
+        page = sheet.page(d)
+        self.assertIn("Fogo A (T2)", page)
+        self.assertIn("Porta existente a manter", page)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = sheet.write_xlsx(os.path.join(tmp, "ficha.xlsx"), d)
+            from openpyxl import load_workbook
+            book = load_workbook(path)
+            self.assertEqual(book.sheetnames, ["Resumo", "Quadro de áreas", "Verificação", "Exceções"])
+            marks = {str(row[6].value) for row in book["Verificação"].iter_rows(min_row=2)}
+            self.assertTrue({"✗", "✓", "✓*"} <= marks)
+
+
 class Steps(unittest.TestCase):
     def test_the_check_in_steps(self):
         """0.424: the check as a generator — a stop after the reading and after each rule (the watcher goes on between

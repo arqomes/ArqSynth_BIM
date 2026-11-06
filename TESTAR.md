@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.425 — A ficha de verificação
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.425.0**. Abra a casa T2 da 0.417 (país Cabo
+   Verde).
+2. Abra o painel **Verificação**. Clique na linha da porta de entrada («Porta 1 — Sala»), depois em **Exceção…**,
+   escreva «Porta existente a manter» e OK.
+3. No separador **Colaborar**, grupo Verificação, clique em **Ficha de verificação…**. Grave como PDF na pasta do
+   projeto e abra o PDF. Confirme que tem:
+   - o quadro de áreas, com «Fogo A (T2)», os quatro compartimentos, a área útil 72,96 m² e a área bruta 83,64 m²;
+   - as regras do CTE por artigo;
+   - na porta de entrada, ✓* e, no fim, «Exceções aceites» com a sua justificação.
+4. Volte a clicar em **Ficha de verificação…** e escolha **Folha de cálculo Excel (*.xlsx)** no tipo de ficheiro.
+   Abra-a: tem as folhas Resumo, Quadro de áreas, Verificação e Exceções.
+5. No painel Verificação, o botão **Ficha…** faz o mesmo.
+
 ## 0.424 — Alturas das fachadas e afastamentos da lei
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.424.0**. Abra a casa T2 da 0.417 (país Cabo

@@ -1,6 +1,25 @@
 # Changelog
 
-## 0.424.0 — 2026-11-06
+## 0.425.0 — 2026-11-06
+
+**O Verificador, passo 9 (1.ª parte): a ficha de verificação.**
+
+- **Colaborar ▸ Verificação ▸ Ficha de verificação…** (e o botão «Ficha…» no painel Verificação) grava a ficha para o
+  processo de licenciamento, em **PDF** ou numa **folha de cálculo Excel (XLSX)**. Escolhe-se pelo tipo de ficheiro.
+- **O que a ficha tem:**
+  - o projeto e a data, o país, o uso do edifício, o tipo de obra, a altura;
+  - os regulamentos (os do país e os supletivos que contaram);
+  - o resumo (incumprimentos, avisos, exceções, a cumprir, por medir);
+  - o lote e o plano municipal, com o que o projeto tem;
+  - o **quadro de áreas**: cada fogo com a tipologia, os compartimentos com o uso e a área, a área útil e a bruta;
+  - a **verificação regra a regra**, por regulamento e artigo: o exigido, o que o projeto tem, ✓ ✗ ⚠ — ou ✓* para uma
+    exceção aceite;
+  - as **exceções**, com a justificação e a data;
+  - uma nota com os valores ainda por conferir com o texto publicado.
+- **No PDF**, uma regra verificada em mais de seis sítios (cada parede…) mostra só o que falha, um a um, e o resto numa
+  linha («mais 7 que cumprem»). O que não tinha nada a medir (nenhuma fachada em frente) também fica numa linha.
+- **No XLSX**, quatro folhas («Resumo», «Quadro de áreas», «Verificação», «Exceções»), com todas as linhas para
+  filtrar.
 
 **O Verificador, passo 8 (2.ª parte): as alturas das fachadas e os afastamentos da lei.**
 

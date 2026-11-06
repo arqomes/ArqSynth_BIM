@@ -420,6 +420,7 @@ class MainWindow(QtWidgets.QMainWindow):
         vpanel.on_goto, vpanel.on_why = self._verify_goto, self.verifier.why
         vpanel.on_except, vpanel.on_settings = self.verify_exception, lambda: self.verify_settings()
         vpanel.on_other = lambda name: self.ribbon_item(name).trigger()
+        vpanel.on_sheet = lambda: self.verify_sheet()                   # (0.425)
         self.verifier.on_panel = self.show_verify_panel
         self.verifier.on_result = lambda result: vpanel.show_result(self.doc, result)
         self.panels_menu.addAction(vpanel.toggleViewAction())
@@ -722,6 +723,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_worktop = self._action(t("act.worktop"), lambda: self.add_worktop(), icon=icons.worktop_icon())    # (0.170)
         self.act_verify_settings = self._action(t("act.verify_settings"), lambda: self.verify_settings())  # (0.417)
         self.act_verify_panel = self._action(t("act.verify_panel"), lambda: self.show_verify_panel())      # (0.418)
+        self.act_verify_sheet = self._action(t("act.verify_sheet"), lambda: self.verify_sheet())          # (0.425)
         self.act_check_ids = self._action(t("act.check_ids"), lambda: self.check_ids())
         self.act_check_ifc = self._action(t("act.check_ifc"), lambda: self.check_ifc())
         self.act_site_location = self._action(t("act.site_location"), lambda: self.site_location())
@@ -3116,6 +3118,39 @@ class MainWindow(QtWidgets.QMainWindow):
         settings["exceptions"] = exceptions
         bim.set_verify_settings(self.doc, settings)
         self.verifier.run()
+
+    def verify_sheet(self, path=None):
+        """(0.425) «Ficha de verificação…»: the sheet for the permit file — as a PDF or an XLSX (by the name chosen).
+        Returns its path, or None."""
+        from ..verify import check as check_mod
+        from ..verify import project
+        from ..verify import sheet as sheet_mod
+        from . import report_pdf
+        settings = self.verifier.settings()
+        if not settings.get("country") or not project.active(settings):
+            self.message(t("sheet.none"), warning=True)
+            return None
+        path = path or getattr(self, "_sheet_path", None)       # (the GUI test answers the dialog)
+        if path is None:
+            base = os.path.splitext(self.doc.path)[0] if self.doc.path else os.path.join(_documents_dir(), "projeto")
+            path, chosen = QtWidgets.QFileDialog.getSaveFileName(self, t("sheet.save_title"),
+                                                                 base + " - ficha de verificação.pdf",
+                                                                 t("sheet.filter"))
+            if not path:
+                return None
+            if not os.path.splitext(path)[1]:
+                path += ".xlsx" if "xlsx" in (chosen or "") else ".pdf"
+        try:
+            data = sheet_mod.sheet(self.doc, settings, check_mod.check(self.doc, settings))
+            if path.lower().endswith(".xlsx"):
+                sheet_mod.write_xlsx(path, data)
+            else:
+                report_pdf.html_to_pdf(sheet_mod.page(data), path)
+        except Exception as e:                                  # noqa: BLE001 (said, never a crash)
+            self.message(t("sheet.failed", e=e), warning=True)
+            return None
+        self.message(t("sheet.saved", path=path))
+        return path
 
     def _verify_goto(self, finding):
         """«Ir para»: the plan of the storey of what fails, it chosen and framed (a room, a door; a dwelling's rooms)."""

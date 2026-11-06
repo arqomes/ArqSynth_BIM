@@ -94,7 +94,7 @@ PANELS = {
     "collaborate": (("team", ("share", "open_shared", "sync", ("reserve_views", "give_back"))),
                     ("links", ("cad_link", "cloud_link", ("cad_links", "cloud_links", "walls_from_cad"))),
                     ("check", ("verify_panel", "clashes", ("check_ifc", "check_ids", "missing_data"),
-                               ("verify_settings",))),
+                               ("verify_settings", "verify_sheet"))),                  # (0.425)
                     ("notes", ("new_note",))),
     "annotate": (("select", ("select",)),
                  ("views", ("plan", "section", ("last_section", "detail", "symbol_styles"))),

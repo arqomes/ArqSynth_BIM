@@ -281,6 +281,18 @@ def _verify_panel(d):
     _cross(d, 24, 24, 3.0)
 
 
+def _verify_sheet(d):
+    """(0.425) The verification sheet: a page with § and lines of results, ticks and a cross down its side."""
+    _sheet(d, 5, 3, 22, 26)
+    d.text(5, 6, 10, 8, "§", size=8)
+    for k, y in enumerate((14, 19, 24)):
+        d.ink(1.0).line(9, y, 19, y)
+        if k == 1:
+            _cross(d, 23, y, 1.8)
+        else:
+            _tick(d, 23, y, 0.5)
+
+
 def _check_ifc(d):
     _cube(d, 13, 15, 9)
     d.fill(PAPER).pen(GREEN, 1.4).circle(23, 23, 6.5)
@@ -970,6 +982,7 @@ DRAWN = {"wall_rect": _wall_rect, "wall_circle": _wall_circle, "wall_arc": _wall
          "ai_install": _ai_install, "box": _box, "box_selection": _box_selection, "cad_links": _cad_links,
          "check_ids": _check_ids, "check_ifc": _check_ifc, "clashes": _clashes, "close_view": _close_view,
          "verify_settings": _verify_settings, "verify_panel": _verify_panel,                           # (0.417)
+         "verify_sheet": _verify_sheet,                                                                # (0.425)
          "cloud_links": _cloud_links, "component_close": _component_close, "component_edit": _component_edit,
          "component_make": _component_make, "delete": _delete, "dimension_style": _dimension_style,
          "electrical_check": _electrical_check, "element_hatches": _element_hatches, "export_image": _export_image,

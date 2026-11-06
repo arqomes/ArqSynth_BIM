@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.424.0
+# Guia das ferramentas — ArqSynth BIM 0.425.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.424.0.
+ArqSynth BIM 0.425.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -110,7 +110,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
-9. [Colaborar](#9-colaborar) — 17 comandos
+9. [Colaborar](#9-colaborar) — 18 comandos
 10. [Anotar](#10-anotar) — 18 comandos
 11. [Visualizar](#11-visualizar) — 37 comandos
 12. [Render](#12-render) — 10 comandos
@@ -1315,7 +1315,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Verificação
 
 - **O que faz:** O painel da Verificação: tudo o que o Verificador encontrou, por fogo ou por regulamento — um clique leva ao sítio; «Porquê» diz a regra; «Exceção…» aceita uma falha com a razão escrita. E as outras verificações do programa num só lugar.
-- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»; 0.163 «Modelo analítico e verificação»
+- **Passos de teste (TESTAR.md):** 0.425 «A ficha de verificação»; 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»
 
 - **Detetar conflitos…** — o mesmo de Instalações ▸ Coordenação.
 
@@ -1336,6 +1336,11 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
 - **Passos de teste (TESTAR.md):** 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+
+#### Ficha de verificação…
+
+- **O que faz:** A ficha de verificação para o processo de licenciamento: o projeto, os regulamentos, o lote e o plano municipal, o quadro de áreas de cada fogo e cada regra verificada com o seu resultado e as exceções — em PDF ou numa folha de cálculo (XLSX).
+- **Passos de teste (TESTAR.md):** 0.425 «A ficha de verificação»
 
 ### Colaborar ▸ Notas
 
@@ -1800,4 +1805,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*243 comandos descritos, gerados do ArqSynth BIM 0.424.0.*
+*244 comandos descritos, gerados do ArqSynth BIM 0.425.0.*

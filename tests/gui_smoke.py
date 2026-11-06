@@ -829,6 +829,7 @@ def bim_flow():
     verifier_footer_flow()            # (0.417)
     verifier_panel_flow()             # (0.418)
     verifier_lot_flow()               # (0.423)
+    verifier_sheet_flow()             # (0.425)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21047,6 +21048,61 @@ def verifier_lot_flow():
     check("verificador_lote", drawn and shown and summary and counted and listed and back,
           "lote={} vista={} resumo={} rodapé={} painel={} desfeito={} | {!r} | {!r} | {!r}".format(
               drawn, shown, summary, counted, listed, back, seen.get("summary"), footer, text[:300]))
+
+
+def verifier_sheet_flow():
+    """0.425: the verification sheet — the T2 house of Cabo Verde with its entrance door accepted as an exception:
+    Colaborar ▸ Ficha de verificação… saves a PDF (its text with «Ficha de verificação», the table of areas «Fogo A
+    (T2)» and the exception's reason; its first page captured: 425_ficha_p1.png) and an XLSX (four sheets, the rules'
+    one with a ✗). The file dialog answered by the test (win._sheet_path)."""
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    _t2_house()
+    pump(800)
+    result = win.verifier.result
+    finding = next((f for f in result.failures if f.rule.id == "CV-CTE-30-1a"), None) if result is not None else None
+    if finding is not None:
+        win.verify_exception(finding, "Porta existente a manter")
+        pump(600)
+    pdf, xlsx = os.path.join(OUT, "425_ficha.pdf"), os.path.join(OUT, "425_ficha.xlsx")
+    for path in (pdf, xlsx):
+        if os.path.exists(path):
+            os.remove(path)
+    win._sheet_path = pdf
+    win.ribbon_item("verify_sheet").trigger()
+    pump(800)
+    win._sheet_path = xlsx
+    win.verify_sheet()
+    pump(500)
+    win._sheet_path = None
+    made_pdf = os.path.exists(pdf) and os.path.getsize(pdf) > 2000
+    from arqbim.verify import check as C, sheet as S       # (the page Qt prints, as a picture: its first A4)
+    page = S.page(S.sheet(doc, win.verifier.settings(), C.check(doc, win.verifier.settings())))
+    said = "Ficha de verificação" in page and "Fogo A (T2)" in page and "Porta existente" in page
+    paper = QtGui.QTextDocument()
+    paper.setDefaultFont(QtGui.QFont("Arial", 9))
+    paper.setHtml(page)
+    paper.setPageSize(QtCore.QSizeF(794, 1123))
+    pages = paper.pageCount()
+    image = QtGui.QImage(794, 1123, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("white"))
+    painter = QtGui.QPainter(image)
+    paper.drawContents(painter, QtCore.QRectF(0, 0, 794, 1123))
+    painter.end()
+    image.save(os.path.join(OUT, "425_ficha_p1.png"))
+    sheets, failed = [], False
+    try:
+        from openpyxl import load_workbook
+        book = load_workbook(xlsx)
+        sheets = book.sheetnames
+        failed = any("✗" in str(c.value) for row in book[sheets[2]].iter_rows() for c in row)
+    except Exception:                                       # noqa: BLE001
+        pass
+    check("verificador_ficha", made_pdf and said is True and len(sheets) == 4 and failed,
+          "pdf={} ({} pág.) texto={} folhas={} falha={}".format(made_pdf, pages, said, sheets, failed))
 
 
 def wheel(steps):

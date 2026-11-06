@@ -30,6 +30,7 @@ class VerifyPanel(QtWidgets.QDockWidget):
         self.on_except = None           # fn(finding, why or None)
         self.on_settings = None         # fn()
         self.on_other = None            # fn(name): another of the program's checks
+        self.on_sheet = None            # fn(): (0.425) the verification sheet
         self.result, self.doc = None, None
         self._findings = {}
         body = QtWidgets.QWidget()
@@ -54,8 +55,11 @@ class VerifyPanel(QtWidgets.QDockWidget):
         for name in ("clashes", "check_ifc", "check_ids", "electrical_check", "verify_ec2"):
             menu.addAction(t("verify.panel.other." + name), lambda n=name: self.on_other and self.on_other(n))
         self.other_button.setMenu(menu)
+        self.sheet_button = QtWidgets.QPushButton(t("verify.panel.sheet"))          # (0.425)
+        self.sheet_button.setToolTip(t("tip.verify_sheet"))
+        self.sheet_button.clicked.connect(lambda: self.on_sheet and self.on_sheet())
         for w in (self.filter, self.group, self.why_button, self.except_button, self.settings_button,
-                  self.other_button):
+                  self.sheet_button, self.other_button):
             row.addWidget(w)
         row.addStretch(1)
         layout.addLayout(row)
