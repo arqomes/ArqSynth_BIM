@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.435.0 — 2026-11-06
+
+**Escadas prontas a colocar**, como o «Gerar escada» do addon: a escada inteira presa ao rato, posta com um clique.
+
+- Na ferramenta **Escada**, escolha **Colocar ▸ Pronta (um clique)** na barra de cima.
+- Ao passar o rato, a escada aparece toda (reta, em L, em U, em V ou circular, com a largura, o cobertor e a altura
+  da barra), com uma seta no sentido em que sobe.
+- **R** e **Shift+R** rodam a escada um quarto de volta, como num pilar.
+- **Espaço** e **Shift+Espaço** escolhem o ponto do 1.º degrau que fica no ponto clicado: o meio, o canto de fora ou
+  o canto de dentro (o lado para onde a escada vira).
+- O ângulo e o ponto também estão na barra.
+- **Pé e sentido (dois cliques)** continua a ser a forma de sempre.
+
+**Corrigido:** desde a 0.432, depois de mudar um valor na edição rápida (TAB) e fechá-la, o TAB seguinte já não a
+abria nem fechava. A causa era a limpeza do botão «Editar tipo…» no topo, que tocava num campo já apagado.
+
 ## 0.434.0 — 2026-11-06
 
 **Ripado como ferramenta própria**, como no addon: **Arquitetura ▸ Acabamentos ▸ Ripado**, ao lado do Painel

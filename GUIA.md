@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.434.0
+# Guia das ferramentas — ArqSynth BIM 0.435.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.434.0.
+ArqSynth BIM 0.435.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -876,8 +876,8 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Escada
 
 - **Como se usa:** Reta, 1,00 m de largura, a subir 2,80 m: clique no meio do primeiro degrau (no chão).
-- **Teclas:** Dois cliques: o pé e o sentido · X / Y: bloquear o eixo · Esc: cancelar
-- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
+- **Teclas:** Dois cliques: o pé e o sentido · Pronta: um clique, R: rodar, Espaço: o ponto · X / Y: bloquear o eixo · Esc: cancelar
+- **Passos de teste (TESTAR.md):** 0.435 «Escadas prontas a colocar»; 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
 
 #### Rampa
 
@@ -1822,4 +1822,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*247 comandos descritos, gerados do ArqSynth BIM 0.434.0.*
+*247 comandos descritos, gerados do ArqSynth BIM 0.435.0.*

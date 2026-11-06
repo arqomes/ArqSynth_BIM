@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.435 — Escadas prontas a colocar
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.435.0**. Faça Ctrl+N e abra a planta do Térreo.
+2. Clique em **Arquitetura ▸ Circulação ▸ Escada**. Na barra de cima, em **Colocar**, escolha **Pronta (um clique)** e,
+   em **Forma**, escolha **Em L (patamar)**.
+3. Passe o rato pela planta: a escada inteira acompanha o rato, com uma seta no sentido em que sobe.
+4. Carregue em **R**: a escada roda um quarto de volta. Carregue outra vez para a pôr como quiser.
+5. Carregue em **Espaço**: a faixa diz «A escada fica presa pelo canto de fora do 1.º degrau». Carregue outra vez:
+   canto de dentro; outra vez: meio.
+6. Clique: a escada fica nesse sítio. A faixa diz quantos espelhos tem.
+7. Carregue em Esc e escolha **Colocar ▸ Pé e sentido (dois cliques)**: a ferramenta volta a ser a de sempre (dois
+   cliques).
+8. **TAB depois de uma edição:** com o Selecionar, clique numa parede e carregue em TAB. Na edição rápida, mude o
+   desvio da base para `0,10` (Enter). Carregue em Esc. Carregue em TAB: abre; TAB outra vez: fecha.
+
 ## 0.434 — Ripado como ferramenta própria
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.434.0**. Faça Ctrl+N e desenhe uma parede de 4 m com

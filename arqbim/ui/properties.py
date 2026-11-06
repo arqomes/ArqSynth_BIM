@@ -261,6 +261,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self.header_texts = texts
         self.type_combo = None       # (0.313) its type, chosen on top from the types' miniatures (ui/type_thumbs)
         self._header_buttons = []    # (0.432) «Editar tipo…» under it
+        self._header_made = []       # …(action, button) of each
         row.addWidget(self.header_icon)
         row.addLayout(texts, 1)
         self.search = QtWidgets.QLineEdit()
@@ -371,6 +372,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         else:
             into.addWidget(button)
         self.editors[action] = button
+        self._header_made.append((action, button))
         return button
 
     def _header_add(self, widget):
@@ -378,23 +380,20 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._header_buttons.append(widget)
 
     def _drop_header_buttons(self):
-        if not self._header_buttons:
+        """Its buttons on top taken away, and their editors. (Only they are looked at, by identity: the other editors'
+        widgets may be gone already — asking Qt about one raised, and a TAB in the view was lost.)"""
+        if not self._header_buttons and not self._header_made:
             return
-        shown = self._header_buttons
-
-        def gone(w):
-            return any(w is b or b.isAncestorOf(w) for b in shown)
-
-        for action, widget in list(self.editors.items()):
-            if isinstance(widget, QtWidgets.QWidget) and gone(widget):
+        mine = {id(b) for _a, b in self._header_made}
+        for action, button in self._header_made:
+            if dict.get(self.editors, action) is button:
                 dict.__delitem__(self.editors, action)
-        self.editors.made = [(a, w) for a, w in self.editors.made
-                             if not (isinstance(w, QtWidgets.QWidget) and gone(w))]
-        for widget in shown:
+        self.editors.made = [(a, w) for a, w in self.editors.made if id(w) not in mine]
+        for widget in self._header_buttons:
             self.header_texts.removeWidget(widget)
             widget.hide()
             widget.deleteLater()
-        self._header_buttons = []
+        self._header_buttons, self._header_made = [], []
 
     def _drop_type_combo(self):
         if self.type_combo is not None:

@@ -839,6 +839,7 @@ def bim_flow():
     wall_chord_flow()                 # (0.432)
     sloped_slab_flow()                # (0.433)
     ripado_tool_flow()                # (0.434)
+    stair_ready_flow()                # (0.435)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6380,6 +6381,59 @@ def stairs_flow():
     shot("104_escada.png")
     check("escadas", preview and made and risers and shown and u,
           "previa={} feita={} espelhos={} painel={} em_U={}".format(preview, made, risers, shown, u))
+
+
+def stair_ready_flow():
+    """0.435 (the addon's «Gerar escada»: a stair ready to put down): the Stair tool, «Colocar ▸ Pronta», an L — its
+    turn and its point on the bar; R turns it to 180°, Space holds it by the outer corner of its first step; under the
+    mouse at (4, 2) the whole stair shown; one click: an L there, going to −x, the middle of its first step half its
+    width from the point clicked, on the side away from its turn."""
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.add_storey(doc, "Piso 1", 3.0)
+    win.set_active_storey(doc.ifc.storeys()[0][0])
+    win.open_view("3d", None)
+    pump(200)
+    vp.set_view("top", center=(3.0, 2.0, 0.0), radius=6.0)
+    pump(300)
+    win.tool_actions["stair"].trigger()
+    pump(100)
+    win._context_option("placing", "ready")
+    win._context_option("form", "l")
+    pump(60)
+    bar = [o.key for o in win.tool.options()]
+    on_bar = "angle" in bar and "anchor" in bar
+    move(near((4.0, 2.0, 0.0)), 4)
+    pump(60)
+    key(Qt.Key.Key_R)
+    key(Qt.Key.Key_Space)
+    move(near((4.05, 2.0, 0.0)), 2)
+    move(near((4.0, 2.0, 0.0)), 2)
+    pump(100)
+    turned = win.tool.angle == 180 and win.tool.anchor == "outside"
+    preview = vp._lines.visible
+    click()
+    pump(400)
+    stairs = doc.ifc.file.by_type("IfcStair")
+    placed = False
+    where = None
+    if len(stairs) == 1:
+        m = doc.ifc._placement_si(stairs[0])
+        where = (np.round(m[:3, 3], 2).tolist(), np.round(m[:3, 0], 3).tolist())
+        # going to −x, turning left (its left: −y): the outer corner is on its right (+y) — the middle 0,50 m in −y
+        placed = stairs[0].PredefinedType == "QUARTER_TURN_STAIR" and np.allclose(m[:3, 0], (-1.0, 0.0, 0.0),
+                                                                                    atol=1e-6) \
+            and abs(m[0, 3] - 4.0) < 0.06 and abs(m[1, 3] - 1.5) < 0.06
+    win._context_option("placing", "two")                   # (the tool as the other flows expect it)
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("435_escada_pronta.png")
+    check("escada_pronta", on_bar and turned and preview and placed,
+          "barra={} rodada={} previa={} posta={} {}".format(on_bar, turned, preview, placed, where))
 
 
 def stair_waist_flow():

@@ -4958,8 +4958,25 @@ _STRINGS = {
                    "{form}, {w} wide, rising {h}: click the middle of the first step (on the floor)."),
     "hint.stair_2": ("Clique para onde sobe (ou Esc). {n} espelhos de {r}, cobertor {g} (2E + C = {b}).",
                      "Click the way it goes up (or Esc). {n} risers of {r}, tread {g} (2R + T = {b})."),
-    "keys.stair": ("Dois cliques: o pé e o sentido  ·  X / Y: bloquear o eixo  ·  Esc: cancelar",
-                   "Two clicks: its foot and its way  ·  X / Y: lock the axis  ·  Esc: cancel"),
+    "keys.stair": ("Dois cliques: o pé e o sentido  ·  Pronta: um clique, R: rodar, Espaço: o ponto  ·  X / Y: "
+                   "bloquear o eixo  ·  Esc: cancelar",
+                   "Two clicks: its foot and its way  ·  Ready: one click, R: turn, Space: its point  ·  X / Y: lock "
+                   "the axis  ·  Esc: cancel"),
+    # (0.435) a stair ready to put down, in one click (the addon's «Gerar escada»)
+    "ctx.stair_placing": ("Colocar", "Place"),
+    "stairplacing.two": ("Pé e sentido (dois cliques)", "Foot and way (two clicks)"),
+    "stairplacing.ready": ("Pronta (um clique)", "Ready (one click)"),
+    "ctx.stair_anchor": ("Ponto", "Point"),
+    "stairanchor.center": ("Meio do 1.º degrau", "Middle of the 1st step"),
+    "stairanchor.outside": ("Canto de fora do 1.º degrau", "Outer corner of the 1st step"),
+    "stairanchor.inside": ("Canto de dentro do 1.º degrau", "Inner corner of the 1st step"),
+    "info.stair_anchor": ("A escada fica presa pelo {p}.", "The stair is held by its {p}."),
+    "hint.stair_ready": ("{form} pronta, {w} de largura, a subir {h}: clique onde fica o {p}. R: rodar · Espaço: outro "
+                         "ponto · Esc: Selecionar.",
+                         "Ready {form}, {w} wide, rising {h}: click where its {p} goes. R: turn · Space: another point "
+                         "· Esc: Select."),
+    "tip.stair_ready": ("Clique: pôr a escada · R: rodar · Espaço: outro ponto",
+                        "Click: put the stair · R: turn · Space: another point"),
     "info.stair": ("Escada ({form}) com {n} espelhos de {r} e cobertor {g}, a subir {h}. Ctrl+Z desfaz.",
                    "Stair ({form}) of {n} risers of {r}, tread {g}, rising {h}. Ctrl+Z undoes."),
     "refuse.stair_small": ("a escada ficaria pequena demais (largura 50 cm, cobertor 15 cm, desnível 30 cm no "
