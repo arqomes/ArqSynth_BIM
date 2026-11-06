@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.428.0 — 2026-11-06
+## 0.429.0 — 2026-11-06
+
+**Editar tipo com o corte ao vivo** (Aprender com o Hestia, passo 3).
+
+- **O corte das camadas desenhado no editor de tipos** (paredes, lajes, coberturas). Muda enquanto se escreve, antes de
+  aplicar:
+  - cada camada na cor do seu material onde é cortado (clareada para o papel), com a trama se o material a tiver;
+  - as linhas entre as camadas finas e o contorno grosso;
+  - o **núcleo** marcado a vermelho: as camadas com a função Estrutura (ou Suporte), senão a mais grossa;
+  - a espessura de cada camada onde cabe, e o total;
+  - numa parede, «Exterior» à esquerda e «Interior» à direita; numa laje, o topo em cima.
+- **OK / Cancelar / Aplicar**, como no Revit:
+  - **OK** aplica o que mudou (um Ctrl+Z) e fecha;
+  - **Cancelar** fecha e deixa o que não foi aplicado;
+  - **Aplicar** aplica sem fechar.
+- **Onde se usa**: escolhe na vista todos os elementos do tipo e enquadra-os.
+- **Apagar um tipo em uso**: o programa pergunta por que tipo substituir os elementos. Eles passam a esse tipo e o
+  tipo antigo é apagado, tudo num só Ctrl+Z. Antes, só se apagavam tipos sem elementos.
 
 **As paredes em planta no ecrã com as canetas do papel** (Aprender com o Hestia, passo 2).
 

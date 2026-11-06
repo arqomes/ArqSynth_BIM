@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.429 — Editar tipo com o corte ao vivo
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.429.0**. Faça Ctrl+N e desenhe duas paredes do tipo
+   **Parede alvenaria 20 cm** (Arquitetura ▸ Parede).
+2. **Gerenciar ▸ Tipos…**, escolha **Paredes** e clique em «Parede alvenaria 20 cm». Por baixo das camadas aparece o
+   corte: reboco, bloco, reboco, com «Exterior» à esquerda e «Interior» à direita.
+3. Na espessura do bloco escreva `0,25`: o corte e o total mudam logo (0,290 m), ainda sem aplicar.
+4. Na **Função** do bloco escolha **Estrutura**: aparece «núcleo» a vermelho por cima do bloco.
+5. Clique em **OK**: o editor fecha e as duas paredes ficam com 29 cm. Carregue em Ctrl+Z: voltam aos 20 cm.
+6. Abra outra vez os Tipos, escolha «Parede alvenaria 20 cm» e clique em **Onde se usa**: o editor fecha e as duas
+   paredes ficam escolhidas e enquadradas.
+7. Abra outra vez os Tipos, escolha «Parede alvenaria 20 cm» e clique em **Apagar**. O programa pergunta por que tipo
+   substituir: escolha «Parede alvenaria 15 cm» e OK. As paredes passam a 15 cm. Carregue em Ctrl+Z uma vez: tudo como
+   estava.
+8. Mude uma espessura e clique em **Cancelar**: nada muda.
+
 ## 0.428 — Paredes em planta com as canetas do papel
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.428.0**. Abra a casa T2 da 0.417 e carregue em F4.

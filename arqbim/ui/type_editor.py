@@ -16,6 +16,7 @@ from ..ifc import catalog
 from ..model import project_types
 from . import type_thumbs
 from .joinery_dialog import Elevation
+from .layer_section import LayerSection
 from . import theme
 
 KIND_LABELS = {"wall": "types.walls", "slab": "types.slabs", "roof": "types.roofs", "column": "types.columns",
@@ -71,6 +72,11 @@ class TypeEditor(QtWidgets.QDialog):
         row.addWidget(self.duplicate)
         row.addWidget(self.remove)
         left.addLayout(row)
+        self.where = QtWidgets.QPushButton(t("types.where_used"))     # (0.429) its elements chosen and framed
+        self.where.setToolTip(t("types.where_tip"))
+        left.addWidget(self.where)
+        self.on_where = None              # (0.429) (spec) -> its elements chosen in the view
+        self.on_replace = None            # (0.429) (spec in use, the one to take its place) -> True if replaced and gone
         body.addLayout(left)
         # the right side: the type's name and its layers / section
         right = QtWidgets.QVBoxLayout()
@@ -86,6 +92,7 @@ class TypeEditor(QtWidgets.QDialog):
         self.layers.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
         self.layers.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
         self.layers.verticalHeader().setVisible(False)
+        self.layers.setMinimumHeight(132)                   # (0.429: four layers in sight, with the section under)
         lb.addWidget(self.layers)
         buttons = QtWidgets.QHBoxLayout()
         self.add_layer = QtWidgets.QPushButton(t("types.add_layer"))
@@ -101,6 +108,8 @@ class TypeEditor(QtWidgets.QDialog):
         self.layers_note = QtWidgets.QLabel()
         self.layers_note.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
         lb.addWidget(self.layers_note)
+        self.section_view = LayerSection()                  # (0.429) the layers' section, drawn as they are typed
+        lb.addWidget(self.section_view)
         right.addWidget(self.layers_box)
         # (0.346) a wall type's own masonry for Eurocode 6 (off: the project's, in Actions and materials)
         from ..core import ec6
@@ -186,13 +195,15 @@ class TypeEditor(QtWidgets.QDialog):
         self.materials = QtWidgets.QPushButton(t("act.materials"))       # (0.89: the materials window)
         bottom.addWidget(self.materials)
         bottom.addStretch(1)
+        self.ok = QtWidgets.QPushButton(t("types.ok"))      # (0.429: as Revit's — OK applies and closes)
+        self.ok.setDefault(True)
+        close = QtWidgets.QPushButton(t("types.cancel"))     # (…Cancel closes, what was not applied left)
         self.apply = QtWidgets.QPushButton(t("types.apply"))
-        self.apply.setDefault(True)
-        close = QtWidgets.QPushButton(t("types.close"))
-        bottom.addWidget(self.apply)
+        bottom.addWidget(self.ok)
         bottom.addWidget(close)
+        bottom.addWidget(self.apply)
         outer.addLayout(bottom)
-        self.resize(780, 680)                               # (0.271: room for the type's IFC data too)
+        self.resize(800, 780)                               # (0.271: room for the type's IFC data too; 0.429: the section)
 
         self.kind.currentIndexChanged.connect(lambda _i: self._fill_list())
         self.list.currentRowChanged.connect(lambda _r: self._show(self._chosen()))
@@ -203,6 +214,8 @@ class TypeEditor(QtWidgets.QDialog):
         self.up.clicked.connect(lambda: self._move_layer(-1))
         self.down.clicked.connect(lambda: self._move_layer(1))
         self.apply.clicked.connect(self.apply_changes)
+        self.ok.clicked.connect(self.ok_clicked)
+        self.where.clicked.connect(self.where_used)
         self.materials.clicked.connect(self._open_materials)
         self.shape.currentIndexChanged.connect(lambda _i: self._show_shape())
         self.design_button.clicked.connect(self._open_generator)
@@ -411,7 +424,8 @@ class TypeEditor(QtWidgets.QDialog):
         n = len(project_types.instances(self.doc.ifc, spec))
         self.used.setText(t("types.apply_note", n=n) if n else t("types.unused"))
         in_project = project_types.find_type(self.doc.ifc, spec) is not None
-        self.remove.setEnabled(in_project and n == 0)
+        self.remove.setEnabled(in_project)                  # (0.429: in use — replaced by another first)
+        self.where.setEnabled(n > 0)
 
     def _show_opening(self, spec):
         """A door or window type (0.88): its width and height, a window's sill when placed."""
@@ -486,9 +500,11 @@ class TypeEditor(QtWidgets.QDialog):
         self.layers.insertRow(row)
         combo = QtWidgets.QComboBox()
         self._fill_materials(combo, key)
+        combo.currentIndexChanged.connect(lambda _i: self._update_total())          # (0.429: the section follows)
         self.layers.setCellWidget(row, 0, combo)
         field = QtWidgets.QLineEdit(_len(thickness))
         field.editingFinished.connect(self._update_total)
+        field.textChanged.connect(lambda _text: self._update_total())                # (0.429: as it is typed)
         self.layers.setCellWidget(row, 1, field)
         role = QtWidgets.QComboBox()                        # (0.334) its function: its priority where elements meet
         role.addItem(t("types.function.auto"), None)
@@ -496,6 +512,7 @@ class TypeEditor(QtWidgets.QDialog):
             role.addItem(t("types.function." + name), name)
         role.setCurrentIndex(max(0, role.findData(function)))
         role.setToolTip(t("types.function_tip"))
+        role.currentIndexChanged.connect(lambda _i: self._update_total())           # (0.429: the core marked)
         self.layers.setCellWidget(row, 2, role)
         if select:
             self.layers.setCurrentCell(row, 0)
@@ -539,6 +556,10 @@ class TypeEditor(QtWidgets.QDialog):
     def _update_total(self):
         rows = self._layer_rows()
         self.total.setText(t("types.total", t=_len(sum(v for _k, v in rows))) if rows else "")
+        if rows is not None and self.current is not None and self.layers.rowCount() == len(rows):
+            functions = tuple(self.layers.cellWidget(r, 2).currentData() for r in range(self.layers.rowCount())
+                              if self.layers.cellWidget(r, 2) is not None)
+            self.section_view.set_layers(self.current.kind, rows, functions)      # (0.429)
 
     def draft(self):
         """The type as the form has it now (a TypeSpec, with the shown type's key), or an error text."""
@@ -652,6 +673,39 @@ class TypeEditor(QtWidgets.QDialog):
             self._fill_list(select=key)
         return key
 
-    def delete_type(self):
-        if self.current is not None and self.on_delete is not None and self.on_delete(self.current):
-            self._fill_list()
+    def delete_type(self, replacement=None):
+        """Delete: a type no element uses, removed; (0.429) one in use, its elements given another type first —
+        asked for (`replacement`: its key, given), all one undo step."""
+        spec = self.current
+        if spec is None:
+            return
+        n = len(project_types.instances(self.doc.ifc, spec))
+        if n == 0:
+            if self.on_delete is not None and self.on_delete(spec):
+                self._fill_list()
+            return
+        others = [s for s in self._specs() if s.key != spec.key]
+        if not others:
+            QtWidgets.QMessageBox.information(self, t("types.replace_title"), t("types.replace_none"))
+            return
+        other = next((s for s in others if s.key == replacement), None)
+        if other is None:
+            names = [_name(s) for s in others]
+            choice, ok = QtWidgets.QInputDialog.getItem(self, t("types.replace_title"),
+                                                        t("types.replace_ask", n=n, name=_name(spec)), names, 0, False)
+            if not ok or choice not in names:
+                return
+            other = others[names.index(choice)]
+        if self.on_replace is not None and self.on_replace(spec, other):
+            self._fill_list(select=other.key)
+
+    def ok_clicked(self):
+        """(0.429) OK: what was changed applied — as Apply, one undo step — and the editor closed; a value that will
+        not do is said and it stays open."""
+        if self.current is None or self.apply_changes() is not None:
+            self.accept()
+
+    def where_used(self):
+        """(0.429) «Onde se usa»: the elements of the type shown chosen in the view and framed (the editor closed)."""
+        if self.current is not None and self.on_where is not None and self.on_where(self.current):
+            self.accept()

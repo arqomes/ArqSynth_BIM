@@ -833,6 +833,7 @@ def bim_flow():
     rules_editor_flow()               # (0.426)
     drag_elements_flow()              # (0.427)
     paper_pens_flow()                 # (0.428)
+    type_section_flow()               # (0.429)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21295,6 +21296,88 @@ def paper_pens_flow():
     check("canetas_do_papel_no_ecra", kinds and closer and smudge and thin and back,
           "tipos={} 1.ª={} k={:.2f} perto={} k={:.2f} longe={} k={:.2f} finas={} volta={}".format(
               sorted(lines), first, k0, near, k1, far, k2, thin, back))
+
+
+def type_section_flow():
+    """0.429 (Aprender com o Hestia, passo 3): Gerenciar ▸ Tipos on the 20 cm wall — its section drawn (3 layers);
+    the block typed 25 cm: the section 29 cm at once, before applying; the block made the structure: the core marked;
+    OK: applied and closed (both walls 29 cm), one Ctrl+Z back. «Onde se usa»: the two walls chosen. Apagar, in use: they
+    become «Parede alvenaria 15 cm» and the 20 cm type goes — one Ctrl+Z puts all back. Captured: 429_tipo_corte.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    w20 = catalog.BY_KEY["parede_alv_20"]
+    a = B.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), w20)
+    b = B.add_wall(doc, np.array((0.0, 3.0, 0.0)), np.array((4.0, 3.0, 0.0)), w20)
+    pump(200)
+    seen = {}
+
+    def opened(then):
+        def go():
+            d = getattr(win, "_type_dialog", None)
+            if d is None or not d.isVisible():
+                QtCore.QTimer.singleShot(100, go)
+                return
+            then(d)
+        return go
+
+    def first(d):
+        d.select("parede_alv_20")
+        pump(100)
+        seen["rows"] = len(d.section_view.rows)
+        d.layers.cellWidget(1, 1).setText("0,25")
+        pump(100)
+        seen["live"] = round(sum(v for _k, v in d.section_view.rows), 3)
+        role = d.layers.cellWidget(1, 2)
+        role.setCurrentIndex(role.findData("structure"))
+        pump(100)
+        seen["core"] = "structure" in d.section_view.functions
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "429_tipo_corte.png"))
+        d.ok_clicked()
+        seen["closed"] = not d.isVisible()
+
+    QtCore.QTimer.singleShot(100, opened(first))
+    win.edit_types("wall")
+    pump(300)
+    applied = abs(doc.ifc.wall_params(a)[2] - 0.29) < 1e-9 and abs(doc.ifc.wall_params(b)[2] - 0.29) < 1e-9
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    undone = abs(doc.ifc.wall_params(a)[2] - 0.20) < 1e-9
+
+    def where(d):
+        d.select("parede_alv_20")
+        pump(100)
+        seen["where_on"] = d.where.isEnabled()
+        d.where_used()
+
+    vp.set_selection(set())
+    QtCore.QTimer.singleShot(100, opened(where))
+    win.edit_types("wall")
+    pump(400)
+    chosen = vp.selection == {a, b} and seen.get("where_on")
+
+    def replace(d):
+        d.select("parede_alv_20")
+        pump(100)
+        d.delete_type(replacement="parede_alv_15")
+        pump(200)
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, opened(replace))
+    win.edit_types("wall")
+    pump(400)
+    from arqbim.model import project_types
+    replaced = abs(doc.ifc.wall_params(a)[2] - 0.15) < 1e-9 and abs(doc.ifc.wall_params(b)[2] - 0.15) < 1e-9 \
+        and project_types.find_type(doc.ifc, w20) is None
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = abs(doc.ifc.wall_params(a)[2] - 0.20) < 1e-9 and project_types.find_type(doc.ifc, w20) is not None
+    check("tipo_corte_ao_vivo", seen.get("rows") == 3 and seen.get("live") == 0.29 and seen.get("core")
+          and seen.get("closed") and applied and undone and chosen and replaced and back,
+          "{} aplicado={} desfeito={} onde={} substituido={} volta={}".format(seen, applied, undone, chosen, replaced,
+                                                                             back))
 
 
 def wheel(steps):

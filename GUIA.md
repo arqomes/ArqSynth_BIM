@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.428.0
+# Guia das ferramentas — ArqSynth BIM 0.429.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.428.0.
+ArqSynth BIM 0.429.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -1381,7 +1381,7 @@ Cotas, textos, pormenores, plantas e cortes.
 #### Corte
 
 - **Como se usa:** Corte: clique no início da linha de corte (ou numa extremidade, num eixo…).
-- **Passos de teste (TESTAR.md):** 0.363 «O painel Apresentação: as cenas preparadas aqui»; 0.362 «Para o ArqSynth Presentation: o pacote»; 0.360 «O gerador de símbolos»; 0.358 «A linha de corte editável»; 0.319 «Escolher a trama da superfície e do corte»; 0.317 «As tramas de corte e de superfície no ecrã»
+- **Passos de teste (TESTAR.md):** 0.429 «Editar tipo com o corte ao vivo»; 0.363 «O painel Apresentação: as cenas preparadas aqui»; 0.362 «Para o ArqSynth Presentation: o pacote»; 0.360 «O gerador de símbolos»; 0.358 «A linha de corte editável»; 0.319 «Escolher a trama da superfície e do corte»
 
 #### Último corte  ·  tecla F5
 
@@ -1816,4 +1816,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*246 comandos descritos, gerados do ArqSynth BIM 0.428.0.*
+*246 comandos descritos, gerados do ArqSynth BIM 0.429.0.*

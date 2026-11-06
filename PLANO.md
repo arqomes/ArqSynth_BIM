@@ -1154,7 +1154,9 @@ Passos propostos (a ordem decide-a o dono):
    camadas finas, mínimo 1 px); o fundo do corte na cor do material clareada, como na folha, em vez do cinzento fixo,
    com a trama por cima; trama e linhas das camadas somem quando a parede fica fina demais; o pormenor dos vãos pelo
    zoom; botão «Linhas finas» (só no ecrã). Cores do tema, papel branco.
-3. **Editar tipo com corte ao vivo:** na parede, laje, piso e cobertura, o corte das camadas desenhado no editor (face
+3. ~~**Editar tipo com corte ao vivo:**~~ (0.429.0: o corte desenhado — cor e trama do material, núcleo, espessuras,
+   total, exterior / interior —, OK / Cancelar / Aplicar, Onde se usa, apagar em uso substituindo por outro num só
+   Ctrl+Z; Duplicar já partia do rascunho.) Na parede, laje, piso e cobertura, o corte das camadas desenhado no editor (face
    exterior / interior, núcleo, espessuras, total), que muda a cada valor; rascunho com Aplicar / OK / Cancelar;
    Duplicar a partir do rascunho; tipo em uso: «Substituir por… e apagar»; «Onde se usa» (escolhe e enquadra).
 4. **Propriedades mais rápidas:** selo «tipo» nos valores do tipo (clique → Editar tipo); exceções por elemento com

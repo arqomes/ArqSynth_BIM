@@ -1103,6 +1103,8 @@ class MainWindow(QtWidgets.QMainWindow):
             dialog.select(key)
         dialog.on_save = self._save_type
         dialog.on_delete = self._delete_type
+        dialog.on_where = self._type_where                  # (0.429)
+        dialog.on_replace = self._replace_type
         dialog.on_materials = lambda: self.edit_materials(parent=dialog)
         dialog.on_type_data = self._save_type_data          # (0.271: the type's IFC data)
         self._type_dialog = dialog                          # (tests)
@@ -1441,6 +1443,40 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         self._refresh_types()
         return True
+
+    def _type_where(self, spec):
+        """(0.429) «Onde se usa»: the elements of a type chosen and framed. True if there were any."""
+        from ..model import project_types
+        guids = [g for g in project_types.instances(self.doc.ifc, spec) if self.doc.get(g) is not None]
+        if not guids:
+            return False
+        if self.tool is None or self.tool.name != "select":
+            self.set_tool("select")
+        self.viewport.set_selection(set(guids))
+        self.viewport.zoom_extents(guids)
+        name = spec.name_pt if lang() == "pt" else spec.name_en
+        self.message(t("info.where_used", n=len(guids), name=name))
+        return True
+
+    def _replace_type(self, spec, other):
+        """(0.429) A type in use deleted: its elements given `other` first — all one undo step. True if done."""
+        from ..model import project_types
+        guids = project_types.instances(self.doc.ifc, spec)
+        mark = self.doc.undo_mark()
+        try:
+            for g in guids:
+                if self.doc.ifc.by_guid(g) is not None and g in project_types.instances(self.doc.ifc, spec):
+                    bim.set_type(self.doc, g, other)          # (a group's copies go with the first: not twice)
+            done = bim.delete_type(self.doc, spec)
+        except ValueError as exc:
+            self.doc.join_since(mark, t("cmd.replace_type"))
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return False
+        self.doc.join_since(mark, t("cmd.replace_type"))
+        self._refresh_types()
+        name = (lambda s: s.name_pt if lang() == "pt" else s.name_en)                  # noqa: E731
+        self.message(t("info.type_replaced", n=len(guids), new=name(other), old=name(spec)))
+        return done
 
     def _build_toolbar(self):
         """(0.182) Panel 1, the header: the disciplines' tabs and the global commands; panel 2, the ribbon: the
