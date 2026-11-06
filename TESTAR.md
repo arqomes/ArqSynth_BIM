@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.433 — Pisos com declive por canto
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.433.0**. Faça Ctrl+N.
+2. Desenhe uma laje de 4 × 2 m com **Arquitetura ▸ Pisos e coberturas ▸ Laje** (dois cliques em cantos opostos).
+3. Carregue em Esc, escolha o **Selecionar** e clique na laje. Nas Propriedades, logo a seguir a «Restrições e
+   dimensões», está o grupo **Declive**.
+4. Em **Lado alto** deixe «Lado 1 (cantos 1–2)». Clique em **Declive (%)**, escreva `2` e carregue em Enter.
+   - A faixa diz «Laje com 2 % de declive a partir do lado 1».
+   - Na vista 3D, a laje cai para o lado de trás. Os cantos 3 e 4 ficam com −0,04 m.
+5. Clique no **Canto 3** e carregue na seta **↑** do teclado: passa a −0,03 m. Carregue em Enter: esse canto sobe 1 cm.
+6. Carregue em Ctrl+Z: o canto 3 volta a −0,04 m.
+7. Clique em **Editar contorno** e arraste um canto para fora. Carregue em Esc: os cantos guardam as suas alturas.
+8. Clique em **Pôr plana**: a laje volta a ser plana e o grupo Declive mostra os cantos todos a 0,00 m.
+9. Grave o projeto com o declive (passo 4), feche e abra-o outra vez: a laje continua inclinada.
+
 ## 0.432 — «W + letra» e «Editar tipo…» no topo
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.432.0**. Desenhe quatro paredes em retângulo com

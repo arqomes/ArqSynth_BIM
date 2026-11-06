@@ -111,7 +111,8 @@ def _type_name(spec):
 
 GROUP = QtCore.Qt.ItemDataRole.UserRole + 7     # (0.185) a group's row (left out when nothing went in it)
 # (0.396) an element's groups in this order (Revit's: what is edited first, who it is after), whatever order made in
-GROUP_ORDER = ("props.g.parameters", "props.g.materials", "props.g.identity", "props.g.phase", "props.g.ifc")
+GROUP_ORDER = ("props.g.parameters", "props.g.slope", "props.g.materials", "props.g.identity", "props.g.phase",
+               "props.g.ifc")
 DIVIDER_DEFAULT, DIVIDER_LEAST, DIVIDER_MOST = 0.5, 0.25, 0.75   # the names' column: its share of the panel at most
 GROUP_EXTRA = 8                 # (0.414) px more for a group's title (a band of its own)
 SUB = QtCore.Qt.ItemDataRole.UserRole + 8       # (0.414) a subgroup's row (Forma, Nervuras…): a lighter band
@@ -190,7 +191,8 @@ class StepEdit(QtWidgets.QLineEdit):
         new = round((value + n * size) / 0.001) * 0.001
         if self.least is not None and new < self.least:
             new = self.least
-        self.setText(_len(new).replace("~ ", ""))
+        text = _len(abs(new)).replace("~ ", "")            # (0.433: a height under the top, «-0,05 m»)
+        self.setText(("-" + text) if new < -5e-4 else text)
 
     def keyPressEvent(self, event):                                 # noqa: N802 (Qt's name)
         if event.key() in (QtCore.Qt.Key.Key_Up, QtCore.Qt.Key.Key_Down):
@@ -1914,10 +1916,54 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         else:
             self._length_editor(t("props.height_free"), height, height_action, guid)
 
-    def _signed_length_editor(self, key, meters, action, guid):
-        """A length that may be 0 or below (an offset)."""
+    def _signed_length_editor(self, key, meters, action, guid, least=None):
+        """A length that may be 0 or below (an offset); `least` (0.433): with ↑ ↓ and the wheel, not under it."""
         text = _len(abs(meters)).replace("~ ", "")
-        return self._text_editor(key, ("-" + text) if meters < -5e-4 else text, action, guid, parse=parse_length)
+        return self._text_editor(key, ("-" + text) if meters < -5e-4 else text, action, guid, parse=parse_length,
+                                 least=least)
+
+    CORNER_ROWS = 12            # (0.433) a slab's corners listed one by one, at most
+
+    def _slab_slope_rows(self, guid, p):
+        """(0.433, the addon's «piso com declive por vértice») A slab's slope: «Lado alto» (that side stays at its top)
+        and «Declive (%)» — a balcony, a terrace falling to its drain —; then each corner's height over its top, one
+        by one (↑ ↓ 1 cm), as the addon's; «Pôr plana»."""
+        n = int(p.get("corners") or 0)
+        if n < 3:
+            return
+        heights = list(p.get("heights") or [0.0] * n)
+        self._begin(t("props.g.slope"))
+        item = self._row(t("props.slope_side"), "")
+        side = QtWidgets.QComboBox()
+        side.setToolTip(t("props.slope_side_tip"))
+        for k in range(n):
+            side.addItem(t("props.slope_side_n", n=k + 1, a=k + 1, b=(k + 1) % n + 1), k)
+        self.tree.setItemWidget(item, 1, side)
+        self.editors["slab_slope_side"] = side
+
+        def percent(text):
+            try:
+                v = float(text.replace("%", "").replace(",", ".").strip())
+            except ValueError:
+                return None
+            return (v, side.currentData()) if 0.0 <= v <= 100.0 else None
+
+        edit = self._text_editor(t("props.slope_percent"), "", "slab_slope", guid, parse=percent)
+        edit.setPlaceholderText("2 %")
+        edit.setToolTip(t("props.slope_percent_tip"))
+        if n > self.CORNER_ROWS:
+            self._row(t("props.corners_many", n=n), "")
+        else:
+            for k in range(n):
+                corner = self._signed_length_editor(t("props.corner_height", n=k + 1), heights[k],
+                                                    ("slab_corner_z", k), guid, least=-20.0)
+                corner.setToolTip(t("props.corner_height_tip"))
+        if p.get("heights"):
+            item = self._row("", "")
+            button = QtWidgets.QPushButton(t("props.slab_flat"))
+            button.clicked.connect(lambda _c=False: self._emit("slab_flat", guid, None))
+            self.tree.setItemWidget(item, 1, button)
+            self.editors["slab_flat"] = button
 
     def _show_bim(self, doc, obj):
         info = doc.ifc.describe(obj.id)
@@ -2004,6 +2050,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 button.clicked.connect(lambda _c=False: self._emit("edit_outline", guid, None))
                 self.tree.setItemWidget(item, 1, button)
                 self.editors["edit_outline"] = button
+                self._slab_slope_rows(guid, p)             # (0.433) its slope, its corners' heights
         elif kind == "ceiling":                            # (0.118) its style, its height over its storey
             from ..core import ceilings as core_ceilings
             self._choice_combo(t("ctx.ceiling_style"), "ceiling_style", guid,

@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.432.0
+# Guia das ferramentas — ArqSynth BIM 0.433.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.432.0.
+ArqSynth BIM 0.433.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -832,7 +832,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Laje de concreto 12 cm: clique no primeiro canto. Na cota do pavimento = laje de piso; num canto do topo das paredes = laje de cobertura. (Tab muda a forma: polígono, círculo, varinha mágica.)
 - **Teclas:** Tab: retângulo → polígono → círculo → varinha mágica · X / Y: bloquear o eixo · N: soltar · Delete: apagar o último canto
-- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.343 «O render realista»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»
+- **Passos de teste (TESTAR.md):** 0.433 «Pisos com declive por canto»; 0.422 «Materiais e boas práticas»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.343 «O render realista»
 
 #### Cobertura
 
@@ -844,7 +844,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Piso cerâmico: clique dentro das paredes de um ambiente. (Tab muda o contorno.)
 - **Teclas:** Tab: por ambiente → retângulo → polígono · X / Y: bloquear o eixo · Delete: apagar o último canto
-- **Passos de teste (TESTAR.md):** 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.231 «As armaduras nos pisos tipo»; 0.214 «Vários pisos de uma vez a partir da nuvem»
+- **Passos de teste (TESTAR.md):** 0.433 «Pisos com declive por canto»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.231 «As armaduras nos pisos tipo»; 0.214 «Vários pisos de uma vez a partir da nuvem»
 
 #### Teto
 
@@ -859,7 +859,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Editar contorno
 
 - **O que faz:** Mudar o contorno da laje, do piso ou do teto: cantos, arcos (Shift), curvas (Alt), concordâncias e furos (também com dois cliques no elemento)
-- **Passos de teste (TESTAR.md):** 0.382 «Lajes e coberturas: as pegas só a arrastar»
+- **Passos de teste (TESTAR.md):** 0.433 «Pisos com declive por canto»; 0.382 «Lajes e coberturas: as pegas só a arrastar»
 
 #### Perfil da cobertura
 
@@ -1816,4 +1816,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*246 comandos descritos, gerados do ArqSynth BIM 0.432.0.*
+*246 comandos descritos, gerados do ArqSynth BIM 0.433.0.*

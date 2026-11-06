@@ -2743,10 +2743,31 @@ _STRINGS = {
     "props.slab_use_project": ("O do projeto (Ações e materiais)", "The project's (Actions and materials)"),
     "cmd.slab_use": ("Uso da laje", "Slab use"),
     "props.outline": ("Contorno", "Outline"),
+    # (0.433) a slab with a height of its own at each corner (the addon's «piso com declive por vértice»)
+    "props.g.slope": ("Declive", "Slope"),
+    "props.slope_side": ("Lado alto", "High side"),
+    "props.slope_side_tip": ("O lado que fica no topo da laje; o declive cai a partir dele",
+                             "The side that stays at the slab's top; the slope falls from it"),
+    "props.slope_side_n": ("Lado {n} (cantos {a}–{b})", "Side {n} (corners {a}–{b})"),
+    "props.slope_percent": ("Declive (%)", "Slope (%)"),
+    "props.slope_percent_tip": ("Escreva o declive em % (1 % = 1 cm por metro) e carregue em Enter: a laje cai a partir "
+                                "do lado alto. Cada canto fica com a sua altura, que pode mudar em baixo.",
+                                "Type the slope in % (1 % = 1 cm a metre) and press Enter: the slab falls from the "
+                                "high side. Each corner gets its height, which can be changed below."),
+    "props.corner_height": ("Canto {n}", "Corner {n}"),
+    "props.corner_height_tip": ("A altura deste canto acima (ou abaixo, com −) do topo da laje. ↑ ↓: 1 cm.",
+                                "This corner's height over (or under, with −) the slab's top. ↑ ↓: 1 cm."),
+    "props.corners_many": ("{n} cantos: use o Declive (%)", "{n} corners: use the Slope (%)"),
+    "props.slab_flat": ("Pôr plana", "Make flat"),
+    "info.slab_slope": ("Laje com {p} % de declive a partir do lado {s}. Ctrl+Z desfaz.",
+                        "Slab sloping {p} % from side {s}. Ctrl+Z undoes."),
     "cmd.slab_outline": ("Contorno da laje", "Slab outline"),
+    "cmd.slab_heights": ("Declive da laje", "Slab slope"),                                       # (0.433)
     "cmd.slab_function": ("Função da laje", "Slab function"),
     "refuse.slab_outline": ("o contorno não serve (lados cruzados ou pequeno demais)",
                             "the outline will not do (its sides cross, or it is too small)"),
+    "refuse.slab_height": ("um canto ficaria a mais de 20 m do topo da laje",                    # (0.433)
+                           "a corner would be more than 20 m off the slab's top"),
     "refuse.slab_outline_edit": ("esta laje muda pelo contorno (Editar contorno) ou pelo raio",
                                  "this slab changes by its outline (Edit outline) or its radius"),
     "refuse.slab_circle": ("uma laje circular muda pelo raio", "a round slab changes by its radius"),

@@ -531,7 +531,8 @@ clique dentro das paredes. Falta, pela ordem do estudo:
    cabeçalhos, destaque, texto, área de desenho, divisórias, campos) em Visualizar ▸ Tema, e «Explorar cores» para
    as afinar e guardar, como no estudo~~ (0.374.0).
 10. **Do inventário, ainda por fazer** (fora da fita do estudo): escadas a colocar já feitas (arrastar a escada pronta),
-    pisos com declive por vértice, fachada de vidro em arco e por face, Steel/Wood frame, mobiliário solto de catálogo,
+    ~~pisos com declive por vértice~~ (0.433.0: o grupo Declive nas Propriedades — lado alto e %, a altura de cada
+    canto, Pôr plana; corpo de triângulos no IFC), fachada de vidro em arco e por face, Steel/Wood frame, mobiliário solto de catálogo,
     ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ripado
     como ferramenta própria. ~~Painel perfurado como ferramenta própria~~ (0.389.0:
     furos redondos/quadrados, malha reta/45°, placas com junta, imagem, retângulo na face). ~~Cobertura orgânica~~

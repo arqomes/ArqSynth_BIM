@@ -2273,7 +2273,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 outline = self.slab_outline(guid)                       # (0.100: a polygon, a circle)
                 if outline is not None:
                     info["params"].update(area=outline["area"], perimeter=outline["perimeter"],
-                                          radius=outline["radius"])
+                                          radius=outline["radius"], thickness=outline["thickness"],
+                                          corners=len(outline["outline"]) if outline["radius"] is None else 0,
+                                          heights=outline.get("heights"))           # (0.433: its slope)
             elif kind == "ceiling":                                     # (0.118)
                 cp = self.ceiling_params(guid)
                 storey = self.storey_of(guid)

@@ -3495,6 +3495,47 @@ def set_slab_outline(doc, guid, outline=None, loops=None):
     _edit(doc, lambda ifc: [ifc.set_slab_outline(g, per_copy[g]) for g in gs], gs, "cmd.slab_outline")
 
 
+def set_slab_heights(doc, guid, heights):
+    """(0.433, «piso com declive por vértice») Each corner of a slab's outline at its own height over its top (m, in
+    its outline's order; all 0: flat). In a group, every copy the same. One undo step."""
+    gs = _and_copies(doc, guid)
+    values = [float(z) for z in heights]
+    _edit(doc, lambda ifc: [ifc.set_slab_heights(g, values) for g in gs], gs, "cmd.slab_heights")
+
+
+def set_slab_corner_height(doc, guid, index, height):
+    """(0.433) One corner of a slab's outline at its own height over its top (the others as they are)."""
+    from ..ifc.edit import EditRefused
+    info = doc.ifc.slab_outline(guid)
+    if info is None or info.get("radius") is not None:
+        raise EditRefused("slab_circle")
+    heights = list(info.get("heights") or [0.0] * len(info["outline"]))
+    if not 0 <= int(index) < len(heights):
+        raise EditRefused("not_editable")
+    heights[int(index)] = float(height)
+    set_slab_heights(doc, guid, heights)
+
+
+def set_slab_slope(doc, guid, percent, side):
+    """(0.433) A slab falling evenly from one side — `side` its outline's side (its corners `side` and `side`+1)
+    stays at its top — to the far corners, `percent` % (1 % = 1 cm a metre): a balcony, a terrace to its drain."""
+    from ..ifc.edit import EditRefused
+    info = doc.ifc.slab_outline(guid)
+    if info is None or info.get("radius") is not None:
+        raise EditRefused("slab_circle")
+    pts = np.asarray(info["outline"], dtype=float)
+    n = len(pts)
+    a, b = pts[int(side) % n], pts[(int(side) + 1) % n]
+    d = b - a
+    if np.linalg.norm(d) < 1e-9:
+        raise EditRefused("not_editable")
+    normal = np.array((-d[1], d[0])) / np.linalg.norm(d)
+    if np.dot(pts.mean(axis=0) - a, normal) < 0:
+        normal = -normal                                   # (into the slab)
+    set_slab_heights(doc, guid, [round(-float(percent) / 100.0 * max(0.0, float(np.dot(p - a, normal))), 6) + 0.0
+                                 for p in pts])
+
+
 def set_covering_outline(doc, guid, loops):
     """(0.410) A floor finish's or a ceiling's plan made these loops (core/outline_loops: its outline and its holes,
     their sides arcs or curves). In a group, every copy in its own place. One undo step."""

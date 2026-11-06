@@ -6579,6 +6579,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_use(doc, [guid], value or "")
             elif action == "slab_radius":
                 bim.set_slab_radius(doc, guid, value)
+            elif action == "slab_corner_z":                # (0.433) a corner's height over its top: its slope
+                bim.set_slab_corner_height(doc, guid, full[1], value)
+            elif action == "slab_slope":                   # (0.433) falling from a side, % (value: (%, side))
+                bim.set_slab_slope(doc, guid, *value)
+                from ..i18n import decimal_sep
+                self.message(t("info.slab_slope", s=int(value[1]) + 1,
+                               p="{:.2f}".format(value[0]).rstrip("0").rstrip(".").replace(".", decimal_sep())))
+            elif action == "slab_flat":                    # (0.433) flat again
+                info = ifc.slab_outline(guid)
+                if info is not None and info.get("heights"):
+                    bim.set_slab_heights(doc, guid, [0.0] * len(info["outline"]))
             elif action == "edit_outline":
                 QtCore.QTimer.singleShot(0, lambda: self.edit_slab_outline(guid))
                 return

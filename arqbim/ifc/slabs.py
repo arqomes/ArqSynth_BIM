@@ -4,7 +4,14 @@ found) or a true circle, extruded up by the type's thickness — IfcSlab with If
 
 ArqSynth_Parametros keeps its shape (Forma: retangulo — the rectangles drawn before, edited by their sides —,
 poligono or circulo) and its function (Funcao: estrutural, acabamento, excluida — Pset_SlabCommon.LoadBearing
-follows). The outline is read back from the body itself: there is no other copy to keep in step."""
+follows). The outline is read back from the body itself: there is no other copy to keep in step.
+
+(0.433, the addon's «piso com declive por vértice») A slab with a height of its own at each corner of its outline
+(«Cotas», m over its flat top, in its outline's order): its body a closed IfcTriangulatedFaceSet (core/sloped_slab) —
+its top through its corners at their heights, its underside a thickness lower —, its plan then kept beside it
+(«Planta»: outside, holes, thickness, in its own frame), as there is no extrusion to read it back from."""
+
+import json
 
 import numpy as np
 
@@ -13,11 +20,14 @@ import ifcopenshell.api
 import ifcopenshell.util.element
 
 from ..core import outline_loops
+from ..core import sloped_slab
 from ..core import slabs as core_slabs
 from .edit import EditRefused
 
 api = ifcopenshell.api
 LOAD_BEARING = {"estrutural": True, "acabamento": False, "excluida": False}
+KEEP = object()             # (0.433) _set_slab_shape: its corners' heights as they are (by corner, or on its surface)
+MAX_HEIGHT = 20.0           # m: a corner's height over (or under) the slab's top, at most
 
 
 class SlabMixin:
@@ -52,11 +62,43 @@ class SlabMixin:
                     return item
         return None
 
+    def _slab_plan(self, slab):
+        """(0.433) A sloped slab's plan kept beside its body: (outside, holes, thickness) in its own frame, or None."""
+        text = self._params(slab).get("Planta")
+        if not text:
+            return None
+        try:
+            d = json.loads(text)
+            return ([(float(x), float(y)) for x, y in d["o"]],
+                    [[(float(x), float(y)) for x, y in h] for h in d.get("h") or ()], float(d["t"]))
+        except (ValueError, KeyError, TypeError):
+            return None
+
+    def slab_heights(self, slab):
+        """(0.433) Each outline corner's height over the slab's flat top (m, its outline's order), or None — flat."""
+        if isinstance(slab, str):
+            slab = self.by_guid(slab)
+        text = self._params(slab).get("Cotas") if slab is not None else None
+        try:
+            values = [float(v) for v in json.loads(text)] if text else None
+        except (ValueError, TypeError):
+            return None
+        return None if values is None or sloped_slab.is_flat(values) else values
+
+    def _slab_thickness(self, slab):
+        """Its thickness (m): its extrusion's depth — (0.433) a sloped slab's, its plan's —, or None."""
+        solid = self._slab_solid(slab)
+        if solid is not None:
+            return float(solid.Depth) * self.unit_scale
+        plan = self._slab_plan(slab)
+        return plan[2] if plan is not None else None
+
     def _local_rings(self, slab):
         """(outside, holes, radius) of a slab's plan in its own frame (m): a circle gives ([], [], radius)."""
         solid = self._slab_solid(slab)
         if solid is None:
-            return None
+            plan = self._slab_plan(slab)            # (0.433: a sloped slab's, kept beside its body)
+            return (plan[0], plan[1], None) if plan is not None else None
         s = self.unit_scale
         # the solid's own position (a rectangle drawn before is at 0, 0 of its slab)
         at = np.array(solid.Position.Location.Coordinates[:2], dtype=float) * s if solid.Position else np.zeros(2)
@@ -83,8 +125,8 @@ class SlabMixin:
         if slab is None or self.kind_of(guid) != "slab":
             return None
         rings = self._local_rings(slab)
-        solid = self._slab_solid(slab)
-        if rings is None or solid is None:
+        thickness = self._slab_thickness(slab)
+        if rings is None or thickness is None:
             return None
         outside, holes, radius = rings
         m = self._placement_si(slab)
@@ -92,10 +134,12 @@ class SlabMixin:
         def world(pts):
             return [tuple(float(c) for c in (m @ np.array((x, y, 0.0, 1.0)))[:2]) for x, y in pts]
 
-        thickness = float(solid.Depth) * self.unit_scale
+        heights = self.slab_heights(slab) if radius is None else None
         info = {"shape": self.slab_shape(guid), "function": self.slab_function(guid), "radius": radius,
                 "bottom": float(m[2, 3]), "top": float(m[2, 3]) + thickness, "thickness": thickness,
-                "centre": None}
+                "centre": None,
+                # (0.433) its corners' heights over its top (its outline's order), or None: flat
+                "heights": heights if heights is not None and len(heights) == len(outside) else None}
         if radius is not None:
             info["centre"] = (float(m[0, 3]), float(m[1, 3]))
             info["outline"], info["holes"] = core_slabs.circle_ring(info["centre"], radius), []
@@ -120,14 +164,58 @@ class SlabMixin:
             return f.createIfcPolyline([f.createIfcCartesianPoint(p) for p in coords])
         return f.createIfcIndexedPolyCurve(f.createIfcCartesianPointList2D(coords), None, False)
 
-    def _set_slab_shape(self, slab, thickness, outside=None, holes=(), radius=None):
+    def _kept_heights(self, slab, outside):
+        """(0.433) The heights its corners keep when its outline changes: the same corners, the same heights; other
+        corners, the height of its top's surface where they are now."""
+        old = self.slab_heights(slab)
+        rings = self._local_rings(slab) if old is not None else None
+        if old is None or rings is None or not outside:
+            return None
+        before = rings[0]
+        if len(before) != len(old):
+            return None
+        if len(before) == len(outside):
+            return list(old)
+        height = sloped_slab.surface(before, old)
+        return [height(float(x), float(y)) for x, y in outside]
+
+    def _set_slab_shape(self, slab, thickness, outside=None, holes=(), radius=None, heights=KEEP):
         """A slab's body: its plan (in its own frame, m) — a ring with holes, or a circle round its 0, 0 —
-        extruded up `thickness`; and its quantities."""
+        extruded up `thickness`; and its quantities. (0.433) `heights`: its outline's corners' over its top (KEEP:
+        as they are; None: flat) — not all 0, its body a closed triangulated face set, its plan kept beside it."""
         f, u = self.file, 1.0 / self.unit_scale
+        if heights is KEEP:
+            heights = self._kept_heights(slab, outside) if radius is None else None
+        if radius is not None or heights is None or len(heights) != len(outside or ()) or sloped_slab.is_flat(heights):
+            heights = None
         usage = ifcopenshell.util.element.get_material(slab, should_skip_usage=False)
         if usage is not None and usage.is_a("IfcMaterialLayerSetUsage"):
             usage.LayerSetDirection = "AXIS3"
         self._clear_representations(slab)
+        params = self._params(slab)
+        if heights is not None:
+            poly = core_slabs.outline_polygon(outside, holes)
+            if poly is None:
+                raise EditRefused("slab_outline")
+            verts, tris = sloped_slab.body(outside, holes, heights, thickness)
+            if not len(tris):
+                raise EditRefused("slab_outline")
+            item = f.createIfcTriangulatedFaceSet(f.createIfcCartesianPointList3D((verts * u).tolist()), None, True,
+                                                  [tuple(int(i) + 1 for i in tri) for tri in tris], None)
+            body = f.createIfcShapeRepresentation(self.body, self.body.ContextIdentifier, "Tessellation", [item])
+            api.geometry.assign_representation(f, product=slab, representation=body)
+            area, perimeter = float(poly.area), float(poly.exterior.length)
+            self._set_qto(slab, "Qto_SlabBaseQuantities", {"Width": thickness * u, "GrossArea": area,
+                                                           "NetArea": area, "GrossVolume": area * thickness,
+                                                           "Perimeter": perimeter * u})
+            plan = {"o": [[round(float(x), 6), round(float(y), 6)] for x, y in outside],
+                    "h": [[[round(float(x), 6), round(float(y), 6)] for x, y in h] for h in holes],
+                    "t": round(float(thickness), 6)}
+            self._set_params(slab, {"Cotas": json.dumps([round(float(z), 6) for z in heights]),
+                                    "Planta": json.dumps(plan, separators=(",", ":"))})
+            return
+        if params.get("Cotas") or params.get("Planta"):          # (flat again: no more of them)
+            self._set_params(slab, {"Cotas": None, "Planta": None})
         if radius is not None:
             profile = f.createIfcCircleProfileDef("AREA", None, f.createIfcAxis2Placement2D(
                 f.createIfcCartesianPoint((0.0, 0.0)), None), float(radius * u))
@@ -199,19 +287,21 @@ class SlabMixin:
         from shapely.geometry import Point
         return all(grown.contains(Point(x, y)) for x, y in corners)
 
-    def set_slab_outline(self, guid, outline, holes=None, loops=None):
+    def set_slab_outline(self, guid, outline, holes=None, loops=None, heights=KEEP):
         """A slab's plan made the outline [(x, y)…] (program's coordinates): edited by its corners (0.100). Its
         holes stay (or `holes`); its level, thickness and placement stay, so its openings stay where they are.
         A rectangle becomes a polygon; tied to beams, it no longer follows them (drawn by hand now).
 
         (0.410) Or `loops` (core/outline_loops, program's coordinates): the outline and its holes as drawn, their
-        sides arcs or Bézier curves — the body made of them in pieces, the drawing kept beside it («Desenho»)."""
+        sides arcs or Bézier curves — the body made of them in pieces, the drawing kept beside it («Desenho»).
+
+        (0.433) A sloped slab's corners keep their heights (`heights`: the new corners' own)."""
         slab, _ = self._require(guid, "slab")
         if self.slab_shape(guid) == "circulo":
             raise EditRefused("slab_circle")
         rings = self._local_rings(slab)
-        solid = self._slab_solid(slab)
-        if rings is None or solid is None:
+        thickness = self._slab_thickness(slab)
+        if rings is None or thickness is None:
             raise EditRefused("not_editable")
         m = self._placement_si(slab)
         inv = np.linalg.inv(m)
@@ -239,8 +329,7 @@ class SlabMixin:
             raise EditRefused("slab_outline")
         if not self._openings_fit(slab, outside):
             raise EditRefused("opening_outside")
-        thickness = float(solid.Depth) * self.unit_scale
-        self._set_slab_shape(slab, thickness, outside, inner)
+        self._set_slab_shape(slab, thickness, outside, inner, heights=heights)
         params = {"Forma": "poligono",
                   "Desenho": outline_loops.text(drawing) if drawing and outline_loops.curved(drawing) else None}
         if self._params(slab).get("Vigas"):
@@ -255,8 +344,29 @@ class SlabMixin:
             raise EditRefused("too_small")
         if not self._openings_fit(slab, radius=radius):
             raise EditRefused("opening_outside")
-        solid = self._slab_solid(slab)
-        self._set_slab_shape(slab, float(solid.Depth) * self.unit_scale, radius=float(radius))
+        self._set_slab_shape(slab, self._slab_thickness(slab), radius=float(radius))
+
+    def set_slab_heights(self, guid, heights):
+        """(0.433, the addon's «piso com declive por vértice») Each corner of a slab's outline at a height of its own
+        over its top (m, its outline's order: a balcony falling to its drain, a ramp) — all 0: flat again, its
+        extrusion. Its underside follows a thickness lower; its holes' corners lie on its top. A rectangle becomes a
+        polygon (its corners its own now); a round slab has no corners."""
+        slab, _ = self._require(guid, "slab")
+        if self.slab_shape(guid) == "circulo":
+            raise EditRefused("slab_circle")
+        rings = self._local_rings(slab)
+        thickness = self._slab_thickness(slab)
+        if rings is None or thickness is None:
+            raise EditRefused("not_editable")
+        outside, holes, _radius = rings
+        heights = [float(z) for z in heights]
+        if len(heights) != len(outside):
+            raise EditRefused("not_editable")
+        if any(abs(z) > MAX_HEIGHT for z in heights):
+            raise EditRefused("slab_height")
+        self._set_slab_shape(slab, thickness, outside, holes, heights=heights)
+        if self.slab_shape(guid) == "retangulo":
+            self._set_params(slab, {"Forma": "poligono"})
 
     def set_slab_function(self, guid, function):
         """A slab's function: estrutural / acabamento / excluida (Pset_SlabCommon.LoadBearing follows). Its place

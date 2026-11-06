@@ -837,6 +837,7 @@ def bim_flow():
     quick_properties_flow()           # (0.430)
     model_warnings_flow()             # (0.431)
     wall_chord_flow()                 # (0.432)
+    sloped_slab_flow()                # (0.433)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21532,6 +21533,59 @@ def wall_chord_flow():
     pump(300)
     check("w_mais_letra", walled and linked and trim and tape and rect,
           "W={} W+L={} W+T={} T={} W,Esc,R={}".format(walled, linked, trim, tape, after_esc))
+
+
+def sloped_slab_flow():
+    """0.433 («piso com declive por vértice», as the addon's): a 4 × 2 slab chosen — in the Properties' «Declive»
+    group, «Lado alto» Lado 1 and «Declive (%)» 2 + Enter: its far side 4 cm lower; «Canto 3» ↑ + Enter: 1 cm up;
+    Ctrl+Z: back to 4 cm; «Pôr plana»: flat, its extrusion again."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    slab = B.add_slab_outline(doc, [(0.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0)], 0.0, catalog.BY_KEY["laje_12"])
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection({slab})
+    vp.zoom_extents()
+    pump(500)
+    panel = win.props
+    side, percent = panel.editors.get("slab_slope_side"), panel.editors.get("slab_slope")
+    rows = side is not None and percent is not None and ("slab_corner_z", 3) in panel.editors
+
+    def heights():
+        found = doc.ifc.slab_outline(slab)["heights"]
+        return [round(z, 3) for z in found] if found else None
+
+    if rows:
+        side.setCurrentIndex(0)
+        percent.setFocus()
+        percent.setText("2")
+        QtTest.QTest.keyClick(percent, Qt.Key.Key_Return)
+        pump(600)
+    sloped = heights() == [0.0, 0.0, -0.04, -0.04]
+    corner = panel.editors.get(("slab_corner_z", 2))
+    corner_text = corner.text() if corner is not None else None
+    shown = corner_text is not None and corner_text.startswith("-0,04")
+    if corner is not None:
+        corner.setFocus()
+        QtTest.QTest.keyClick(corner, Qt.Key.Key_Up)
+        QtTest.QTest.keyClick(corner, Qt.Key.Key_Return)
+        pump(600)
+    stepped = heights() == [0.0, 0.0, -0.03, -0.04]
+    shot("433_declive.png")
+    doc.undo()
+    pump(400)
+    undone = heights() == [0.0, 0.0, -0.04, -0.04]
+    flat = panel.editors.get("slab_flat")
+    if flat is not None:
+        flat.click()
+        pump(500)
+    back = heights() is None and doc.ifc._slab_solid(doc.ifc.by_guid(slab)) is not None
+    vp.set_selection(set())
+    check("piso_com_declive", rows and sloped and shown and stepped and undone and back,
+          "linhas={} 2%={} campo={!r} canto3={} desfeito={} plana={} {}".format(
+              rows, sloped, corner_text, stepped, undone, back, heights()))
 
 
 def wheel(steps):

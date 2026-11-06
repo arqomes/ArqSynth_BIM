@@ -290,6 +290,8 @@ def create(session, args):
             raise ToolError("outline: three points at least")
         made = [bim.add_slab_outline(doc, outline, float(p.get("z", z)), session.spec(kind, p.get("type")),
                                      storey=storey)]
+        if p.get("heights"):                      # (0.433) each corner's height over its top (m): its slope
+            bim.set_slab_heights(doc, made[0], [float(v) for v in p["heights"]])
     elif kind == "roof":
         outline = [tuple(_point(q, "outline")[:2]) for q in p.get("outline") or ()]
         if len(outline) < 3:
@@ -479,7 +481,7 @@ def definitions(live=False):
         ("get", "One element: class, name, type, storey, sizes, its standard IFC properties set. full=true: the empty "
                 "ones and every other property set.",
          _schema({"id": {"type": ["string", "integer"]}, "full": {"type": "boolean"}}, ["id"]), get, True),
-        ("create", "Make an element. kind + params: wall{a,b,type?,height?} walls{points,closed?} slab{outline,z?} "
+        ("create", "Make an element. kind + params: wall{a,b,type?,height?} walls{points,closed?} slab{outline,z?,heights?} "
                    "roof{outline,form?(hip gable shed flat),slope?,overhang?} door|window{wall,at(m from its start)} "
                    "column{at,height?} beam{a,b,top} room{at,name?} storey{name,z}; type?, storey? in any.",
          _schema({"kind": {"type": "string"}, "params": {"type": "object"}}, ["kind", "params"]), create, False),

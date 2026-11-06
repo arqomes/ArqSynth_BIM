@@ -880,7 +880,12 @@ class EditMixin:
     def slab_extents(self, guid):
         """(x0, y0, x1, y1, thickness) of a rectangular slab in its own frame."""
         f = self.element_frame(guid)
-        return f.x0, f.y0, f.x0 + f.length, f.y1, f.z1 - f.z0
+        thickness = f.z1 - f.z0
+        slab = self.by_guid(guid)
+        if slab is not None and self._slab_solid(slab) is None:     # (0.433) a sloped slab: its own, not its box's
+            own = self._slab_thickness(slab)
+            thickness = own if own is not None else thickness
+        return f.x0, f.y0, f.x0 + f.length, f.y1, thickness
 
     def resize_slab(self, guid, x0, y0, x1, y1):
         slab, _ = self._require(guid, "slab")

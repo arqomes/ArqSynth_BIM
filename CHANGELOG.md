@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.433.0 — 2026-11-06
+
+**Pisos com declive por canto**, como no addon: cada canto de uma laje pode ficar mais alto ou mais baixo do que o
+topo dela. Serve para uma varanda ou um terraço que cai para o ralo, ou para uma rampa.
+
+- Nas Propriedades de uma laje há um grupo novo, **Declive**, logo a seguir a «Restrições e dimensões»:
+  - **Lado alto**: o lado que fica no topo da laje;
+  - **Declive (%)**: escreva, por exemplo, 2 e carregue em Enter. A laje cai 2 cm por metro a partir do lado alto;
+  - **Canto 1, Canto 2…**: a altura de cada canto acima do topo (ou abaixo, com −). As setas ↑ ↓ sobem ou descem 1 cm,
+    como nos outros campos de medidas;
+  - **Pôr plana**: volta a ser uma laje plana.
+- A face de baixo acompanha o declive, sempre com a espessura do tipo. Os furos ficam no declive.
+- Ao mexer no contorno, os cantos que já existiam guardam a sua altura; um canto novo fica à altura do declive nesse
+  sítio. Mudar o tipo da laje, espelhá-la, gravar e abrir o ficheiro: o declive fica.
+- Uma laje retangular com declive passa a polígono (os cantos passam a ser dela). Uma laje circular não tem cantos.
+- No IFC, uma laje com declive leva um corpo de triângulos fechado (IfcTriangulatedFaceSet), com a área, o volume e a
+  espessura certos nas quantidades.
+- No MCP, «create» de uma laje aceita `heights` (a altura de cada canto, em metros).
+
 ## 0.432.0 — 2026-11-06
 
 **«W + letra» — os comandos das paredes por uma segunda letra**, como no addon.

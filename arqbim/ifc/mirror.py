@@ -166,8 +166,10 @@ class MirrorMixin:
             self._place(e, _frame(point(m[:3, 3]), r @ m[:3, 0]))
             if info["shape"] != "circulo":
                 ring = [tuple(point((x, y, 0.0))[:2]) for x, y in info["outline"]][::-1]
+                heights = info.get("heights")                     # (0.433: its corners' heights go with them)
                 self.set_slab_outline(guid, ring, holes=[[tuple(point((x, y, 0.0))[:2]) for x, y in h][::-1]
-                                                          for h in info["holes"]])
+                                                          for h in info["holes"]],
+                                      heights=heights[::-1] if heights else None)
 
     def _mirror_wall(self, guid, mat, lang="pt"):
         """A straight wall reflected: drawn from the reflected end towards the reflected start (see the module's
