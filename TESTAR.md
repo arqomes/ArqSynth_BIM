@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.437 — Estrutura leve (Steel frame e Wood frame)
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.437.0**. Faça Ctrl+N e desenhe uma parede de 4 m
+   com **Arquitetura ▸ Parede**. Ponha-lhe uma porta a meio (**Arquitetura ▸ Aberturas ▸ Porta**).
+2. Carregue em Esc, escolha o **Selecionar** e clique na parede. Nas Propriedades, no grupo **Estrutura leve**, em
+   **Estrutura**, escolha **Steel frame (aço leve)**.
+   - A faixa diz quantas peças tem a estrutura e os metros ao todo.
+   - O grupo mostra o espaçamento (0,60 m), os travamentos (1) e as peças de cada tipo: guias, montantes, ombreiras,
+     verga, montantes curtos e travamentos.
+3. Clique num sítio vazio da vista (nada escolhido). Nas Propriedades da vista, clique em **Visibilidade…** e desligue
+   **Paredes** e **Portas**. Agora vê-se a estrutura: as ombreiras de cada lado da porta, a verga por cima e os
+   travamentos que não atravessam a porta.
+4. Volte a ligar as paredes e as portas. Clique na parede e mude **Travamentos (filas)** para 2 e o **espaçamento** para
+   0,40: a estrutura refaz-se.
+5. Nas Propriedades da parede, mude o **Comprimento** para 6 m (Enter): a estrutura acompanha, com mais montantes.
+6. Em **Estrutura**, escolha **Wood frame (madeira)**: as peças passam a madeira, a 40 cm.
+7. Em **Estrutura**, escolha **Nenhuma**: a estrutura desaparece. Ctrl+Z volta a pô-la.
+
 ## 0.436 — Fachada de vidro em arco e por face
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.436.0**. Faça Ctrl+N.

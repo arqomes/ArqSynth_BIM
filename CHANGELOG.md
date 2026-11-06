@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.437.0 — 2026-11-06
+
+**Estrutura leve das paredes (Steel frame e Wood frame)**, como no addon.
+
+- Nas Propriedades de uma parede há um grupo novo, **Estrutura leve**. Em **Estrutura**, escolha **Steel frame (aço
+  leve)** ou **Wood frame (madeira)**.
+- A estrutura fica dentro do núcleo da parede (a camada com a função Estrutura no tipo, ou a mais grossa):
+  - **guias** em baixo e em cima (a de baixo cortada nas portas);
+  - **montantes** ao espaçamento, contado do início da parede, e um em cada ponta;
+  - **ombreiras** de cada lado de cada porta e janela, uma **verga** por cima e, nas janelas, um **peitoril** por baixo;
+  - **montantes curtos** por cima das vergas e por baixo dos peitoris, onde estariam os montantes;
+  - **travamentos** em filas, entre os montantes, sem atravessar as aberturas.
+- Por omissão: aço com montantes de 4 cm a 60 cm e guias de 4 cm; madeira com 4,5 cm a 40 cm. O espaçamento e o número
+  de filas de travamentos mudam-se nas Propriedades, que mostram também quantas peças há de cada e os metros.
+- A estrutura refaz-se sozinha quando a parede muda: mais comprida, mais alta, com uma porta ou janela nova ou mudada
+  de sítio. Uma cópia da parede leva a sua própria estrutura; apagar a parede apaga a estrutura.
+- No IFC, é um IfcElementAssembly «Estrutura leve» com as peças em IfcMember (guias PLATE, montantes STUD, vergas,
+  peitoris e travamentos), de aço galvanizado ou madeira, com o comprimento e o volume de cada uma.
+- A parede continua igual (as placas e o isolamento são as camadas dela). Para ver a estrutura, esconda as paredes em
+  **Visibilidade…** (Propriedades da vista).
+
 ## 0.436.0 — 2026-11-06
 
 **Fachada de vidro em arco e por face**, como no addon. Na ferramenta **Parede cortina**, a barra de cima tem agora

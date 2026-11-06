@@ -534,7 +534,9 @@ clique dentro das paredes. Falta, pela ordem do estudo:
     pronta)~~ (0.435.0: Escada ▸ Colocar ▸ Pronta — a escada presa ao rato, R roda, Espaço o ponto do 1.º degrau),
     ~~pisos com declive por vértice~~ (0.433.0: o grupo Declive nas Propriedades — lado alto e %, a altura de cada
     canto, Pôr plana; corpo de triângulos no IFC), ~~fachada de vidro em arco e por face~~ (0.436.0: Parede cortina ▸
-    Forma ▸ Arco — três cliques — e Por face — o retângulo de pé da face, por fora dela), Steel/Wood frame, mobiliário
+    Forma ▸ Arco — três cliques — e Por face — o retângulo de pé da face, por fora dela), ~~Steel/Wood frame~~ (0.437.0:
+    Propriedades da parede ▸ Estrutura leve — guias, montantes, ombreiras, vergas, peitoris, travamentos no núcleo,
+    refeita quando a parede muda; ficam por fazer as placas por face como peças e a estrutura nas listas), mobiliário
     solto de catálogo,
     ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ~~ripado
     como ferramenta própria~~ (0.434.0: Acabamentos ▸ Ripado — clique na face ou retângulo, moldura, ripas de fixação,

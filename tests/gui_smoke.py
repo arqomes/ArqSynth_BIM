@@ -841,6 +841,7 @@ def bim_flow():
     ripado_tool_flow()                # (0.434)
     stair_ready_flow()                # (0.435)
     curtain_shapes_flow()             # (0.436)
+    wall_framing_flow()               # (0.437)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6489,6 +6490,45 @@ def curtain_shapes_flow():
     shot("436_fachada_arco_face.png")
     check("fachada_arco_e_face", shown and face_ok and arc_ok,
           "mostrada={} face={} arco_raio={}".format(shown, by_face, radius))
+
+
+def wall_framing_flow():
+    """0.437 (the addon's «Steel Frame / Wood Frame»): a 4 m wall with a door chosen — in its Properties «Estrutura
+    leve ▸ Estrutura» Steel frame: its frame made (its studs, its jambs, its header listed); «Travamentos» 2: two rows;
+    the walls hidden in the 3D view, the frame seen. Captured: 437_estrutura_leve.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = B.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    B.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], B.wall_frame(doc, wall), 1.5, -1)
+    win.open_view("3d", None)
+    win.set_tool("select")
+    vp.set_selection({wall})
+    pump(400)
+    combo = win.props.editors.get("wall_framing")
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData("steel"))
+        combo.activated.emit(combo.currentIndex())
+        pump(600)
+    made = doc.ifc.framing_of(wall) is not None
+    text = win.props.text()
+    listed = "Montantes" in text and "Ombreiras" in text and "Vergas" in text
+    rows = win.props.editors.get("wall_framing_blocking")
+    if rows is not None:
+        rows.setCurrentIndex(rows.findData(2))
+        rows.activated.emit(rows.currentIndex())
+        pump(600)
+    two = (doc.ifc.framing_settings(wall) or (None, None, None))[2] == 2
+    vp.set_selection(set())
+    doc.set_view_props(("3d",), hidden=["IfcWall", "IfcDoor"])
+    vp.set_view("front")
+    vp.zoom_extents()
+    pump(500)
+    shot("437_estrutura_leve.png")
+    doc.set_view_props(("3d",), hidden=None)
+    pump(200)
+    check("estrutura_leve", made and listed and two, "feita={} lista={} travamentos2={}".format(made, listed, two))
 
 
 def stair_waist_flow():

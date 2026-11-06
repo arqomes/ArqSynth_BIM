@@ -1884,8 +1884,10 @@ _STRINGS = {
     "tree.cat.IfcSlab": ("Lajes", "Slabs"),
     "tree.cat.IfcRamp": ("Rampas", "Ramps"),
     "tree.cat.IfcRoof": ("Coberturas", "Roofs"),
-    "tree.cat.IfcMember": ("Peças lineares (madeiramento…)", "Members (carpentry…)"),            # (0.276)
-    "tree.cat.IfcElementAssembly": ("Conjuntos (madeiramento…)", "Assemblies (carpentry…)"),
+    "tree.cat.IfcMember": ("Peças lineares (madeiramento, estrutura leve…)",                      # (0.276; 0.437)
+                           "Members (carpentry, light frames…)"),
+    "tree.cat.IfcElementAssembly": ("Conjuntos (madeiramento, estrutura leve…)",
+                                    "Assemblies (carpentry, light frames…)"),
     "tree.cat.IfcStair": ("Escadas", "Stairs"),
     "tree.cat.IfcRailing": ("Guardas", "Railings"),
     "tree.cat.IfcTransportElement": ("Elevadores", "Elevators"),        # (0.374)
@@ -2800,6 +2802,30 @@ _STRINGS = {
                         "Slab sloping {p} % from side {s}. Ctrl+Z undoes."),
     "cmd.slab_outline": ("Contorno da laje", "Slab outline"),
     "cmd.slab_heights": ("Declive da laje", "Slab slope"),                                       # (0.433)
+    # (0.437) a wall's light frame (the addon's «Steel Frame / Wood Frame»)
+    "cmd.wall_framing": ("Estrutura leve", "Light frame"),
+    "props.g.framing": ("Estrutura leve", "Light frame"),
+    "props.framing": ("Estrutura", "Frame"),
+    "framing.none": ("Nenhuma", "None"),
+    "framing.steel": ("Steel frame (aço leve)", "Steel frame"),
+    "framing.wood": ("Wood frame (madeira)", "Wood frame"),
+    "props.framing_spacing": ("Espaçamento dos montantes", "Stud spacing"),
+    "props.framing_blocking": ("Travamentos (filas)", "Blocking (rows)"),
+    "framing.no_blocking": ("Sem travamentos", "No blocking"),
+    "framing.role.plate": ("Guias", "Plates"),
+    "framing.role.stud": ("Montantes", "Studs"),
+    "framing.role.jamb": ("Ombreiras", "Jamb studs"),
+    "framing.role.cripple": ("Montantes curtos", "Cripple studs"),
+    "framing.role.header": ("Vergas", "Headers"),
+    "framing.role.sill": ("Peitoris", "Sills"),
+    "framing.role.blocking": ("Travamentos", "Blocking"),
+    "framing.count": ("{n} — {m}", "{n} — {m}"),
+    "info.wall_framing": ("Estrutura leve: {n} peças, {m} ao todo. Para a ver, esconda as paredes (Visibilidade). "
+                          "Ctrl+Z desfaz.",
+                          "Light frame: {n} pieces, {m} in all. To see it, hide the walls (Visibility). Ctrl+Z undoes."),
+    "refuse.framing_bad": ("o espaçamento dos montantes tem de estar entre 10 cm e 1,50 m",
+                           "the studs' spacing must be between 10 cm and 1.50 m"),
+    "refuse.framing_small": ("a parede é pequena demais para uma estrutura", "the wall is too small for a frame"),
     "cmd.slab_function": ("Função da laje", "Slab function"),
     "refuse.slab_outline": ("o contorno não serve (lados cruzados ou pequeno demais)",
                             "the outline will not do (its sides cross, or it is too small)"),

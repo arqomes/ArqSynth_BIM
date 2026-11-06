@@ -75,6 +75,7 @@ from .roof_tiles import RoofTilesMixin  # noqa: E402
 from .joinery import JoineryMixin  # noqa: E402
 from .dwellings import DwellingMixin  # noqa: E402
 from .lot import LotMixin  # noqa: E402
+from .wall_framing import WallFramingMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -365,7 +366,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                ElectricalMixin, CircuitMixin, ConduitMixin, TerrainMixin, StructuralMixin, RebarMixin,
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
-               ElementTypeMixin, DwellingMixin, LotMixin):
+               ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -1588,6 +1589,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             for rel in list(getattr(element, "IsNestedBy", None) or ()):      # a pipe's / bend's ports (0.74)
                 for port in [o for o in rel.RelatedObjects if o.is_a("IfcDistributionPort")]:
                     api.root.remove_product(f, product=port)
+            if element.is_a("IfcWall"):
+                self.drop_framing(guid)                                     # (its light frame with it, 0.437)
             if element.is_a("IfcRoof"):
                 self.drop_carpentry(guid)                                   # (its carpentry with it, 0.276)
                 self.drop_tiles(guid)                                       # (its tiles, 0.279: while tied to it)
@@ -2264,6 +2267,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 length, h, t = self.wall_params(guid)
                 info["params"] = {"length": length, "height": h, "thickness": t,
                                   "profiled": self.wall_profile(e) is not None}             # (0.109)
+                if self.framing_of(guid) is not None:                   # (0.437) its light frame
+                    info["params"].update(framing=self.framing_settings(guid),
+                                          framing_summary=self.framing_summary(guid))
                 info["constraints"] = self.constraints(guid)            # (0.73)
             elif kind == "slab":
                 x0, y0, x1, y1, t = self.slab_extents(guid)

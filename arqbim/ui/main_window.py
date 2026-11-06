@@ -6582,6 +6582,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_use(doc, [guid], value or "")
             elif action == "slab_radius":
                 bim.set_slab_radius(doc, guid, value)
+            elif action in ("wall_framing", "wall_framing_spacing", "wall_framing_blocking"):   # (0.437)
+                if action == "wall_framing":
+                    bim.set_wall_framing(doc, guid, kind=value or "")
+                elif action == "wall_framing_spacing":
+                    bim.set_wall_framing(doc, guid, spacing=value)
+                else:
+                    bim.set_wall_framing(doc, guid, blocking=int(value))
+                found = ifc.framing_summary(guid)
+                if found:
+                    self.message(t("info.wall_framing", n=sum(n for n, _m in found.values()),
+                                   m=format_length(sum(m for _n, m in found.values()), decimal_sep())))
             elif action == "slab_corner_z":                # (0.433) a corner's height over its top: its slope
                 bim.set_slab_corner_height(doc, guid, full[1], value)
             elif action == "slab_slope":                   # (0.433) falling from a side, % (value: (%, side))

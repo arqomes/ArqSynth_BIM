@@ -3556,6 +3556,18 @@ def set_slab_outline(doc, guid, outline=None, loops=None):
     _edit(doc, lambda ifc: [ifc.set_slab_outline(g, per_copy[g]) for g in gs], gs, "cmd.slab_outline")
 
 
+def set_wall_framing(doc, guid, kind=None, spacing=None, blocking=None):
+    """(0.437, the addon's «Steel Frame / Wood Frame») A straight wall's light frame made or changed (kind "steel" /
+    "wood"; the studs' spacing; the rows of blocking) — kind "": taken away. In a group, every copy. One undo step."""
+    language = lang()
+    gs = _and_copies(doc, guid)
+    if kind == "":
+        _edit(doc, lambda ifc: [ifc.remove_wall_framing(g) for g in gs], gs, "cmd.wall_framing")
+        return
+    _edit(doc, lambda ifc: [ifc.set_wall_framing(g, kind, spacing, blocking, language) for g in gs], gs,
+          "cmd.wall_framing")
+
+
 def set_slab_heights(doc, guid, heights):
     """(0.433, «piso com declive por vértice») Each corner of a slab's outline at its own height over its top (m, in
     its outline's order; all 0: flat). In a group, every copy the same. One undo step."""

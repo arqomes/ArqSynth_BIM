@@ -111,8 +111,8 @@ def _type_name(spec):
 
 GROUP = QtCore.Qt.ItemDataRole.UserRole + 7     # (0.185) a group's row (left out when nothing went in it)
 # (0.396) an element's groups in this order (Revit's: what is edited first, who it is after), whatever order made in
-GROUP_ORDER = ("props.g.parameters", "props.g.slope", "props.g.materials", "props.g.identity", "props.g.phase",
-               "props.g.ifc")
+GROUP_ORDER = ("props.g.parameters", "props.g.slope", "props.g.framing", "props.g.materials", "props.g.identity",
+               "props.g.phase", "props.g.ifc")
 DIVIDER_DEFAULT, DIVIDER_LEAST, DIVIDER_MOST = 0.5, 0.25, 0.75   # the names' column: its share of the panel at most
 GROUP_EXTRA = 8                 # (0.414) px more for a group's title (a band of its own)
 SUB = QtCore.Qt.ItemDataRole.UserRole + 8       # (0.414) a subgroup's row (Forma, Nervuras…): a lighter band
@@ -1921,6 +1921,25 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         return self._text_editor(key, ("-" + text) if meters < -5e-4 else text, action, guid, parse=parse_length,
                                  least=least)
 
+    def _framing_rows(self, guid, p):
+        """(0.437, the addon's «Steel Frame / Wood Frame») A wall's light frame: «Estrutura leve» — none, steel or
+        wood —; with one, its studs' spacing, its rows of blocking and how many pieces of each (its plates, studs,
+        jambs, headers, sills, cripples, blocking: their metres)."""
+        from ..core import wall_framing as core_framing
+        framing = p.get("framing")
+        kind, spacing, blocking = framing if framing else ("", None, None)
+        self._begin(t("props.g.framing"))
+        self._choice_combo(t("props.framing"), "wall_framing", guid,
+                           [(t("framing.none"), "")] + [(t("framing." + k), k) for k in core_framing.KINDS], kind)
+        if not framing:
+            return
+        self._length_editor(t("props.framing_spacing"), spacing, "wall_framing_spacing", guid)
+        self._choice_combo(t("props.framing_blocking"), "wall_framing_blocking", guid,
+                           [(t("framing.no_blocking") if n == 0 else str(n), n)
+                            for n in range(core_framing.MAX_BLOCKING + 1)], blocking)
+        for role, (n, metres) in (p.get("framing_summary") or {}).items():
+            self._row(t("framing.role." + role), t("framing.count", n=n, m=_len(metres)))
+
     CORNER_ROWS = 12            # (0.433) a slab's corners listed one by one, at most
 
     def _slab_slope_rows(self, guid, p):
@@ -2026,6 +2045,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             button.clicked.connect(lambda _c=False: self._emit("edit_profile", guid, None))
             self.tree.setItemWidget(item, 1, button)
             self.editors["edit_profile"] = button
+            self._framing_rows(guid, p)                    # (0.437) its light frame
         elif kind == "slab":
             shape = p.get("shape") or "retangulo"
             if shape == "retangulo":
