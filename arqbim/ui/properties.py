@@ -706,6 +706,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 if group is not None:
                     copies = len(doc.ifc.group_copies(doc.ifc.group_model(group)))
                     self._row(t("props.group"), t("props.group_member", name=group.Name or "", n=copies))
+                self._verify_rows(doc, obj.id)                                                # (0.417)
             else:
                 self._set_header(obj.name, t("props.sketch_kind"), _kind_icon("sketch"))
                 self._show_sketch(obj)
@@ -1063,14 +1064,78 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._choice_combo(t("props.room_where"), "room_external", g,                     # (0.357)
                                [(t("props.room_interior"), False), (t("props.room_exterior"), True)],
                                bool(info.get("external")))
+            self._room_verifier_rows(doc, g)                                                  # (0.416)
             self._row(t("props.room_area"), "{:.2f} m²".format(info["area"]).replace(".", decimal_sep()))
             self._row(t("props.room_perimeter"), _len(info["perimeter"]))
             self._row(t("props.room_height"), _len(info["height"]))
             for key, label in (("FloorCovering", "props.room_floor"), ("WallCovering", "props.room_wall"),
                                ("CeilingCovering", "props.room_ceiling")):
                 self._text_editor(t(label), info["finishes"].get(key, ""), ("room_finish", key), g)
+            self._verify_rows(doc, g)                                                          # (0.417)
         self._note(t("props.room_hint"), theme.C["link"])
         self._done()
+
+    def _verify_rows(self, doc, element):
+        """(0.417) The group «Verificação»: each rule of the project's laws on this room or door — ✓ / ✗ / not
+        measured, the value, the limit, the law and its article (its text in the tip)."""
+        from ..verify import check as check_mod
+        from ..verify import project
+        from ..verify import rules as rules_mod
+        from .verify_bar import default_country
+        try:
+            result = check_mod.check(doc, project.settings(doc, default_country()))
+        except Exception:                                      # noqa: BLE001 (the panel never fails for it)
+            return
+        found = [f for f in result.findings if f.subject.id == element]
+        if not found:
+            return
+        packs = rules_mod.packs()
+        self._begin(t("verify.props.group"))
+        for f in sorted(found, key=lambda f: (f.status != "fail", f.rule.article)):
+            rule = f.rule
+            side = t("verify.side." + ("min" if any(k.startswith("min") for k in rule.limit) else "max"))
+            values = dict(value=check_mod.number(f.value, rule.unit), side=side,
+                          limit=check_mod.number(f.limit, rule.unit))
+            text = t({"ok": "verify.props.ok", "fail": "verify.props.fail"}.get(f.status, "verify.props.unknown"),
+                     **values)
+            pack = packs.get(rule.pack)
+            item = self._row("{} — {}".format(pack.short if pack else rule.pack, rule.title), text)
+            item.setToolTip(0, "{} — {}\n\n{}".format(rule.article, rule.title, rule.text))
+            item.setToolTip(1, check_mod.message(f))
+            colour = {"ok": theme.C["ok"], "fail": theme.C["fail"]}.get(f.status, theme.C["neutral"])
+            item.setForeground(1, QtGui.QBrush(QtGui.QColor(colour)))
+        self._group = None                                     # (what comes after it is not in it)
+
+    def _room_verifier_rows(self, doc, guid):
+        """(0.416) What the Verifier reads of a room: its use (automatic — and why — or chosen), its dwelling (found by
+        the doors, or named by hand) and the dwelling's type."""
+        from ..verify import reader, uses
+        try:
+            facts = reader.read(doc)
+        except Exception:                                      # noqa: BLE001 (the panel never fails for it)
+            return
+        room = facts.rooms.get(guid)
+        if room is None:
+            return
+        language = lang()
+        chosen, manual = doc.ifc.space_choices(guid)
+        auto_use, auto_why = uses.deduce(room.name, facts.contents.get(guid), room.external)
+        auto = t("props.room_use_auto", use=uses.label(auto_use, language),
+                 why=t("props.room_use_why." + auto_why))
+        self._choice_combo(t("props.room_use"), "room_use", guid,
+                           [(auto, None)] + [(uses.label(k, language), k) for k in uses.ORDER], chosen)
+        dwelling = facts.dwelling_of(guid)
+        self._text_editor(t("props.room_dwelling"), dwelling.name if dwelling else "", "room_dwelling", guid)
+        editor = self.editors.get("room_dwelling")
+        if editor is not None:
+            editor.setToolTip(t("props.room_dwelling_tip"))
+            if dwelling is None:
+                editor.setPlaceholderText(t("props.room_common") if uses.is_common(room.use)
+                                          else t("props.room_no_dwelling"))
+        if dwelling is not None:
+            area = "{:.2f}".format(dwelling.useful_area).replace(".", decimal_sep())
+            self._row(t("props.room_typology"), t("props.room_typology_value", t=dwelling.typology,
+                                                  n=dwelling.bedrooms, a=area))
 
     # ------------------------------------------------------------ the view shown (nothing selected)
 

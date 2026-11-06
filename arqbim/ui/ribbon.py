@@ -92,7 +92,7 @@ PANELS = {
                  ("coordination", ("clashes",))),
     "collaborate": (("team", ("share", "open_shared", "sync", ("reserve_views", "give_back"))),
                     ("links", ("cad_link", "cloud_link", ("cad_links", "cloud_links", "walls_from_cad"))),
-                    ("check", ("clashes", ("check_ifc", "check_ids", "missing_data"))),
+                    ("check", ("clashes", ("check_ifc", "check_ids", "missing_data"), ("verify_settings",))),
                     ("notes", ("new_note",))),
     "annotate": (("select", ("select",)),
                  ("views", ("plan", "section", ("last_section", "detail", "symbol_styles"))),

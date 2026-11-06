@@ -8283,6 +8283,9 @@ _STRINGS = {
         "Where each thing is: this panel's «Find» tab (type its name)."),
 }
 
+from .verify.texts import STRINGS as _VERIFY_STRINGS  # noqa: E402  (0.416: the Verifier's own texts)
+_STRINGS.update(_VERIFY_STRINGS)
+
 
 def set_language(lang):
     global _LANG

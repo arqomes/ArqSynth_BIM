@@ -54,6 +54,7 @@ from . import (context_bar, graphic_rules, icons, ids_panel, menus, notes_panel,
                title_block_dialog, view_tabs, view_templates)
 from . import presentation_panel
 from . import room_program as room_program_panel
+from . import verify_bar                                    # (0.417) the Verifier
 
 Key = QtCore.Qt.Key
 Mod = QtCore.Qt.KeyboardModifier
@@ -406,6 +407,13 @@ class MainWindow(QtWidgets.QMainWindow):
         app.installEventFilter(self)
         app.aboutToQuit.connect(lambda: app.removeEventFilter(self))    # (not while Qt takes things down)
         self.doc.subscribe(lambda changed, removed: self._on_document_changed(changed, removed))
+        # (0.417) the Verifier: it watches the project and says what fails in the footer and at the foot of the view
+        self.verifier = verify_bar.Verifier(self, self.doc, self.statusBar(), self.notice.parentWidget())
+        self.hint_label.setMinimumWidth(64)     # (its room to the Verifier's indicator: the hint is whole in the balloon)
+        self.verifier.on_goto = self._verify_goto
+        self.verifier.on_marks = lambda marks: self.viewport.set_verify_marks(marks)
+        self.verifier.on_settings = lambda: self.verify_settings()
+        self.doc.subscribe(lambda changed, removed: self.verifier.changed())
         self.viewport.selection_listeners.append(lambda ids: self._refresh_properties())
         self.viewport.axes_listeners.append(lambda axes: self._refresh_properties())
         self.viewport.selection_listeners.append(lambda ids: self.tree_panel.show_selection(ids))
@@ -702,6 +710,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_missing_data = self._action(t("act.missing_data"), lambda: self.missing_data())         # (0.273)
         self.act_missing_data.setToolTip(t("tip.missing_data"))
         self.act_worktop = self._action(t("act.worktop"), lambda: self.add_worktop(), icon=icons.worktop_icon())    # (0.170)
+        self.act_verify_settings = self._action(t("act.verify_settings"), lambda: self.verify_settings())  # (0.417)
         self.act_check_ids = self._action(t("act.check_ids"), lambda: self.check_ids())
         self.act_check_ifc = self._action(t("act.check_ifc"), lambda: self.check_ifc())
         self.act_site_location = self._action(t("act.site_location"), lambda: self.site_location())
@@ -3050,6 +3059,47 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.viewport.set_canvas(on):
             self.message(t("info.canvas_dark" if on else "info.canvas_light"))
 
+    # ------------------------------------------------------------ the Verifier (0.417)
+
+    def verify_settings(self):
+        """«Regulamentos do projeto…»: the country, the building's use, the kind of work, its height — one undo step;
+        the check made again."""
+        from ..verify import check as check_mod
+        from . import verify_settings as dialog
+        height, _n = check_mod._building_height(self.doc)
+        values = dialog.ask(self, self.verifier.settings(), height)
+        if values is None:
+            return None
+        bim.set_verify_settings(self.doc, values)
+        self.verifier.run()
+        return values
+
+    def _verify_goto(self, finding):
+        """«Ir para»: the plan of the storey of what fails, it chosen and framed (a room, a door; a dwelling's rooms)."""
+        s = finding.subject
+        rooms = [g for g in s.elements if self.doc.ifc.by_guid(g) is not None and
+                 self.doc.ifc.by_guid(g).is_a("IfcSpace")]
+        storey = s.storey or (self.doc.ifc.space_storey(rooms[0]) if rooms else None)
+        if storey:
+            self.set_active_storey(storey)
+            self.open_view("plan", storey)
+        vp = self.viewport
+        if rooms:
+            infos = [self.doc.ifc.space_info(g) for g in rooms]
+            pts = np.array([p for info in infos if info for p in info["outline"]], dtype=float)
+            vp.select_rooms(set(rooms))
+            if len(pts):
+                level = infos[0]["level"] if infos[0] else 0.0
+                lo, hi = pts.min(axis=0), pts.max(axis=0)
+                vp.zoom_box((np.array((lo[0] - 1.0, lo[1] - 1.0, level)), np.array((hi[0] + 1.0, hi[1] + 1.0,
+                                                                                  level + 1.0))))
+        else:
+            ids = {g for g in s.elements if self.doc.get(g) is not None}
+            if ids:
+                vp.set_selection(ids)
+                vp.zoom_extents(ids)
+        self.canvas.setFocus()
+
     def _restyle(self):
         """(0.338) The window's own pieces in the theme in use: the header, the ribbon (its buttons made again), the
         contextual bar, the modules' bar, the properties, the balloon; every icon in the theme's ink."""
@@ -3059,6 +3109,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.context_bar.setStyleSheet(context_bar.style())
         self.module_bar.setStyleSheet(self._modules_style())
         self.notice.restyle()
+        if getattr(self, "verifier", None) is not None:      # (0.417)
+            self.verifier.restyle()
         self.share_label.setStyleSheet(self._share_style())
         self.vcb.setStyleSheet(self._vcb_style())
         theme.retheme_icons(self)
@@ -6208,6 +6260,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_room(doc, guid, external=bool(value))
             elif action == "room_finish":
                 bim.set_room(doc, guid, finishes={full[1]: str(value)})
+            elif action == "room_use":                     # (0.416) chosen, or None: automatic
+                bim.set_room_use(doc, guid, value or None)
+            elif action == "room_dwelling":                # (0.416) named by hand, or "": found by the doors
+                bim.set_room_dwelling(doc, guid, str(value or "").strip() or None)
             elif action == "edit_type":                    # (0.87) the type editor on this element's type
                 QtCore.QTimer.singleShot(0, lambda: self.edit_types(value.kind, value.key))
                 return

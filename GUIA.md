@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.415.0
+# Guia das ferramentas — ArqSynth BIM 0.417.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.415.0.
+ArqSynth BIM 0.417.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -110,7 +110,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
-9. [Colaborar](#9-colaborar) — 15 comandos
+9. [Colaborar](#9-colaborar) — 16 comandos
 10. [Anotar](#10-anotar) — 18 comandos
 11. [Visualizar](#11-visualizar) — 37 comandos
 12. [Render](#12-render) — 10 comandos
@@ -749,7 +749,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Retangular
 
 - **O que faz:** Paredes à volta de um retângulo: dois cantos, ou as medidas digitadas (ex.: 5;4).
-- **Passos de teste (TESTAR.md):** 0.391 «Pintura (como o balde do SketchUp)»
+- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
 
 #### Circular
 
@@ -898,7 +898,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Ambiente: clique dentro das paredes para fazer o ambiente (o contorno aparece debaixo do rato). Ele acompanha as paredes. Esc: Selecionar.
 - **Teclas:** Clique dentro de paredes fechadas · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»; 0.357 «Ambientes e o programa de necessidades»
+- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»; 0.357 «Ambientes e o programa de necessidades»
 
 #### Separador
 
@@ -1171,7 +1171,7 @@ Redes elétricas, de água, de esgoto e AVAC.
 
 - **Como se usa:** sanita: passe sobre a face de uma parede — encosta-se a ela, virada para o ambiente — e clique. Longe das paredes: no ponto, R / Shift+R roda. A verde, a zona livre à frente.
 - **Teclas:** Clique: a louça ali · R / Shift+R: rodar · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.200 «Forquilhas a 45° nos esgotos»; 0.199 «O ramal contorna obstáculos»; 0.171 «Eletrodomésticos e gás»
+- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»
 
 #### Tubo
 
@@ -1318,6 +1318,11 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 
 - **O que faz:** Antes de entregar: por classe e propriedade, quantos elementos ainda não têm valor; um duplo clique seleciona-os.
 - **Passos de teste (TESTAR.md):** 0.273 «Dados IFC em falta, antes de entregar»
+
+#### Regulamentos do projeto…
+
+- **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
+- **Passos de teste (TESTAR.md):** 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 ### Colaborar ▸ Notas
 
@@ -1782,4 +1787,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*240 comandos descritos, gerados do ArqSynth BIM 0.415.0.*
+*241 comandos descritos, gerados do ArqSynth BIM 0.417.0.*

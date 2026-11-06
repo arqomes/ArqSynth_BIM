@@ -1,0 +1,97 @@
+"""(0.416) The Verifier's texts (Portuguese, English), added to the program's (i18n._STRINGS) — kept here, apart from
+the program's long list, so the Verifier's words are found together."""
+
+STRINGS = {
+    "cmd.room_use": ("Uso do ambiente", "Room use"),
+    "cmd.room_dwelling": ("Fogo do ambiente", "Room's dwelling"),
+    "cmd.verify_settings": ("Regulamentos do projeto", "Project regulations"),
+    "props.room_use": ("Uso", "Use"),
+    "props.room_use_auto": ("Automático — {use} ({why})", "Automatic — {use} ({why})"),
+    "props.room_use_why.name": ("pelo nome", "by its name"),
+    "props.room_use_why.contents": ("pelo que tem dentro", "by what is inside"),
+    "props.room_use_why.none": ("sem pistas", "no clue"),
+    "props.room_use_why.chosen": ("escolhido", "chosen"),
+    "props.room_dwelling": ("Fogo", "Dwelling"),
+    "props.room_dwelling_tip": ("O fogo deste ambiente. Vazio: o programa encontra-o pelas portas. Escreva um nome "
+                                "(«Fogo B») para juntar ambientes que as portas não juntam — um duplex, moradias "
+                                "lado a lado.",
+                                "This room's dwelling. Empty: the program finds it by the doors. Type a name "
+                                "(«Dwelling B») to join rooms the doors do not join — a duplex, houses side by side."),
+    "props.room_typology": ("Tipologia do fogo", "Dwelling type"),
+    "props.room_typology_value": ("{t} — {n} quarto(s), {a} m² úteis", "{t} — {n} bedroom(s), {a} m² useful"),
+    "props.room_common": ("— (espaço comum do edifício)", "— (the building's common area)"),
+    "props.room_no_dwelling": ("— (sem fogo)", "— (no dwelling)"),
+    "room.dwelling_label": ("{name} · {t}", "{name} · {t}"),
+    # (0.417) the rules, the footer, the settings
+    "act.verify_settings": ("Regulamentos do projeto…", "Project regulations…"),
+    "tip.verify_settings": ("O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — "
+                            "RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por "
+                            "eles e diz no rodapé o que falha.",
+                            "The country the project is built in (its regulations), the building's use, the kind of "
+                            "work and its height. The Verifier watches the project by them and says in the footer "
+                            "what fails."),
+    "verify.message": ("{subject}: {measure} {value} — {law}, {article}: {side} {limit}",
+                       "{subject}: {measure} {value} — {law}, {article}: {side} {limit}"),
+    "verify.side.min": ("mínimo", "at least"),
+    "verify.side.max": ("máximo", "at most"),
+    "verify.unconfirmed": (" (valor a confirmar)", " (value to be confirmed)"),
+    "verify.door": ("Porta", "Door"),
+    "verify.building": ("Edifício", "Building"),
+    "verify.m.area_util": ("área útil", "useful area"),
+    "verify.m.pe_direito_min": ("pé-direito mais baixo", "lowest ceiling height"),
+    "verify.m.pe_direito_80": ("pé-direito (em 80 % da área)", "ceiling height (over 80 % of it)"),
+    "verify.m.area_bruta": ("área bruta", "gross area"),
+    "verify.m.area_habitavel": ("área habitável", "habitable area"),
+    "verify.m.areas_quartos": ("áreas dos quartos", "bedroom areas"),
+    "verify.m.n_quartos": ("quartos", "bedrooms"),
+    "verify.m.area_sala_cozinha_suplementos": ("sala, cozinha, refeições e roupa", "living, kitchen, dining and laundry"),
+    "verify.m.largura_util": ("largura útil", "clear width"),
+    "verify.m.altura_util": ("altura útil", "clear height"),
+    "verify.m.altura": ("altura", "height"),
+    "verify.m.n_pisos": ("pisos", "storeys"),
+    "verify.foot.off": ("§ Regulamento?", "§ Regulations?"),
+    "verify.foot.ok": ("{law} ✓", "{law} ✓"),
+    "verify.foot.fail": ("{law} ✗ {n}", "{law} ✗ {n}"),
+    "verify.foot.warn": ("{law} ⚠ {n}", "{law} ⚠ {n}"),
+    "verify.foot.both": ("{law} ✗ {n} ⚠ {w}", "{law} ✗ {n} ⚠ {w}"),
+    "verify.foot.none": ("{law} —", "{law} —"),
+    "verify.foot.count": ("{n} incumprimento(s), {w} aviso(s).", "{n} failure(s), {w} warning(s)."),
+    "verify.foot.tip": ("O Verificador vigia o projeto pelos regulamentos de {country} ({laws}). Clique para ver o que "
+                        "falha ou mudar os regulamentos.",
+                        "The Verifier watches the project against the regulations of {country} ({laws}). Click to see "
+                        "what fails or change the regulations."),
+    "verify.foot.tip_off": ("O Verificador vigia o projeto pelos regulamentos do país onde se constrói. Clique para "
+                            "o escolher.",
+                            "The Verifier watches the project against the regulations of the country it is built in. "
+                            "Click to choose it."),
+    "verify.menu.settings": ("Regulamentos do projeto…", "Project regulations…"),
+    "verify.menu.marks": ("Mostrar na planta o que falha", "Show what fails on the plan"),
+    "verify.strip.goto": ("Ir para", "Go to"),
+    "verify.strip.why": ("Porquê", "Why"),
+    "verify.strip.more": ("(+{n} outro(s))", "(+{n} more)"),
+    "verify.why.title": ("Porquê — {law}, {article}", "Why — {law}, {article}"),
+    "verify.why.text": ("{title}\n\n«{text}»\n\nMedido: {value}\nExigido: {side} {limit}\n\nFonte: {source}\n{state}",
+                        "{title}\n\n«{text}»\n\nMeasured: {value}\nRequired: {side} {limit}\n\nSource: {source}\n{state}"),
+    "verify.why.confirmed": ("Valor conferido com o texto publicado.", "Value checked against the published text."),
+    "verify.why.unconfirmed": ("Valor ainda por conferir com o texto publicado (Regulamentos do projeto…).",
+                               "Value not yet checked against the published text (Project regulations…)."),
+    "verify.why.fix": ("\nComo resolver: {fix}", "\nHow to solve it: {fix}"),
+    "verify.settings.title": ("Regulamentos do projeto", "Project regulations"),
+    "verify.settings.country": ("País", "Country"),
+    "verify.settings.no_country": ("(nenhum — sem verificação)", "(none — no verification)"),
+    "verify.settings.use": ("Uso do edifício", "Building use"),
+    "verify.settings.work": ("Tipo de obra", "Kind of work"),
+    "verify.settings.height": ("Altura do edifício (m)", "Building height (m)"),
+    "verify.settings.height_auto": ("automática ({h})", "automatic ({h})"),
+    "verify.settings.packs": ("Regulamentos verificados", "Regulations checked"),
+    "verify.settings.supplementary": ("supletivo", "supplementary"),
+    "verify.settings.rules": ("{n} regras", "{n} rules"),
+    "verify.settings.note": ("Os valores das regras vêm dos textos publicados; cada um fica «a confirmar» até o "
+                             "arquiteto o conferir. O Verificador avisa — nunca impede de desenhar.",
+                             "The rules' values come from the published texts; each stays «to be confirmed» until the "
+                             "architect checks it. The Verifier warns — it never stops the drawing."),
+    "verify.props.group": ("Verificação", "Verification"),
+    "verify.props.ok": ("✓ {value} ({side} {limit})", "✓ {value} ({side} {limit})"),
+    "verify.props.fail": ("✗ {value} ({side} {limit})", "✗ {value} ({side} {limit})"),
+    "verify.props.unknown": ("— sem medida ({side} {limit})", "— not measured ({side} {limit})"),
+}

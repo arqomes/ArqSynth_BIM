@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.417.0 — 2026-11-06
+
+**O Verificador, passo 2: as regras, o vigilante e o alerta vermelho no rodapé.** (O dono: «se for inferior à
+legislação, então o sistema coloca uma mensagem no rodapé com fundo vermelho de alerta».)
+
+- **Regulamentos do projeto** (Colaborar ▸ Verificar ▸ Regulamentos do projeto…, ou um clique no indicador do
+  rodapé): o país onde se constrói (Cabo Verde, Portugal), o uso do edifício, o tipo de obra (nova ou intervenção de
+  nível I a IV, como no CTE art. 6.º) e a altura. Fica no projeto (IFC) e o país escolhido passa a ser o dos projetos
+  novos deste computador.
+- **As regras são dados, não programa:** um ficheiro por regulamento (`arqbim/regulamentos/CV/cte_2012.json`), cada
+  regra com o diploma, o artigo, o texto, onde se aplica, a medida e o limite. O primeiro é o **Código Técnico da
+  Edificação de Cabo Verde** (Portaria conjunta n.º 4/2012), lido no Boletim Oficial: pé-direito (art. 27.º — 2,70 m
+  na habitação em 80 % da área, 2,40 m em vestíbulos, corredores, instalações sanitárias e arrumos, 2,30 m no resto,
+  3,20 m em serviços e comércio, 2,20 m no estacionamento), portas (art. 30.º — 0,90 m úteis na entrada do edifício,
+  0,70 m nos compartimentos, 2,00 m de altura), áreas dos compartimentos pela tipologia (art. 40.º e Anexo I — sala,
+  cozinha, quartos do maior para o menor, sala e cozinha juntas no T0/T1, suplementos) e área bruta do fogo (art. 40.º
+  n.º 10). Cada valor diz «(valor a confirmar)» até ser conferido. Onde o CTE não diz nada, a lei portuguesa
+  (art. 4.º) — o pacote de Portugal vem num passo seguinte.
+- **O que se mede:** a área útil; o pé-direito em vários pontos do compartimento (até ao teto, à laje ou à cobertura
+  de cima, a partir da laje ou do piso de baixo); a área bruta do fogo (até à face exterior das paredes exteriores e
+  a meio das paredes com outro fogo); a largura útil das portas (o vão menos os aros e a folha aberta). Sem nada por
+  cima, o pé-direito não se mede — e isso não conta como falha.
+- **O vigilante:** 0,3 s depois de cada alteração verifica tudo outra vez (o que não mudou é reaproveitado).
+- **No rodapé, à esquerda:** «CTE ✓» a verde, «CTE ✗ 2» a vermelho, «CTE ⚠ 1» a laranja («§ Regulamento?» antes de
+  escolher o país); a dica conta-os e o clique abre o menu.
+- **A faixa vermelha** no fundo da vista, quando uma alteração cria uma falha que não havia: a frase inteira — «✗ Sala
+  (Fogo A): área útil 11,52 m² — CTE, art. 40.º, n.º 3 e Anexo I: mínimo 14,00 m²» — com **Ir para** (abre a planta
+  do pavimento, escolhe e enquadra) e **Porquê** (o texto da regra, o medido, o exigido, a fonte e como resolver).
+  Fica até à alteração seguinte.
+- **Na planta:** os ambientes que falham ficam tingidos de vermelho (laranja num aviso); desliga-se no menu do
+  indicador.
+- **Nas Propriedades** de um ambiente ou de uma porta: o grupo **Verificação**, cada regra com ✓ / ✗, o valor e o
+  limite (o texto do artigo na dica).
+- Uma zona fechada por paredes sem «Ambiente» (um corredor) liga os compartimentos do fogo — a porta para ela não é
+  tomada como entrada.
+
+## 0.416.0 — 2026-11-06
+
+**O Verificador, passo 1: o leitor — o uso de cada ambiente, os fogos e a tipologia.** (O dono: «quando colocar os
+ambientes, o verificador entenderá a tipologia, por exemplo um T2».)
+
+- **O uso de cada ambiente** — sala, quarto, cozinha, instalação sanitária, corredor, vestíbulo, arrumos, tratamento
+  de roupa, varanda, garagem, espaço comum… — sai do **nome** («Quarto 2», «WC», «Sala de jantar», «Casa de banho»)
+  e do que está **dentro** dele (uma sanita ou um duche: instalação sanitária; lava-loiça, placa ou móveis de
+  cozinha: cozinha; uma cama: quarto). Nas **Propriedades** do ambiente: «Uso: Automático — Quarto (pelo nome)»; a
+  lista deixa escolher outro, e esse fica (Ctrl+Z desfaz).
+- **Os fogos:** os ambientes ligados por portas são um fogo; os espaços comuns (patamar, átrio comum, caixa de
+  escada) não são de nenhum, e a porta deles (ou de fora) é a entrada do fogo. Um edifício sem espaços comuns é uma
+  moradia: os pisos, uns por cima dos outros, são um só fogo. Num prédio, um piso sem entrada própria por cima de um
+  fogo é o piso de cima dele (um duplex). Nas Propriedades: «Fogo: Fogo A» — escrever outro nome dá-o ao fogo inteiro
+  («Fogo 1.º Esq.») ou junta ambientes que as portas não juntam.
+- **A tipologia** (T0, T1, T2… pelo número de quartos de dormir, como no CTE de Cabo Verde, art. 40.º, e no RGEU):
+  nas Propriedades («T2 — 2 quarto(s), 72,96 m² úteis») e na planta, na etiqueta do maior ambiente de cada fogo
+  («Fogo A · T2»).
+- **No IFC:** ao gravar, o uso vai para o IfcSpace (ObjectType) e cada fogo é uma IfcZone com a tipologia e os seus
+  ambientes — o Revit e os outros programas leem-nos. Na memória são calculados a cada mudança (não se guardam duas
+  vezes); o que se escolhe à mão (uso, nome do fogo) fica no ambiente.
+
 ## 0.415.0 — 2026-11-05
 
 **Tipos para os outros elementos, sempre no cabeçalho.** (Seguimento de «quero todos os elementos IFC tenham tipo,

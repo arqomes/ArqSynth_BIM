@@ -1,0 +1,140 @@
+"""(0.417) The whole check: the reader's facts, the subjects (rooms, dwellings, doors, the building) with what the
+rules filter on, the rules of the project's laws evaluated on them — a Result: what fails, what passes, what could not
+be measured; and each finding said in words («Sala (Fogo A): área 12,40 m² — CTE, art. 40.º e Anexo I: mínimo
+14,00 m²»)."""
+
+from dataclasses import dataclass, field
+
+from ..i18n import decimal_sep, lang, t
+from . import dwellings as dw
+from . import measures as ms
+from . import project
+from . import reader
+from . import rules as rules_mod
+from . import uses
+
+
+@dataclass
+class Result:
+    revision: int = -1
+    findings: list = field(default_factory=list)
+    packs: list = field(default_factory=list)       # [(Pack, own)]
+    settings: dict = field(default_factory=dict)
+
+    @property
+    def failures(self):
+        return [f for f in self.findings if f.failed]
+
+    def count(self, severity):
+        return sum(1 for f in self.findings if f.failed and f.rule.severity == severity)
+
+    def of(self, element):
+        """The findings about one room / door (its GlobalId) or dwelling (its name)."""
+        return [f for f in self.findings if f.subject.id == element or element in f.subject.elements]
+
+
+def _building_height(doc):
+    try:
+        levels = sorted(z for _g, _n, z in doc.storeys())
+    except Exception:                                   # noqa: BLE001
+        return None, 0
+    if not levels:
+        return None, 0
+    top = levels[-1] + 3.0                               # (the top storey's own height, roughly, until a roof says)
+    return round(top - levels[0], 2), len(levels)
+
+
+def subjects(ctx):
+    """{"room": [Subject], "dwelling": […], "door": […], "building": […]}."""
+    facts, settings = ctx.facts, ctx.settings
+    building_use = settings.get("building_use", "habitacao")
+    language = lang()
+    out = {"room": [], "dwelling": [], "door": [], "building": []}
+    ranks = {}
+    for d in facts.dwellings:
+        bedrooms = sorted((g for g in d.rooms if g in facts.rooms and uses.is_bedroom(facts.rooms[g].use)
+                           and not facts.rooms[g].external), key=lambda g: -facts.rooms[g].area)
+        for k, g in enumerate(bedrooms):
+            ranks[g] = k + 1
+        out["dwelling"].append(ms.Subject(
+            "dwelling", d.name, "{} ({})".format(d.name, d.typology), list(d.rooms),
+            props={"typology": d.typology, "building_use": building_use, "bedrooms": d.bedrooms}))
+    for g, r in facts.rooms.items():
+        d = facts.dwelling_of(g)
+        name = r.name or uses.label(r.use, language)
+        out["room"].append(ms.Subject(
+            "room", g, "{} ({})".format(name, d.name) if d else name, [g], r.storey,
+            props={"use": r.use, "external": r.external, "common": uses.is_common(r.use),
+                   "typology": d.typology if d else None, "in_dwelling": d is not None,
+                   "building_use": building_use, "bedroom_rank": ranks.get(g)}))
+    sides = facts.sides or dw.door_sides(facts.rooms.values(), facts.doors)
+    for door in facts.doors:
+        a, b = sides.get(door.guid, (None, None))
+        if a is None and b is None:
+            continue
+        ra, rb = facts.rooms.get(a), facts.rooms.get(b)
+        role = "compartimento"
+        if a is None or b is None:                       # (a «~place» in no room is inside: not an entrance)
+            role = "entrada_edificio"
+        elif uses.is_common(ra.use if ra else None) or uses.is_common(rb.use if rb else None):
+            role = "acesso_comum"
+        elif "arrumos" in (ra.use if ra else None, rb.use if rb else None):
+            role = "secundaria"
+        obj = ctx.doc.get(door.guid)
+        inside = rb if ra is None else ra
+        where = (inside.name or uses.label(inside.use, language)) if inside else ""
+        name = "{} — {}".format(obj.name if obj is not None else t("verify.door"), where) if where else \
+            (obj.name if obj is not None else t("verify.door"))
+        out["door"].append(ms.Subject("door", door.guid, name, [door.guid], door.storey,
+                                      props={"role": role, "building_use": building_use}))
+    height, storeys = _building_height(ctx.doc)
+    if settings.get("height") is not None:
+        height = float(settings["height"])
+    out["building"].append(ms.Subject("building", "building", t("verify.building"), [],
+                                      props={"building_use": building_use, "height": height, "storeys": storeys,
+                                             "work": settings.get("work", "nova")}))
+    return out
+
+
+_KEPT = {}
+
+
+def check(doc, settings=None, all_packs=None, default_country=None, force=False):
+    """The Result for the document as it is now (kept until it changes)."""
+    revision = getattr(doc, "revision", 0)
+    settings = settings if settings is not None else project.settings(doc, default_country)
+    key = (revision, repr(sorted(settings.items())))
+    kept = _KEPT.get(id(doc))
+    if kept is not None and kept[0] == key and not force:
+        return kept[1]
+    facts = reader.read(doc)
+    chosen = project.active(settings, all_packs)
+    rules = project.active_rules(settings, all_packs)
+    ctx = ms.Context(doc, facts, settings)
+    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and facts.rooms else [], chosen,
+                    settings)
+    _KEPT[id(doc)] = (key, result)
+    return result
+
+
+# ------------------------------------------------------------------ said in words
+
+def number(value, unit):
+    if value is None:
+        return "—"
+    text = "{:.2f}".format(float(value)).replace(".", decimal_sep())
+    return {"m": text + " m", "m2": text + " m²", "%": text + " %"}.get(unit, text)
+
+
+def message(finding, packs_by_id=None):
+    """«Sala (Fogo A): área útil 12,40 m² — CTE, art. 40.º e Anexo I: mínimo 14,00 m²»."""
+    rule, s = finding.rule, finding.subject
+    pack = (packs_by_id if packs_by_id is not None else rules_mod.packs()).get(rule.pack)
+    short = pack.short if pack is not None else rule.pack
+    side = "min" if any(k.startswith("min") for k in rule.limit) else "max"
+    text = t("verify.message", subject=s.name, measure=t("verify.m." + rule.measure),
+             value=number(finding.value, rule.unit), law=short, article=rule.article,
+             side=t("verify.side." + side), limit=number(finding.limit, rule.unit))
+    if not rule.confirmed:
+        text += t("verify.unconfirmed")
+    return text

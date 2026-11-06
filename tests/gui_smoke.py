@@ -174,6 +174,9 @@ def shot(name):
             painter.drawPixmap(win.notice.mapTo(win, QtCore.QPoint(0, 0)), win.notice.grab())
         if win.quick.isVisible():                    # (0.354) the quick edit over the view
             painter.drawPixmap(win.quick.mapTo(win, QtCore.QPoint(0, 0)), win.quick.grab())
+        strip = getattr(getattr(win, "verifier", None), "strip", None)
+        if strip is not None and strip.isVisible():  # (0.417) the Verifier's strip at the foot of the view
+            painter.drawPixmap(strip.mapTo(win, QtCore.QPoint(0, 0)), strip.grab())
         painter.end()
     pix.save(os.path.join(OUT, name))
 
@@ -822,6 +825,8 @@ def bim_flow():
     param_surface_flow()              # (0.395)
     properties_layout_flow()          # (0.396)
     properties_types_flow()           # (0.414)
+    verifier_reader_flow()            # (0.416)
+    verifier_footer_flow()            # (0.417)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -20787,6 +20792,117 @@ def doors_and_windows(wall, path):
     rel_ok = len(f.by_type("IfcRelVoidsElement")) == 1 and len(f.by_type("IfcRelFillsElement")) == 1
     check("gravar_com_porta_ifc_valido", errors == [] and rel_ok and len(f.by_type("IfcDoor")) == 1,
           "erros={} relações_vão={}".format(errors[:2], rel_ok))
+
+
+def _t2_house():
+    """(0.416) A one-storey house 10 × 8 m drawn by the program's own actions: a living room and a kitchen at the front,
+    two bedrooms at the back, a door from outside, doors between the rooms. {name: room GlobalId}."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    spec = catalog.BY_KEY["parede_alv_20"]
+    outer = B.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 8.0, 0.0),
+                                                       (0.0, 8.0, 0.0))], spec)
+    middle = B.add_wall(doc, np.array((5.0, 0.0, 0.0)), np.array((5.0, 8.0, 0.0)), spec)
+    left = B.add_wall(doc, np.array((0.0, 4.0, 0.0)), np.array((5.0, 4.0, 0.0)), spec)
+    right = B.add_wall(doc, np.array((5.0, 4.0, 0.0)), np.array((10.0, 4.0, 0.0)), spec)
+    door = catalog.OPENING_BY_KEY["porta_90"]
+    for wall, s in ((outer[0], 2.0), (middle, 1.5), (left, 2.0), (right, 2.0)):
+        B.add_opening(doc, wall, door, B.wall_frame(doc, wall), s, -1)
+    return {name: B.add_room(doc, p, name) for name, p in (("Sala", (2.5, 2.0)), ("Cozinha", (7.5, 2.0)),
+                                                          ("Quarto 1", (2.5, 6.0)), ("Quarto 2", (7.5, 6.0)))}
+
+
+def verifier_reader_flow():
+    """0.416 (the owner: «quando colocar os ambientes o verificador entenderá a tipologia, por exemplo um T2»): a house
+    of four rooms in its plan — the largest room's label says «Fogo A · T2»; a bedroom chosen: its Properties say its
+    use is automatic, «Quarto (pelo nome)», its dwelling «Fogo A» and the dwelling's type T2; its use made «Escritório»
+    in the list: the dwelling is a T1 (the label too); Ctrl+Z: T2 again. Captured: 416_leitor.png."""
+    from arqbim.verify import reader
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    rooms = _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    pump(300)
+    win.set_tool("select")
+    infos = doc.ifc.spaces(doc.active_storey)
+    lines = vp._dwelling_lines(infos)
+    labelled = list(lines.values()) == ["Fogo A · T2"]
+    move(near((7.5, 6.5, 0.0)), 3)                       # inside «Quarto 2»
+    click()
+    pump(300)
+    text = win.props.text()
+    shown = vp.selected_rooms == {rooms["Quarto 2"]} and "Automático — Quarto (pelo nome)" in text \
+        and "Fogo A" in text and "T2 — 2 quarto(s)" in text
+    shot("416_leitor.png")
+    combo = win.props.editors.get("room_use")
+    office = combo.findData("escritorio") if combo is not None else -1
+    if office >= 0:
+        combo.setCurrentIndex(office)
+        combo.activated.emit(office)
+        pump(400)
+    t1 = reader.read(doc).dwellings[0].typology == "T1" and \
+        list(vp._dwelling_lines(doc.ifc.spaces(doc.active_storey)).values()) == ["Fogo A · T1"]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = reader.read(doc).dwellings[0].typology == "T2"
+    win.open_view("3d", None)
+    pump(300)
+    check("verificador_leitor_tipologia", labelled and shown and t1 and back,
+          "etiqueta={} painel={} T1={} desfeito={} | {!r}".format(labelled, shown, t1, back, text[:300]))
+
+
+def verifier_footer_flow():
+    """0.417 (the owner: «se for inferior à legislação, então o sistema coloca uma mensagem no rodapé com fundo vermelho
+    de alerta»): a T2 house in a project of Cabo Verde — the footer says «✗ 1 incumprimento(s)» (its entrance door,
+    0,76 m clear, under the CTE's 0,90 m); a wall drawn across the living room leaves it 11,52 m²: the strip at the foot
+    of the view turns red with the whole sentence («Sala (Fogo A): área útil 11,52 m² — CTE, art. 40.º…: mínimo
+    14,00 m²»), the room tinted on the plan; «Ir para» chooses it; its Properties have the group «Verificação» with
+    ✗ 11,52 m²; Ctrl+Z: the strip goes, the footer back to 1. Captured: 417_rodape_vermelho.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    rooms = _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    win.set_tool("select")
+    pump(700)                                                # (the watcher: 0,3 s after the last change)
+    v = win.verifier
+    first = v.button.text() == "CTE ✗ 1" and "Porta 1 — Sala: largura útil 0,76 m" in v.strip.shown_text()
+    spec = catalog.BY_KEY["parede_alv_20"]
+    across = B.add_wall(doc, np.array((0.0, 2.6, 0.0)), np.array((5.0, 2.6, 0.0)), spec)
+    B.add_opening(doc, across, catalog.OPENING_BY_KEY["porta_90"], B.wall_frame(doc, across), 3.5, -1)
+    pump(800)
+    said = v.strip.shown_text()
+    red = v.strip.isVisible() and "Sala (Fogo A): área útil 11,52 m²" in said and "mínimo 14,00 m²" in said \
+        and v.strip.kind == "fail" and v.button.text() == "CTE ✗ 2"
+    tinted = vp.verify_marks.get(rooms["Sala"]) == "fail"
+    shot("417_rodape_vermelho.png")
+    v.strip.goto.click()
+    pump(500)
+    chosen = vp.selected_rooms == {rooms["Sala"]}
+    text = win.props.text()
+    grouped = "Verificação" in text and "✗ 11,52 m²" in text
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(800)
+    back = not v.strip.isVisible() and v.button.text() == "CTE ✗ 1" and rooms["Sala"] not in vp.verify_marks
+    size = win.size()                                        # (the footer still has room for its own buttons, on the
+    win.resize(1536, size.height())                          #  owner's 1536 px screen)
+    pump(300)
+    units_seen = win.units_button.isVisible() and win.verifier.button.isVisible()
+    win.resize(size)
+    pump(300)
+    win.open_view("3d", None)
+    pump(300)
+    check("verificador_rodape_vermelho", first and red and tinted and chosen and grouped and back and units_seen,
+          "1.º={} faixa={} cor={} ir_para={} grupo={} desfeito={} unidades={} | {!r} | {!r}".format(
+              first, red, tinted, chosen, grouped, back, units_seen, said, v.button.text()))
 
 
 def wheel(steps):

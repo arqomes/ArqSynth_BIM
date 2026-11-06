@@ -644,6 +644,52 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.417 — O Verificador: as regras e o alerta vermelho no rodapé
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.417.0**. Abra a casa do teste da 0.416 (ou faça-a
+   outra vez, passos 2 a 5 da 0.416).
+2. Veja o rodapé, à esquerda: **§ Regulamento?** a cinzento. Clique nele e em **Regulamentos do projeto…**.
+3. Em **País** escolha **Cabo Verde**: a lista de baixo mostra «CTE — Código Técnico da Edificação (14 regras)». Clique
+   em **OK**.
+4. O rodapé passa a **CTE ✗ 1** a vermelho: passe o rato por cima — a dica diz «1 incumprimento(s)». É a porta de
+   entrada: uma «Porta 90» deixa 0,76 m livres e o CTE pede 0,90 m na entrada do edifício.
+5. Clique na porta de entrada (na planta, F4) com o **Selecionar**: nas **Propriedades**, no fim, o grupo
+   **Verificação** diz «✗ 0,76 m (mínimo 0,90 m)». Passe o rato pela linha: a dica traz o texto do art. 30.º.
+6. Com a ferramenta **Parede** (W), desenhe uma parede de lado a lado da sala, a 2,6 m da parede de baixo (a sala
+   fica pequena), e ponha-lhe uma **Porta** (D).
+7. No fundo da vista aparece a **faixa vermelha**: «✗ Sala (Fogo A): área útil … — CTE, art. 40.º, n.º 3 e Anexo I:
+   mínimo 14,00 m²», e a sala fica **vermelha** na planta. O rodapé diz **CTE ✗ 2**.
+8. Clique em **Porquê**: a janela mostra o texto do Anexo I, o medido, o exigido e a fonte. Feche-a.
+9. Clique em **Ir para**: a planta enquadra a sala e escolhe-a; nas Propriedades, o grupo Verificação tem «✗ …».
+10. Carregue em **Ctrl+Z** duas vezes: a faixa desaparece, a sala deixa de estar vermelha, o rodapé volta a CTE ✗ 1.
+11. Para desligar o vermelho na planta: clique no indicador do rodapé e tire a marca de **Mostrar na planta o que
+    falha**.
+
+## 0.416 — O Verificador: o uso dos ambientes, os fogos e a tipologia
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.416.0**. Faça **Ficheiro ▸ Novo** (Ctrl+N).
+2. Carregue em **F4** (planta). Clique em **Arquitetura ▸ Paredes ▸ Retangular**, clique num ponto do chão, escreva
+   `10;8` e carregue em Enter: quatro paredes à volta de 10 × 8 m.
+3. Com a ferramenta **Parede** (W), desenhe uma parede do meio da parede de baixo ao meio da parede de cima (o cursor
+   prende-se ao «Ponto médio»), e carregue em Esc. Desenhe mais duas, de meia altura: uma de cada parede lateral até
+   à parede do meio. Ficam quatro compartimentos.
+4. Com a ferramenta **Porta** (D), clique na parede de baixo, no compartimento da esquerda (a entrada), e depois numa
+   parede entre cada dois compartimentos, de modo a ir de um a todos.
+5. Clique em **Arquitetura ▸ Ambientes ▾ ▸ Ambiente** (num ecrã largo, o botão **Ambiente** está à vista) e clique
+   dentro de cada compartimento. Depois, com o **Selecionar** (Espaço), clique em cada ambiente e, nas
+   **Propriedades**, mude o **Nome**: «Sala», «Cozinha», «Quarto 1», «Quarto 2» (escreva e carregue em Enter).
+6. Veja a planta: na etiqueta do maior ambiente aparece uma terceira linha, **«Fogo A · T2»**.
+7. Clique no «Quarto 2». Nas Propriedades: **Uso: Automático — Quarto (pelo nome)**, **Fogo: Fogo A** e
+   **Tipologia do fogo: T2 — 2 quarto(s)…**.
+8. Abra a lista **Uso** e escolha **Escritório**: a tipologia passa a **T1** (nas Propriedades e na etiqueta).
+   Carregue em **Ctrl+Z**: volta a T2.
+9. Clique na caixa **Fogo**, escreva `Fogo 1.º Esq.` e Enter: a etiqueta da planta passa a «Fogo 1.º Esq. · T2».
+10. Clique no separador **Instalações ▸ Louça sanitária**, escolha **Sanita** na barra de cima e clique dentro de um
+    ambiente que ainda se chame «Ambiente»: clique nesse ambiente com o Selecionar e veja **Uso: Automático —
+    Instalação sanitária (pelo que tem dentro)**.
+11. Grave (Ctrl+S). Se tiver o Revit, abra o IFC: os ambientes têm o tipo (Quarto, Sala…) e há uma zona «Fogo A» com
+    a tipologia T2.
+
 ## 0.415 — Tipos para os outros elementos, no cabeçalho
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.415.0**.

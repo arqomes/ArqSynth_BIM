@@ -100,6 +100,8 @@ GRID_BUBBLE = 0.35                         # m: the radius of an axis's bubble
 ROOM_FILL = (0.98, 0.96, 0.84, 0.55)
 ROOM_FILL_DARK = (0.25, 0.24, 0.20, 0.55)  # (0.341) …on the dark views: a warm grey a little lighter than the ground
 ROOM_SELECTED = (0.31, 0.55, 0.95, 0.40)
+ROOM_FAIL = (0.88, 0.25, 0.22, 0.38)        # (0.417) a room the Verifier finds failing a rule (an error)
+ROOM_WARN = (0.95, 0.66, 0.15, 0.35)        # …or a warning
 ROOM_LINE = "#b9a96a"
 ROOM_LIFT = 0.003
 ROOM_AREA = "{:.2f} m²"
@@ -1403,14 +1405,18 @@ class Viewport:
         from shapely.geometry import Polygon
         from ..core.rooms import label_point
         tris, colors, segs = [], [], []
+        dwelling_lines = self._dwelling_lines(infos)                 # (0.416) «Fogo A · T2» on its largest room
         for info in infos:
             poly = Polygon(info["outline"], info["holes"])
             if poly.is_empty or not poly.is_valid:
                 continue
             self._room_shapes.append((info["guid"], poly))
             selected = info["guid"] in self.selected_rooms
+            mark = getattr(self, "verify_marks", {}).get(info["guid"])
             if selected:
                 colour = _physical(ROOM_SELECTED)
+            elif mark is not None:                                 # (0.417: what the Verifier finds failing)
+                colour = _physical(ROOM_FAIL if mark == "fail" else ROOM_WARN)
             elif views_canvas.DARK:
                 colour = _physical_in(ROOM_FILL_DARK, False)       # (0.341: its own on the dark views)
             else:
@@ -1425,6 +1431,8 @@ class Viewport:
                     segs += [(a[0], a[1], z), (b[0], b[1], z)]
             x, y = label_point(poly)
             text = "{} {}\n{}".format(info["name"], info["number"], ROOM_AREA.format(info["area"]).replace(".", ","))
+            if info["guid"] in dwelling_lines:
+                text += "\n" + dwelling_lines[info["guid"]]
             label = gfx.Text(text=text, font_size=12, screen_space=True, anchor="middle-center",
                              material=_mat(gfx.TextMaterial, color=EDGE_SELECTED if selected else "#2a3340",
                                                        outline_color="#ffffff", outline_thickness=0.3,
@@ -1445,6 +1453,32 @@ class Viewport:
             self.scene.add(wobj)
         self._clip(*[w.material for w in self._room_objects])
         self.redraw()
+
+    def set_verify_marks(self, marks):
+        """(0.417) {room GlobalId: "fail" | "warn"}: the rooms the Verifier finds failing, tinted on the plan."""
+        marks = dict(marks or {})
+        if marks != getattr(self, "verify_marks", {}):
+            self.verify_marks = marks
+            self._show_rooms()
+
+    def _dwelling_lines(self, infos):
+        """(0.416) {room GlobalId: «Fogo A · T2»} for the largest room of each dwelling among those drawn — the
+        Verifier's reading of the plan, seen where the rooms are."""
+        if self.doc.loading or not infos:
+            return {}
+        try:
+            from ..verify import reader
+            facts = reader.read(self.doc)
+        except Exception:                                   # noqa: BLE001 (the plan is drawn without it)
+            return {}
+        shown = {info["guid"]: info["area"] for info in infos}
+        out = {}
+        for d in facts.dwellings:
+            here = [g for g in d.rooms if g in shown]
+            if here:
+                main = max(here, key=lambda g: shown[g])
+                out[main] = t("room.dwelling_label", name=d.name, t=d.typology)
+        return out
 
     # ------------------------------------------------------------ CAD drawings linked (0.158)
 

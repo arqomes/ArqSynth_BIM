@@ -4001,6 +4001,34 @@ def set_room(doc, guid, name=None, number=None, finishes=None, external=None):
                                                                               external)))
 
 
+def set_room_use(doc, guids, key):
+    """(0.416) The use of these rooms chosen by hand (a verify/uses key), or None: found again from their name and
+    what is inside. One undo step."""
+    guids = [guids] if isinstance(guids, str) else list(guids)
+
+    def action(ifc):
+        for g in guids:
+            ifc.set_space_use(g, key)
+    doc.execute(IfcCommand(t("cmd.room_use"), action, plan=False))
+
+
+def set_room_dwelling(doc, guids, name):
+    """(0.416) The dwelling these rooms are in, by its name (a duplex, houses side by side…), or None: found from
+    their doors. One undo step."""
+    guids = [guids] if isinstance(guids, str) else list(guids)
+
+    def action(ifc):
+        for g in guids:
+            ifc.set_space_dwelling(g, name)
+    doc.execute(IfcCommand(t("cmd.room_dwelling"), action, plan=False))
+
+
+def set_verify_settings(doc, values):
+    """(0.416) The project's verification settings (verify/project.py). One undo step."""
+    values = dict(values)
+    doc.execute(IfcCommand(t("cmd.verify_settings"), lambda ifc: ifc.set_verify_settings(values), plan=False))
+
+
 def set_room_program(doc, needs):
     """(0.357) The project's programme (model/room_program: [Need]) kept in it. One undo step."""
     doc.execute(IfcCommand(t("cmd.room_program"), lambda ifc: ifc.set_room_program(needs)))

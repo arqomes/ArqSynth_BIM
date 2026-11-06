@@ -1,0 +1,120 @@
+{
+  "id": "CV-CTE",
+  "country": "CV",
+  "short": "CTE",
+  "title": "Código Técnico da Edificação",
+  "instrument": "Portaria conjunta n.º 4/2012 (impressa «4/2011»), de 12 de janeiro, ao abrigo do DL n.º 18/2011",
+  "published": "2012-01-12",
+  "source": "Boletim Oficial, I Série, n.º 2, de 12 de janeiro de 2012 (arquitectos.org.cv)",
+  "status": "em_vigor",
+  "fallback": ["PT-RGEU"],
+  "notes": "Art. 4.º: nas situações não cobertas aplica-se a regulamentação portuguesa. Valores lidos do texto publicado em 2012 (2026-11-06); revisões posteriores por confirmar.",
+  "rules": [
+    {
+      "id": "CV-CTE-27-1-hab", "topic": "pe_direito.habitacao", "article": "art. 27.º, n.os 1 e 4",
+      "title": "Pé-direito dos compartimentos de habitação",
+      "text": "Nos espaços destinados a habitação, o pé-direito mínimo é de 2,70 m (…). No caso de tectos inclinados, abobadados, falsos ou com vigas aparentes, os pés-direitos mínimos devem ser mantidos, pelo menos, em 80% da superfície.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio", "tratamento_roupa"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_80", "min": 2.70, "unit": "m", "severity": "error",
+      "fix": "Subir o teto ou a laje de cima, ou baixar o pavimento."
+    },
+    {
+      "id": "CV-CTE-27-1-sec", "topic": "pe_direito.secundarios", "article": "art. 27.º, n.os 1 e 4",
+      "title": "Pé-direito de vestíbulos, corredores, instalações sanitárias e arrumos",
+      "text": "(…) dimensão que pode baixar até 2,40 m nos vestíbulos, corredores, instalações sanitárias e arrumos.",
+      "subject": "room", "where": {"use": ["vestibulo", "corredor", "instalacao_sanitaria", "arrumos"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_80", "min": 2.40, "unit": "m", "severity": "error",
+      "fix": "Um teto falso não pode descer abaixo de 2,40 m em 80 % do compartimento."
+    },
+    {
+      "id": "CV-CTE-27-4", "topic": "pe_direito.resto", "article": "art. 27.º, n.º 4",
+      "title": "Pé-direito na superfície restante (tetos inclinados ou com saliências)",
+      "text": "(…) admitindo-se que, na superfície restante, o pé direito possa descer até 2,30 m no caso do n.º 1.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio", "tratamento_roupa", "vestibulo", "corredor", "instalacao_sanitaria", "arrumos"], "building_use": ["habitacao", "misto"]},
+      "measure": "pe_direito_min", "min": 2.30, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-27-2", "topic": "pe_direito.servicos", "article": "art. 27.º, n.os 2 e 4",
+      "title": "Pé-direito de serviços e comércio",
+      "text": "Nos espaços destinados a serviços administrativos e comércio, o pé-direito mínimo é de 3,20 m, salvo os casos sujeitos a regulamentação específica.",
+      "subject": "room", "where": {"use": ["servicos", "comercio"]},
+      "measure": "pe_direito_80", "min": 3.20, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-27-6", "topic": "pe_direito.estacionamento", "article": "art. 27.º, n.º 6",
+      "title": "Pé-direito do estacionamento",
+      "text": "Nos espaços destinados a estacionamento de viaturas ligeiras, o pé direito mínimo é de 2,20 m, medido abaixo de qualquer elemento saliente.",
+      "subject": "room", "where": {"use": ["garagem"]},
+      "measure": "pe_direito_min", "min": 2.20, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-30-1a", "topic": "porta.entrada_edificio", "article": "art. 30.º, n.º 1, al. a)",
+      "title": "Largura útil da porta de acesso ao edifício",
+      "text": "A largura útil de passagem nos vãos de acesso aos edifícios ou aos espaços comuns não pode ser inferior a: a) Acesso dos edifícios, 0,90 m.",
+      "subject": "door", "where": {"role": ["entrada_edificio"]},
+      "measure": "largura_util", "min": 0.90, "unit": "m", "severity": "error",
+      "fix": "Uma porta de 1,00 m (vão) deixa cerca de 0,86 m livres; para 0,90 m livres, uma porta de 1,05 m ou de duas folhas."
+    },
+    {
+      "id": "CV-CTE-30-1c", "topic": "porta.compartimento", "article": "art. 30.º, n.º 1, al. c)",
+      "title": "Largura útil das portas dos compartimentos",
+      "text": "c) Os compartimentos, exceptuados os previstos na alínea b), 0,70 m.",
+      "subject": "door", "where": {"role": ["compartimento"]},
+      "measure": "largura_util", "min": 0.70, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-30-2a", "topic": "porta.altura", "article": "art. 30.º, n.º 2, al. a)",
+      "title": "Altura útil dos vãos de acesso",
+      "text": "A altura útil de passagem dos vãos de acesso aos edifícios ou aos espaços comuns não pode ser inferior a: a) Acessos, com excepção de viaturas, 2,00 m.",
+      "subject": "door", "where": {"role": ["entrada_edificio", "acesso_comum"]},
+      "measure": "altura_util", "min": 2.00, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-40-AI-sala", "topic": "area.sala", "article": "art. 40.º, n.º 3 e Anexo I",
+      "title": "Área mínima da sala",
+      "text": "As áreas mínimas dos compartimentos habitáveis (…) são as indicadas no Anexo I: sala — T0 e T1 12 m²; T2 14 m²; T3 e T4 16 m²; T5 e T6 18 m².",
+      "subject": "room", "where": {"use": ["sala"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min_table": {"by": "typology", "values": {"T0": 12, "T1": 12, "T2": 14, "T3": 16, "T4": 16, "T5": 18, "T6": 18}, "else": 18},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-40-6", "topic": "area.sala_cozinha", "article": "art. 40.º, n.º 6 e Anexo I",
+      "title": "Sala e cozinha num só compartimento (T0 e T1)",
+      "text": "Nos fogos T0 e T1, os espaços destinados a sala, cozinha, tratamento de roupa e refeições podem constituir um único compartimento desde que a área total prevista seja maior ou igual ao somatório das áreas parciais previstas para cada um dos espaços (12 + 6,5 + 2 + 4 m²).",
+      "subject": "room", "where": {"use": ["sala_cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min_table": {"by": "typology", "values": {"T0": 24.5, "T1": 24.5}},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-40-AI-cozinha", "topic": "area.cozinha", "article": "art. 40.º, n.º 3 e Anexo I",
+      "title": "Área mínima da cozinha",
+      "text": "Cozinha: 6,5 m² em todas as tipologias (Anexo I).",
+      "subject": "room", "where": {"use": ["cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min": 6.5, "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-40-AI-quartos", "topic": "area.quartos", "article": "art. 40.º, n.os 3 e 5 e Anexo I",
+      "title": "Áreas mínimas dos quartos",
+      "text": "Quartos (do maior para o menor): T1 10,5; T2 10,5 e 7; T3 10,5, 7 e 7; T4 10,5, 10, 7 e 7; T5 10,5, 10, 7, 7 e 7; T6 10,5, 10, 7, 7, 7 e 7 m² (Anexo I). Acima de T6, os restantes quartos com 7,00 m² (n.º 5).",
+      "subject": "room", "where": {"use": ["quarto"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_util", "min_rank": {"by": "typology", "values": {"T1": [10.5], "T2": [10.5, 7], "T3": [10.5, 7, 7], "T4": [10.5, 10, 7, 7], "T5": [10.5, 10, 7, 7, 7], "T6": [10.5, 10, 7, 7, 7, 7]}, "rest": 7},
+      "unit": "m2", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-40-AI-suplementos", "topic": "area.suplementos", "article": "art. 40.º, n.º 3 e Anexo I",
+      "title": "Suplementos de área (tratamento de roupa e refeições)",
+      "text": "Suplementos de área do Anexo I: tratamento de roupa (T0–T1 2; T2 3; T3–T4 4; T5–T6 5 m²) e refeições (T0–T2 4; T3–T4 6; T5 8; T6 10 m²), além da sala e da cozinha. As notas (1) a (3) do Anexo I dizem onde podem ficar — a confirmar.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_sala_cozinha_suplementos", "min_table": {"by": "typology", "values": {"T0": 24.5, "T1": 24.5, "T2": 27.5, "T3": 32.5, "T4": 32.5, "T5": 37.5, "T6": 39.5}, "else": 39.5},
+      "unit": "m2", "severity": "warning"
+    },
+    {
+      "id": "CV-CTE-40-10", "topic": "area.fogo_bruta", "article": "art. 40.º, n.os 4 e 10",
+      "title": "Área bruta mínima do fogo",
+      "text": "As áreas brutas dos fogos têm os seguintes valores mínimos: T0 29,40; T1 42; T2 54; T3 68,40; T4 80,40; T5 94,80; T6 105,60 m²; Tn = 1,2 × Ahab (somatório dos compartimentos úteis).",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_bruta", "min_table": {"by": "typology", "values": {"T0": 29.40, "T1": 42, "T2": 54, "T3": 68.40, "T4": 80.40, "T5": 94.80, "T6": 105.60}, "else": "1.2 * area_habitavel"},
+      "unit": "m2", "severity": "error"
+    }
+  ]
+}

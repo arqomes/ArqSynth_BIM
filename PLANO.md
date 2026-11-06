@@ -1098,6 +1098,207 @@ mostram o tipo; a superfície paramétrica, o piso (acabamento), os móveis e ou
    tipo do catálogo no cabeçalho (só mostrado). Ficam sem tipo, se o dono os quiser: elevador, calha, nicho, terreno,
    ambientes e os aparelhos de catálogo (trocá-los no lugar pede refazer o corpo).
 
+### Aprender com o Hestia (pedido do dono do projeto, 2026-11-06)
+«Encontrei um clone do Revit que está com boa performance e gráfico muito interessante… gostei de poder simplesmente
+selecionar e pegar qualquer elemento e arrastar para reposicionar. Gostei da verificação de acordo com a legislação, mas
+vamos fazer isso melhor. Gostei do gráfico da parede em planta, do tipo e editar tipo, do painel de propriedades, da
+navegação… podemos personalizar alguma coisa do nosso jeito.» O Hestia (github.com/engdennylsonsantos-cloud/Hestia,
+brasileiro, licença MIT) é um BIM no navegador (TypeScript, WebGL2/WebGPU). Estudado o código de 2026-11-05 (commit
+9f0192e). A MIT deixa aproveitar ideias e algoritmos; o que se traduzir de perto leva o aviso de autoria MIT num
+ficheiro de terceiros.
+
+O que se viu, ponto a ponto (Hestia → ArqSynth 0.415):
+- **Arrastar:** no Hestia escolhe-se e depois arrasta-se, só na planta; as paredes ligadas esticam, portas e janelas
+  deslizam na parede, um só Ctrl+Z. Não há cotas nem medida escrita durante o arraste, nem móveis, nem 3D. No ArqSynth,
+  arrastar com o Selecionar desenha a caixa (`tools/select.py`); mover é a ferramenta Mover (ponto base → destino).
+- **Parede em planta:** as espessuras das linhas estão em mm de papel por escala (1:50 / 1:100 / 1:200) e passam para o
+  ecrã a cada zoom — o corte sai grosso, as camadas finas; o fundo é a cor do material clareada para o papel (a
+  alvenaria salmão), com a trama por cima; trama e linhas das camadas somem quando a parede fica fina demais no ecrã; o
+  pormenor dos vãos segue o zoom; «linhas finas» só no ecrã. No ArqSynth o recorte e as junções já são do mesmo nível
+  (junção pelo material, 0.320; níveis de detalhe), mas no ecrã todas as linhas têm 1–1,5 px e o corte é um cinzento
+  escuro fixo (`render/batches.py`, `POCHE_COLOR`): as canetas só existem no papel.
+- **Tipos:** o diálogo edita um rascunho (Aplicar / OK / Cancelar, cada um um Ctrl+Z), com o corte da parede ao vivo
+  (núcleo marcado, espessuras, total), «usado em N paredes», Duplicar a partir do rascunho e Apagar bloqueado com
+  «Substituir por…». O ArqSynth tem o editor com camadas e contagem (`ui/type_editor.py`), sem corte ao vivo.
+- **Propriedades:** os valores que vêm do tipo levam um selo «tipo»; as exceções por elemento têm «usar o valor do
+  tipo»; os campos aceitam contas (3,50+0,15) e mudam com as setas e a roda. O ArqSynth já tem procura no painel (o
+  Hestia não), multi-seleção e a vista sem seleção; não aceita contas (`core/units.py`, `parse_length`).
+- **Navegação:** equivalente; do Hestia vale só o zoom no 3D que pára antes da primeira superfície.
+- **Legislação:** no Hestia só escadas (Blondel, espelho, cobertor, patamares, altura livre), rampas (tabela da NBR 9050
+  editável no tipo, com «norma conferida») e portas / janelas dentro do diálogo do tipo. Os limites estão quase todos
+  escritos no código, quase nenhuma mensagem cita o artigo, não há relatório nem «ignorar», e o lote / zoneamento ficou
+  no papel. Os avisos vivem num botão do rodapé («2 avisos») com «Ir para». O ArqSynth não verifica legislação (o 2h+p
+  da escada só se mostra) nem tem uma lista de avisos permanente.
+- **Desempenho:** o ArqSynth já está medido e bem (57 imagens/s, escolher 1,6 ms, refazer uma parede 24 ms). Do Hestia
+  valem uma camada própria na placa para a pré-visualização (o arraste não mexe no resto) e um contorno provisório logo
+  ao largar, com o exato a seguir.
+
+Passos propostos (a ordem decide-a o dono):
+1. **Arrastar para mover, à nossa maneira:** com o Selecionar, carregar num elemento — escolhido ou não — e arrastar
+   move-o, na planta e no 3D (no plano de trabalho); a partir do vazio continua a ser a caixa; mais de 6 px conta como
+   arraste. O ponto agarrado prende-se aos snaps e o destino também; cotas temporárias aos vizinhos durante o arraste e
+   a distância pode escrever-se; as paredes ligadas acompanham (Alt solta-as); portas e janelas deslizam na parede, com
+   fantasma, sem sair dela; Ctrl copia; Shift prende a ortogonal; Esc cancela; um só Ctrl+Z. Lajes, pisos e terreno
+   agarram-se pela borda na planta (para a caixa não os levar sem querer); interruptor «Arrastar elementos» na barra da
+   seleção, como no Revit.
+2. **Paredes em planta no ecrã como no papel:** as canetas em mm por escala, convertidas a cada zoom (corte grosso,
+   camadas finas, mínimo 1 px); o fundo do corte na cor do material clareada, como na folha, em vez do cinzento fixo,
+   com a trama por cima; trama e linhas das camadas somem quando a parede fica fina demais; o pormenor dos vãos pelo
+   zoom; botão «Linhas finas» (só no ecrã). Cores do tema, papel branco.
+3. **Editar tipo com corte ao vivo:** na parede, laje, piso e cobertura, o corte das camadas desenhado no editor (face
+   exterior / interior, núcleo, espessuras, total), que muda a cada valor; rascunho com Aplicar / OK / Cancelar;
+   Duplicar a partir do rascunho; tipo em uso: «Substituir por… e apagar»; «Onde se usa» (escolhe e enquadra).
+4. **Propriedades mais rápidas:** selo «tipo» nos valores do tipo (clique → Editar tipo); exceções por elemento com
+   «usar o valor do tipo»; contas nos campos (3,50+0,15; 2*1,20; com unidades); setas ↑↓ e roda a ajustar; áreas e
+   volumes calculados sem atrasar o clique.
+5. **Avisos do modelo sempre à vista:** no rodapé «⚠ 3 avisos» / «✓ sem avisos»; a lista por gravidade e categoria;
+   «Ir para» abre a planta, enquadra e escolhe todos os elementos envolvidos; «Ignorar, com nota»; exportar. Calculados
+   em fundo depois de cada edição.
+6. **Verificação regulamentar** — desenhada a seguir, na secção «O Verificador» (o dono, a 2026-11-06: Portugal e
+   Cabo Verde primeiro, com lugar para outros países).
+
+### O Verificador — legislação e boas práticas a vigiar o projeto (pedido do dono do projeto, 2026-11-06)
+«Vamos seguir a legislação portuguesa e o código técnico de Cabo Verde, mas quero que tenha espaço para outras
+legislações, pois o programa pode ser utilizado noutros lugares. Quero um sistema de verificação melhor e mais
+abrangente. Enquanto o arquiteto estiver a fazer o seu projeto, esse sistema deve vigiar e verificar. Por exemplo, o
+arquiteto faz uma sala; quando colocar os ambientes, o verificador entenderá a tipologia — por exemplo um T2 — e pode
+verificar a área da sala; se for inferior à legislação, coloca uma mensagem no rodapé com fundo vermelho de alerta.
+É bom verificar a largura da escada, a inclinação da rampa, a largura da porta, o pé-direito, as áreas dos
+compartimentos, a ventilação e a iluminação… incompatibilidade de material e outras coisas.»
+
+**O que a legislação obriga o sistema a saber fazer** (lido nos textos, 2026-11-06):
+- **Portugal:** o RGEU continua em vigor. O DL 10/2024 (Simplex urbanístico) revogava-o a 1 de junho de 2026; o DL
+  108/2026 adiou a revogação até entrar o diploma das regras técnicas dos edifícios; o Despacho 12528/2026 (15 de
+  outubro) só criou a equipa que prepara o Código da Construção. Quando este chegar, troca-se o pacote, não o programa.
+  O DL 10/2024 também mexeu no art. 66.º (áreas). Acessibilidades: DL 163/2006 e alterações; incêndio: SCIE; térmica:
+  REH. Os textos consolidados do Diário da República não se leem fora do navegador: os valores de Portugal tiram-se do
+  texto oficial com o dono.
+- **Cabo Verde:** Código Técnico da Edificação (CTE), Portaria conjunta n.º 4/2012 (impressa «4/2011»), B.O. I Série n.º
+  2, de 12 de janeiro de 2012, ao abrigo do DL 18/2011; não achei revisões depois (confirmar com o dono). Lido o texto
+  todo. Mostra os tipos de regra que o motor tem de saber — e não basta comparar números:
+  - limites por uso do compartimento: pé-direito de habitação, mais baixo em vestíbulos, corredores, instalações
+    sanitárias e arrumos; em tetos inclinados, o mínimo em 80 % da área (art. 27.º);
+  - tabelas pela tipologia: áreas mínimas da sala, cozinha, quartos e suplementos (art. 40.º, Anexo I — no T2 a sala
+    pede 14 m²) e a área bruta do fogo, com regra própria para medir o fogo (art. 40.º n.º 4 e n.º 10, Tn = 1,2 × Ahab);
+  - figuras que têm de caber: um círculo na sala, um quadrado nos quartos, um cilindro livre na cozinha, a profundidade
+    face à fachada com vãos (art. 41.º); um círculo de 1,50 m no patamar que as portas não varram (art. 35.º);
+  - proporções: envidraçado contra a área útil a até 6 m do vão (art. 76.º); obstáculo fronteiro a mais de metade da
+    sua altura (art. 77.º); horas de sol direto no compartimento maior (art. 78.º);
+  - presença de equipamento: lava-loiça, bancada e exaustão na cozinha (art. 42.º);
+  - dependências do edifício: a largura da escada comum muda com a altura do edifício (art. 35.º); elevador a partir de
+    certo número de pisos (art. 37.º); o nível da intervenção em edifício existente, I a IV (art. 6.º);
+  - materiais e espessuras: espessuras mínimas das paredes pelo material e pela função (art. 92.º, Anexo II);
+    pavimentos de locais húmidos e em contacto com o solo (arts. 98.º–100.º);
+  - lei supletiva: no que o CTE não cobre aplica-se a regulamentação portuguesa (art. 4.º); os municípios
+    pormenorizam (art. 5.º); exceções por vontade expressa do dono de obra (art. 27.º n.º 7).
+
+**Como funciona — cinco peças:**
+1. **O leitor (perceber o projeto).** O uso de cada ambiente — sala, quarto, cozinha, instalação sanitária, corredor,
+   vestíbulo, arrumos, tratamento de roupa, varanda, garagem… — pelo nome e pelo que lá está dentro (sanita ou duche →
+   instalação sanitária; lava-loiça e bancada → cozinha; cama → quarto, cama de casal → quarto de casal), mostrado nas
+   Propriedades com o porquê («Quarto — pelo nome e pela cama») e corrigível. O **fogo**: os ambientes ligados por portas
+   a partir de uma porta de entrada (para o exterior ou para um espaço comum); numa moradia, um fogo. A **tipologia** Tn
+   pelo número de quartos de dormir (CTE art. 40.º n.º 1), viva, na etiqueta da planta e nas Propriedades. O
+   **edifício**: uso, altura, número de pisos, obra nova ou intervenção (nível I–IV). Nos elementos: largura útil da
+   porta (o vão livre com a folha a 90°), área envidraçada e de ventilação de cada janela e se dá para o exterior,
+   espelho, cobertor, largura e altura livre da escada, inclinação e lanços da rampa, altura das guardas, camadas e U
+   das paredes.
+2. **Os medidores.** Uma biblioteca de medidas feitas no programa e testadas, cada uma com um nome que as regras usam:
+   área útil, área bruta do fogo, pé-direito (o mínimo e a percentagem da área acima de um valor), maior círculo e
+   maior quadrado inscritos, menor dimensão, profundidade face à fachada, envidraçado ÷ área útil, distância a
+   obstáculos, horas de sol (o sol do terreno, 0.365), largura útil, zonas livres das portas e das louças (0.140), 2e+c,
+   desnível por lanço, U. Uma regra nova não pede programação; uma medida nova, sim.
+3. **Os regulamentos (as regras são dados).** Um pacote por país — Portugal e Cabo Verde primeiro; Brasil, Angola,
+   Moçambique… quando vierem —; cada diploma com a data, as alterações, o estado (em vigor, revogado, proposta) e a
+   fonte; cada regra com o artigo (n.º e alínea), o texto curto, onde se aplica (ambiente de um uso, fogo, porta de
+   entrada, escada comum, rampa, parede exterior, par de camadas, edifício, lote), a condição sobre os medidores (≥, ≤,
+   entre, tabela pela tipologia, conta simples), a gravidade e a correção sugerida. Por projeto: o país, os diplomas à
+   data do pedido de licença, o regulamento municipal / PDM (os valores escritos pelo arquiteto) e as regras do
+   gabinete; Cabo Verde chama Portugal como supletivo. Cada valor fica «a confirmar» até o arquiteto o conferir no texto
+   publicado. O projeto guarda a cópia das regras com que foi verificado (a ficha de 2026 não muda com o pacote de
+   2027; atualizar é um botão). Um editor de regulamentos no programa — tabela, sem programar — e «duplicar um país»
+   para adaptar a outro.
+4. **O vigilante.** Depois de cada edição (cada passo de Ctrl+Z) refazem-se só as regras do que mudou e do que depende
+   disso (o ambiente ← as paredes, portas e janelas à volta; o fogo ← os seus ambientes; a escada ← a laje de cima, pela
+   altura livre), em fundo, depois de ~0,3 s parado, nunca durante uma órbita ou um arraste; o resultado guarda-se por
+   elemento até ele mudar. Meta: menos de 50 ms por edição; ao abrir, o projeto todo em fundo. Ao desenhar: a porta, a
+   escada e a rampa mostram ✓ / ⚠ na barra da ferramenta antes do clique; ao pousar um ambiente, o uso, o fogo e a
+   tipologia refazem-se e a área é comparada logo.
+5. **Mostrar e agir.**
+   - **Rodapé:** um indicador permanente — verde «✓ Cumpre o CTE», âmbar «⚠ 2 recomendações», vermelho «✗ 3
+     incumprimentos». Quando a última ação cria um incumprimento, a faixa do rodapé fica vermelha com a frase inteira:
+     «✗ Sala do fogo A (T2): 12,40 m² — CTE, art. 40.º e Anexo I: mínimo 14,00 m²   [Ir para] [Porquê] [Exceção]», até à
+     ação seguinte.
+   - **Na vista:** o ambiente ou o elemento que falha com uma trama vermelha transparente e um ⚠; desliga-se.
+   - **Propriedades:** um grupo «Verificação» em cada elemento e ambiente — cada regra com ✓ / ✗, o medido, o exigido e
+     o artigo.
+   - **Painel Verificação:** por fogo → ambiente → regra, ou por diploma; filtros (incumprimentos, recomendações,
+     exceções, a confirmar); «Ir para» abre a planta, enquadra e escolhe todos os envolvidos; «Corrigir» quando a
+     resposta é única (o número de degraus, o tipo de porta seguinte que cumpre, o corrimão que falta); «Exceção» com a
+     justificação (vontade do dono de obra, edifício existente…), quem e quando.
+   - **Ficha de verificação** em PDF e XLSX para o licenciamento: diploma, artigo, exigido, projeto, estado, exceções
+     justificadas; o quadro de áreas por fogo com a tipologia.
+   - Nunca bloqueia: avisa.
+   - **Tudo num só lugar:** o mesmo rodapé e o mesmo painel juntam o que já se verifica noutros sítios, cada um como
+     uma fonte com o seu filtro — a coerência do modelo (vãos fora da parede, paredes sobrepostas, ambientes abertos),
+     as boas práticas dos materiais, os conflitos entre disciplinas, a elétrica, a estrutura (EC2 / EC6) e o IFC para
+     certificação (IDS).
+
+**Materiais incompatíveis (pacote «Boas práticas», à parte da lei, desligável):** cada material ganha uma família (gesso
+cartonado normal ou hidrófugo, madeira, aço, alumínio, cobre, zinco, betão, argamassa de cimento ou de cal, pedra, EPS,
+XPS, lã mineral, betume, PVC, vidro…); as regras olham para as camadas que se tocam e para o material no seu sítio — gesso
+normal em instalação sanitária ou cozinha; madeira em contacto com o terreno; metais em contacto que corroem (alumínio
+com cobre, zinco com cobre); poliestireno com produtos betuminosos com solventes; argamassa de cimento sobre alvenaria
+antiga de cal; local húmido sem revestimento impermeável; parede mais fina do que o mínimo do seu material e função
+(CTE Anexo II); U da parede exterior acima do máximo (REH, em Portugal). Cada regra diz o porquê.
+
+**O que verificar, por tema** (Cabo Verde lido no CTE; Portugal a fixar no texto oficial):
+
+| Tema | Cabo Verde (CTE) | Portugal |
+|---|---|---|
+| Pé-direito | art. 27.º | RGEU, art. 65.º |
+| Áreas dos compartimentos e dos fogos pela tipologia | art. 40.º e Anexo I | RGEU, arts. 66.º–67.º (DL 10/2024) |
+| Forma dos compartimentos | art. 41.º | RGEU |
+| Iluminação, ventilação, obstáculos, sol | arts. 76.º–78.º | RGEU |
+| Portas e zonas livres | arts. 30.º e 115.º | DL 163/2006 |
+| Escadas, rampas, corredores, passagens | arts. 35.º–39.º | RGEU; DL 163/2006 |
+| Cozinha e instalações sanitárias | arts. 42.º–43.º | RGEU; DL 163/2006 |
+| Elevador | art. 37.º | DL 163/2006 |
+| Paredes e pavimentos (material, espessura, humidade) | arts. 92.º, 98.º–100.º, Anexo II | — |
+| Urbanismo: parâmetros, alturas de fachada, afastamentos, pátios | arts. 19.º–23.º e regulamento municipal | PDM; RGEU |
+| Incêndio | arts. 59.º–62.º (remete para legislação própria) | SCIE (mais tarde) |
+| Térmica | art. 79.º | REH |
+
+**Passos (uma versão cada, parar em cada um para o dono testar):**
+1. ~~**O leitor:** uso dos ambientes (nome e equipamento), fogos e tipologia automáticos, na planta e nas Propriedades,
+   corrigíveis~~ (0.416.0; o uso e os fogos no IFC ao gravar — IfcSpace.ObjectType, IfcZone —, calculados em memória
+   a cada mudança). As Propriedades do projeto (país, regulamentos, tipo de obra, uso e altura do edifício) passam
+   para o passo 2, com os regulamentos.
+2. ~~**O motor, o vigilante e o rodapé:** o formato dos pacotes, os primeiros medidores (área útil, área bruta do fogo,
+   pé-direito, largura útil das portas), a vigilância por edição, a faixa do rodapé, o grupo Verificação nas
+   Propriedades; o pacote de Cabo Verde com os arts. 27.º, 30.º, 40.º e o Anexo I. Teste: um T2 com a sala pequena → o
+   rodapé vermelho~~ (0.417.0; e as Propriedades do projeto que eram do passo 1: país, uso, obra, altura; o
+   indicador ficou à esquerda do rodapé — à direita empurrava os botões do rodapé a 1280 px).
+3. **O painel Verificação:** a lista, Ir para, Exceção com justificação, filtros, as marcas na vista; as verificações que
+   já existem entram como fontes.
+4. **Escadas, rampas, corredores e guardas:** os medidores e as regras dos arts. 35.º–39.º; ✓ / ⚠ ao desenhar;
+   «Corrigir».
+5. **Iluminação, ventilação e forma:** envidraçado ÷ área até 6 m, círculos e quadrados inscritos, profundidade,
+   obstáculos fronteiros, horas de sol.
+6. **Portugal:** RGEU, DL 163/2006 e o U do REH, tirados do texto oficial com o dono; Cabo Verde → Portugal supletivo.
+7. **Materiais e boas práticas:** as famílias, as camadas em contacto, o material no seu sítio, as espessuras do Anexo II.
+8. **Urbanismo:** lote e estremas (do terreno), índices, alturas de fachada, afastamentos, os valores do regulamento
+   municipal / PDM por projeto.
+9. **A ficha de verificação** (PDF e XLSX) e o **editor de regulamentos** (duplicar um país para outro).
+
+**Decisões do dono antes do passo 1** (formato dos dados, difíceis de desfazer):
+- O uso dos ambientes e os fogos no IFC: o uso em `IfcSpace.ObjectType` e cada fogo uma `IfcZone` com a tipologia
+  (o Revit e os outros programas leem-nos) — proposta.
+- Os pacotes de regras: ficheiros JSON numa pasta «regulamentos» do programa (um por diploma) e a cópia usada no
+  `.arqsynthbim` do projeto — proposta.
+- As fontes: Cabo Verde do texto do B.O. de 2012 que li (o dono confirma se houve alterações); Portugal do texto
+  consolidado oficial (o dono traz ou confirma).
+
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.
 - ~~Investigar: no papel, o contorno grosso das paredes falhou uma vez num canto (a união dos contornos pelo Qt, `pdf._paths`); não se repetiu ao desenhar de novo.~~ (0.253.0: os contornos saíam do corte num sentido ou noutro; agora orientados por elemento; 0.254.0: o pilar recorta a parede no papel.)

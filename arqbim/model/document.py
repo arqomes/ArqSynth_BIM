@@ -1368,7 +1368,8 @@ class Document:
         self._notify()
 
     def save(self, path):
-        self.ifc.save(path)
+        with self._verifier_stamp():                    # (0.416: the rooms' uses and the dwellings, in the file)
+            self.ifc.save(path)
         _write_sketches(sidecar_path(path, write=True), self.sketches(), self.guides.values(), self.ifc.origin, self.sections,
                         self.last_section, self.sheets, self.dimensions, self.templates, self.view_templates,
                         self.title_block, self.open_views, self.view_props, self.views3d, self.grids,
@@ -1382,6 +1383,24 @@ class Document:
         self._save_geometry(path)
         self.path = path
         self.modified = False
+
+    def _verifier_stamp(self):
+        """(0.416) What the Verifier found — each room's use, the dwellings and their type — put in the IFC for the
+        file being written (IfcSpace.ObjectType, IfcZone), and taken out again after. Never in the way of saving: if
+        it cannot be found, the file is written without it."""
+        try:
+            from ..verify import reader, uses
+            facts = reader.read(self)
+            if not facts.rooms:
+                return contextlib.nullcontext()
+            language = lang()
+            labels = {g: uses.label(r.use, language) for g, r in facts.rooms.items() if r.use != "outro"}
+            return self.ifc.stamped({g: r.use for g, r in facts.rooms.items()}, facts.dwellings, labels,
+                                    "Fogo" if language == "pt" else "Dwelling")
+        except Exception:                                   # noqa: BLE001 (never stops a save)
+            import logging
+            logging.getLogger("arqbim").exception("verifier stamp")
+            return contextlib.nullcontext()
 
     def _save_geometry(self, path):
         """The shapes on screen are those of the file just written / opened: keep them for next
@@ -1613,6 +1632,7 @@ def read_file(path, progress=None, cancelled=None, preview=None, started=None, p
     report = progress or (lambda stage, percent=None: None)
     report("read")
     model = IfcModel.open(path)
+    model.strip_dwellings()                          # (0.416: found again from the rooms, not kept in memory)
     if cancelled is not None and cancelled():
         raise Cancelled()
     key = model.geometry_key()
