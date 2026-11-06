@@ -72,7 +72,8 @@ def subjects(ctx):
     facts, settings = ctx.facts, ctx.settings
     building_use = settings.get("building_use", "habitacao")
     language = lang()
-    out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": []}
+    out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": [],
+           "window": []}
     ranks = {}
     for d in facts.dwellings:
         bedrooms = sorted((g for g in d.rooms if g in facts.rooms and uses.is_bedroom(facts.rooms[g].use)
@@ -141,6 +142,22 @@ def subjects(ctx):
         out[kind].append(ms.Subject(kind, obj.id, obj.name or t("verify.kind." + kind), [obj.id], obj.storey,
                                     props={"common": common, "in_dwelling": in_dwelling, "height_band": band,
                                            "building_use": building_use}))
+    # (0.420) the windows (and glazed doors) to the outside, of the rooms they light
+    from . import measures as _ms
+    language_ = lang()
+    for w in facts.windows:
+        a, b = facts.window_sides.get(w.guid, (None, None))
+        if (a is None) == (b is None) or _ms.glazing(ctx, w.guid) <= 1e-6:
+            continue
+        room = facts.rooms.get(a if b is None else b)
+        if room is None:
+            continue
+        obj = ctx.doc.get(w.guid)
+        name = "{} — {}".format(obj.name if obj is not None else "", room.name or uses.label(room.use, language_))
+        out["window"].append(ms.Subject("window", w.guid, name, [w.guid], w.storey,
+                                        props={"habitable": uses.is_habitable(room.use),
+                                               "in_dwelling": room.guid in facts.of_room,
+                                               "use": room.use, "building_use": building_use}))
     return out
 
 

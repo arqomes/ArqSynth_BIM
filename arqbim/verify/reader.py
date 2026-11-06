@@ -28,6 +28,8 @@ class Facts:
     of_room: dict = field(default_factory=dict)      # room GlobalId -> its dwelling's name
     infos: dict = field(default_factory=dict)        # GlobalId -> ifc.space_info(…)
     inside: dict = field(default_factory=dict)       # (0.419) room GlobalId -> [(object id, its kind)] inside it
+    windows: list = field(default_factory=list)      # (0.420) dw.Door of the windows (and glazed doors)
+    window_sides: dict = field(default_factory=dict)  # (0.420) window GlobalId -> (room / «~place» / None, the same)
     sides: dict = field(default_factory=dict)        # door GlobalId -> (room or «~place» or None, the same)
 
     def dwelling(self, name):
@@ -126,6 +128,12 @@ def read(doc, force=False):
             door = _door(doc, obj)
             if door is not None:
                 doors.append(door)
+                facts.windows.append(door)                  # (0.420: a glazed door lights a room too)
+            continue
+        if obj.ifc_class == "IfcWindow":                    # (0.420)
+            window = _door(doc, obj)
+            if window is not None:
+                facts.windows.append(window)
             continue
         if obj.ifc_class not in INSIDE or obj.storey not in by_storey:
             continue
@@ -154,6 +162,7 @@ def read(doc, force=False):
     enclosure = _enclosures(doc)
     facts.dwellings, facts.of_room = dw.find(facts.rooms.values(), doors, language, enclosure)
     facts.sides = dw.door_sides(facts.rooms.values(), doors, enclosure)
+    facts.window_sides = dw.door_sides(facts.rooms.values(), facts.windows, enclosure)
     _KEPT[id(doc)] = facts
     return facts
 

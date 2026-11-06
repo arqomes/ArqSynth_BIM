@@ -171,7 +171,7 @@ class Verifier(QtCore.QObject):
             self.strip.hide()
         first = self.result is None
         self.result = result
-        failures = result.failures
+        failures = [f for f in result.failures if f.rule.severity != "info"]   # (0.420: a note is not an alert)
         keys = {f.key for f in failures}
         new = [f for f in failures if f.key not in self.known]
         self.known = keys
@@ -199,6 +199,8 @@ class Verifier(QtCore.QObject):
             return {}
         out = {}
         for f in self.result.failures:
+            if f.rule.severity == "info":
+                continue
             for g in f.subject.elements if f.subject.kind in ("room", "door") else ():
                 if out.get(g) != "fail":
                     out[g] = "fail" if f.rule.severity == "error" else "warn"

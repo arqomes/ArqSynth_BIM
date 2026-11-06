@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.420 — Iluminação, ventilação e o que está em frente das janelas
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.420.0**. Faça Ctrl+N, escolha o país Cabo Verde
+   (rodapé ▸ Regulamentos do projeto…) e carregue em F4.
+2. Com **Arquitetura ▸ Paredes ▸ Retangular**, clique num ponto e escreva `4;10` e Enter. Ponha um **Ambiente** dentro
+   e chame-lhe «Quarto».
+3. O rodapé fica vermelho: «Compartimento habitável com vão para o exterior ✗» (veja no painel Verificação).
+4. Ponha uma **Janela** (J) de 120 numa parede curta: a falha muda para «Área de envidraçados (1/8 …) ✗ 0,78 m²
+   (mínimo …)», e aparece a laranja «Parte do compartimento a mais de 6 m de um vão».
+5. Ponha mais janelas (ou uma porta de sacada) até o vidro chegar a 1/8: a linha passa a ✓.
+6. Desenhe uma **Parede** solta, de 6 m de altura (na barra, **Altura** `6`), paralela à janela e a 2,5 m dela, do
+   lado de fora: «Afastamento dos vãos a muros ou fachadas em frente ✗ (mínimo 3,00 m)». Afaste a parede para 4 m:
+   passa a ✓.
+7. Faça uma casa de banho sem janela: no painel, com o filtro **Tudo**, aparece a nota «Sem vão para o exterior:
+   extração de ar viciado obrigatória» (não conta no rodapé).
+
 ## 0.419 — Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.419.0**. Abra a casa da 0.417 (país Cabo Verde).

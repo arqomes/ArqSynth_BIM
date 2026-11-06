@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.419.0
+# Guia das ferramentas — ArqSynth BIM 0.420.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.419.0.
+ArqSynth BIM 0.420.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -749,7 +749,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Retangular
 
 - **O que faz:** Paredes à volta de um retângulo: dois cantos, ou as medidas digitadas (ex.: 5;4).
-- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
+- **Passos de teste (TESTAR.md):** 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
 
 #### Circular
 
@@ -789,7 +789,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Janela 120×120 (peitoril 1,00): passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** F: para a outra face da parede · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»; 0.330 «Botões e janelas em português de Portugal»; 0.328 «Reabrir um modelo grande sem a janela parar»
+- **Passos de teste (TESTAR.md):** 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»; 0.330 «Botões e janelas em português de Portugal»
 
 #### Abertura na parede
 
@@ -1792,4 +1792,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*242 comandos descritos, gerados do ArqSynth BIM 0.419.0.*
+*242 comandos descritos, gerados do ArqSynth BIM 0.420.0.*

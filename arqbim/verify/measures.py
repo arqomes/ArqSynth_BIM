@@ -378,6 +378,148 @@ def _storage_area(ctx, d):
     return round(total, 3)
 
 
+# ------------------------------------------------------------------ daylight and what stands in front (0.420)
+
+LIGHT_REACH = 6.0           # m: the part of a room lit by a window (CTE art. 76.º n.º 2)
+LOOK_AHEAD = 60.0           # m: how far in front of a window obstacles are looked for
+BAND = 2.0                  # m each side of a window's axis (CTE art. 77.º n.º 3)
+FRONT = ("IfcWall", "IfcWallStandardCase", "IfcCurtainWall", "IfcColumn", "IfcBuildingElementProxy", "IfcSlab",
+         "IfcRoof", "IfcStair", "IfcRailing", "IfcSite", "IfcGeographicElement")
+
+
+def _shares(total, sizes, gap):
+    """Lengths of parts along `total` with `gap` between them: those with a size keep it, the others share the rest."""
+    sizes = list(sizes)
+    fixed = sum(s for s in sizes if s > 0)
+    free = sum(1 for s in sizes if s <= 0)
+    rest = max(0.0, total - fixed - gap * max(0, len(sizes) - 1))
+    return [s if s > 0 else (rest / free if free else 0.0) for s in sizes]
+
+
+def glazing(ctx, guid):
+    """A window's (or a door's) glazed area (m²): its glass and frosted cells, less its frame, mullions and leaves."""
+    def make():
+        ifc = ctx.doc.ifc
+        e = ifc.by_guid(guid)
+        if e is None:
+            return 0.0
+        s = ifc.unit_scale
+        width, height = float(e.OverallWidth or 0.0) * s, float(e.OverallHeight or 0.0) * s
+        try:
+            d = ifc.opening_design(e)
+        except Exception:                               # noqa: BLE001 (another program's: most of it glass)
+            return 0.7 * width * height if e.is_a("IfcWindow") else 0.0
+        inner_w = width - 2.0 * d.frame
+        inner_h = height - (2.0 if d.bottom else 1.0) * d.frame
+        area = 0.0
+        rows = list(d.rows)
+        if d.columns:                                   # (by columns: each «row» a column from the left)
+            for col, w in zip(rows, _shares(inner_w, [r.height for r in rows], d.mullion)):
+                cells = list(col.cells)
+                for cell, h in zip(cells, _shares(inner_h, [c.width for c in cells], d.mullion)):
+                    if cell.fill in ("glass", "frosted"):
+                        k = d.sash if cell.operation != "fixed" else 0.0
+                        area += max(0.0, w - 2 * k) * max(0.0, h - 2 * k)
+        else:
+            for row, h in zip(rows, _shares(inner_h, [r.height for r in rows], d.mullion)):
+                cells = list(row.cells)
+                for cell, w in zip(cells, _shares(inner_w, [c.width for c in cells], d.mullion)):
+                    if cell.fill in ("glass", "frosted"):
+                        k = d.sash if cell.operation != "fixed" else 0.0
+                        area += max(0.0, w - 2 * k) * max(0.0, h - 2 * k)
+        return round(area, 4)
+    return ctx.keep(("glass", guid), make)
+
+
+def room_windows(ctx, room_id):
+    """The windows and glazed doors of a room that open to the outside: [(dw.Door, glazed area)]."""
+    out = []
+    for w in ctx.facts.windows:
+        a, b = ctx.facts.window_sides.get(w.guid, (None, None))
+        if (a == room_id and b is None) or (b == room_id and a is None):
+            g = glazing(ctx, w.guid)
+            if g > 1e-6:
+                out.append((w, g))
+    return out
+
+
+def lit_area(ctx, room):
+    """The part of a room within 6 m of its windows to the outside (m²)."""
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union
+    windows = room_windows(ctx, room.guid)
+    if not windows:
+        return 0.0
+    poly = _poly(room)
+    reach = []
+    for w, _g in windows:
+        n = np.asarray(w.normal, dtype=float)
+        along = np.array((-n[1], n[0])) / max(np.linalg.norm(n), 1e-9)
+        m = np.asarray(w.middle, dtype=float)
+        half = max(w.width, 0.1) / 2.0
+        reach.append(LineString([tuple(m - along * half), tuple(m + along * half)]).buffer(LIGHT_REACH))
+    return float(poly.intersection(unary_union(reach)).area)
+
+
+def front_obstacle(ctx, window_id):
+    """(distance, height above the room's floor) of what stands in front of a window to the outside — of all the
+    obstacles in the 4 m band in front of it (2 m each side of its axis), the one that asks the most of it (CTE art.
+    77.º: at least half its height away, and 3 m); (None, None) when nothing stands there."""
+    def make():
+        from shapely.geometry import LineString, MultiPoint, Polygon
+        facts = ctx.facts
+        w = next((x for x in facts.windows if x.guid == window_id), None)
+        if w is None:
+            return (None, None)
+        a, b = facts.window_sides.get(window_id, (None, None))
+        room = facts.rooms.get(a if b is None else b)
+        if room is None:
+            return (None, None)
+        n = np.asarray(w.normal, dtype=float)
+        n = n / max(np.linalg.norm(n), 1e-9)
+        m = np.asarray(w.middle, dtype=float)
+        poly = _poly(room)
+        from shapely.geometry import Point
+        if poly.distance(Point(*(m + n * 0.6))) < poly.distance(Point(*(m - n * 0.6))):
+            n = -n                                         # (the outside is the side away from the room)
+        along = np.array((-n[1], n[0]))
+        face = m + n * 0.15                                 # (the wall's outer face, roughly)
+        band = Polygon([tuple(face + along * BAND), tuple(face - along * BAND),
+                        tuple(face - along * BAND + n * LOOK_AHEAD), tuple(face + along * BAND + n * LOOK_AHEAD)])
+        front = LineString([tuple(face + along * BAND), tuple(face - along * BAND)])
+        floor = float(room.level)
+        own = ctx.doc.get(window_id)
+        own_wall = None
+        try:
+            own_wall = ctx.doc.ifc.host_wall(window_id)
+        except Exception:                                   # noqa: BLE001
+            pass
+        worst = None
+        for obj in ctx.doc.objects.values():
+            if not getattr(obj, "is_bim", False) or obj.ifc_class not in FRONT or obj.id in (window_id, own_wall):
+                continue
+            mesh = getattr(obj, "mesh", None)
+            if mesh is None or obj is own:
+                continue
+            v = np.asarray(mesh.verts, dtype=float).reshape(-1, 3)
+            if len(v) < 3:
+                continue
+            top = float(v[:, 2].max()) - floor
+            if top <= 0.5:
+                continue
+            hull = MultiPoint([tuple(p) for p in v[:, :2]]).convex_hull
+            if hull.geom_type != "Polygon" or not hull.intersects(band):
+                continue
+            d = float(front.distance(hull.intersection(band)))
+            if d < 0.30:                                    # (the window's own wall and what touches it)
+                continue
+            need = d - max(3.0, top / 2.0)
+            if worst is None or need < worst[0]:
+                worst = (need, d, top)
+        return (None, None) if worst is None else (round(worst[1], 3), round(worst[2], 3))
+    return ctx.keep(("front", window_id), make)
+
+
 # ------------------------------------------------------------------ the registry
 
 def _room(ctx, subject):
@@ -408,6 +550,15 @@ MEASURES = {
         "quadrado_inscrito": _room_shape("quadrado_inscrito"),
         "circulo_livre": _room_shape("circulo_livre"),
         "comprimento": _room_shape("comprimento"),
+        "envidracado": lambda ctx, s: round(sum(g for _w, g in room_windows(ctx, s.id)), 4),      # (0.420)
+        "area_iluminada": lambda ctx, s: lit_area(ctx, _room(ctx, s)),
+        "area_sem_luz": lambda ctx, s: max(0.0, float(_room(ctx, s).area) - lit_area(ctx, _room(ctx, s))),
+        "n_vaos_exteriores": lambda ctx, s: float(len(room_windows(ctx, s.id))),
+    },
+    "window": {                                                                                    # (0.420)
+        "afastamento_fronteiro": lambda ctx, s: front_obstacle(ctx, s.id)[0],     # (None: nothing in front)
+        "altura_fronteira": lambda ctx, s: front_obstacle(ctx, s.id)[1],
+        "area_vidro": lambda ctx, s: glazing(ctx, s.id),
     },
     "stair": {                                                        # (0.419)
         "espelho": lambda ctx, s: round(stair_info(ctx, s.id)["riser"], 4),

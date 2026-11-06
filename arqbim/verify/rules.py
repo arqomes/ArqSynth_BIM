@@ -41,6 +41,7 @@ class Rule:
     unit: str = "m"
     topic: str = ""             # what it is about («pe_direito.habitacao»): a supplementary law's rule on a topic the
     #                             project's own law covers is not checked
+    absent_ok: bool = False     # (0.420) its measure None means nothing there (no obstacle in front): it passes
 
 
 @dataclass
@@ -88,7 +89,7 @@ def _rule(data, pack):
                 where=dict(data.get("where") or {}), limit=limit,
                 severity=data.get("severity", "error") if data.get("severity") in SEVERITIES else "error",
                 confirmed=bool(data.get("confirmed", False)), fix=data.get("fix", ""), unit=data.get("unit", "m"),
-                topic=data.get("topic", ""))
+                topic=data.get("topic", ""), absent_ok=bool(data.get("absent_ok", False)))
 
 
 def load_pack(path):
@@ -183,6 +184,8 @@ def limit_of(ctx, rule, subject):
 
 
 def evaluate(ctx, rule, subject):
+    if rule.absent_ok and ms.measure(ctx, subject, rule.measure) is None:
+        return Finding(rule, subject, "ok", None, None)    # (0.420: nothing there to fall short — nothing in front)
     side, bound = limit_of(ctx, rule, subject)
     if side is None:
         return None                                    # (nothing asked of this one)

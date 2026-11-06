@@ -36,6 +36,12 @@ def t2_house(doc):
     door = catalog.OPENING_BY_KEY["porta_90"]
     for wall, s in ((outer[0], 2.0), (middle, 1.5), (left, 2.0), (right, 2.0)):
         bim.add_opening(doc, wall, door, bim.wall_frame(doc, wall), s, -1)
+    # (0.420) daylight: in each room a French door and a window (2,63 m² of glass ≥ 18,24 / 8: CTE art. 76.º)
+    french, window = catalog.OPENING_BY_KEY["porta_sacada_140"], catalog.OPENING_BY_KEY["janela_120"]
+    for wall, s, spec in ((outer[0], 0.4, window), (outer[0], 3.3, french), (outer[0], 5.5, window),
+                          (outer[0], 7.5, french), (outer[2], 5.5, window), (outer[2], 7.1, french),
+                          (outer[2], 0.5, window), (outer[2], 2.2, french)):
+        bim.add_opening(doc, wall, spec, bim.wall_frame(doc, wall), s, -1)
     rooms = {name: bim.add_room(doc, p, name) for name, p in (("Sala", (2.5, 2.0)), ("Cozinha", (7.5, 2.0)),
                                                              ("Quarto 1", (2.5, 6.0)), ("Quarto 2", (7.5, 6.0)))}
     return rooms, {"outer": outer, "middle": middle, "left": left, "right": right}
@@ -122,7 +128,7 @@ class Reader(unittest.TestCase):
         self.assertEqual([(d.name, d.typology) for d in facts.dwellings], [("Fogo A", "T2")])
         self.assertEqual({facts.rooms[g].use for g in rooms.values()}, {"sala", "cozinha", "quarto"})
         self.assertEqual(facts.why[rooms["Sala"]], "name")
-        self.assertEqual(len(facts.dwellings[0].entrances), 1)
+        self.assertEqual(len(facts.dwellings[0].entrances), 5)          # (the front door and four French doors)
         bim.set_room_use(doc, rooms["Cozinha"], "quarto")
         facts = reader.read(doc)
         self.assertEqual((facts.dwellings[0].typology, facts.why[rooms["Cozinha"]]), ("T3", "chosen"))
@@ -310,6 +316,63 @@ class StairsRampsBathrooms(unittest.TestCase):
                                                  [(o.ifc_class, np.round(o.mesh.bounds(), 2).tolist())
                                                   for o in doc.objects.values()
                                                   if o.is_bim and o.ifc_class == "IfcSanitaryTerminal"]))
+
+
+class Daylight(unittest.TestCase):
+    """0.420: CTE arts. 76.º and 77.º."""
+
+    def box(self, doc, w, d):
+        spec = catalog.BY_KEY["parede_alv_20"]
+        return bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, d, 0.0),
+                                                             (0.0, d, 0.0))], spec)
+
+    def findings(self, doc, room):
+        from arqbim.verify import check
+        result = check.check(doc, dict(CV), force=True)
+        return {f.rule.id: f for f in result.findings if f.subject.id == room}, result
+
+    def test_no_window_a_small_one_and_a_deep_room(self):
+        """A bedroom 4 × 10 m with no window: no opening to the outside (art. 76.º n.º 1); a window of 120 × 120 on its
+        short side (0,78 m² of glass): less than an eighth of the 4,6 m deep strip it lights (6 m from it: 3,8 × 5,9 =
+        22,4 m² → 2,80 m²), and the far end, more than 6 m away, unlit (a warning)."""
+        doc = Document()
+        outer = self.box(doc, 4.0, 10.0)
+        room = bim.add_room(doc, (2.0, 5.0), "Quarto")
+        mine, _r = self.findings(doc, room)
+        self.assertEqual(mine["CV-CTE-76-1-vao"].status, "fail")
+        bim.add_opening(doc, outer[0], catalog.OPENING_BY_KEY["janela_120"], bim.wall_frame(doc, outer[0]), 1.4, -1)
+        mine, _r = self.findings(doc, room)
+        self.assertEqual(mine["CV-CTE-76-1-vao"].status, "ok")
+        light = mine["CV-CTE-76-1-area"]
+        self.assertEqual(light.status, "fail")
+        self.assertAlmostEqual(light.value, 0.784, places=2)
+        self.assertGreater(light.limit, 2.5)
+        self.assertEqual(mine["CV-CTE-76-2"].status, "fail")
+        self.assertEqual(mine["CV-CTE-76-2"].rule.severity, "warning")
+
+    def test_a_wall_in_front_of_a_window(self):
+        """A living room 5 × 4 with a French door to the outside and, 2,5 m in front of it, a wall 6 m high: closer
+        than half its height (3 m) — art. 77.º fails; the wall moved to 4 m: it passes; nothing in front: passes."""
+        from arqbim.verify import check
+        doc = Document()
+        outer = self.box(doc, 5.0, 4.0)
+        bim.add_opening(doc, outer[0], catalog.OPENING_BY_KEY["porta_sacada_140"], bim.wall_frame(doc, outer[0]),
+                        1.8, -1)
+        bim.add_room(doc, (2.5, 2.0), "Sala")
+        result = check.check(doc, dict(CV), force=True)
+        front = [f for f in result.findings if f.rule.id == "CV-CTE-77-1"]
+        self.assertEqual([(f.status, f.value) for f in front], [("ok", None)])
+        spec = catalog.BY_KEY["parede_alv_20"]
+        wall = bim.add_wall(doc, np.array((-3.0, -2.6, 0.0)), np.array((8.0, -2.6, 0.0)), spec, height=6.0)
+        result = check.check(doc, dict(CV), force=True)
+        front = next(f for f in result.findings if f.rule.id == "CV-CTE-77-1")
+        self.assertEqual(front.status, "fail")
+        self.assertAlmostEqual(front.value, 2.5 - 0.15 + 0.05, places=1)   # (from the wall's face, roughly)
+        self.assertAlmostEqual(front.limit, 3.0)
+        bim.delete(doc, [wall])
+        bim.add_wall(doc, np.array((-3.0, -4.2, 0.0)), np.array((8.0, -4.2, 0.0)), spec, height=6.0)
+        result = check.check(doc, dict(CV), force=True)
+        self.assertEqual(next(f for f in result.findings if f.rule.id == "CV-CTE-77-1").status, "ok")
 
 
 class Exceptions(unittest.TestCase):

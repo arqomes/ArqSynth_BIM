@@ -20809,6 +20809,12 @@ def _t2_house():
     door = catalog.OPENING_BY_KEY["porta_90"]
     for wall, s in ((outer[0], 2.0), (middle, 1.5), (left, 2.0), (right, 2.0)):
         B.add_opening(doc, wall, door, B.wall_frame(doc, wall), s, -1)
+    # (0.420) daylight: in each room a French door and a window (2,63 m² of glass ≥ 18,24 / 8: CTE art. 76.º)
+    french, window = catalog.OPENING_BY_KEY["porta_sacada_140"], catalog.OPENING_BY_KEY["janela_120"]
+    for wall, s, spec in ((outer[0], 0.4, window), (outer[0], 3.3, french), (outer[0], 5.5, window),
+                          (outer[0], 7.5, french), (outer[2], 5.5, window), (outer[2], 7.1, french),
+                          (outer[2], 0.5, window), (outer[2], 2.2, french)):
+        B.add_opening(doc, wall, spec, B.wall_frame(doc, wall), s, -1)
     return {name: B.add_room(doc, p, name) for name, p in (("Sala", (2.5, 2.0)), ("Cozinha", (7.5, 2.0)),
                                                           ("Quarto 1", (2.5, 6.0)), ("Quarto 2", (7.5, 6.0)))}
 

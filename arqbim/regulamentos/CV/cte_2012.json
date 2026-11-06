@@ -250,6 +250,46 @@
       "fix": "Um compartimento «Arrumos» ou «Despensa», ou roupeiros (Arquitetura ▸ Mobiliário)."
     },
     {
+      "id": "CV-CTE-76-1-vao", "topic": "luz.vao", "article": "art. 76.º, n.º 1",
+      "title": "Compartimento habitável com vão para o exterior",
+      "text": "Nos espaços destinados à habitação todos os compartimentos habitáveis devem ser iluminados por vãos e ventiláveis naturalmente por comunicação directa com o exterior (…).",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "n_vaos_exteriores", "min": 1, "unit": "", "severity": "error",
+      "fix": "Uma janela numa parede exterior do compartimento."
+    },
+    {
+      "id": "CV-CTE-76-1-area", "topic": "luz.area", "article": "art. 76.º, n.os 1 e 2",
+      "title": "Área de envidraçados (1/8 da área útil a até 6 m do vão)",
+      "text": "(…) sendo que a área de envidraçados não deve ser inferior a 1/8 da área útil do compartimento onde se situam. Para efeitos de aplicação do número anterior, na quantificação da área útil, considera-se apenas a área adjacente ao vão, até 6 m de qualquer ponto deste.",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "envidracado", "min": "area_iluminada / 8", "unit": "m2", "severity": "error",
+      "fix": "Janelas maiores, ou mais uma janela."
+    },
+    {
+      "id": "CV-CTE-76-2", "topic": "luz.fundo", "article": "art. 76.º, n.º 2",
+      "title": "Parte do compartimento a mais de 6 m de um vão",
+      "text": "Na quantificação da área útil, considera-se apenas a área adjacente ao vão, até 6 m de qualquer ponto deste (…).",
+      "subject": "room", "where": {"use": ["sala", "quarto", "cozinha", "sala_cozinha", "refeicoes", "escritorio"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "area_sem_luz", "max": 0.5, "unit": "m2", "severity": "warning",
+      "fix": "Uma janela do outro lado, ou um compartimento menos fundo."
+    },
+    {
+      "id": "CV-CTE-76-6b", "topic": "ventilacao.extracao", "article": "art. 76.º, n.º 6, al. b)",
+      "title": "Sem vão para o exterior: extração de ar viciado obrigatória",
+      "text": "Nos compartimentos sem vãos para o exterior e em espaços destinados a instalações sanitárias e arrumos, é obrigatória a existência de sistemas de extracção de ar viciado (…).",
+      "subject": "room", "where": {"use": ["instalacao_sanitaria", "arrumos"], "in_dwelling": true},
+      "measure": "n_vaos_exteriores", "min": 1, "unit": "", "severity": "info",
+      "fix": "Prever a extração (conduta ou ventilador) — o Verificador ainda não a vê no modelo."
+    },
+    {
+      "id": "CV-CTE-77-1", "topic": "luz.obstaculo", "article": "art. 77.º, n.os 1 e 3",
+      "title": "Afastamento dos vãos a muros ou fachadas em frente",
+      "text": "Os vãos envidraçados dos compartimentos habitáveis devem distar de qualquer muro ou fachada fronteiros, que possam constituir obstáculo à iluminação natural, mais de metade da altura desse muro ou fachada, acima do nível do pavimento do compartimento (…), com o mínimo de 3 m. Não deve haver a um e outro lado do eixo vertical do vão qualquer obstáculo à iluminação a distância inferior a 2 m (…).",
+      "subject": "window", "where": {"habitable": true, "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "afastamento_fronteiro", "min": "max(3; altura_fronteira / 2)", "absent_ok": true,
+      "unit": "m", "severity": "error"
+    },
+    {
       "id": "CV-CTE-131-3", "topic": "guarda.altura", "article": "art. 131.º, n.º 3",
       "title": "Altura das guardas (espaços comuns)",
       "text": "Em edifícios públicos, equipamentos colectivos, via pública e espaços comuns de prédios de habitação, deve assegurar-se que as guardas possuem uma altura mínima de 0,90 m, uma distância máxima entre prumos de 0,13 m (…).",

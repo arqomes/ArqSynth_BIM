@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.420.0 — 2026-11-06
+
+**O Verificador, passo 5: iluminação e ventilação naturais, e o que está em frente das janelas** (CTE arts. 76.º e
+77.º).
+
+- **Cada compartimento habitável com um vão para o exterior** (art. 76.º n.º 1).
+- **Área de vidro** das janelas e portas envidraçadas para o exterior de, pelo menos, **1/8 da área útil a até 6 m
+  delas** (art. 76.º n.os 1 e 2). O vidro mede-se pelo desenho da caixilharia: as folhas de vidro (ou fosco), menos o
+  aro, os montantes e o caixilho das folhas que abrem — uma janela 150×120 de correr dá 1,08 m²; uma porta de sacada
+  140×220, 1,85 m².
+- **Fundo do compartimento** a mais de 6 m de qualquer janela (aviso).
+- **Instalações sanitárias e arrumos sem vão para o exterior:** uma nota (não conta como falha) a lembrar a extração
+  de ar viciado obrigatória (art. 76.º n.º 6 b).
+- **O que está em frente das janelas** (art. 77.º): numa faixa de 4 m (2 m de cada lado do eixo da janela), o muro, a
+  fachada, o edifício vizinho ou o terreno que se levanta à frente tem de estar a mais de metade da sua altura acima do
+  pavimento do compartimento, e a 3 m no mínimo. Sem nada à frente, cumpre.
+- Por fazer: as horas de sol do compartimento maior (art. 78.º — o texto não diz em que dia do ano; a decidir com o
+  dono) e a profundidade do compartimento face à fachada (art. 41.º a).
+
 ## 0.419.0 — 2026-11-06
 
 **O Verificador, passo 4: escadas, rampas, guardas, circulação, a forma dos compartimentos, as instalações sanitárias

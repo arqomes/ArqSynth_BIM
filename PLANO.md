@@ -1287,8 +1287,10 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    guardas do 131.º). Por fazer: os corrimãos (número e prolongamentos, arts. 35.º e 36.º), os patamares, a altura
    livre das rampas; ✓ / ⚠ na barra das ferramentas ao desenhar e «Corrigir» (o vigilante já avisa 0,3 s depois de
    cada clique).
-5. **Iluminação, ventilação e forma:** envidraçado ÷ área até 6 m, círculos e quadrados inscritos, profundidade,
-   obstáculos fronteiros, horas de sol.
+5. ~~**Iluminação, ventilação e forma:** envidraçado ÷ área até 6 m, círculos e quadrados inscritos, profundidade,
+   obstáculos fronteiros~~ (0.420.0; os círculos e quadrados vieram na 0.419). Por fazer: as **horas de sol** (art.
+   78.º: cinco horas entre as 7 e as 17 horas solares — o texto não diz em que dia do ano; perguntar ao dono) e a
+   **profundidade face à fachada** (art. 41.º a).
 6. **Portugal:** RGEU, DL 163/2006 e o U do REH, tirados do texto oficial com o dono; Cabo Verde → Portugal supletivo.
 7. **Materiais e boas práticas:** as famílias, as camadas em contacto, o material no seu sítio, as espessuras do Anexo II.
 8. **Urbanismo:** lote e estremas (do terreno), índices, alturas de fachada, afastamentos, os valores do regulamento
