@@ -644,6 +644,17 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.439 — Elevador com portas de patamar
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.439.0**. Faça Ctrl+N. No separador **Gerenciar**,
+   clique em **Novo pavimento**: fica o «Piso 1» a 3,00 m.
+2. Ponha uma laje grande no pavimento de cima (escolha esse pavimento no rodapé e desenhe a laje com **Arquitetura ▸
+   Pisos e coberturas ▸ Laje**). Volte ao Térreo no rodapé.
+3. Clique em **Arquitetura ▸ Circulação ▸ Elevador** e clique num ponto por baixo da laje.
+4. Na vista 3D: a caixa do elevador tem, em cada piso, a parede da frente com a porta de patamar (duas folhas
+   cinzentas). A laje de cima ficou aberta à volta da caixa.
+5. Carregue em Ctrl+Z: o elevador sai e a laje fica inteira outra vez.
+
 ## 0.438 — Calha em meia-cana e tubos de queda
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.438.0**. Faça Ctrl+N, desenhe quatro paredes em

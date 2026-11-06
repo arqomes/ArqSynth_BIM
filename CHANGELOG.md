@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.439.0 — 2026-11-06
+
+**Elevador com portas de patamar e lajes abertas sozinhas.**
+
+- Em cada piso, da base do elevador para cima, a caixa tem agora a parede da frente com a **porta de patamar**: duas
+  folhas de correr fechadas, com até 0,90 m de largura e 2,10 m de altura, a cinzento (aço).
+- As **lajes** que a caixa atravessa (acima do fundo dela) ficam **abertas à volta da caixa** quando se põe o elevador.
+  A laje do piso de baixo, onde o elevador assenta, não se abre.
+- Nas propriedades do elevador ficam o número de patamares e a largura da porta.
+
 ## 0.438.0 — 2026-11-06
 
 **Calha em meia-cana e tubos de queda.**

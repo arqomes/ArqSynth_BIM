@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.438.0
+# Guia das ferramentas — ArqSynth BIM 0.439.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.438.0.
+ArqSynth BIM 0.439.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -473,7 +473,7 @@ Tipos, materiais, pavimentos, fases, componentes e grupos.
 #### Novo pavimento
 
 - **O que faz:** Acrescenta um pavimento 3 m acima do último e passa a ser o ativo.
-- **Passos de teste (TESTAR.md):** 0.326 «Copiar, Matriz e copiar-colar»; 0.325 «Pequenos defeitos»; 0.231 «As armaduras nos pisos tipo»; 0.222 «A 2.ª ordem»
+- **Passos de teste (TESTAR.md):** 0.439 «Elevador com portas de patamar»; 0.326 «Copiar, Matriz e copiar-colar»; 0.325 «Pequenos defeitos»; 0.231 «As armaduras nos pisos tipo»; 0.222 «A 2.ª ordem»
 
 #### Pavimento acima  ·  tecla PgUp
 
@@ -792,7 +792,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Porta 80×210: passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** Rato numa face: abre para esse lado · F: para o outro · Espaço: dobradiças no outro aro · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.366 «Os ambientes e o Passeio Virtual»; 0.359 «A porta em planta»
+- **Passos de teste (TESTAR.md):** 0.439 «Elevador com portas de patamar»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.366 «Os ambientes e o Passeio Virtual»
 
 #### Janela  ·  tecla J
 
@@ -832,7 +832,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Laje de concreto 12 cm: clique no primeiro canto. Na cota do pavimento = laje de piso; num canto do topo das paredes = laje de cobertura. (Tab muda a forma: polígono, círculo, varinha mágica.)
 - **Teclas:** Tab: retângulo → polígono → círculo → varinha mágica · X / Y: bloquear o eixo · N: soltar · Delete: apagar o último canto
-- **Passos de teste (TESTAR.md):** 0.433 «Pisos com declive por canto»; 0.422 «Materiais e boas práticas»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.343 «O render realista»
+- **Passos de teste (TESTAR.md):** 0.439 «Elevador com portas de patamar»; 0.433 «Pisos com declive por canto»; 0.422 «Materiais e boas práticas»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.382 «Lajes e coberturas: as pegas só a arrastar»; 0.345 «As paredes de fachada à flexão pelo vento»
 
 #### Cobertura
 
@@ -888,7 +888,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Elevador
 
 - **Como se usa:** Elevador (caixa 1,60 m × 1,75 m): clique no canto da frente à esquerda; R roda 90°. Sobe até acima do último pavimento. Esc: Selecionar.
-- **Passos de teste (TESTAR.md):** 0.374 «Ferramentas de arquitetura do addon; os temas do estudo»
+- **Passos de teste (TESTAR.md):** 0.439 «Elevador com portas de patamar»
 
 #### Guarda
 
@@ -1822,4 +1822,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*247 comandos descritos, gerados do ArqSynth BIM 0.438.0.*
+*247 comandos descritos, gerados do ArqSynth BIM 0.439.0.*

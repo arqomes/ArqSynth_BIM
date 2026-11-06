@@ -524,7 +524,7 @@ clique dentro das paredes. Falta, pela ordem do estudo:
    ~~a meia-cana e o tubo de queda~~ (0.438.0: Secção e Tubos de queda na barra e nas Propriedades; fica por fazer o
    cotovelo do tubo até à parede).
 6. ~~**Elevador:** a caixa e a cabina (IfcTransportElement ELEVATOR) em planta, por pavimentos~~ (0.374.0, a frente
-   aberta); fica por fazer: as portas de patamar e abrir as lajes por cima sozinho.
+   aberta); ~~as portas de patamar e abrir as lajes por cima sozinho~~ (0.439.0).
 7. ~~**Ambientes — Separador, Identificar, Áreas:** linhas que separam ambientes sem paredes (contam como limite);
    identificar todos os espaços fechados do pavimento de uma vez; as áreas (útil e bruta) do pavimento~~ (0.374.0).
 8. ~~**Guarda de vão:** o guarda-corpo dentro de uma porta ou janela escolhida (de batente a batente)~~ (0.374.0).

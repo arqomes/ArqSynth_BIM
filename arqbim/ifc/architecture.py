@@ -31,6 +31,7 @@ DOWNPIPE_IN = 0.15                  # m: …its axis this far in from the gutter
 ARC_STEPS = 12                      # a half-round section's arc in this many sides
 SHAFT_WALL = 0.15                   # m: an elevator shaft's walls
 CAR_HEIGHT = 2.20                   # m
+LANDING_DOOR = (0.90, 2.10)         # m: (0.438) a landing door's width (at most) and height
 SEPARATOR = 0.005                   # m: how thick a room separator counts in the rooms' outlines
 
 
@@ -312,7 +313,8 @@ class ArchitectureMixin:
 
     def add_elevator(self, corner, width, depth, angle, z0, z1, name, storey=None, lang="pt"):
         """An elevator: its shaft `width` × `depth` (inside) from its corner (plan, the front left one seen from the
-        landing) turned `angle` degrees, from z0 up to z1, its front open; the car at z0."""
+        landing) turned `angle` degrees, from z0 up to z1; the car at z0. (0.438) At each storey from z0 up, its
+        front: a wall with its landing door — two sliding leaves, LANDING_DOOR wide (at most) and high, closed."""
         f = self.file
         c, s_ = np.cos(np.radians(angle)), np.sin(np.radians(angle))
         x, y, z = np.array((c, s_, 0.0)), np.array((-s_, c, 0.0)), np.array((0.0, 0.0, 1.0))
@@ -324,6 +326,24 @@ class ArchitectureMixin:
         u_ring = [(-t, 0.0), (0.0, 0.0), (0.0, d), (w, d), (w, 0.0), (w + t, 0.0), (w + t, d + t), (-t, d + t)]
         car = [(0.05, 0.05), (w - 0.05, 0.05), (w - 0.05, d - 0.05), (0.05, d - 0.05)]
         items = [self._profile_solid(u_ring, float(z1 - z0)), self._profile_solid(car, CAR_HEIGHT)]
+        leaves = []
+        dw, dh = min(LANDING_DOOR[0], w - 0.20), LANDING_DOOR[1]
+        levels = sorted({float(zl) for _g, _n, zl in self.storeys() if z0 - 1e-6 <= zl <= z1 - dh - 0.3} | {float(z0)})
+        for k, level in enumerate(levels):           # (0.438) each landing: its front wall, its door
+            top = levels[k + 1] if k + 1 < len(levels) else float(z1)
+            at, story = level - float(z0), top - level
+            a0, a1 = (w - dw) / 2.0, (w + dw) / 2.0
+            for ring in ([(-t, -t), (a0, -t), (a0, 0.0), (-t, 0.0)], [(a1, -t), (w + t, -t), (w + t, 0.0), (a1, 0.0)]):
+                items.append(self._profile_solid(ring, story, at=(0.0, 0.0, at)))
+            if story > dh + 0.02:
+                items.append(self._profile_solid([(a0, -t), (a1, -t), (a1, 0.0), (a0, 0.0)], story - dh,
+                                                 at=(0.0, 0.0, at + dh)))
+            for b0, b1 in ((a0, w / 2.0 - 0.003), (w / 2.0 + 0.003, a1)):      # (its two leaves, closed)
+                leaves.append(self._profile_solid([(b0, -t / 2 - 0.02), (b1, -t / 2 - 0.02), (b1, -t / 2 + 0.02),
+                                                   (b0, -t / 2 + 0.02)], dh, at=(0.0, 0.0, at)))
+        for leaf in leaves:                          # (steel: grey, not the shaft's concrete)
+            f.createIfcStyledItem(leaf, [self._spandrel_style()], None)
+        items += leaves
         ifc_class = "IfcTransportElement"
         lift = api.root.create_entity(f, ifc_class=ifc_class, name=name, predefined_type="ELEVATOR")
         self._place(lift, m)
@@ -336,7 +356,37 @@ class ArchitectureMixin:
                                 "Altura": float(z1 - z0)})
         common = api.pset.add_pset(f, product=lift, name="Pset_TransportElementCommon")
         api.pset.edit_pset(f, pset=common, properties={"CapacityPeople": 8})
+        self._set_params(lift, {"Patamares": len(levels), "PortaLargura": dw})
         return lift
+
+    def open_slabs_for(self, lift_guid, name="vão"):
+        """(0.438) The slabs the elevator's shaft goes through (above its bottom, under its top) opened round it — the
+        shaft's outer outline, right through each. Returns their GlobalIds."""
+        from shapely.geometry import Polygon
+        lift = self.by_guid(lift_guid)
+        p = self._params(lift)
+        w, d, height = float(p["Largura"]), float(p["Profundidade"]), float(p["Altura"])
+        t = SHAFT_WALL
+        m = self._placement_si(lift)
+        z0 = float(m[2, 3])
+        corners = [(-t, -t), (w + t, -t), (w + t, d + t), (-t, d + t)]
+        shaft = Polygon([tuple((m @ np.array((cx, cy, 0.0, 1.0)))[:2]) for cx, cy in corners])
+        out = []
+        for slab in self.file.by_type("IfcSlab"):
+            g = slab.GlobalId
+            if self.kind_of(g) != "slab":
+                continue
+            info = self.slab_outline(g)
+            if info is None or not (z0 + 0.5 < info["top"] and info["bottom"] < z0 + height):
+                continue
+            poly = Polygon(info["outline"], info["holes"] or None).buffer(0)
+            if poly.intersection(shaft).area < 0.01:
+                continue
+            lo = (-t, -t, info["bottom"] - z0 - 0.05)
+            hi = (w + t, d + t, info["top"] - z0 + 0.05 + max(info.get("heights") or [0.0]))
+            self.add_void(slab, m, lo, hi, "{} — {}".format(name, lift.Name or ""))
+            out.append(g)
+        return out
 
     # ------------------------------------------------------------ room separators
 

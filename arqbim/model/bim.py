@@ -4016,12 +4016,16 @@ def add_elevator(doc, corner, width=1.60, depth=1.75, angle=0.0, storey=None):
     above = [z for z in levels if z > z0 + 1e-6]
     z1 = (above[-1] if above else z0) + WALL_HEIGHT + 1.20          # (the machine-less top: over the last storey)
     prefix, language = t("elem.elevator"), lang()
+    command = IfcCommand(t("cmd.elevator"), None)
 
     def action(ifc):
         name = "{} {}".format(prefix, ifc.count("IfcTransportElement") + 1)
-        return ifc.add_elevator(corner, width, depth, angle, z0, z1, name, storey=storey, lang=language).GlobalId
+        guid = ifc.add_elevator(corner, width, depth, angle, z0, z1, name, storey=storey, lang=language).GlobalId
+        command.changed += ifc.open_slabs_for(guid, t("elem.bare_opening"))      # (0.438) the slabs it goes through
+        return guid
 
-    return doc.execute(IfcCommand(t("cmd.elevator"), action)).result
+    command.action = action
+    return doc.execute(command).result
 
 
 def add_separator(doc, a, b, storey=None):
