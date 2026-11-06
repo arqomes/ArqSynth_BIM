@@ -91,8 +91,10 @@ def _kind_of(ifc, obj):
         if params.get("Elemento") == "cabinet":
             return "kitchen_cabinet" if params.get("Modulo") in ("base", "wall", "tall") else \
                 ("wardrobe" if params.get("Modulo") == "wardrobe" else None)
-        if getattr(e, "PredefinedType", None) == "BED":
-            return "bed"
+        if getattr(e, "PredefinedType", None) == "BED":     # (0.440: a double one by its piece, its name or kind)
+            words = " {} {} ".format(obj.name or "", getattr(e, "ObjectType", "") or "").lower()
+            double = params.get("Peca") == "cama_casal" or any(w in words for w in FURNITURE_WORDS[0][1])
+            return "double_bed" if double else "bed"
         if getattr(e, "PredefinedType", None) == "SOFA":
             return "sofa"
     name = " {} ".format((obj.name or "").lower())

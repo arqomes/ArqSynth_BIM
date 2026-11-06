@@ -18,7 +18,8 @@ from . import material_looks
 CATEGORY_FINISH = {"plaster": "matte", "gypsum": "matte", "insulation": "matte", "concrete": "matte",
                    "block": "matte", "brick": "matte", "earth": "matte", "stone": "satin", "wood": "satin",
                    "plastic": "satin", "ceramic": "glossy", "steel": "metal", "aluminium": "metal", "zinc": "metal",
-                   "copper": "metal", "glass": "glass", "water": "water"}
+                   "copper": "metal", "glass": "glass", "water": "water",
+                   "fabric": "matte", "plant": "satin"}                     # (0.440: the loose furniture's)
 FINISHES = ("matte", "satin", "glossy", "metal", "glass", "frosted", "water")    # (0.365: water)
 FROSTED_ALPHA = 0.5             # a see-through face less clear than this: frosted glass
 SKETCH_RGB = (0.92, 0.91, 0.87)

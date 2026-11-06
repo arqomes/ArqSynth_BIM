@@ -144,6 +144,10 @@ MATERIALS = {m.key: m for m in (
     MaterialSpec("telha", "Telha cerâmica", "Clay roof tile", "ceramic", (0.71, 0.36, 0.24)),               # (0.278)
     MaterialSpec("fibrocimento", "Fibrocimento", "Fibre cement", "concrete", (0.74, 0.75, 0.73)),          # (0.280)
     MaterialSpec("rede", "Rede mosquiteira", "Insect mesh", "plastic", (0.30, 0.31, 0.33)),                # (0.291)
+    # (0.440) the loose furniture's: its upholstery, a light fabric (mattresses, cushions), a plant's foliage
+    MaterialSpec("tecido", "Tecido de estofo", "Upholstery fabric", "fabric", (0.55, 0.57, 0.60)),
+    MaterialSpec("tecido_claro", "Tecido claro", "Light fabric", "fabric", (0.92, 0.91, 0.88)),
+    MaterialSpec("folhagem", "Folhagem", "Foliage", "plant", (0.33, 0.52, 0.30)),
 )}
 MATERIALS["vidro_fosco"] = MaterialSpec("vidro_fosco", "Vidro fosco", "Frosted glass", "glass",
                                         (0.84, 0.89, 0.92))                                          # (0.306)

@@ -614,6 +614,23 @@ def ripado_panel_icon():
     return theme.icon(pm)
 
 
+def loose_furniture_icon():
+    """Loose furniture (0.440): an armchair seen from the front — its back, its arms, its cushion, its legs."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.2))
+    p.setBrush(QtGui.QColor("#8c97a6"))
+    p.drawRoundedRect(QtCore.QRectF(8, 5, 16, 14), 2, 2)                  # (its back)
+    p.drawRoundedRect(QtCore.QRectF(4, 12, 6, 13), 2, 2)                  # (its arms)
+    p.drawRoundedRect(QtCore.QRectF(22, 12, 6, 13), 2, 2)
+    p.setBrush(QtGui.QColor("#b8c1cc"))
+    p.drawRect(QtCore.QRectF(10, 17, 12, 6))                             # (its cushion)
+    p.setPen(_pen(INK, 1.6))
+    p.drawLine(QtCore.QPointF(6, 25), QtCore.QPointF(6, 28))             # (its legs)
+    p.drawLine(QtCore.QPointF(26, 25), QtCore.QPointF(26, 28))
+    p.end()
+    return theme.icon(pm)
+
+
 def paint_icon():
     """Paint (0.391): SketchUp's bucket, tipped, paint running out of it."""
     pm, p = _canvas()
@@ -2704,6 +2721,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "elevator": elevator_icon, "room_separator": room_separator_icon,
               "perforated_panel": perforated_panel_icon,                                # (0.389)
               "ripado_panel": ripado_panel_icon,                                        # (0.434)
+              "loose_furniture": loose_furniture_icon,                                  # (0.440)
               "organic_roof": organic_roof_icon,                                        # (0.390)
     "param_surface": param_surface_icon,                                      # (0.395)
               "paint": paint_icon,                                                      # (0.391)

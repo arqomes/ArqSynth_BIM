@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.440 — Mobiliário solto
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.440.0**. Faça Ctrl+N e abra a planta do Térreo.
+2. Clique em **Arquitetura ▸ Mobiliário ▸ Mobiliário solto**. Na barra de cima, em **Peça**, escolha **Quarto ▸ Cama
+   de casal**.
+3. Passe o rato pela planta: aparece o contorno da cama, com uma linha do lado da frente (os pés).
+4. Carregue em **R**: a cama roda um quarto de volta. Carregue em **Espaço** até a faixa dizer o ponto que quer (por
+   exemplo, o meio da frente).
+5. Clique: fica a cama. Escolha **Sala ▸ Sofá de 3 lugares** e clique noutro sítio: fica o sofá.
+6. Na barra, escreva `2,60` em **Largura** (Enter) e clique de novo: um sofá mais comprido.
+7. Carregue em Esc, escolha o **Selecionar** e clique no sofá. Nas Propriedades:
+   - no topo está a peça («Sala ▸ Sofá de 3 lugares»);
+   - mude a **Largura** para 2,40: o sofá refaz-se;
+   - no topo, escolha **Sala ▸ Poltrona**: passa a ser uma poltrona.
+8. Veja em 3D (**Vista 3D**): as peças têm as cores das partes (madeira, tecido, colchão claro).
+9. Ponha uma **Cama de casal** num ambiente e carregue em F4: o Verificador conta-a como cama de casal.
+
 ## 0.439 — Elevador com portas de patamar
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.439.0**. Faça Ctrl+N. No separador **Gerenciar**,

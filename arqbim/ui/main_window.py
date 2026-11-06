@@ -867,6 +867,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "niche": "", "flooring": "", "gutter": "", "elevator": "", "room_separator": "",   # (0.374)
                 "perforated_panel": "",                                                    # (0.389)
                 "ripado_panel": "",                                                        # (0.434)
+                "loose_furniture": "",                                                     # (0.440)
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
@@ -6582,6 +6583,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_use(doc, [guid], value or "")
             elif action == "slab_radius":
                 bim.set_slab_radius(doc, guid, value)
+            elif action in ("loose_piece", "loose_width", "loose_depth", "loose_height"):   # (0.440)
+                bim.set_loose(doc, guid, **{action[6:]: value})
             elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes
                 bim.set_gutter(doc, guid, **{action[7:]: value})
             elif action in ("wall_framing", "wall_framing_spacing", "wall_framing_blocking"):   # (0.437)

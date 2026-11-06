@@ -2013,6 +2013,13 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             spec = p.get("spec")                   # (0.415: a stair's slab, a ceiling's board… from the catalogue)
             if spec is not None:
                 self._row(t("props.catalog_type"), _type_name(spec))
+        elif kind == "loose":                      # (0.440) its piece, on top as a type
+            from ..core import loose_furniture as core_loose
+            self._header_choice(t("props.loose_piece"), "loose_piece", guid,
+                                [("{} ▸ {}".format(t("loosegroup." + core_loose.PIECES[k][0]),
+                                                   core_loose.PIECES[k][2][0 if lang() == "pt" else 1]), k)
+                                 for g in core_loose.GROUPS for k in core_loose.PIECES
+                                 if core_loose.PIECES[k][0] == g], p["piece"])
         elif kind == "railing":                    # (0.415) its railing types, on top
             self._header_choice(t("props.railing_type"), "railing_style", guid,
                                 [(name, key) for key, name in p["types"]], p["type"])
@@ -2080,6 +2087,10 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p["bulkhead"] > 0:
                 self._length_editor(t("ctx.bulkhead_drop"), p["drop"], "ceiling_drop", guid)
             self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
+        elif kind == "loose":                              # (0.440) a piece of loose furniture: its sizes
+            self._length_editor(t("props.width"), p["width"], "loose_width", guid)
+            self._length_editor(t("props.depth"), p["depth"], "loose_depth", guid)
+            self._length_editor(t("props.height"), p["height"], "loose_height", guid)
         elif kind == "gutter":                             # (0.438) its section and its downpipes
             from ..ifc.architecture import DOWNPIPES, GUTTER_SHAPES
             self._choice_combo(t("ctx.gutter_shape"), "gutter_shape", guid,

@@ -25,6 +25,7 @@ from .electrical import ElectricalTool
 from .finishes import LightTool, WallFinishTool
 from .perforated import PerforatedPanelTool
 from .ripado import RipadoTool                      # (0.434)
+from .loose_furniture import LooseFurnitureTool    # (0.440)
 from .param_surface import ParamSurfaceTool       # (0.395: replaces the «Cobertura orgânica» tool — tools/organic_roof)
 from .paint import PaintTool
 from .hvac import AirTerminalTool, EquipmentTool
@@ -60,4 +61,5 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              SplitGapTool, TrimExtendTool, WallJoinsTool, WallOpeningTool, WallSweepTool, WallRevealTool,
              CopyTool, ArrayTool, JoinGeometryTool, UnjoinGeometryTool, ArcTool, FreehandTool, BezierTool,
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
-             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool, RipadoTool)
+             PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool, RipadoTool,
+             LooseFurnitureTool)

@@ -537,8 +537,10 @@ clique dentro das paredes. Falta, pela ordem do estudo:
     canto, Pôr plana; corpo de triângulos no IFC), ~~fachada de vidro em arco e por face~~ (0.436.0: Parede cortina ▸
     Forma ▸ Arco — três cliques — e Por face — o retângulo de pé da face, por fora dela), ~~Steel/Wood frame~~ (0.437.0:
     Propriedades da parede ▸ Estrutura leve — guias, montantes, ombreiras, vergas, peitoris, travamentos no núcleo,
-    refeita quando a parede muda; ficam por fazer as placas por face como peças e a estrutura nas listas), mobiliário
-    solto de catálogo,
+    refeita quando a parede muda; ficam por fazer as placas por face como peças e a estrutura nas listas), ~~mobiliário
+    solto de catálogo~~ (0.440.0, «Sim, peças próprias»: Mobiliário ▸ Mobiliário solto — 14 peças paramétricas do
+    próprio programa, por divisão, R/Espaço, cores por parte, peça no topo das Propriedades; o catálogo do addon usa
+    ficheiros .blend de terceiros, que não vêm),
     ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ~~ripado
     como ferramenta própria~~ (0.434.0: Acabamentos ▸ Ripado — clique na face ou retângulo, moldura, ripas de fixação,
     lista de corte; fica por fazer o ripado solto, sem parede — divisória ou brise —, que o addon também tem).

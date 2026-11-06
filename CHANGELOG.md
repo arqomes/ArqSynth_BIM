@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.440.0 — 2026-11-06
+
+**Mobiliário solto, com peças do próprio programa** (o dono: «Sim, peças próprias»).
+
+- **Arquitetura ▸ Mobiliário ▸ Mobiliário solto**: escolha a peça na barra de cima, por divisão:
+  - **Quarto**: cama de casal, cama de solteiro, mesa de cabeceira;
+  - **Sala**: sofá de 2 e de 3 lugares, poltrona, mesa de centro, móvel de TV;
+  - **Jantar**: mesa de jantar de 4 e de 6 lugares, cadeira;
+  - **Escritório**: secretária, estante;
+  - **Outros**: planta em vaso.
+- A barra mostra a largura, a profundidade e a altura da peça (as dela, para começar), que se podem mudar.
+  **R** roda um quarto de volta e **Espaço** muda o ponto que fica no clique (o meio, o meio da frente, um canto…),
+  como nos pilares. Um clique põe a peça.
+- Cada peça é feita de partes com o seu material e a sua cor: madeira, tecido do estofo, tecido claro dos colchões e
+  almofadas, terracota do vaso, folhagem. Esticada, refaz-se nas medidas novas (as pernas não engrossam).
+- Nas Propriedades, a peça está no topo, como um tipo: escolher outra troca a peça, com as medidas dela. Por baixo,
+  a largura, a profundidade e a altura.
+- No IFC é um IfcFurniture do seu tipo (BED, SOFA, CHAIR, TABLE, DESK, SHELF, ou USERDEFINED com o nome, como a mesa
+  de cabeceira), com as medidas nominais e «não embutido».
+- **No Verificador**, as camas e os sofás contam, e a cama de casal conta como cama de casal.
+
 ## 0.439.0 — 2026-11-06
 
 **Elevador com portas de patamar e lajes abertas sozinhas.**

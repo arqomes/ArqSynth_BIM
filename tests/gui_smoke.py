@@ -843,6 +843,7 @@ def bim_flow():
     curtain_shapes_flow()             # (0.436)
     wall_framing_flow()               # (0.437)
     gutter_downpipes_flow()           # (0.438)
+    loose_furniture_flow()            # (0.440)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6569,6 +6570,65 @@ def gutter_downpipes_flow():
     shot("438_calha_tubos.png")
     check("calha_meia_cana_tubos", shape == "meia_cana" and pipes == 2 and "shape" in bar and "downpipes" in bar,
           "seccao={} tubos={} barra={}".format(shape, pipes, bar))
+
+
+def loose_furniture_flow():
+    """0.440 (the owner: «Sim, peças próprias»): Arquitetura ▸ Mobiliário ▸ Mobiliário solto on the ribbon; «Peça»
+    Cama de casal, R (turned 90°), a click at (2, 2): a double bed there (IfcFurniture BED, 1,70 × 2,10); a three-seat
+    sofa at (6, 2); the sofa chosen: its piece on top and its sizes in the Properties — made 2,60 m wide. Captured:
+    440_mobiliario_solto.png."""
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    vp.set_view("top", center=(4.0, 2.0, 0.0), radius=5.0)
+    pump(300)
+    on_ribbon = "loose_furniture" in ribbon.items_of("architecture")
+    win.tool_actions["loose_furniture"].trigger()
+    pump(100)
+    win._context_option("piece", "cama_casal")
+    move(near((2.0, 2.0, 0.0)), 3)
+    key(Qt.Key.Key_R)
+    move(near((2.02, 2.0, 0.0)), 2)
+    move(near((2.0, 2.0, 0.0)), 2)
+    pump(100)
+    click()
+    pump(400)
+    win._context_option("piece", "sofa_3")
+    move(near((6.0, 2.0, 0.0)), 3)
+    pump(100)
+    click()
+    pump(400)
+    found = {doc.ifc._params(e).get("Peca"): e.GlobalId for e in doc.ifc.file.by_type("IfcFurniture")}
+    bed, sofa = found.get("cama_casal"), found.get("sofa_3")
+    placed = False
+    if bed:
+        v = doc.get(bed).mesh.verts
+        size = v.max(axis=0) - v.min(axis=0)
+        mid = (v.max(axis=0) + v.min(axis=0)) / 2
+        placed = doc.ifc.by_guid(bed).PredefinedType == "BED" and abs(size[0] - 2.10) < 0.02 and \
+            abs(size[1] - 1.70) < 0.02 and abs(mid[0] - 2.0) < 0.06 and abs(mid[1] - 2.0) < 0.06
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    widened = shown = False
+    if sofa:
+        vp.set_selection({sofa})
+        pump(400)
+        shown = win.props.type_combo is not None and win.props.type_combo.currentData() == "sofa_3" and \
+            "loose_width" in win.props.editors
+        edit = win.props.editors.get("loose_width")
+        if edit is not None:
+            edit.setText("2,60")
+            edit.editingFinished.emit()
+            pump(500)
+        widened = abs(doc.ifc.loose_params(sofa)["width"] - 2.60) < 1e-6
+    vp.set_selection(set())
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("440_mobiliario_solto.png")
+    check("mobiliario_solto", on_ribbon and placed and bool(sofa) and shown and widened,
+          "fita={} cama={} sofa={} propriedades={} largura={}".format(on_ribbon, placed, bool(sofa), shown, widened))
 
 
 def stair_waist_flow():

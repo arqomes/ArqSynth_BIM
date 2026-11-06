@@ -972,6 +972,34 @@ _STRINGS = {
                              "The rectangle must be at least 5 cm each way."),
     "warn.hole_pitch": ("Com furos de {d} o passo ({p}) tem de ser maior: assim não cabe nenhum furo.",
                         "With {d} holes the pitch ({p}) must be larger: no hole fits as it is."),
+    # (0.440) loose furniture of the program's own
+    "tool.loose_furniture": ("Mobiliário solto", "Loose furniture"),
+    "tip.loose_furniture": ("Camas, mesas de cabeceira, sofás, poltrona, cadeira, mesas, secretária, estante, móvel de "
+                            "TV e plantas em vaso: escolha a peça na barra, ajuste as medidas e clique na planta. R roda, "
+                            "Espaço muda o ponto. As camas e os sofás contam no Verificador.",
+                            "Beds, bedside tables, sofas, an armchair, a chair, tables, a desk, a bookcase, a TV unit and "
+                            "potted plants: choose the piece on the bar, set its sizes and click on the plan. R turns it, "
+                            "Space changes its point. The beds and sofas count in the Checker."),
+    "keys.loose_furniture": ("Clique: pôr a peça  ·  R / Shift+R: rodar  ·  Espaço: o ponto  ·  Esc: Selecionar",
+                             "Click: put the piece  ·  R / Shift+R: turn  ·  Space: its point  ·  Esc: Select"),
+    "hint.loose_furniture": ("{name} ({w} × {d}, {h} de altura): clique onde fica. R roda · Espaço: o ponto · Esc: "
+                             "Selecionar.",
+                             "{name} ({w} × {d}, {h} high): click where it goes. R turns it · Space: its point · Esc: "
+                             "Select."),
+    "info.loose": ("«{name}» ({w} × {d}) posta. Ctrl+Z desfaz.", "“{name}” ({w} × {d}) put. Ctrl+Z undoes."),
+    "ctx.loose_piece": ("Peça", "Piece"),
+    "props.depth": ("Profundidade", "Depth"),
+    "props.loose_piece": ("Peça de mobiliário", "Furniture piece"),
+    "loosegroup.bedroom": ("Quarto", "Bedroom"),
+    "loosegroup.living": ("Sala", "Living room"),
+    "loosegroup.dining": ("Jantar", "Dining"),
+    "loosegroup.office": ("Escritório", "Study"),
+    "loosegroup.other": ("Outros", "Other"),
+    "cmd.loose": ("Mobiliário solto", "Loose furniture"),
+    "cmd.loose_edit": ("Mobiliário solto", "Loose furniture"),
+    "refuse.loose_bad": ("essa peça não existe no catálogo", "there is no such piece in the catalogue"),
+    "refuse.loose_size": ("cada medida da peça tem de estar entre 15 cm e 4 m",
+                          "each of the piece's sizes must be between 15 cm and 4 m"),
     # (0.434) the addon's «Ripado» as a command of its own
     "tool.ripado_panel": ("Ripado", "Slatted panel"),
     "tip.ripado_panel": ("Um ripado numa parede: clique na face (toda ela) ou arraste de um canto ao outro (um "

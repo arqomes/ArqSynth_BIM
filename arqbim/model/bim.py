@@ -3801,6 +3801,28 @@ def add_gutter(doc, a, b, outward, storey=None, shape="caixa", downpipes="nenhum
     return doc.execute(IfcCommand(t("cmd.gutter"), action, changed=sorted({g for _m, g, _t, _o in joins}))).result
 
 
+def add_loose(doc, key, centre, angle=0.0, storey=None, width=None, depth=None, height=None):
+    """(0.440) A piece of loose furniture of the program's own (core/loose_furniture: «cama_casal», «sofa_3»…) with the
+    middle of its footprint at `centre`, turned `angle` degrees. One undo step. Its GlobalId."""
+    from ..core import loose_furniture as core_loose
+    language = lang()
+    label = core_loose.PIECES[key][2][0 if language == "pt" else 1] if key in core_loose.PIECES else key
+
+    def action(ifc):
+        n = sum(1 for e in ifc.file.by_type("IfcFurniture") if ifc._params(e).get("Peca") == key) + 1
+        return ifc.add_loose(key, centre, angle, "{} {}".format(label, n), language, storey=storey, width=width,
+                             depth=depth, height=height).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.loose"), action)).result
+
+
+def set_loose(doc, guid, **changes):
+    """(0.440) Another piece, or its sizes (piece, width, depth, height). In a group, every copy. One undo step."""
+    language = lang()
+    gs = _and_copies(doc, guid)
+    _edit(doc, lambda ifc: [ifc.set_loose(g, lang=language, **changes) for g in gs], gs, "cmd.loose_edit")
+
+
 def set_gutter(doc, guid, shape=None, downpipes=None):
     """(0.438) A gutter's section (caixa / meia_cana) or its downpipes (nenhum / inicio / fim / ambos) changed. One undo
     step."""

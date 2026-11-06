@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.439.0
+# Guia das ferramentas — ArqSynth BIM 0.440.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.439.0.
+ArqSynth BIM 0.440.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -107,7 +107,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 3. [Gerenciar](#3-gerenciar) — 21 comandos
 4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
 5. [Terreno](#5-terreno) — 11 comandos
-6. [Arquitetura](#6-arquitetura) — 48 comandos
+6. [Arquitetura](#6-arquitetura) — 49 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
 9. [Colaborar](#9-colaborar) — 19 comandos
@@ -981,6 +981,12 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 ### Arquitetura ▸ Mobiliário
 
+#### Mobiliário solto
+
+- **Como se usa:** Sofá de 3 lugares (2,20 m × 0,90 m, 0,85 m de altura): clique onde fica. R roda · Espaço: o ponto · Esc: Selecionar.
+- **Teclas:** Clique: pôr a peça · R / Shift+R: rodar · Espaço: o ponto · Esc: Selecionar
+- **Passos de teste (TESTAR.md):** 0.440 «Mobiliário solto»
+
 #### Cozinha
 
 - **Como se usa:** Cozinha: clique onde começa, na face de dentro de uma parede (o ambiente fica desse lado).
@@ -1822,4 +1828,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*247 comandos descritos, gerados do ArqSynth BIM 0.439.0.*
+*248 comandos descritos, gerados do ArqSynth BIM 0.440.0.*

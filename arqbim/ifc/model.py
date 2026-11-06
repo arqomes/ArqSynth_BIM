@@ -76,6 +76,7 @@ from .joinery import JoineryMixin  # noqa: E402
 from .dwellings import DwellingMixin  # noqa: E402
 from .lot import LotMixin  # noqa: E402
 from .wall_framing import WallFramingMixin  # noqa: E402
+from .loose_furniture import LooseFurnitureMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -366,7 +367,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                ElectricalMixin, CircuitMixin, ConduitMixin, TerrainMixin, StructuralMixin, RebarMixin,
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
-               ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin):
+               ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
+               LooseFurnitureMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -1775,8 +1777,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
         joined = {e.GlobalId for e in elements if e.is_a("IfcStair")       # (0.262: and a roof by blocks)
                   or (e.is_a("IfcRoof") and self._params(e).get("Forma") == "blocks")}
         painted = {e.GlobalId for e in elements if e.is_a() in COLOURED or (           # (0.390: an organic roof's
-            e.is_a("IfcRoof") and self._params(e).get("Elemento") == "organic_roof")} \
-            if colours is not None else set()                                          # bars, glass, supports)
+            e.is_a("IfcRoof") and self._params(e).get("Elemento") == "organic_roof") or (  # bars, glass, supports;
+            e.is_a("IfcFurniture") and self._params(e).get("Elemento") == "loose")} \
+            if colours is not None else set()                                          # 0.440: loose furniture)
         if len(elements) <= FEW_ELEMENTS:
             settings = self._settings()
             for e in elements:
@@ -2295,6 +2298,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                                   "gap": float(pp.get("Rasgo") or 0.0),                 # (0.119)
                                   "bulkhead": float(pp.get("SancaLargura") or 0.0),
                                   "drop": float(pp.get("SancaAltura") or 0.0)}
+            elif kind == "loose":                                       # (0.440) a piece of loose furniture
+                info["params"] = self.loose_params(guid)
             elif kind == "gutter":                                      # (0.438) its section, its downpipes
                 info["params"] = {"shape": self.gutter_shape(guid), "downpipes": self.gutter_downpipes(guid)}
             elif kind == "flooring":                                    # (0.415) a floor finish: its finish
