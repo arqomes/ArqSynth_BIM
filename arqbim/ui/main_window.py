@@ -283,6 +283,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pick_busy = False
         self._help = None                         # (0.327) the Help window, made when first asked for
         self._verify_dialog = None                # (0.423) the Project regulations dialog while it is open
+        self._rules_dialog = None                 # (0.426) the rules editor while it is open
         from ..render import canvas as views_canvas            # (0.341) the views light or dark, as chosen last
         views_canvas.set_dark(theme.dark_views())
         self.viewport = Viewport(self.canvas, self.doc)
@@ -724,6 +725,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_verify_settings = self._action(t("act.verify_settings"), lambda: self.verify_settings())  # (0.417)
         self.act_verify_panel = self._action(t("act.verify_panel"), lambda: self.show_verify_panel())      # (0.418)
         self.act_verify_sheet = self._action(t("act.verify_sheet"), lambda: self.verify_sheet())          # (0.425)
+        self.act_rules_editor = self._action(t("act.rules_editor"), lambda: self.rules_editor())          # (0.426)
         self.act_check_ids = self._action(t("act.check_ids"), lambda: self.check_ids())
         self.act_check_ifc = self._action(t("act.check_ifc"), lambda: self.check_ifc())
         self.act_site_location = self._action(t("act.site_location"), lambda: self.site_location())
@@ -3117,6 +3119,17 @@ class MainWindow(QtWidgets.QMainWindow):
                                        "rule": finding.rule.id, "subject": finding.subject.name}
         settings["exceptions"] = exceptions
         bim.set_verify_settings(self.doc, settings)
+        self.verifier.run()
+
+    def rules_editor(self):
+        """(0.426) «Editor de regulamentos…»: the packs of rules, the program's and the architect's; the check made
+        again with them after."""
+        from . import rules_editor
+        self._rules_dialog = rules_editor.RulesEditor(self)
+        try:
+            self._rules_dialog.exec()
+        finally:
+            self._rules_dialog = None
         self.verifier.run()
 
     def verify_sheet(self, path=None):

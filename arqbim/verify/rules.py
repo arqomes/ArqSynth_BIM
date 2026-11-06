@@ -58,6 +58,7 @@ class Pack:
     notes: str = ""
     path: str = ""
     rules: list = field(default_factory=list)
+    country_name: str = ""      # (0.426) a country the architect added: its name («Angola»)
 
 
 @dataclass
@@ -98,8 +99,10 @@ def load_pack(path):
     pack = Pack(id=data["id"], country=data.get("country", ""), short=data.get("short", data["id"]),
                 title=data.get("title", ""), instrument=data.get("instrument", ""), published=data.get("published", ""),
                 source=data.get("source", ""), status=data.get("status", "em_vigor"),
-                fallback=list(data.get("fallback") or ()), notes=data.get("notes", ""), path=path)
-    pack.rules = [_rule(r, pack) for r in data.get("rules", ()) if r.get("measure")]
+                fallback=list(data.get("fallback") or ()), notes=data.get("notes", ""), path=path,
+                country_name=data.get("country_name", ""))
+    pack.rules = [_rule(r, pack) for r in data.get("rules", ())          # (0.426: «off»: switched off by the architect)
+                  if r.get("measure") and not r.get("off")]
     return pack
 
 
@@ -112,11 +115,17 @@ def find(pack_id):
     return packs().get(pack_id) or GENERATED.get(pack_id)
 
 
+GENERATION = [0]            # (0.426) one more each time the packs are read anew: a check kept is made again
+
+
 def packs(folders=None, again=False):
     """{pack id: Pack} of the folders (the program's, then the user's: a pack of the same id there wins); read once
     (again: read anew — a pack changed)."""
-    folders = tuple(folders or (BUILTIN,))
-    if folders in _READ and not again:
+    folders = tuple(folders or (BUILTIN, user_folder()))
+    if again:
+        _READ.clear()
+        GENERATION[0] += 1
+    if folders in _READ:
         return _READ[folders]
     out = {}
     for folder in folders:
@@ -128,6 +137,87 @@ def packs(folders=None, again=False):
             out[pack.id] = pack
     _READ[folders] = out
     return out
+
+
+# ------------------------------------------------------------------ (0.426) the architect's own packs
+
+def user_folder():
+    """Where the architect's own packs are kept: «ArqSynth BIM/regulamentos» in the user's application data
+    (ARQBIM_RULES_DIR, when set: the tests')."""
+    from ..paths import local_base, user_dir
+    return os.environ.get("ARQBIM_RULES_DIR") or user_dir(local_base(), "regulamentos")
+
+
+def is_users(pack):
+    """Whether a pack is one of the architect's (in their folder) — not the program's."""
+    if not pack.path:
+        return False
+    folder = os.path.abspath(user_folder())
+    return os.path.abspath(pack.path).startswith(folder + os.sep)
+
+
+def has_builtin(pack_id):
+    return pack_id in packs((BUILTIN,))
+
+
+def _file_name(text):
+    import re
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(text)).strip("_") or "pacote"
+
+
+def save_users(data):
+    """A pack (its JSON) saved in the architect's folder, under its country (the program's of the same id: this one
+    wins). Its path."""
+    folder = os.path.join(user_folder(), _file_name(data.get("country") or "_geral"))
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, _file_name(data["id"]) + ".json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    packs(again=True)
+    return path
+
+
+def remove_users(pack_id):
+    """The architect's copy of a pack taken away (the program's own comes back, if there is one). Whether there was
+    one."""
+    found = packs().get(pack_id)
+    if found is None or not is_users(found):
+        return False
+    os.remove(found.path)
+    packs(again=True)
+    return True
+
+
+def free_id(base):
+    """An id no pack has: `base`, else `base-2`, `base-3`…"""
+    taken = set(packs())
+    out, k = base, 2
+    while out in taken:
+        out, k = "{}-{}".format(base, k), k + 1
+    return out
+
+
+def new_country(code, name, source):
+    """Another country's packs, copied from those of `source` (its own; not those it takes as supplementary): new ids
+    («AO-CTE»…), the country `code` with its name, no supplementary laws, every value «to be confirmed». The ids
+    made."""
+    code = (code or "").strip().upper()
+    if not code or code == "*":
+        return []
+    made = []
+    for pack in [p for p in packs().values() if p.country == source]:
+        with open(pack.path, encoding="utf-8") as f:
+            data = json.load(f)
+        old = data["id"]
+        new = free_id(code + "-" + (old.split("-", 1)[1] if "-" in old else old))
+        data.update(id=new, country=code, country_name=(name or code).strip(), status="rascunho", fallback=[],
+                    notes="Copiado de {} ({}). {}".format(old, source, data.get("notes", "")).strip())
+        for rule in data.get("rules", []):
+            rule["id"] = new + rule["id"][len(old):] if rule["id"].startswith(old) else "{}~{}".format(new, rule["id"])
+            rule["confirmed"] = False
+        save_users(data)
+        made.append(new)
+    return made
 
 
 # ------------------------------------------------------------------ evaluating

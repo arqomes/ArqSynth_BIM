@@ -58,7 +58,7 @@ def sheet(doc, settings, result=None):
             for p, own in result.packs                  # (the country's own; a supplementary one only when used)
             if (own or p.id in used) and (p.id != project.PLAN_PACK or project.plan_values(settings))]
     out = {"project": _project_name(doc), "date": datetime.date.today().strftime("%d/%m/%Y"),
-           "country": project.label(project.COUNTRIES, settings.get("country"), language) or "—",
+           "country": project.country_name(settings.get("country"), language) or "—",
            "use": project.label(project.BUILDING_USES, settings.get("building_use"), language),
            "work": project.label(project.WORKS, settings.get("work"), language),
            "height": check_mod.number(settings.get("height"), "m") if settings.get("height") is not None else

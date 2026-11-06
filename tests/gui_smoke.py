@@ -830,6 +830,7 @@ def bim_flow():
     verifier_panel_flow()             # (0.418)
     verifier_lot_flow()               # (0.423)
     verifier_sheet_flow()             # (0.425)
+    rules_editor_flow()               # (0.426)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21103,6 +21104,69 @@ def verifier_sheet_flow():
         pass
     check("verificador_ficha", made_pdf and said is True and len(sheets) == 4 and failed,
           "pdf={} ({} pág.) texto={} folhas={} falha={}".format(made_pdf, pages, said, sheets, failed))
+
+
+def rules_editor_flow():
+    """0.426: the rules editor — Colaborar ▸ Editar regulamentos…: the CTE of Cabo Verde chosen, the kitchen's least
+    area typed 20 in its table and saved (a copy of the architect's: «(seu)»): the T2 house's footer counts one more
+    failure; a new country, Angola, from Cabo Verde: in the list; «Repor o original»: as before. The architect's folder a
+    temporary one (ARQBIM_RULES_DIR). Captured: 426_editor_regulamentos.png."""
+    import shutil
+    import tempfile
+    from arqbim.model import bim as B
+    from arqbim.verify import rules as R
+    folder = tempfile.mkdtemp()
+    before_dir = os.environ.get("ARQBIM_RULES_DIR")
+    os.environ["ARQBIM_RULES_DIR"] = folder
+    R.packs(again=True)
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    _t2_house()
+    pump(900)
+    before = win.verifier.button.text()
+    seen = {}
+
+    def fill():
+        d = win._rules_dialog
+        if d is None:
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        for k in range(d.packs.topLevelItemCount()):
+            top = d.packs.topLevelItem(k)
+            for j in range(top.childCount()):
+                if top.child(j).data(0, Qt.ItemDataRole.UserRole) == "CV-CTE":
+                    d.packs.setCurrentItem(top.child(j))
+        pump(200)
+        row = next(k for k, r in enumerate(d.data["rules"]) if r["id"] == "CV-CTE-40-AI-cozinha")
+        d.table.item(row, 3).setText("20")
+        seen["limit"] = d.data["rules"][row].get("min")
+        d.save()
+        pump(200)
+        seen["yours"] = "(seu)" in d.packs.currentItem().text(0)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "426_editor_regulamentos.png"))
+        seen["made"] = d._new_country("AO", "Angola", "CV")
+        countries = [d.packs.topLevelItem(k).text(0) for k in range(d.packs.topLevelItemCount())]
+        seen["angola"] = "Angola" in countries
+        d.reject()
+    QtCore.QTimer.singleShot(300, fill)
+    win.rules_editor()
+    pump(900)
+    after = win.verifier.button.text()
+    R.remove_users("CV-CTE")
+    win.verifier.run()
+    pump(700)
+    back = win.verifier.button.text()
+    os.environ.pop("ARQBIM_RULES_DIR", None)
+    if before_dir is not None:
+        os.environ["ARQBIM_RULES_DIR"] = before_dir
+    R.packs(again=True)
+    shutil.rmtree(folder, ignore_errors=True)
+    ok = seen.get("limit") == 20 and seen.get("yours") and before == "CTE ✗ 2 ⚠ 1" and after == "CTE ✗ 3 ⚠ 1" \
+        and seen.get("made") == ["AO-CTE"] and seen.get("angola") and back == before
+    check("editor_regulamentos", ok, "{} | antes={} depois={} reposto={}".format(seen, before, after, back))
 
 
 def wheel(steps):

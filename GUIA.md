@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.425.0
+# Guia das ferramentas — ArqSynth BIM 0.426.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.425.0.
+ArqSynth BIM 0.426.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -110,7 +110,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
-9. [Colaborar](#9-colaborar) — 18 comandos
+9. [Colaborar](#9-colaborar) — 19 comandos
 10. [Anotar](#10-anotar) — 18 comandos
 11. [Visualizar](#11-visualizar) — 37 comandos
 12. [Render](#12-render) — 10 comandos
@@ -1335,12 +1335,17 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Regulamentos do projeto…
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
-- **Passos de teste (TESTAR.md):** 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+- **Passos de teste (TESTAR.md):** 0.426 «O editor de regulamentos»; 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 #### Ficha de verificação…
 
 - **O que faz:** A ficha de verificação para o processo de licenciamento: o projeto, os regulamentos, o lote e o plano municipal, o quadro de áreas de cada fogo e cada regra verificada com o seu resultado e as exceções — em PDF ou numa folha de cálculo (XLSX).
 - **Passos de teste (TESTAR.md):** 0.425 «A ficha de verificação»
+
+#### Editar regulamentos…
+
+- **O que faz:** Os regulamentos que o Verificador usa, regra a regra: os limites, a gravidade, se o valor já foi conferido, ligar e desligar. Os do programa ficam como estão — o que se muda guarda-se numa cópia sua. E outro país, a partir de um que já existe.
+- **Passos de teste (TESTAR.md):** 0.426 «O editor de regulamentos»
 
 ### Colaborar ▸ Notas
 
@@ -1600,7 +1605,7 @@ Vistas, estilos gráficos, câmaras e painéis.
 
 #### Painéis
 
-- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Regras gráficas · Requisitos (IDS) · Notas (BCF) · Verificação
+- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Editor de regulamentos · Requisitos (IDS) · Notas (BCF) · Verificação
 - **Passos de teste (TESTAR.md):** 0.280 «Chapas e painéis»; 0.181 «Painéis da fachada de vidro»
 
 #### Vista seguinte  ·  tecla Ctrl+Tab
@@ -1805,4 +1810,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*244 comandos descritos, gerados do ArqSynth BIM 0.425.0.*
+*245 comandos descritos, gerados do ArqSynth BIM 0.426.0.*

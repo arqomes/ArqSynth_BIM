@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.426 — O editor de regulamentos
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.426.0**. Abra a casa T2 da 0.417 (país Cabo
+   Verde). O rodapé diz «CTE ✗ 2 ⚠ 1».
+2. No separador **Colaborar**, grupo Verificação, clique em **Editar regulamentos…**. À esquerda, em «Cabo Verde»,
+   clique em **CTE**.
+3. Na linha «Área mínima da cozinha», faça duplo clique na coluna **Limite** e escreva `20`. Carregue em Enter e depois
+   em **Guardar**. À esquerda passa a dizer «CTE (seu)». Feche.
+4. O rodapé passa a **CTE ✗ 3 ⚠ 1**: a cozinha, com 18,24 m², já não chega a 20.
+5. Volte ao editor, escolha **CTE (seu)** e clique em **Repor o original**. Feche. O rodapé volta a «CTE ✗ 2 ⚠ 1».
+6. No editor, clique em **Novo país…**:
+   - **Código do país:** `AO`;
+   - **Nome:** «Angola»;
+   - **A partir de:** «Cabo Verde».
+
+   Carregue em OK: aparece «Angola» na lista, com o CTE copiado.
+7. Abra o rodapé ▸ **Regulamentos do projeto…**: «Angola» está na lista dos países.
+8. No editor, **Abrir a pasta** mostra onde ficam os seus regulamentos. Apague lá a pasta «AO» para tirar Angola.
+
 ## 0.425 — A ficha de verificação
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.425.0**. Abra a casa T2 da 0.417 (país Cabo

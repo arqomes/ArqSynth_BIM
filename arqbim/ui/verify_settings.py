@@ -24,8 +24,8 @@ class VerifySettings(QtWidgets.QDialog):
         form = QtWidgets.QFormLayout()
         self.country = QtWidgets.QComboBox()
         self.country.addItem(t("verify.settings.no_country"), None)
-        for key in project.COUNTRIES:
-            self.country.addItem(project.label(project.COUNTRIES, key, language), key)
+        for key, _names in project.countries().items():         # (0.426: and those the architect added)
+            self.country.addItem(project.country_name(key, language), key)
         self.country.setCurrentIndex(max(0, self.country.findData(settings.get("country"))))
         form.addRow(t("verify.settings.country"), self.country)
         self.use = QtWidgets.QComboBox()
@@ -54,7 +54,14 @@ class VerifySettings(QtWidgets.QDialog):
         box.addLayout(form)
         box.addWidget(QtWidgets.QLabel(t("verify.settings.packs")))
         box.addWidget(self.packs)
-        box.addWidget(self.good_practice)
+        under = QtWidgets.QHBoxLayout()
+        under.addWidget(self.good_practice)
+        under.addStretch(1)
+        self.edit_rules = QtWidgets.QPushButton(t("act.rules_editor"))      # (0.426)
+        self.edit_rules.setToolTip(t("tip.rules_editor"))
+        self.edit_rules.clicked.connect(self._edit_rules)
+        under.addWidget(self.edit_rules)
+        box.addLayout(under)
         note = QtWidgets.QLabel(t("verify.settings.note"))
         note.setWordWrap(True)
         note.setStyleSheet("color: %s;" % theme.C["note"])
@@ -155,6 +162,22 @@ class VerifySettings(QtWidgets.QDialog):
             return None
         return [k for k in range(self.fronts.count())
                 if self.fronts.item(k).checkState() == QtCore.Qt.CheckState.Checked]
+
+    def _edit_rules(self):
+        """(0.426) The rules editor; then the countries and the packs as it left them."""
+        from . import rules_editor
+        rules_editor.RulesEditor(self).exec()
+        self.all_packs = rules_mod.packs()
+        chosen = self.country.currentData()
+        self.country.blockSignals(True)
+        self.country.clear()
+        self.country.addItem(t("verify.settings.no_country"), None)
+        language = lang()
+        for key in project.countries():
+            self.country.addItem(project.country_name(key, language), key)
+        self.country.setCurrentIndex(max(0, self.country.findData(chosen)))
+        self.country.blockSignals(False)
+        self._fill_packs()
 
     def _fill_packs(self):
         self.packs.clear()

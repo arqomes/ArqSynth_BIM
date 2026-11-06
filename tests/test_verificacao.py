@@ -666,6 +666,71 @@ class Sheet(unittest.TestCase):
             self.assertTrue({"✗", "✓", "✓*"} <= marks)
 
 
+class UsersPacks(unittest.TestCase):
+    """0.426: the architect's own packs — a change saved as a copy that wins, a rule switched off, another country."""
+
+    def setUp(self):
+        from arqbim.verify import rules
+        self.tmp = tempfile.mkdtemp()
+        self.before = os.environ.get("ARQBIM_RULES_DIR")
+        os.environ["ARQBIM_RULES_DIR"] = self.tmp
+        rules.packs(again=True)
+
+    def tearDown(self):
+        import shutil
+        from arqbim.verify import rules
+        if self.before is None:
+            os.environ.pop("ARQBIM_RULES_DIR", None)
+        else:
+            os.environ["ARQBIM_RULES_DIR"] = self.before
+        rules.packs(again=True)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_copy_wins_and_the_original_comes_back(self):
+        """The kitchen's least area raised to 20 m² in the architect's copy of the CTE: the T2 house's kitchen
+        (18,24 m²) fails, the check made again though the document did not change; the rule switched off: not
+        checked; «Repor o original»: 6,5 m² again."""
+        import json
+        from arqbim.verify import check, rules
+        doc = Document()
+        t2_house(doc)
+        kitchen = lambda: [f for f in check.check(doc, dict(CV)).findings if f.rule.id == "CV-CTE-40-AI-cozinha"]  # noqa: E731
+        self.assertEqual([f.status for f in kitchen()], ["ok"])
+        pack = rules.find("CV-CTE")
+        self.assertFalse(rules.is_users(pack))
+        with open(pack.path, encoding="utf-8") as f:
+            data = json.load(f)
+        rule = next(r for r in data["rules"] if r["id"] == "CV-CTE-40-AI-cozinha")
+        rule["min"] = 20
+        path = rules.save_users(data)
+        self.assertTrue(path.startswith(self.tmp))
+        self.assertTrue(rules.is_users(rules.find("CV-CTE")))
+        self.assertEqual([(f.status, f.limit) for f in kitchen()], [("fail", 20.0)])
+        rule["off"] = True
+        rules.save_users(data)
+        self.assertEqual(kitchen(), [])
+        self.assertTrue(rules.remove_users("CV-CTE"))
+        self.assertFalse(rules.is_users(rules.find("CV-CTE")))
+        self.assertEqual([(f.status, f.limit) for f in kitchen()], [("ok", 6.5)])
+
+    def test_another_country(self):
+        """Angola from Cabo Verde: «AO-CTE» with every value to be confirmed and no supplementary laws; Angola among
+        the countries; the T2 house checked by it (and the good practice, as any country)."""
+        from arqbim.verify import check, project, rules
+        made = rules.new_country("ao", "Angola", "CV")
+        self.assertEqual(made, ["AO-CTE"])
+        pack = rules.find("AO-CTE")
+        self.assertEqual((pack.country, pack.country_name, pack.fallback), ("AO", "Angola", []))
+        self.assertFalse(any(r.confirmed for r in pack.rules))
+        self.assertTrue(all(r.id.startswith("AO-CTE") for r in pack.rules))
+        self.assertEqual(project.country_name("AO"), "Angola")
+        doc = Document()
+        t2_house(doc)
+        result = check.check(doc, {"country": "AO", "building_use": "habitacao", "work": "nova"}, force=True)
+        self.assertEqual({p.id for p, own in result.packs}, {"AO-CTE", "BOAS-PRATICAS", "PLANO"})
+        self.assertIn("AO-CTE-30-1a", {f.rule.id for f in result.failures})
+
+
 class Steps(unittest.TestCase):
     def test_the_check_in_steps(self):
         """0.424: the check as a generator — a stop after the reading and after each rule (the watcher goes on between

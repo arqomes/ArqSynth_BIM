@@ -1307,9 +1307,14 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    arts. 59.º, 60.º e 62.º § 2.º; o uso «Pátio»; a verificação aos bocados, sem prender a janela). Por fazer: o lote
    escolhido com o rato e as suas pegas (hoje redesenha-se); o lote nas tabelas; o art. 21.º n.os 2–4 (elementos
    recuados, fachadas contíguas, terreno em declive), o 23.º b)–g) (acesso ao pátio, cotas) e o 24.º n.os 3–4.
-9. ~~**A ficha de verificação** (PDF e XLSX)~~ (0.425.0: o projeto, os regulamentos, o lote e o plano municipal, o
-   quadro de áreas, regra a regra por artigo, as exceções; no PDF as regras de muitos sítios resumidas) e o **editor de
-   regulamentos** (duplicar um país para outro).
+9. ~~**A ficha de verificação** (PDF e XLSX) e o **editor de regulamentos** (duplicar um país para outro)~~ (0.425.0:
+   o projeto, os regulamentos, o lote e o plano municipal, o quadro de áreas, regra a regra por artigo, as exceções;
+   no PDF as regras de muitos sítios resumidas. 0.426.0: o editor — limites, gravidade, conferido, ativa; os do programa
+   nunca alterados, as mudanças numa cópia do arquiteto que vale em vez deles; Novo país a partir de outro).
+
+**O Verificador está completo nos 9 passos (0.416–0.426).** Ficam anotados, para quando o dono decidir: as horas de sol
+(art. 78.º: em que dia do ano), o art. 41.º a), o U do REH (o quadro da Portaria 138-I/2021), a SCIE, os corrimãos e os
+patamares, ✓/⚠ ao desenhar e «Corrigir», as espessuras do Anexo II do CTE, o lote escolhido com o rato e as suas pegas.
 
 **Decisões do dono antes do passo 1** (formato dos dados, difíceis de desfazer):
 - O uso dos ambientes e os fogos no IFC: o uso em `IfcSpace.ObjectType` e cada fogo uma `IfcZone` com a tipologia

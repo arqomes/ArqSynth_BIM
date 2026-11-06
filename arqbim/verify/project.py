@@ -18,6 +18,26 @@ WORKS = {"nova": ("Obra nova", "New building"),
 DEFAULTS = {"country": None, "packs": None, "building_use": "habitacao", "work": "nova", "height": None, "on": True}
 
 
+def countries():
+    """(0.426) {code: (Portuguese name, English name)}: the program's countries and those the architect added (their
+    packs say their name)."""
+    out = dict(COUNTRIES)
+    for pack in rules_mod.packs().values():
+        if pack.country and pack.country != "*" and pack.country not in out:
+            name = pack.country_name or pack.country
+            out[pack.country] = (name, name)
+    return out
+
+
+def country_name(code, language="pt"):
+    return label(countries(), code, language) or (code or "")
+
+
+def forget_countries():
+    """(The packs read anew: a country added or taken away.)"""
+    rules_mod.packs(again=True)
+
+
 def settings(doc, default_country=None):
     """The project's settings, with the defaults (a project never set: the country last chosen in this computer)."""
     try:
@@ -26,7 +46,7 @@ def settings(doc, default_country=None):
         own = {}
     out = dict(DEFAULTS)
     out.update({k: v for k, v in own.items() if v is not None or k == "country"})
-    if out.get("country") is None and default_country in COUNTRIES and not own:
+    if out.get("country") is None and default_country in countries() and not own:
         out["country"] = default_country
     return out
 

@@ -256,7 +256,7 @@ def steps(doc, settings=None, all_packs=None, default_country=None, force=False)
     window standing still); check() runs it through."""
     revision = getattr(doc, "revision", 0)
     settings = settings if settings is not None else project.settings(doc, default_country)
-    key = (revision, repr(sorted(settings.items())))
+    key = (revision, repr(sorted(settings.items())), rules_mod.GENERATION[0])     # (0.426: a pack changed: again)
     kept = _KEPT.get(doc)
     if kept is not None and kept[0]() is getattr(doc, "ifc", None) and kept[1] == key and not force:
         return kept[2]

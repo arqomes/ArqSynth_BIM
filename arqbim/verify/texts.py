@@ -343,6 +343,53 @@ STRINGS = {
     "sheet.tab.areas": ("Quadro de áreas", "Areas"),
     "sheet.tab.rules": ("Verificação", "Verification"),
     "sheet.tab.exceptions": ("Exceções", "Exceptions"),
+    # (0.426) the rules editor
+    "act.rules_editor": ("Editar regulamentos…", "Edit regulations…"),
+    "tip.rules_editor": ("Os regulamentos que o Verificador usa, regra a regra: os limites, a gravidade, se o valor já "
+                         "foi conferido, ligar e desligar. Os do programa ficam como estão — o que se muda guarda-se "
+                         "numa cópia sua. E outro país, a partir de um que já existe.",
+                         "The regulations the Verifier uses, rule by rule: the limits, how serious, whether the value "
+                         "was checked, on and off. The program's stay as they are — a change is kept in your own "
+                         "copy. And another country, from one that is there."),
+    "rules.title": ("Editor de regulamentos", "Regulations editor"),
+    "rules.duplicate": ("Duplicar", "Duplicate"),
+    "rules.new_country": ("Novo país…", "New country…"),
+    "rules.restore": ("Repor o original", "Restore the original"),
+    "rules.folder": ("Abrir a pasta", "Open the folder"),
+    "rules.col.article": ("Artigo", "Article"),
+    "rules.col.title": ("Regra", "Rule"),
+    "rules.col.measure": ("Medida", "Measure"),
+    "rules.col.limit": ("Limite", "Limit"),
+    "rules.col.unit": ("Unidade", "Unit"),
+    "rules.col.severity": ("Gravidade", "Severity"),
+    "rules.col.confirmed": ("Conferido", "Checked"),
+    "rules.col.on": ("Ativa", "On"),
+    "rules.severity.error": ("Incumprimento", "Failure"),
+    "rules.severity.warning": ("Aviso", "Warning"),
+    "rules.severity.info": ("Nota", "Note"),
+    "rules.table_limit": ("por tabela (no ficheiro)", "by a table (in the file)"),
+    "rules.limit_tip": ("Um número (12,5) ou uma fórmula das medidas (max(5; altura_fachada / 2)).",
+                        "A number (12.5) or a formula of the measures (max(5; altura_fachada / 2))."),
+    "rules.any_country": ("Qualquer país", "Any country"),
+    "rules.yours": ("seu", "yours"),
+    "rules.programs": ("do programa", "the program's"),
+    "rules.head": ("{short} — {title} ({whose})\n{instrument}", "{short} — {title} ({whose})\n{instrument}"),
+    "rules.note": ("Os regulamentos do programa não se alteram: ao gravar, o que mudou fica numa cópia sua, que passa "
+                   "a valer em vez do original («Repor o original» tira-a). Marque «Conferido» quando tiver confirmado "
+                   "o valor no texto publicado — deixa de aparecer «a confirmar».",
+                   "The program's regulations are never changed: on saving, what changed is kept in your own copy, "
+                   "which counts instead of the original («Restore the original» takes it away). Tick «Checked» once "
+                   "you have confirmed the value in the published text — «to be confirmed» goes."),
+    "rules.saved": ("Gravado em {path}", "Saved in {path}"),
+    "rules.ask_save": ("Gravar as alterações deste regulamento?", "Save the changes to this regulation?"),
+    "rules.copy": ("cópia", "copy"),
+    "rules.country_code": ("Código do país", "Country code"),
+    "rules.country_name": ("Nome", "Name"),
+    "rules.country_from": ("A partir de", "From"),
+    "rules.country_note": ("Copia os regulamentos desse país com outro nome; todos os valores ficam «a confirmar» até "
+                           "os conferir com a lei do novo país.",
+                           "Copies that country's regulations under another name; every value stays «to be "
+                           "confirmed» until you check it against the new country's law."),
     "sheet.others_ok": ("mais {n} que cumprem", "{n} more that comply"),
     "sheet.absent": ("{n} sem nada a medir (cumprem)", "{n} with nothing to measure (comply)"),
     "sheet.yes": ("sim", "yes"),

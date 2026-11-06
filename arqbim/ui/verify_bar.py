@@ -27,7 +27,7 @@ MARKS_KEY = "verificacao/marcas"
 
 def default_country():
     value = QtCore.QSettings("ArqSynth", "ArqSynth BIM").value(COUNTRY_KEY, "")
-    return value if value in project.COUNTRIES else None
+    return value if value in project.countries() else None
 
 
 def marks_on():
@@ -258,7 +258,7 @@ class Verifier(QtCore.QObject):
             packs = self.result.packs if self.result is not None else project.active(s)
             laws = ", ".join(p.short for p, own in packs if own and (    # (0.423: the town plan once it has values)
                 p.id != project.PLAN_PACK or project.plan_values(s))) or "—"
-            tip = t("verify.foot.tip", country=project.label(project.COUNTRIES, country, language), laws=laws)
+            tip = t("verify.foot.tip", country=project.country_name(country, language), laws=laws)
             r = self.result
             n_err = r.count("error") if r is not None else 0
             n_warn = r.count("warning") if r is not None else 0

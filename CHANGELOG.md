@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.425.0 — 2026-11-06
+## 0.426.0 — 2026-11-06
+
+**O Verificador, passo 9 (2.ª parte): o editor de regulamentos.** Com isto fica feito o plano do Verificador.
+
+- **Colaborar ▸ Verificação ▸ Editar regulamentos…** (e o botão com o mesmo nome nos Regulamentos do projeto):
+  - à esquerda, os regulamentos por país (os do programa e os seus, marcados «seu»);
+  - à direita, as regras do escolhido numa tabela: artigo, regra, medida, limite, gravidade, conferido, ativa.
+- **O que se muda:**
+  - o **limite**: um número, ou uma fórmula das medidas, como `max(5; altura_fachada / 2)`;
+  - a **gravidade**: incumprimento, aviso ou nota;
+  - **Conferido**: o valor foi confirmado no texto publicado; deixa de aparecer «a confirmar» na ficha e nas
+    mensagens;
+  - **Ativa**: desligar uma regra que não se aplica.
+
+  Os limites dados por tabela (as áreas por tipologia) mudam-se no ficheiro.
+- **Os regulamentos do programa nunca se alteram.** Ao gravar, a mudança fica numa cópia sua, na pasta «ArqSynth
+  BIM/regulamentos» dos dados do utilizador, e essa cópia passa a valer em vez do original. **Repor o original** tira a
+  cópia. **Duplicar** faz um regulamento novo a partir do escolhido.
+- **Novo país…**: um código (AO), um nome (Angola) e o país de partida (Cabo Verde). Copia os regulamentos desse país,
+  com todos os valores «a confirmar» e sem supletivos. O país novo aparece logo na lista dos Regulamentos do projeto.
+- Depois de editar, o Verificador volta a verificar com os regulamentos novos, mesmo sem nada mudar no modelo.
 
 **O Verificador, passo 9 (1.ª parte): a ficha de verificação.**
 
