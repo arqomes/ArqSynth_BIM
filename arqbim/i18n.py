@@ -962,6 +962,43 @@ _STRINGS = {
                              "The rectangle must be at least 5 cm each way."),
     "warn.hole_pitch": ("Com furos de {d} o passo ({p}) tem de ser maior: assim não cabe nenhum furo.",
                         "With {d} holes the pitch ({p}) must be larger: no hole fits as it is."),
+    # (0.434) the addon's «Ripado» as a command of its own
+    "tool.ripado_panel": ("Ripado", "Slatted panel"),
+    "tip.ripado_panel": ("Um ripado numa parede: clique na face (toda ela) ou arraste de um canto ao outro (um "
+                         "retângulo). Ripas na vertical ou na horizontal, com a largura, a espessura e o passo; uma "
+                         "moldura à volta e ripas de fixação por trás, como no addon. Entra na lista de corte.",
+                         "A slatted panel on a wall: click its face (all of it) or drag from one corner to the other (a "
+                         "rectangle). Slats upright or level, of a width, a thickness and a pitch; a frame round it and "
+                         "battens behind, as the addon's. It goes in the cut list."),
+    "elem.ripado": ("Ripado", "Slatted panel"),
+    "cmd.ripado": ("Ripado", "Slatted panel"),
+    "keys.ripado_panel": ("Clique: a face inteira  ·  Arraste: um retângulo  ·  Clique num ripado: escolhê-lo  ·  "
+                          "Esc: Selecionar",
+                          "Click: the whole face  ·  Drag: a rectangle  ·  Click a slatted panel: choose it  ·  "
+                          "Esc: Select"),
+    "hint.ripado_panel": ("Ripado (ripas de {w} × {d}, passo {p}): passe o rato por uma parede e clique — a face "
+                          "inteira — ou arraste de um canto ao outro — um retângulo. Clique num ripado para o escolher. "
+                          "Esc: Selecionar.",
+                          "Slatted panel ({w} × {d} slats, pitch {p}): move over a wall and click — the whole face — or "
+                          "drag from one corner to the other — a rectangle. Click a slatted panel to choose it. "
+                          "Esc: Select."),
+    "tip.ripado_pick": ("Clique: escolher este ripado", "Click: choose this slatted panel"),
+    "info.ripado_picked": ("«{name}» escolhido: as medidas estão nas Propriedades.",
+                           "“{name}” chosen: its measures are in the Properties."),
+    "info.ripado": ("«{name}» na parede «{wall}»: {n} ripas. Ctrl+Z desfaz.",
+                    "“{name}” on the wall “{wall}”: {n} slats. Ctrl+Z undoes it."),
+    "warn.slat_pitch": ("Com ripas de {w} o passo ({p}) tem de ser maior: as ripas ficariam umas sobre as outras.",
+                        "With {w} slats the pitch ({p}) must be larger: the slats would overlap."),
+    "props.slat_depth": ("Espessura da ripa", "Slat thickness"),
+    "props.slat_pitch": ("Passo", "Pitch"),
+    "props.ripado_frame": ("Moldura", "Frame"),
+    "props.ripado_frame_tip": ("A largura da moldura à volta do ripado; 0: sem moldura",
+                               "The width of the frame round the panel; 0: no frame"),
+    "props.ripado_battens": ("Ripas de fixação", "Battens"),
+    "props.batten_w": ("Largura da fixação", "Batten width"),
+    "props.batten_d": ("Espessura da fixação", "Batten thickness"),
+    "ripado.no_battens": ("Sem fixação", "None"),
+    "refuse.ripado_frame": ("a moldura não deixa espaço para as ripas", "the frame leaves no room for the slats"),
     "ctx.hole_shape": ("Furos", "Holes"),
     "ctx.hole_grid": ("Malha", "Grid"),
     "ctx.hole_size": ("Ø", "Ø"),
@@ -7145,6 +7182,8 @@ _STRINGS = {
                                                             "(over 20,000 holes or 3,000 slats): make the pitch or "
                                                             "the width larger"),
     "cut.role.slat": ("Ripa", "Slat"),
+    "cut.role.batten": ("Ripa de fixação", "Batten"),                                             # (0.434)
+    "cut.role.ripado_frame": ("Moldura do ripado", "Slatted panel frame"),
     "cut.role.flute": ("Ripa canelada", "Fluted slat"),
     "cut.role.perforated": ("Painel perfurado", "Perforated panel"),
     "cut.mat.slat": ("Madeira", "Wood"),

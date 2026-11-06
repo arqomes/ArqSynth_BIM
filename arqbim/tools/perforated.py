@@ -30,6 +30,8 @@ class PerforatedPanelTool(Tool):
     name = "perforated_panel"
     placement = True
     keys_help = "keys.perforated_panel"
+    FINISH = "perfurado"                    # (0.434: the slatted panel's tool is this one with "ripado")
+    PICK_TIP, PICKED = "tip.perforated_pick", "info.perforated_picked"
 
     def __init__(self, host):
         super().__init__(host)
@@ -117,7 +119,7 @@ class PerforatedPanelTool(Tool):
         kind = self.doc.ifc.kind_of(obj.id)
         if kind == "cladding":
             p = self.doc.ifc._params(self.doc.ifc.by_guid(obj.id))
-            if p.get("Acabamento") == "perfurado":
+            if p.get("Acabamento") == self.FINISH:
                 return ("panel", obj.id)
             wall = p.get("Parede")
             if self.doc.get(wall) is None:
@@ -145,7 +147,7 @@ class PerforatedPanelTool(Tool):
         x, z = self._on_face(frame, local)
         for guid in ifc.claddings_of([wall]):
             p = ifc._params(ifc.by_guid(guid))
-            if p.get("Acabamento") != "perfurado" or (1 if int(p.get("Lado") or 1) > 0 else -1) != side:
+            if p.get("Acabamento") != self.FINISH or (1 if int(p.get("Lado") or 1) > 0 else -1) != side:
                 continue
             x0, z0, x1, z1 = ifc.cladding_box(p, frame)
             if x0 - frame.x0 - 1e-6 <= x <= x1 - frame.x0 + 1e-6 and z0 - 1e-6 <= z <= z1 + 1e-6:
@@ -164,6 +166,14 @@ class PerforatedPanelTool(Tool):
         normal = frame.matrix[:3, 1] / np.linalg.norm(frame.matrix[:3, 1]) * side * OUT
         ring = [p + normal for p in face_rectangle(frame, frame.x0 + x0, x1 - x0, z0, z1 - z0, side)]
         segs = [q for a, b in zip(ring, ring[1:] + ring[:1]) for q in (a, b)]
+        segs += self._inside(frame, side, x0, z0, x1, z1, normal)
+        self.viewport.show_polygon(ring, segments=segs, colors=[PREVIEW] * len(segs))
+        tip = t("tip.perforated_whole") if whole else "{} × {}".format(_fmt(x1 - x0), _fmt(z1 - z0))
+        self.viewport.show_tip(tip, ring[2])
+
+    def _inside(self, frame, side, x0, z0, x1, z1, normal):
+        """The lines shown inside the panel (pairs of points): its boards' joints, from its corner."""
+        segs = []
         y = frame.y1 if side > 0 else frame.y0
         u = x0 + self.sheet_w
         while u < x1 - 1e-6:                     # (the boards' joints, from the panel's corner)
@@ -175,9 +185,7 @@ class PerforatedPanelTool(Tool):
             segs += [frame.to_world((frame.x0 + x0, y, frame.z0 + v)) + normal,
                      frame.to_world((frame.x0 + x1, y, frame.z0 + v)) + normal]
             v += self.sheet_h
-        self.viewport.show_polygon(ring, segments=segs, colors=[PREVIEW] * len(segs))
-        tip = t("tip.perforated_whole") if whole else "{} × {}".format(_fmt(x1 - x0), _fmt(z1 - z0))
-        self.viewport.show_tip(tip, ring[2])
+        return segs
 
     # ------------------------------------------------------------ the mouse
 
@@ -201,7 +209,7 @@ class PerforatedPanelTool(Tool):
             return
         if found[0] == "panel":
             self.viewport.clear_overlays()
-            self.viewport.show_tip(t("tip.perforated_pick"), self.viewport.pick_point(x, y)[2])
+            self.viewport.show_tip(t(self.PICK_TIP), self.viewport.pick_point(x, y)[2])
             return
         _kind, _wall, frame, side, _local = found
         self._show(frame, side, 0.0, 0.0, frame.length, frame.height, True)
@@ -228,7 +236,7 @@ class PerforatedPanelTool(Tool):
             return
         if found[0] == "panel":                  # (as the addon: a panel already there is chosen, to edit it)
             self.viewport.set_selection({found[1]})
-            self.host.message(t("info.perforated_picked", name=self.doc.get(found[1]).name))
+            self.host.message(t(self.PICKED, name=self.doc.get(found[1]).name))
             return
         _kind, wall, frame, side, local = found
         self._press = (wall, frame, side, self._on_face(frame, local), (x, y))
@@ -251,13 +259,17 @@ class PerforatedPanelTool(Tool):
                 region = {"start": min(ax, bx), "end": max(ax, bx), "base": min(az, bz)}
                 top = max(az, bz)
         try:
-            guid = bim.add_cladding(self.doc, wall, side, "perfurado", top if region else 0.0, self.pattern(),
+            guid = bim.add_cladding(self.doc, wall, side, self.FINISH, top if region else 0.0, self.pattern(),
                                     region)
         except ValueError as exc:
             self.viewport.clear_overlays()
             self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
             return
         self.viewport.clear_overlays()
+        self._made(guid, wall)
+
+    def _made(self, guid, wall):
+        """The bar says what was made."""
         d = self.doc.ifc.pattern_params(guid)
         self.host.message(t("info.perforated", name=self.doc.get(guid).name, n=d["count"],
                             a="{:.0f}".format(100 * d["open_area"]), wall=self.doc.get(wall).name))

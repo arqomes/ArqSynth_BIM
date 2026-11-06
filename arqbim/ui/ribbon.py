@@ -75,8 +75,8 @@ PANELS = {
                                       ("edit_outline", "roof_profile", "drain"))),
                      ("circulation", ("stair", "ramp", ("elevator", "railing", "railing_types"))),
                      ("rooms", ("room", ("room_separator", "rooms_identify", "areas"), ("room_program", "light"))),
-                     ("finishes", ("paint", "perforated_panel", ("wall_finish", "wall_reveal", "profile"),
-                                   ("wall_sweep", "profile_from_face"))),          # (0.389) the perforated panel
+                     ("finishes", ("paint", "perforated_panel", ("ripado_panel", "wall_finish", "wall_reveal"),
+                                   ("profile", "wall_sweep", "profile_from_face"))),   # (0.389; 0.434 the ripado)
                      ("furniture", ("kitchen", "cabinet", ("worktop", "appliance", "cut_list")))),
     "structure": (("select", ("select",)),
                   ("grid", ("grid", ("grid_generate", "grid_settings", "columns_on_grid"))),

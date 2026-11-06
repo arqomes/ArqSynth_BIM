@@ -62,6 +62,14 @@ def pieces(doc, guids=None):
             for u0, v0, u1, v1 in d["strips"]:
                 a, b = sorted((round(u1 - u0, 3), round(v1 - v0, 3)), reverse=True)
                 count[(role, "slat", a, b, th, 0)] += 1
+            standoff = round(float(d.get("batten_d") or 0.0), 3)
+            for u0, v0, u1, v1 in d.get("batten_pieces") or ():          # (0.434) a slatted panel's battens
+                a, b = sorted((round(u1 - u0, 3), round(v1 - v0, 3)), reverse=True)
+                count[("batten", "slat", a, b, standoff, 0)] += 1
+            for u0, v0, u1, v1 in d.get("frame_pieces") or ():           # (0.434) and its frame (as deep as both)
+                a, b = sorted((round(u1 - u0, 3), round(v1 - v0, 3)), reverse=True)
+                count[("ripado_frame", "slat", a, b, round(th + (standoff if d.get("batten_pieces") else 0.0), 3),
+                       0)] += 1
     rows = [(role, mat, a, b, c, n, edges) for (role, mat, a, b, c, edges), n in count.items()]
     return sorted(rows, key=lambda r: (r[0], -r[2])), panels
 
@@ -126,7 +134,7 @@ def write_dxf(path, doc, guids=None):
         w.text("TEXTOS", (x, -3.5 * TEXT), TEXT, "{:.0f} × {:.0f} mm — {} {}".format(W, H, len(holes), t("fab.holes")))
         x += W + GAP
     y = -10 * TEXT
-    lengths = [r for r in rows if r[0] in ("slat", "flute")]
+    lengths = [r for r in rows if r[0] in ("slat", "flute", "batten", "ripado_frame")]
     for role, _mat, a, b, c, n, _e in lengths:
         L, B = a * 1000.0, b * 1000.0
         w.polyline("CONTORNO", [(0.0, y - B), (L, y - B), (L, y), (0.0, y)], closed=True)

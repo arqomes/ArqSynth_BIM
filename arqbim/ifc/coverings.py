@@ -39,7 +39,10 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  "depth": "Fundo",
                  # (0.389) a perforated panel's: the holes' shape, their grid, the boards' size, the joint, a picture
                  "hole": "FormaFuro", "grid": "Malha", "sheet_w": "PainelLargura", "sheet_h": "PainelAltura",
-                 "joint": "Junta", "mask": "Imagem"}
+                 "joint": "Junta", "mask": "Imagem",
+                 # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
+                 "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
+                 "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
 TEXT_KEYS = {"direction", "hole", "grid", "mask"}
 CHOICES = {"direction": ("vertical", "horizontal"), "hole": core_surfaces.HOLE_SHAPES, "grid": core_surfaces.GRIDS}
 REGION_NAMES = {"start": "Inicio", "end": "Fim", "base": "Base"}      # (0.389) a rectangle on the face (m)
@@ -52,6 +55,11 @@ def _pattern_of(p, finish):
         if p.get(name) is not None:
             d[key] = str(p[name]) if key in TEXT_KEYS else float(p[name])
     return d
+
+
+def _framed(d):
+    """(0.434) A slatted finish with a frame round it or battens behind it (else its slats alone, as before)."""
+    return float(d.get("frame") or 0.0) > 1e-9 or int(round(float(d.get("battens") or 0.0))) > 0
 
 
 def _mask(d):
@@ -334,6 +342,9 @@ class CoveringMixin:
             self.body, self.body.ContextIdentifier, kind, items))
         area = float(face.area)
         x0, z0, x1, z1 = self.cladding_box(p, self.element_frame(wall))         # (0.389: a rectangle on the face)
+        if finish == "ripado":                             # (0.434) its battens behind it: as much thicker
+            d = _pattern_of(p, finish)
+            t += float(d.get("batten_d") or 0.0) if int(round(float(d.get("battens") or 0.0))) > 0 else 0.0
         self._set_qto(covering, "Qto_CoveringBaseQuantities", {"Width": t * u, "GrossArea": (x1 - x0) * (z1 - z0),
                                                                "NetArea": area})
 
@@ -427,6 +438,19 @@ class CoveringMixin:
                 d["ribs"] = core_surfaces.ribs(face, d["width"], d["gap"], d["amplitude"], d["wavelength"],
                                                d["shift"], d["depth"], d["direction"])
                 d["count"] = len(d["ribs"])
+            elif finish == "ripado" and _framed(d):      # (0.434) inside its frame; its battens; its frame's pieces
+                try:
+                    band, battens, d["strips"], _inner = core_surfaces.ripado_parts(face, d)
+                except ValueError:
+                    band, battens, d["strips"] = None, [], []
+                d["count"], d["batten_count"] = len(d["strips"]), len(battens)
+                d["batten_pieces"] = [q.bounds for q in battens]
+                d["frame_pieces"] = []
+                if band is not None:                     # (its four sides: top and bottom across, the sides between)
+                    fw = float(d["frame"])
+                    u0, v0, u1, v1 = face.bounds
+                    d["frame_pieces"] = [(u0, v0, u1, v0 + fw), (u0, v1 - fw, u1, v1),
+                                         (u0, v0 + fw, u0 + fw, v1 - fw), (u1 - fw, v0 + fw, u1, v1 - fw)]
             else:
                 d["strips"] = core_surfaces.strips(face, d["width"], d["gap"], d["direction"])
                 d["count"] = len(d["strips"])
@@ -483,6 +507,8 @@ class CoveringMixin:
                                                           place, f.createIfcDirection((0.0, 0.0, 1.0)),
                                                           float((a1 - a0) * u)))
             return "SweptSolid", items
+        if finish == "ripado" and _framed(d):              # (0.434) with a frame round it, battens behind
+            return self._ripado_items(d, face, frame, side, t, curve)
         runs = core_surfaces.strips(face, d["width"], d["gap"], d.get("direction", "vertical"))
         if len(runs) > core_surfaces.MAX_STRIPS:
             raise EditRefused("pattern_many")
@@ -514,6 +540,47 @@ class CoveringMixin:
                     f.createIfcDirection((0.0, 0.0, 1.0)), f.createIfcDirection((1.0, 0.0, 0.0)))
             items.append(f.createIfcExtrudedAreaSolid(f.createIfcArbitraryClosedProfileDef("AREA", None, arc), place,
                                                       f.createIfcDirection((0.0, 0.0, 1.0)), float((b1 - b0) * u)))
+        return "SweptSolid", items
+
+    def _ripado_items(self, d, face, frame, side, t, curve):
+        """(0.434, the addon's «Ripado») A slatted panel's pieces on the face: its battens on the wall (as thick as
+        `batten_d`), its slats `t` thick over them — standing off the wall by the battens —, its frame round it as deep
+        as both. Each its outline on the face extruded out of it."""
+        from shapely.geometry import box
+        f, u = self.file, 1.0 / self.unit_scale
+        try:
+            band, battens, slats, _inner = core_surfaces.ripado_parts(face, d)
+        except ValueError:
+            raise EditRefused("ripado_frame")
+        if len(slats) > core_surfaces.MAX_STRIPS:
+            raise EditRefused("pattern_many")
+        standoff = float(d.get("batten_d") or 0.0) if battens else 0.0
+        z0 = frame.z0
+        items = []
+
+        def extrude(geometry, offset, depth):
+            """Its polygons extruded out of the face from `offset` to `offset` + `depth`."""
+            y = (frame.y1 + offset + depth) if side > 0 else (frame.y0 - offset)
+            place = f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, float(y * u), 0.0)),
+                                                f.createIfcDirection((0.0, -1.0, 0.0)),
+                                                f.createIfcDirection((1.0, 0.0, 0.0)))
+            for q in getattr(geometry, "geoms", [geometry]):
+                if q.geom_type != "Polygon" or q.area < 1e-6:
+                    continue
+                q = orient(q, 1.0)
+                outer = [(float(x * u), float((z + z0) * u)) for x, z in list(q.exterior.coords)[:-1]]
+                holes = [[(float(x * u), float((z + z0) * u)) for x, z in list(h.coords)[:-1]] for h in q.interiors]
+                profile = f.createIfcArbitraryProfileDefWithVoids("AREA", None, curve(outer), [curve(h) for h in holes]) \
+                    if holes else f.createIfcArbitraryClosedProfileDef("AREA", None, curve(outer))
+                items.append(f.createIfcExtrudedAreaSolid(profile, place, f.createIfcDirection((0.0, 0.0, 1.0)),
+                                                          float(depth * u)))
+
+        if band is not None:
+            extrude(band, 0.0, standoff + t)
+        for q in battens:
+            extrude(q, 0.0, standoff)
+        for u0, v0, u1, v1 in slats:
+            extrude(box(u0, v0, u1, v1), standoff, t)
         return "SweptSolid", items
 
     def _cover(self, covering, wall):
@@ -598,11 +665,16 @@ class CoveringMixin:
             elif key == "shift":                         # (0.175) any angle — negative: the waves turn the other way
                 changes[PATTERN_NAMES[key]] = float(value)
             else:
-                if float(value) <= 0.0 and key not in ("gap", "margin", "depth", "joint") or float(value) < 0.0:
+                if float(value) <= 0.0 and key not in ("gap", "margin", "depth", "joint", "frame", "battens") \
+                        or float(value) < 0.0:
                     raise EditRefused("pattern_bad")
                 if key in ("sheet_w", "sheet_h") and float(value) < 0.1:
                     raise EditRefused("pattern_bad")
-                changes[PATTERN_NAMES[key]] = float(value)
+                if key == "battens" and float(value) > core_surfaces.MAX_BATTENS:        # (0.434)
+                    raise EditRefused("pattern_bad")
+                if key in ("thickness", "batten_d") and float(value) > 0.30:
+                    raise EditRefused("pattern_bad")
+                changes[PATTERN_NAMES[key]] = float(round(float(value))) if key == "battens" else float(value)
         return changes
 
     @staticmethod

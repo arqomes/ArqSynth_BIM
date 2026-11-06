@@ -596,6 +596,24 @@ def perforated_panel_icon():
     return theme.icon(pm)
 
 
+def ripado_panel_icon():
+    """Ripado (0.434): upright wooden slats in a frame, a batten across them showing between."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.2))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawRect(QtCore.QRectF(3, 3, 26, 26))
+    p.setPen(QtCore.Qt.PenStyle.NoPen)
+    p.setBrush(QtGui.QColor("#8a6a48"))
+    p.drawRect(QtCore.QRectF(5, 9, 22, 3))                               # (a batten behind)
+    p.drawRect(QtCore.QRectF(5, 20, 22, 3))
+    p.setPen(_pen(INK, 0.9))
+    p.setBrush(QtGui.QColor("#d9b98c"))
+    for x in (6, 11, 16, 21):
+        p.drawRect(QtCore.QRectF(x, 5, 3, 22))
+    p.end()
+    return theme.icon(pm)
+
+
 def paint_icon():
     """Paint (0.391): SketchUp's bucket, tipped, paint running out of it."""
     pm, p = _canvas()
@@ -2685,6 +2703,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "niche": niche_icon, "flooring": flooring_icon, "gutter": gutter_icon,           # (0.374)
               "elevator": elevator_icon, "room_separator": room_separator_icon,
               "perforated_panel": perforated_panel_icon,                                # (0.389)
+              "ripado_panel": ripado_panel_icon,                                        # (0.434)
               "organic_roof": organic_roof_icon,                                        # (0.390)
     "param_surface": param_surface_icon,                                      # (0.395)
               "paint": paint_icon,                                                      # (0.391)

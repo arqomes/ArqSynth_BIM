@@ -536,13 +536,15 @@ def add_cladding(doc, wall, side, finish="azulejo", height=WALL_FINISH_HEIGHT, p
     cut round its doors and windows; it follows the wall. (0.389) `pattern`: its pattern's measures; `region`:
     {start, end, base} a rectangle on the face. One undo step. Returns its GlobalId."""
     language = lang()
-    prefix = t("elem.perforated") if finish == "perfurado" else t("elem.cladding")
+    own = {"perfurado": ("elem.perforated", "cmd.perforated"), "ripado": ("elem.ripado", "cmd.ripado")}   # (0.434)
+    name_key, cmd_key = own.get(finish, ("elem.cladding", "cmd.cladding"))
+    prefix = t(name_key)
 
     def action(ifc):
         name = "{} {}".format(prefix, _coverings(ifc, "CLADDING") + 1)
         return ifc.add_cladding(wall, side, finish, height, name, language, pattern, region).GlobalId
 
-    return doc.execute(IfcCommand(t("cmd.perforated" if finish == "perfurado" else "cmd.cladding"), action)).result
+    return doc.execute(IfcCommand(t(cmd_key), action)).result
 
 
 def set_cladding(doc, guid, height=None, finish=None, **pattern):

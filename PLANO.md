@@ -533,8 +533,10 @@ clique dentro das paredes. Falta, pela ordem do estudo:
 10. **Do inventário, ainda por fazer** (fora da fita do estudo): escadas a colocar já feitas (arrastar a escada pronta),
     ~~pisos com declive por vértice~~ (0.433.0: o grupo Declive nas Propriedades — lado alto e %, a altura de cada
     canto, Pôr plana; corpo de triângulos no IFC), fachada de vidro em arco e por face, Steel/Wood frame, mobiliário solto de catálogo,
-    ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ripado
-    como ferramenta própria. ~~Painel perfurado como ferramenta própria~~ (0.389.0:
+    ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ~~ripado
+    como ferramenta própria~~ (0.434.0: Acabamentos ▸ Ripado — clique na face ou retângulo, moldura, ripas de fixação,
+    lista de corte; fica por fazer o ripado solto, sem parede — divisória ou brise —, que o addon também tem).
+    ~~Painel perfurado como ferramenta própria~~ (0.389.0:
     furos redondos/quadrados, malha reta/45°, placas com junta, imagem, retângulo na face). ~~Cobertura orgânica~~
     (0.390.0: cúpula/abóbada/onda tiradas do contorno; casca, gridshell, envidraçada, pérgola curva; aro e apoios).
     ~~Da cobertura orgânica fica por fazer: o loft entre 2+ curvas e a superfície por 4 bordos (o addon tem), nós

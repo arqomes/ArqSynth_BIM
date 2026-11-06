@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.434 — Ripado como ferramenta própria
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.434.0**. Faça Ctrl+N e desenhe uma parede de 4 m com
+   **Arquitetura ▸ Parede**. Carregue em Esc.
+2. Clique em **Arquitetura ▸ Acabamentos ▸ Ripado** (o botão pequeno, ao lado do Painel perfurado).
+3. Na barra de cima, escreva `0,05` em **Moldura** (Enter) e escolha `2` em **Ripas de fixação**.
+4. Passe o rato pela face da parede: aparece o ripado com as ripas desenhadas.
+5. Carregue no botão do rato perto do canto de baixo à esquerda da parede, arraste até meio da parede e largue. Fica um
+   ripado nesse retângulo, com a moldura à volta. A faixa diz quantas ripas tem.
+6. Rode a vista (botão do meio do rato) e aproxime-se da ponta do ripado: as ripas estão afastadas da parede pelas
+   ripas de fixação, que se veem por trás.
+7. Clique no ripado: fica escolhido. Nas Propriedades, mude **Ripas de fixação** para 3: aparecem três.
+8. Mude **Moldura** para 0: a moldura desaparece e as ripas ocupam o retângulo todo.
+9. Carregue em Esc, escolha o **Ripado** outra vez e clique (sem arrastar) na outra face da parede: o ripado cobre a face
+   inteira.
+10. Clique em **Arquitetura ▸ Mobiliário ▸ Lista de corte…**: aparecem as ripas, as ripas de fixação e as peças da
+    moldura.
+
 ## 0.433 — Pisos com declive por canto
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.433.0**. Faça Ctrl+N.

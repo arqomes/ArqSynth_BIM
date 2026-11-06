@@ -866,6 +866,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "arc": "A", "freehand": "", "bezier": "",                                 # (0.373, as SketchUp's A)
                 "niche": "", "flooring": "", "gutter": "", "elevator": "", "room_separator": "",   # (0.374)
                 "perforated_panel": "",                                                    # (0.389)
+                "ripado_panel": "",                                                        # (0.434)
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
@@ -6515,7 +6516,9 @@ class MainWindow(QtWidgets.QMainWindow):
                             "cladding_depth",                               # (0.119; its pattern: 0.173, 0.175)
                             "cladding_hole", "cladding_grid", "cladding_sheet_w", "cladding_sheet_h",
                             "cladding_joint", "cladding_mask", "cladding_start", "cladding_end",
-                            "cladding_base"):                               # (0.389) a perforated panel's
+                            "cladding_base",                                # (0.389) a perforated panel's
+                            "cladding_thickness", "cladding_frame", "cladding_battens", "cladding_batten_w",
+                            "cladding_batten_d"):                           # (0.434) a slatted panel's
                 if action == "cladding_mask" and value == "__escolher__":
                     value = self.choose_image()
                     if not value:                          # (none chosen: the list as it was)

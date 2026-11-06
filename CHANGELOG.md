@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.434.0 — 2026-11-06
+
+**Ripado como ferramenta própria**, como no addon: **Arquitetura ▸ Acabamentos ▸ Ripado**, ao lado do Painel
+perfurado.
+
+- Passe o rato por uma parede: o ripado aparece na face, com as ripas desenhadas.
+  - **Um clique** cobre a face inteira (toda a altura, e acompanha a parede).
+  - **Arrastar** de um canto ao outro faz um ripado só nesse retângulo.
+  - **Um clique num ripado** que já lá está escolhe-o, com as medidas nas Propriedades.
+- Na barra de cima:
+  - **Sentido**: ripas na vertical ou na horizontal;
+  - **Largura da ripa**, **Espessura da ripa** e **Passo** (de eixo a eixo). Por omissão, ripas de 4 × 4 cm a 8 cm,
+    como no addon;
+  - **Moldura**: a largura da moldura à volta (0: sem moldura);
+  - **Ripas de fixação**: quantas ripas por trás, atravessadas às ripas. As ripas ficam afastadas da parede pela
+    espessura delas.
+- As ripas ficam ao centro do espaço dentro da moldura, com as folgas das pontas iguais, e são cortadas nas portas e
+  janelas.
+- Nas Propriedades de um ripado há também a espessura da ripa, a moldura, as ripas de fixação e a largura e a espessura
+  delas.
+- A lista de corte e o DXF da CNC levam as ripas, as ripas de fixação e as peças da moldura.
+- O ripado chama-se «Ripado 1», «Ripado 2»… (também o que se põe com Acabamento de parede ▸ Ripado).
+
 ## 0.433.0 — 2026-11-06
 
 **Pisos com declive por canto**, como no addon: cada canto de uma laje pode ficar mais alto ou mais baixo do que o

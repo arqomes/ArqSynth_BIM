@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.433.0
+# Guia das ferramentas — ArqSynth BIM 0.434.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.433.0.
+ArqSynth BIM 0.434.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -107,7 +107,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 3. [Gerenciar](#3-gerenciar) — 21 comandos
 4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
 5. [Terreno](#5-terreno) — 11 comandos
-6. [Arquitetura](#6-arquitetura) — 47 comandos
+6. [Arquitetura](#6-arquitetura) — 48 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
 9. [Colaborar](#9-colaborar) — 19 comandos
@@ -747,7 +747,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»
+- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»
 
 #### Fachada de vidro
 
@@ -945,6 +945,12 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 - **Teclas:** Clique: a face inteira · Arraste: um retângulo · Clique num painel: escolhê-lo · Esc: Selecionar
 - **Passos de teste (TESTAR.md):** 0.389 «Painel perfurado»; 0.173 «Ripado, canelado e painel perfurado»
 
+#### Ripado
+
+- **Como se usa:** Ripado (ripas de 0,04 m × 0,04 m, passo 0,08 m): passe o rato por uma parede e clique — a face inteira — ou arraste de um canto ao outro — um retângulo. Clique num ripado para o escolher. Esc: Selecionar.
+- **Teclas:** Clique: a face inteira · Arraste: um retângulo · Clique num ripado: escolhê-lo · Esc: Selecionar
+- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.173 «Ripado, canelado e painel perfurado»
+
 #### Revestimento de parede
 
 - **Como se usa:** Revestimento (azulejo até 2,10 m): clique na face de uma parede — fica recortado nas portas e janelas e acompanha a parede.
@@ -1001,7 +1007,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Lista de corte…
 
 - **O que faz:** A lista de corte dos móveis escolhidos (nenhum: todos): os painéis e as ferragens, os ripados e perfurados; para CSV ou para o DXF da CNC.
-- **Passos de teste (TESTAR.md):** 0.389 «Painel perfurado»; 0.169 «Móveis e lista de corte»
+- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.389 «Painel perfurado»; 0.169 «Móveis e lista de corte»
 
 ---
 
@@ -1816,4 +1822,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*246 comandos descritos, gerados do ArqSynth BIM 0.433.0.*
+*247 comandos descritos, gerados do ArqSynth BIM 0.434.0.*

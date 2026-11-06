@@ -838,6 +838,7 @@ def bim_flow():
     model_warnings_flow()             # (0.431)
     wall_chord_flow()                 # (0.432)
     sloped_slab_flow()                # (0.433)
+    ripado_tool_flow()                # (0.434)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -14608,6 +14609,62 @@ def perforated_panel_flow():
     check("painel_perfurado", on_ribbon and rect and covers and chosen,
           "fita={} retangulo={} face_inteira={} escolhido={} paineis={}".format(on_ribbon, rect, covers, chosen,
                                                                                len(panels)))
+    doc.modified = False
+
+
+def ripado_tool_flow():
+    """0.434 (the addon's «Ripado» as a command of its own): Arquitetura ▸ Acabamentos ▸ Ripado on the ribbon; on the
+    bar a 5 cm frame and 2 battens; on a wall seen from the front a drag from (1,0; 0,3) to (3,0; 2,4) makes a slatted
+    panel of that rectangle — its frame, its battens, its slats 4 × 4 cm at 8 cm —; a click on it chooses it: its
+    frame and battens in the Properties; there 3 battens chosen: three. Captured: 434_ripado.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    wall = bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)),
+                                catalog.BY_KEY["parede_alv_20"])
+    win.views.open(("3d",))
+    vp.set_view("front")
+    vp.zoom_extents()
+    pump(500)
+    on_ribbon = "ripado_panel" in ribbon.items_of("architecture")
+    win.tool_actions["ripado_panel"].trigger()
+    pump(200)
+    win._context_option("frame", 0.05)
+    win._context_option("battens", "2")
+    pump(100)
+    y = -0.101
+    drag([near((1.0, y, 0.3)), near((2.0, y, 1.2)), near((3.0, y, 2.4))])
+    pump(600)
+    panels = list(doc.ifc.claddings_of([wall]))
+    made = False
+    if len(panels) == 1:
+        info = doc.ifc.describe(panels[0])["params"]
+        d = info["pattern"]
+        made = abs(info["start"] - 1.0) < 0.06 and abs(info["end"] - 3.0) < 0.06 and d["batten_count"] == 2 \
+            and abs(d["frame"] - 0.05) < 1e-6 and abs(d["thickness"] - 0.04) < 1e-6 and d["count"] > 15 \
+            and doc.get(panels[0]).name.startswith("Ripado")
+    if panels:
+        move(near((2.0, y - 0.09, 1.2)), 3)
+        pump(150)
+        click()
+        pump(400)
+    chosen = bool(panels) and vp.selection == {panels[0]} and "cladding_frame" in win.props.editors and \
+        "cladding_battens" in win.props.editors and "cladding_batten_w" in win.props.editors
+    shot("434_ripado.png")
+    combo = win.props.editors.get("cladding_battens")
+    if combo is not None:
+        combo.setCurrentIndex(combo.findData(3))
+        combo.activated.emit(combo.currentIndex())
+        pump(500)
+    three = bool(panels) and doc.ifc.pattern_params(panels[0])["batten_count"] == 3
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_selection(set())
+    pump(200)
+    check("ripado_ferramenta", on_ribbon and made and chosen and three,
+          "fita={} feito={} escolhido={} tres={} paineis={}".format(on_ribbon, made, chosen, three, len(panels)))
     doc.modified = False
 
 

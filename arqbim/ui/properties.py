@@ -2103,6 +2103,18 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                         self._text_editor(t("props.wave_shift"), format_angle(d["shift"], decimal_sep()),
                                           "cladding_shift", guid, parse=parse_angle)
                         self._length0_editor(t("props.wave_depth"), d["depth"], "cladding_depth", guid)
+                    if p["finish"] == "ripado":            # (0.434) its slats' thickness, its frame, its battens
+                        self._length_editor(t("props.slat_depth"), d["thickness"], "cladding_thickness", guid)
+                        frame = self._length0_editor(t("props.ripado_frame"), d.get("frame", 0.0), "cladding_frame",
+                                                     guid)
+                        frame.setToolTip(t("props.ripado_frame_tip"))
+                        battens = int(round(float(d.get("battens") or 0)))
+                        self._choice_combo(t("props.ripado_battens"), "cladding_battens", guid,
+                                           [(t("ripado.no_battens") if n == 0 else str(n), n) for n in range(0, 7)],
+                                           battens)
+                        if battens:
+                            self._length_editor(t("props.batten_w"), d["batten_w"], "cladding_batten_w", guid)
+                            self._length_editor(t("props.batten_d"), d["batten_d"], "cladding_batten_d", guid)
                     self._row(t("props.slats"), str(d["count"]))
                 else:
                     from ..core.surfaces import GRIDS, HOLE_SHAPES

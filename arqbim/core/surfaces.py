@@ -17,7 +17,10 @@ HOLE_SHAPES = ("redondo", "quadrado")   # (0.389) a perforated sheet's holes: ro
 GRIDS = ("reta", "diagonal")            # (0.389) their grid: square, or turned 45° (quincôncio; square holes: losangos)
 MIN_HOLE = 0.003                        # m: (0.389) a hole a picture makes smaller than this is left out
 DEFAULTS = {                    # slat / flute width, gap, direction; hole diameter, pitch, margin
-    "ripado": {"width": 0.04, "gap": 0.02, "direction": "vertical"},
+    # (0.434, the addon's «Ripado») and a frame round it (its width; 0: none), battens behind the slats across them
+    # (how many; their width, their thickness: the slats stand off the wall by it)
+    "ripado": {"width": 0.04, "gap": 0.02, "direction": "vertical", "frame": 0.0, "battens": 0.0,
+               "batten_w": 0.04, "batten_d": 0.02},
     "canelado": {"width": 0.04, "gap": 0.0, "direction": "vertical"},
     # (0.389) and the holes' shape, their grid, the boards' size, the joint between them, a picture («Imagem»: its
     # dark parts big holes, its light parts small ones or none)
@@ -59,6 +62,44 @@ def strips(face, width, gap, direction="vertical"):
                 if ((bu1 - bu0) if level else (bv1 - bv0)) > 0.05:      # (bits shorter than 5 cm left out)
                     out.append((bu0, bv0, bu1, bv1))
     return out
+
+
+MAX_BATTENS = 12
+
+
+def ripado_parts(face, d):
+    """(0.434, the addon's «Ripado»: ripado_core.layout over a wall's face) (frame, battens, slats, inner): `frame` the
+    band `d["frame"]` wide round the face's outline (a shapely geometry, or None); `battens` [polygons] —
+    `d["battens"]` of them, `d["batten_w"]` wide, behind the slats and across them, in equal bands of the face inside
+    the frame, each cut where an opening interrupts it —; `slats` the strips (as strips()) of that inside; `inner`
+    that inside. Refused (ValueError) when the frame leaves nothing inside."""
+    from shapely.geometry import box
+    f = max(0.0, float(d.get("frame") or 0.0))
+    inner, frame = face, None
+    if f > 1e-9:
+        u0, v0, u1, v1 = face.bounds
+        if 2 * f >= min(u1 - u0, v1 - v0) - 0.05:
+            raise ValueError("frame")
+        core = box(u0 + f, v0 + f, u1 - f, v1 - f)
+        inner = face.intersection(core)
+        frame = face.difference(core)
+    battens = []
+    n = min(MAX_BATTENS, max(0, int(round(float(d.get("battens") or 0)))))
+    if n and not inner.is_empty:
+        u0, v0, u1, v1 = inner.bounds
+        w = float(d.get("batten_w") or 0.04) / 2.0
+        level = d.get("direction") == "horizontal"        # (level slats: upright battens, and the other way)
+        for k in range(n):
+            if level:
+                c = u0 + (k + 0.5) * (u1 - u0) / n
+                band = box(c - w, v0, c + w, v1)
+            else:
+                c = v0 + (k + 0.5) * (v1 - v0) / n
+                band = box(u0, c - w, u1, c + w)
+            piece = inner.intersection(band)
+            battens += [q for q in getattr(piece, "geoms", [piece]) if q.geom_type == "Polygon" and q.area > 1e-6]
+    slats = strips(inner, d["width"], d["gap"], d.get("direction", "vertical")) if not inner.is_empty else []
+    return frame, battens, slats, inner
 
 
 def wave(b, amplitude, wavelength, phase, depth):

@@ -71,7 +71,8 @@ class CutListDialog(QtWidgets.QDialog):
         self.rows, hardware, areas = self.cut_list()
         self.table.setRowCount(0)
         from ..core.profiles import PROFILES, is_custom                 # (0.174: the profiles too; 0.245: own)
-        self.dxf_button.setEnabled(any(r[0] in ("slat", "flute", "perforated", "rib") or r[0] in PROFILES
+        self.dxf_button.setEnabled(any(r[0] in ("slat", "flute", "perforated", "rib", "batten", "ripado_frame")
+                                       or r[0] in PROFILES
                                        or is_custom(r[0]) for r in self.rows))
         if not self.rows:
             self.summary.setText(t("cut.none"))
