@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.431 — Avisos do modelo
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.431.0**. Abra a casa T2 da 0.417 (país Cabo Verde)
+   e carregue em F4. O rodapé diz «CTE ✗ 2 ⚠ 1».
+2. Com **Arquitetura ▸ Parede**, desenhe uma parede de 3 m por cima da parede da frente (com o mesmo eixo).
+   - O rodapé passa a «CTE ✗ 2 ⚠ 3».
+   - A faixa laranja diz «Parede …: Paredes sobrepostas (0,60 m²)». Clique em **Ir para**: a parede fica escolhida.
+3. Carregue em Ctrl+Z: o rodapé volta a «⚠ 1».
+4. Escolha a parede do meio (a que separa a sala da cozinha) e carregue em Delete. Aparece «Vários ambientes no mesmo
+   espaço fechado» nos quatro ambientes. Ctrl+Z.
+5. Escolha a parede da frente e carregue em Delete. Aparece «Ambiente não fechado pelas paredes» na sala e na cozinha.
+   Ctrl+Z.
+6. No painel **Verificação**, **Por regulamento**, os avisos do modelo ficam em «Modelo — Avisos do modelo». Escolha
+   um e clique em **Exceção…** para o aceitar com uma nota.
+7. Em **Regulamentos do projeto…**, desligue **Avisos do modelo**: estes avisos desaparecem. Volte a ligar.
+
 ## 0.430 — Propriedades mais rápidas
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.430.0**. Faça Ctrl+N e desenhe uma parede de 4 m

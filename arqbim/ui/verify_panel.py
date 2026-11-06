@@ -104,8 +104,8 @@ class VerifyPanel(QtWidgets.QDockWidget):
             self.summary.setText(t("verify.panel.none"))
             return
         c = r.counts()
-        laws = ", ".join(p.short for p, own in r.packs if own and (     # (0.423: the town plan once it has values)
-            p.id != project.PLAN_PACK or project.plan_values(r.settings))) or "—"
+        laws = ", ".join(p.short for p, own in r.packs if own and project.is_law(p) and (     # (0.423: the town
+            p.id != project.PLAN_PACK or project.plan_values(r.settings))) or "—"           # plan with values)
         self.summary.setText(t("verify.panel.summary", laws=laws, e=c["error"], w=c["warning"], x=c["excepted"],
                                ok=c["ok"], u=c["unknown"]))
         facts = reader.read(self.doc) if self.doc is not None else None

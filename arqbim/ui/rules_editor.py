@@ -103,7 +103,8 @@ class RulesEditor(QtWidgets.QDialog):
         for pack in rules_mod.packs(again=True).values():
             by_country.setdefault(pack.country, []).append(pack)
         for country in sorted(by_country, key=lambda c: (c == "*", c)):
-            name = project.country_name(country, language) if country != "*" else t("regs.any_country")
+            name = project.country_name(country, language) if country != "*" and not country.startswith("@") \
+                else t("regs.any_country")                  # (0.431: the model's warnings, any country too)
             top = QtWidgets.QTreeWidgetItem([name])
             top.setFlags(top.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
             self.packs.addTopLevelItem(top)

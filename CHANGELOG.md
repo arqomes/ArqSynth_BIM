@@ -1,6 +1,24 @@
 # Changelog
 
-## 0.430.0 — 2026-11-06
+## 0.431.0 — 2026-11-06
+
+**Avisos do modelo** (Aprender com o Hestia, passo 5): o que está mal desenhado, não o que a lei pede. Estes são os
+avisos mais comuns do Revit.
+
+- **Os avisos:**
+  - **Paredes sobrepostas**: duas paredes desenhadas uma por cima da outra, a partilhar mais do que um canto. Diz a
+    área sobreposta.
+  - **Elemento repetido no mesmo sítio**: uma cópia que ficou por cima de outra igual (paredes, lajes, pilares, vigas,
+    portas, janelas, móveis, louças…).
+  - **Ambiente não fechado pelas paredes**: uma parede de fora foi apagada e o ambiente ficou aberto.
+  - **Vários ambientes no mesmo espaço fechado**: a parede entre dois ambientes foi apagada.
+- **Entram no Verificador como mais um pacote, «Modelo», sempre ligado em qualquer país.**
+  - Contam no rodapé como avisos (⚠) e aparecem na faixa laranja, com «Ir para» e «Porquê».
+  - No painel Verificação ficam em «Modelo — Avisos do modelo».
+  - Aceitam «Exceção…» com uma nota (o «Ignorar, com nota» do plano) e vão para a ficha de verificação.
+- A frase destes avisos diz o que é e quanto: «Parede 1: Paredes sobrepostas (0,60 m²)».
+- Desligam-se em Regulamentos do projeto ▸ **Avisos do modelo**.
+- Uma varanda, um terraço ou um pátio (ambientes exteriores) não precisam de estar fechados.
 
 **Propriedades mais rápidas** (Aprender com o Hestia, passo 4).
 

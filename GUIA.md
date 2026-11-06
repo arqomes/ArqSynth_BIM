@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.430.0
+# Guia das ferramentas — ArqSynth BIM 0.431.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.430.0.
+ArqSynth BIM 0.431.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -747,7 +747,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.383 «As prévias das paredes em volume»
+- **Passos de teste (TESTAR.md):** 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»
 
 #### Fachada de vidro
 
@@ -1336,7 +1336,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Regulamentos do projeto…
 
 - **O que faz:** O país onde o projeto se constrói (os seus regulamentos: Cabo Verde — CTE; Portugal — RGEU…), o uso do edifício, o tipo de obra e a altura. O Verificador vigia o projeto por eles e diz no rodapé o que falha.
-- **Passos de teste (TESTAR.md):** 0.426 «O editor de regulamentos»; 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
+- **Passos de teste (TESTAR.md):** 0.431 «Avisos do modelo»; 0.426 «O editor de regulamentos»; 0.423 «O lote e o plano municipal»; 0.422 «Materiais e boas práticas»; 0.421 «Portugal: RGEU e DL 163/2006»; 0.417 «O Verificador: as regras e o alerta vermelho no rodapé»
 
 #### Ficha de verificação…
 
@@ -1816,4 +1816,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*246 comandos descritos, gerados do ArqSynth BIM 0.430.0.*
+*246 comandos descritos, gerados do ArqSynth BIM 0.431.0.*

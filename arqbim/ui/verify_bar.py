@@ -256,8 +256,8 @@ class Verifier(QtCore.QObject):
             text, colour, tip = t("verify.foot.off"), theme.C["neutral"], t("verify.foot.tip_off")
         else:
             packs = self.result.packs if self.result is not None else project.active(s)
-            laws = ", ".join(p.short for p, own in packs if own and (    # (0.423: the town plan once it has values)
-                p.id != project.PLAN_PACK or project.plan_values(s))) or "—"
+            laws = ", ".join(p.short for p, own in packs if own and project.is_law(p) and (   # (0.423: the town
+                p.id != project.PLAN_PACK or project.plan_values(s))) or "—"              # plan once it has values)
             tip = t("verify.foot.tip", country=project.country_name(country, language), laws=laws)
             r = self.result
             n_err = r.count("error") if r is not None else 0

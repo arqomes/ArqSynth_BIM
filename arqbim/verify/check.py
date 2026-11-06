@@ -11,6 +11,7 @@ import numpy as np
 from ..i18n import decimal_sep, lang, t
 from . import dwellings as dw
 from . import measures as ms
+from . import model_checks
 from . import project
 from . import reader
 from . import rules as rules_mod
@@ -74,7 +75,7 @@ def subjects(ctx):
     building_use = settings.get("building_use", "habitacao")
     language = lang()
     out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": [],
-           "window": [], "wall": [], "slab": [], "roof": [], "lot": []}
+           "window": [], "wall": [], "slab": [], "roof": [], "lot": [], "element": []}
     # (0.423) the lot, and the building on it — when there is one, or the town plan has values to check
     from ..core import lot as core_lot
     from . import urban
@@ -103,7 +104,8 @@ def subjects(ctx):
             "room", g, "{} ({})".format(name, d.name) if d else name, [g], r.storey,
             props={"use": r.use, "external": r.external, "common": uses.is_common(r.use),
                    "typology": d.typology if d else None, "in_dwelling": d is not None,
-                   "building_use": building_use, "bedroom_rank": ranks.get(g)}))
+                   "building_use": building_use, "bedroom_rank": ranks.get(g),
+                   "outside": model_checks.outside(r)}))                  # (0.431: a balcony need not be closed)
     sides = facts.sides or dw.door_sides(facts.rooms.values(), facts.doors)
     for door in facts.doors:
         a, b = sides.get(door.guid, (None, None))
@@ -204,6 +206,7 @@ def subjects(ctx):
                                                "in_dwelling": room.guid in facts.of_room,
                                                "use": room.use, "building_use": building_use,
                                                "tem_lote": lot is not None}))          # (0.424)
+    out["element"] = model_checks.subjects(ctx, building_use)       # (0.431: the elements repeated in one place)
     return out
 
 
@@ -295,6 +298,10 @@ def number(value, unit):
 def message(finding, packs_by_id=None):
     """«Sala (Fogo A): área útil 12,40 m² — CTE, art. 40.º e Anexo I: mínimo 14,00 m²»."""
     rule, s = finding.rule, finding.subject
+    if rule.pack == project.MODEL_PACK:                  # (0.431) a model's warning: what it is, and how much
+        amount = number(finding.value, rule.unit) if rule.unit and finding.value else ""
+        return t("verify.model_message", subject=s.name, title=rule.title,
+                 amount=" ({})".format(amount) if amount else "")
     pack = (packs_by_id.get(rule.pack) if packs_by_id is not None else None) or rules_mod.find(rule.pack)
     short = pack.short if pack is not None else rule.pack
     side = "min" if any(k.startswith("min") for k in rule.limit) else "max"

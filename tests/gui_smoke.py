@@ -835,6 +835,7 @@ def bim_flow():
     paper_pens_flow()                 # (0.428)
     type_section_flow()               # (0.429)
     quick_properties_flow()           # (0.430)
+    model_warnings_flow()             # (0.431)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -21445,6 +21446,47 @@ def quick_properties_flow():
     check("propriedades_rapidas", summed and stepped and tagged and has_back and restored,
           "conta={} seta={} ({!r}) tipo={} ↺={} reposto={}".format(summed, stepped, stepped_text, tagged, has_back,
                                                                    restored))
+
+
+def model_warnings_flow():
+    """0.431 (Aprender com o Hestia, passo 5): the T2 house of Cabo Verde, its footer «CTE ✗ 2 ⚠ 1»; a wall drawn over
+    its front wall: two warnings more (both walls) — «⚠ 3» —, the strip says «Paredes sobrepostas…», the panel lists
+    them under «Modelo»; Ctrl+Z: as before. Captured: 431_avisos_modelo.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    _t2_house()
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    win.set_tool("select")
+    pump(900)
+    v = win.verifier
+    before = v.button.text()
+    B.add_wall(doc, np.array((1.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+    pump(900)
+    after = v.button.text()
+    said = v.strip.shown_text()
+    shot("431_avisos_modelo.png")
+    win.ribbon_item("verify_panel").trigger()
+    pump(600)
+    panel = win.verify_panel
+    panel.group.setCurrentIndex(panel.group.findData("law"))
+    pump(300)
+    text = panel.text()
+    listed = "Modelo — Avisos do modelo" in text and "Paredes sobrepostas" in text
+    panel.hide()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(900)
+    back = v.button.text() == before
+    win.open_view("3d", None)
+    pump(300)
+    check("avisos_do_modelo", before == "CTE ✗ 2 ⚠ 1" and after == "CTE ✗ 2 ⚠ 3" and "Paredes sobrepostas" in said
+          and listed and back,
+          "antes={} depois={} faixa={!r} painel={} desfeito={}".format(before, after, said[:90], listed, back))
 
 
 def wheel(steps):

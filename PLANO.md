@@ -1164,10 +1164,13 @@ Passos propostos (a ordem decide-a o dono):
    IFC. As áreas e volumes já não atrasavam o clique.) Selo «tipo» nos valores do tipo (clique → Editar tipo); exceções por elemento com
    «usar o valor do tipo»; contas nos campos (3,50+0,15; 2*1,20; com unidades); setas ↑↓ e roda a ajustar; áreas e
    volumes calculados sem atrasar o clique.
-5. **Avisos do modelo sempre à vista:** no rodapé «⚠ 3 avisos» / «✓ sem avisos»; a lista por gravidade e categoria;
+5. ~~**Avisos do modelo sempre à vista:**~~ (0.431.0: o pacote «Modelo» no Verificador — paredes sobrepostas,
+   elementos repetidos, ambientes não fechados, vários ambientes no mesmo espaço; no rodapé, na faixa, no painel com Ir
+   para e Exceção com nota, na ficha; desligável. **A secção «Aprender com o Hestia» fica completa (0.427–0.431).**)
+   No rodapé «⚠ 3 avisos» / «✓ sem avisos»; a lista por gravidade e categoria;
    «Ir para» abre a planta, enquadra e escolhe todos os elementos envolvidos; «Ignorar, com nota»; exportar. Calculados
    em fundo depois de cada edição.
-6. **Verificação regulamentar** — desenhada a seguir, na secção «O Verificador» (o dono, a 2026-11-06: Portugal e
+6. ~~**Verificação regulamentar**~~ (0.416–0.426: o Verificador, os seus 9 passos) — desenhada a seguir, na secção «O Verificador» (o dono, a 2026-11-06: Portugal e
    Cabo Verde primeiro, com lugar para outros países).
 
 ### O Verificador — legislação e boas práticas a vigiar o projeto (pedido do dono do projeto, 2026-11-06)

@@ -874,6 +874,11 @@ MEASURES["lot"] = _urban.MEASURES
 for _kind, _more in (("wall", _urban.WALL), ("window", _urban.WINDOW), ("room", _urban.ROOM),   # (0.424)
                      ("slab", _urban.SLAB)):
     MEASURES[_kind].update(_more)
+from . import model_checks as _model  # noqa: E402 (0.431: the model's own warnings)
+
+MEASURES["wall"].update(_model.WALL)
+MEASURES["room"].update(_model.ROOM)
+MEASURES["element"] = dict(_model.ELEMENT)
 
 
 def measure(ctx, subject, name):

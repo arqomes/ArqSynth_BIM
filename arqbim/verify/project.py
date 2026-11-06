@@ -23,7 +23,7 @@ def countries():
     packs say their name)."""
     out = dict(COUNTRIES)
     for pack in rules_mod.packs().values():
-        if pack.country and pack.country != "*" and pack.country not in out:
+        if pack.country and pack.country != "*" and not pack.country.startswith("@") and pack.country not in out:
             name = pack.country_name or pack.country
             out[pack.country] = (name, name)
     return out
@@ -57,7 +57,19 @@ def active(settings_, all_packs=None):
     all_packs = all_packs if all_packs is not None else rules_mod.packs()
     if not settings_.get("on", True):
         return []
-    return _laws(settings_, all_packs) + [(plan_pack(settings_), True)]
+    out = _laws(settings_, all_packs) + [(plan_pack(settings_), True)]
+    model = all_packs.get(MODEL_PACK)                   # (0.431: the model's own warnings, in any country)
+    if model is not None and settings_.get("model_warnings", True):
+        out.append((model, True))
+    return out
+
+
+MODEL_PACK = "MODELO"
+
+
+def is_law(pack):
+    """(0.431) Whether a pack is a law said in the footer (not the model's warnings, nor an empty town plan)."""
+    return pack.id != MODEL_PACK and not pack.country.startswith("@")
 
 
 # (0.423) the town plan's values for this project — what the municipality sets for the lot (a PDM, a «plano de

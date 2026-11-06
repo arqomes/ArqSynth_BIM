@@ -188,6 +188,18 @@ STRINGS = {
     "verify.props.unknown": ("— sem medida ({side} {limit})", "— not measured ({side} {limit})"),
     # (0.423) the lot and the town plan
     "verify.kind.lot": ("Lote", "Lot"),
+    # (0.431) the model's own warnings
+    "verify.kind.element": ("Elemento", "Element"),
+    "verify.m.sobreposicao": ("área sobreposta a outras paredes", "area over other walls"),
+    "verify.m.duplicado": ("outro igual no mesmo sítio", "another just like it in the same place"),
+    "verify.m.fechado": ("fechado pelas paredes", "closed by the walls"),
+    "verify.m.partilha_regiao": ("outros ambientes no mesmo espaço", "other rooms in the same space"),
+    "verify.model_message": ("{subject}: {title}{amount}", "{subject}: {title}{amount}"),
+    "verify.settings.model_warnings": ("Avisos do modelo", "Model warnings"),
+    "verify.settings.model_warnings_tip": ("Paredes sobrepostas, elementos repetidos no mesmo sítio, ambientes que as "
+                                           "paredes já não fecham — o que está mal desenhado, em qualquer país.",
+                                           "Walls over each other, elements repeated in one place, rooms the walls no "
+                                           "longer close — what is badly drawn, in any country."),
     # (0.424) the law's façade heights and setbacks
     "verify.m.altura_fachada": ("altura da fachada", "façade height"),
     "verify.m.afastamento_fachada_oposta": ("afastamento à fachada oposta", "distance to the façade opposite"),

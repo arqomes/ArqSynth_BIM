@@ -49,6 +49,10 @@ class VerifySettings(QtWidgets.QDialog):
         self.good_practice = QtWidgets.QCheckBox(t("verify.settings.good_practice"))      # (0.422)
         self.good_practice.setChecked(bool(settings.get("good_practice", True)))
         self.good_practice.toggled.connect(lambda _on: self._fill_packs())
+        self.model_warnings = QtWidgets.QCheckBox(t("verify.settings.model_warnings"))    # (0.431)
+        self.model_warnings.setToolTip(t("verify.settings.model_warnings_tip"))
+        self.model_warnings.setChecked(bool(settings.get("model_warnings", True)))
+        self.model_warnings.toggled.connect(lambda _on: self._fill_packs())
         laws = QtWidgets.QWidget()
         box = QtWidgets.QVBoxLayout(laws)
         box.addLayout(form)
@@ -56,6 +60,7 @@ class VerifySettings(QtWidgets.QDialog):
         box.addWidget(self.packs)
         under = QtWidgets.QHBoxLayout()
         under.addWidget(self.good_practice)
+        under.addWidget(self.model_warnings)
         under.addStretch(1)
         self.edit_rules = QtWidgets.QPushButton(t("act.rules_editor"))      # (0.426)
         self.edit_rules.setToolTip(t("tip.rules_editor"))
@@ -182,7 +187,8 @@ class VerifySettings(QtWidgets.QDialog):
     def _fill_packs(self):
         self.packs.clear()
         s = {"country": self.country.currentData(), "packs": None, "on": True,
-             "good_practice": self.good_practice.isChecked() if hasattr(self, "good_practice") else True}
+             "good_practice": self.good_practice.isChecked() if hasattr(self, "good_practice") else True,
+             "model_warnings": self.model_warnings.isChecked() if hasattr(self, "model_warnings") else True}
         for pack, own in project.active(s, self.all_packs):
             if pack.id == project.PLAN_PACK:                # (its own page)
                 continue
@@ -199,7 +205,8 @@ class VerifySettings(QtWidgets.QDialog):
         height = parse_length(text) if text else None
         return {"country": self.country.currentData(), "building_use": self.use.currentData(),
                 "work": self.work.currentData(), "height": height, "packs": None, "on": True,
-                "good_practice": self.good_practice.isChecked(), "pdm": self.plan()}
+                "good_practice": self.good_practice.isChecked(), "pdm": self.plan(),
+                "model_warnings": self.model_warnings.isChecked()}                  # (0.431)
 
 
 def ask(parent, settings, auto_height, lot=None, summary=None):

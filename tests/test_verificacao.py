@@ -396,7 +396,7 @@ class Portugal(unittest.TestCase):
         self.assertEqual(sorted(failed), ["PT-DL163-3.3.4", "PT-DL163-4.9.1-compartimentos",
                                           "PT-DL163-4.9.1-entrada", "PT-RGEU-68"])
         self.assertEqual(len(failed["PT-DL163-4.9.1-compartimentos"]), 3)
-        self.assertEqual({p.id for p, own in result.packs if own}, {"PT-RGEU", "PT-DL163", "PLANO"})   # (0.423)
+        self.assertEqual({p.id for p, own in result.packs if own}, {"PT-RGEU", "PT-DL163", "PLANO", "MODELO"})   # (0.423)
         self.assertEqual({p.id for p, own in result.packs if not own}, {"BOAS-PRATICAS"})      # (0.422)
         passed = {f.rule.id for f in result.findings if f.status == "ok"}
         self.assertTrue({"PT-RGEU-66-sala", "PT-RGEU-66-quartos", "PT-RGEU-67", "PT-RGEU-71-area", "PT-RGEU-72",
@@ -413,8 +413,8 @@ class Portugal(unittest.TestCase):
         result = check.check(doc, dict(CV), force=True)
         self.assertEqual([(p.id, own) for p, own in result.packs],
                          [("CV-CTE", True), ("PT-RGEU", False), ("PT-DL163", False), ("BOAS-PRATICAS", False),
-                          ("PLANO", True)])
-        self.assertEqual({f.rule.pack for f in result.findings} - {"BOAS-PRATICAS"}, {"CV-CTE"})
+                          ("PLANO", True), ("MODELO", True)])
+        self.assertEqual({f.rule.pack for f in result.findings} - {"BOAS-PRATICAS", "MODELO"}, {"CV-CTE"})
         supplementary = {r.id for r in project.active_rules(dict(CV)) if r.pack.startswith("PT-")}
         self.assertEqual(supplementary, {"PT-DL163-3.3.6"})
         practice = {r.id for r in project.active_rules(dict(CV)) if r.pack == "BOAS-PRATICAS"}
@@ -727,8 +727,52 @@ class UsersPacks(unittest.TestCase):
         doc = Document()
         t2_house(doc)
         result = check.check(doc, {"country": "AO", "building_use": "habitacao", "work": "nova"}, force=True)
-        self.assertEqual({p.id for p, own in result.packs}, {"AO-CTE", "BOAS-PRATICAS", "PLANO"})
+        self.assertEqual({p.id for p, own in result.packs}, {"AO-CTE", "BOAS-PRATICAS", "PLANO", "MODELO"})
         self.assertIn("AO-CTE-30-1a", {f.rule.id for f in result.failures})
+
+
+class ModelWarnings(unittest.TestCase):
+    """0.431: the model's own warnings (the pack «Modelo», always on): walls over each other, an element twice in one
+    place, a room its walls no longer close — and none in the T2 house as it is (its walls meet at corners and Ts)."""
+
+    def test_the_t2_house_has_none(self):
+        from arqbim.verify import check
+        doc = Document()
+        t2_house(doc)
+        result = check.check(doc, dict(CV), force=True)
+        self.assertFalse([f for f in result.failures if f.rule.pack == "MODELO"])
+        self.assertTrue(any(f.rule.id == "MOD-ambiente-aberto" and f.status == "ok" for f in result.findings))
+
+    def test_walls_twins_and_an_open_room(self):
+        from arqbim.verify import check
+        doc = Document()
+        rooms, walls = t2_house(doc)
+        spec = catalog.BY_KEY["parede_alv_20"]
+        over = bim.add_wall(doc, np.array((1.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), spec)   # (on the front wall)
+        column = bim.add_column(doc, np.array((20.0, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+        twin = bim.add_column(doc, np.array((20.0, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+        result = check.check(doc, dict(CV), force=True)
+        failed = {}
+        for f in result.failures:
+            if f.rule.pack == "MODELO":
+                failed.setdefault(f.rule.id, set()).add(f.subject.id)
+        self.assertIn(over, failed.get("MOD-paredes-sobrepostas", set()))
+        self.assertIn(walls["outer"][0], failed["MOD-paredes-sobrepostas"])
+        self.assertEqual(failed.get("MOD-elemento-repetido"), {column, twin})
+        self.assertNotIn("MOD-ambiente-aberto", failed)
+        self.assertEqual({f.rule.severity for f in result.failures if f.rule.pack == "MODELO"}, {"warning"})
+        doc.undo()
+        doc.undo()
+        doc.undo()
+        bim.delete(doc, [walls["middle"]])              # (the middle wall gone: two rooms in one space each side)
+        result = check.check(doc, dict(CV), force=True)
+        joined = {f.subject.id for f in result.failures if f.rule.id == "MOD-ambientes-juntos"}
+        self.assertEqual(joined, set(rooms.values()))
+        doc.undo()
+        bim.delete(doc, [walls["outer"][0]])            # (the front wall gone: the living room and kitchen open)
+        result = check.check(doc, dict(CV), force=True)
+        opened = {f.subject.id for f in result.failures if f.rule.id == "MOD-ambiente-aberto"}
+        self.assertEqual(opened, {rooms["Sala"], rooms["Cozinha"]})
 
 
 class Texts(unittest.TestCase):

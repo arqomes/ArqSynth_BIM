@@ -1,0 +1,44 @@
+{
+  "id": "MODELO",
+  "country": "@modelo",
+  "short": "Modelo",
+  "title": "Avisos do modelo (não é lei)",
+  "instrument": "Verificação do próprio modelo do ArqSynth BIM — o que está mal desenhado, não o que a lei pede",
+  "published": "2026-11-06",
+  "source": "Os avisos mais comuns do Revit e do Hestia: paredes sobrepostas, elementos repetidos, ambientes não fechados",
+  "status": "em_vigor",
+  "fallback": [],
+  "notes": "Sempre ligado, em qualquer país. Avisos, nunca incumprimentos. Um aviso aceite (Exceção…) fica com a sua nota.",
+  "rules": [
+    {
+      "id": "MOD-paredes-sobrepostas", "topic": "modelo.paredes_sobrepostas", "article": "modelo",
+      "title": "Paredes sobrepostas",
+      "text": "Duas paredes desenhadas uma por cima da outra (mais do que se encontram num canto): contam duas vezes nas áreas e quantidades, e o corte sai errado.",
+      "subject": "wall", "measure": "sobreposicao", "max": 0, "unit": "m2", "severity": "warning", "confirmed": true,
+      "fix": "Escolha uma das paredes e apague-a, ou junte-as (Modificar ▸ Juntar paredes)."
+    },
+    {
+      "id": "MOD-elemento-repetido", "topic": "modelo.repetido", "article": "modelo",
+      "title": "Elemento repetido no mesmo sítio",
+      "text": "Dois elementos iguais exatamente no mesmo sítio (uma cópia que ficou por cima): contam duas vezes nas quantidades e nos orçamentos.",
+      "subject": "element", "measure": "duplicado", "max": 0, "unit": "", "severity": "warning", "confirmed": true,
+      "fix": "Escolha-o com «Ir para» e apague um dos dois."
+    },
+    {
+      "id": "MOD-ambiente-aberto", "topic": "modelo.ambiente_aberto", "article": "modelo",
+      "title": "Ambiente não fechado pelas paredes",
+      "text": "O ambiente já não está dentro de paredes (ou separadores de ambientes) que o fechem — uma parede foi apagada ou mudada. A sua área pode estar errada.",
+      "subject": "room", "where": {"outside": false}, "measure": "fechado", "min": 1, "unit": "",
+      "severity": "warning", "confirmed": true,
+      "fix": "Feche-o com uma parede ou um separador de ambientes (Arquitetura ▸ Ambientes ▸ Separador), ou apague o ambiente."
+    },
+    {
+      "id": "MOD-ambientes-juntos", "topic": "modelo.ambientes_juntos", "article": "modelo",
+      "title": "Vários ambientes no mesmo espaço fechado",
+      "text": "Este ambiente e outro estão no mesmo espaço fechado pelas paredes — a parede entre eles foi apagada ou movida. As áreas dos dois ficam erradas.",
+      "subject": "room", "where": {"outside": false}, "measure": "partilha_regiao", "max": 0, "unit": "",
+      "severity": "warning", "confirmed": true,
+      "fix": "Separe-os com uma parede ou um separador de ambientes, ou apague um deles."
+    }
+  ]
+}
