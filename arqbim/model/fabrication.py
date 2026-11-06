@@ -70,6 +70,14 @@ def pieces(doc, guids=None):
                 a, b = sorted((round(u1 - u0, 3), round(v1 - v0, 3)), reverse=True)
                 count[("ripado_frame", "slat", a, b, round(th + (standoff if d.get("batten_pieces") else 0.0), 3),
                        0)] += 1
+    for e in doc.ifc.file.by_type("IfcBuildingElementProxy"):      # (0.441) the free-standing slatted screens
+        if doc.ifc.kind_of(e.GlobalId) != "ripado_screen" or (chosen is not None and e.GlobalId not in chosen):
+            continue
+        frames, battens, slats = doc.ifc._screen_pieces(doc.ifc.screen_params(e.GlobalId))
+        for role, boxes in (("slat", slats), ("batten", battens), ("ripado_frame", frames)):
+            for x0, y0, z0, x1, y1, z1 in boxes:
+                a, b = sorted((round(x1 - x0, 3), round(z1 - z0, 3)), reverse=True)
+                count[(role, "slat", a, b, round(y1 - y0, 3), 0)] += 1
     rows = [(role, mat, a, b, c, n, edges) for (role, mat, a, b, c, edges), n in count.items()]
     return sorted(rows, key=lambda r: (r[0], -r[2])), panels
 

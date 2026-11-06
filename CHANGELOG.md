@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.441.0 — 2026-11-06
+
+**Ripado solto** (uma divisória ou um brise sem parede atrás), como o «Apoio: Livre» do ripado do addon.
+
+- **Arquitetura ▸ Acabamentos ▸ Ripado solto**: desenha-se como uma parede, com um clique no início e outro no fim,
+  ou escrevendo o comprimento.
+- Na barra de cima ficam a altura e as ripas: sentido, largura, espessura, passo, moldura e ripas de fixação (por
+  trás).
+- Com as ripas na horizontal e sem moldura nem fixações, o ripado leva sozinho dois prumos por trás, para as segurar.
+- Nas Propriedades mudam-se o comprimento (o início fica no sítio), a altura e as ripas. Movido, rodado ou
+  espelhado, fica como foi posto.
+- Entra na lista de corte (ripas, ripas de fixação e moldura). No IFC é um IfcBuildingElementProxy «Ripado», de
+  madeira.
+
 ## 0.440.0 — 2026-11-06
 
 **Mobiliário solto, com peças do próprio programa** (o dono: «Sim, peças próprias»).

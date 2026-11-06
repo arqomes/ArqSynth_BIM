@@ -77,6 +77,7 @@ from .dwellings import DwellingMixin  # noqa: E402
 from .lot import LotMixin  # noqa: E402
 from .wall_framing import WallFramingMixin  # noqa: E402
 from .loose_furniture import LooseFurnitureMixin  # noqa: E402
+from .ripado_screen import RipadoScreenMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -368,7 +369,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
                ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
-               LooseFurnitureMixin):
+               LooseFurnitureMixin, RipadoScreenMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -2298,6 +2299,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                                   "gap": float(pp.get("Rasgo") or 0.0),                 # (0.119)
                                   "bulkhead": float(pp.get("SancaLargura") or 0.0),
                                   "drop": float(pp.get("SancaAltura") or 0.0)}
+            elif kind == "ripado_screen":                               # (0.441) a free-standing slatted screen
+                sp = self.screen_params(guid)
+                info["params"] = {k: v for k, v in sp.items() if k not in ("start", "end")}
             elif kind == "loose":                                       # (0.440) a piece of loose furniture
                 info["params"] = self.loose_params(guid)
             elif kind == "gutter":                                      # (0.438) its section, its downpipes

@@ -972,6 +972,19 @@ _STRINGS = {
                              "The rectangle must be at least 5 cm each way."),
     "warn.hole_pitch": ("Com furos de {d} o passo ({p}) tem de ser maior: assim não cabe nenhum furo.",
                         "With {d} holes the pitch ({p}) must be larger: no hole fits as it is."),
+    # (0.441) a free-standing slatted screen
+    "tool.ripado_screen": ("Ripado solto", "Slatted screen"),
+    "tip.ripado_screen": ("Um ripado sem parede atrás — uma divisória ou um brise —, desenhado como uma parede: clique "
+                          "no início e no fim (ou escreva o comprimento). Altura, ripas, moldura e fixações na barra.",
+                          "A slatted screen with no wall behind it — a divider or a brise —, drawn as a wall: click its "
+                          "start and its end (or type its length). Height, slats, frame and battens on the bar."),
+    "hint.ripado_screen": ("Ripado solto ({h} de altura, ripas de {w}, passo {p}): clique no início da linha.",
+                           "Slatted screen ({h} high, {w} slats, pitch {p}): click the start of its line."),
+    "hint.ripado_screen_2": ("Clique no fim do ripado (ou escreva o comprimento e Enter).",
+                             "Click the end of the screen (or type its length and Enter)."),
+    "info.ripado_screen": ("«{name}» feito: {l} de comprimento, {n} ripas. Ctrl+Z desfaz.",
+                           "“{name}” made: {l} long, {n} slats. Ctrl+Z undoes."),
+    "props.screen_length": ("Comprimento", "Length"),
     # (0.440) loose furniture of the program's own
     "tool.loose_furniture": ("Mobiliário solto", "Loose furniture"),
     "tip.loose_furniture": ("Camas, mesas de cabeceira, sofás, poltrona, cadeira, mesas, secretária, estante, móvel de "

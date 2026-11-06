@@ -543,7 +543,8 @@ clique dentro das paredes. Falta, pela ordem do estudo:
     ficheiros .blend de terceiros, que não vêm),
     ~~o «W + letra» das paredes~~ (0.432.0: W e, em 1,25 s, a letra do comando; L novo — as paredes ligadas), ~~ripado
     como ferramenta própria~~ (0.434.0: Acabamentos ▸ Ripado — clique na face ou retângulo, moldura, ripas de fixação,
-    lista de corte; fica por fazer o ripado solto, sem parede — divisória ou brise —, que o addon também tem).
+    lista de corte; ~~o ripado solto, sem parede — divisória ou brise~~ — 0.441.0: Acabamentos ▸ Ripado solto, dois
+    cliques).
     ~~Painel perfurado como ferramenta própria~~ (0.389.0:
     furos redondos/quadrados, malha reta/45°, placas com junta, imagem, retângulo na face). ~~Cobertura orgânica~~
     (0.390.0: cúpula/abóbada/onda tiradas do contorno; casca, gridshell, envidraçada, pérgola curva; aro e apoios).

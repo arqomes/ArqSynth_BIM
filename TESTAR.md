@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.441 — Ripado solto
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.441.0**. Faça Ctrl+N e abra a planta do Térreo.
+2. Clique em **Arquitetura ▸ Acabamentos ▸ Ripado solto** (o botão pequeno da última coluna dos Acabamentos).
+3. Clique num ponto da planta e depois noutro 3 m ao lado: fica um ripado de 3 m, com 2,40 m de altura, ripas na
+   vertical.
+4. Carregue em Esc, escolha o **Selecionar** e clique no ripado. Nas Propriedades:
+   - mude o **Sentido** para **Na horizontal**: as ripas deitam-se e aparecem dois prumos por trás a segurá-las;
+   - mude o **Comprimento** para 4 m: o ripado cresce a partir do início;
+   - escreva `0,05` em **Moldura**: fica uma moldura à volta.
+5. Veja em 3D (**Vista 3D**). Depois abra **Arquitetura ▸ Mobiliário ▸ Lista de corte…**: aparecem as ripas, os
+   prumos e as peças da moldura.
+
 ## 0.440 — Mobiliário solto
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.440.0**. Faça Ctrl+N e abra a planta do Térreo.

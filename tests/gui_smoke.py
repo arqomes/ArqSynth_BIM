@@ -844,6 +844,7 @@ def bim_flow():
     wall_framing_flow()               # (0.437)
     gutter_downpipes_flow()           # (0.438)
     loose_furniture_flow()            # (0.440)
+    ripado_screen_flow()              # (0.441)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6629,6 +6630,48 @@ def loose_furniture_flow():
     shot("440_mobiliario_solto.png")
     check("mobiliario_solto", on_ribbon and placed and bool(sofa) and shown and widened,
           "fita={} cama={} sofa={} propriedades={} largura={}".format(on_ribbon, placed, bool(sofa), shown, widened))
+
+
+def ripado_screen_flow():
+    """0.441 (the addon's «Ripado» free-standing): Arquitetura ▸ Acabamentos ▸ Ripado solto on the ribbon; two clicks
+    (1, 1) and (4, 1) on the plan: a screen 3 m long, 2,40 m high, its slats; chosen: its length and slats in the
+    Properties — made with level slats. Captured: 441_ripado_solto.png."""
+    from arqbim.ui import ribbon
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    vp.set_view("top", center=(2.5, 1.0, 0.0), radius=4.0)
+    pump(300)
+    on_ribbon = "ripado_screen" in ribbon.items_of("architecture")
+    win.tool_actions["ripado_screen"].trigger()
+    pump(100)
+    for q in ((1.0, 1.0, 0.0), (4.0, 1.0, 0.0)):
+        move(near(q), 3)
+        pump(80)
+        click()
+        pump(200)
+    pump(300)
+    screens = [e.GlobalId for e in doc.ifc.file.by_type("IfcBuildingElementProxy")
+               if doc.ifc.kind_of(e.GlobalId) == "ripado_screen"]
+    made = len(screens) == 1 and abs(doc.ifc.screen_params(screens[0])["length"] - 3.0) < 0.06
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    level = False
+    if screens:
+        vp.set_selection({screens[0]})
+        pump(400)
+        combo = win.props.editors.get("screen_direction")
+        if combo is not None:
+            combo.setCurrentIndex(combo.findData("horizontal"))
+            combo.activated.emit(combo.currentIndex())
+            pump(500)
+        level = doc.ifc.screen_params(screens[0])["direction"] == "horizontal"
+    vp.set_selection(set())
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("441_ripado_solto.png")
+    check("ripado_solto", on_ribbon and made and level, "fita={} feito={} horizontal={}".format(on_ribbon, made, level))
 
 
 def stair_waist_flow():

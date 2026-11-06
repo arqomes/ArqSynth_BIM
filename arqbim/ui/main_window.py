@@ -868,6 +868,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "perforated_panel": "",                                                    # (0.389)
                 "ripado_panel": "",                                                        # (0.434)
                 "loose_furniture": "",                                                     # (0.440)
+                "ripado_screen": "",                                                       # (0.441)
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
@@ -6583,6 +6584,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_use(doc, [guid], value or "")
             elif action == "slab_radius":
                 bim.set_slab_radius(doc, guid, value)
+            elif action in ("screen_length", "screen_height", "screen_direction", "screen_width", "screen_gap",
+                            "screen_thickness", "screen_frame", "screen_battens"):     # (0.441) a slatted screen
+                bim.set_ripado_screen(doc, guid, **{action[7:]: value})
             elif action in ("loose_piece", "loose_width", "loose_depth", "loose_height"):   # (0.440)
                 bim.set_loose(doc, guid, **{action[6:]: value})
             elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes

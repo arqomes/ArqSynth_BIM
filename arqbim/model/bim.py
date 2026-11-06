@@ -3816,6 +3816,25 @@ def add_loose(doc, key, centre, angle=0.0, storey=None, width=None, depth=None, 
     return doc.execute(IfcCommand(t("cmd.loose"), action)).result
 
 
+def add_ripado_screen(doc, start, end, height, pattern=None, storey=None):
+    """(0.441) A free-standing slatted screen (a divider, a brise) along start -> end, `height` high, its slats as
+    `pattern` (width, gap, direction, thickness, frame, battens…). One undo step. Its GlobalId."""
+    language, prefix = lang(), t("elem.ripado")
+
+    def action(ifc):
+        n = sum(1 for e in ifc.file.by_type("IfcBuildingElementProxy") if ifc.kind_of(e.GlobalId) == "ripado_screen")
+        return ifc.add_ripado_screen(start, end, height, "{} {}".format(prefix, n + 1), pattern, storey=storey,
+                                     lang=language).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.ripado"), action)).result
+
+
+def set_ripado_screen(doc, guid, **changes):
+    """(0.441) A slatted screen's length, height or slats changed. In a group, every copy. One undo step."""
+    gs = _and_copies(doc, guid)
+    _edit(doc, lambda ifc: [ifc.set_ripado_screen(g, **dict(changes)) for g in gs], gs, "cmd.ripado")
+
+
 def set_loose(doc, guid, **changes):
     """(0.440) Another piece, or its sizes (piece, width, depth, height). In a group, every copy. One undo step."""
     language = lang()

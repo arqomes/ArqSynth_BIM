@@ -2087,6 +2087,18 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if p["bulkhead"] > 0:
                 self._length_editor(t("ctx.bulkhead_drop"), p["drop"], "ceiling_drop", guid)
             self._row(t("props.area"), "{:.2f} m²".format(p["area"]).replace(".", decimal_sep()))
+        elif kind == "ripado_screen":                      # (0.441) a free-standing slatted screen
+            self._length_editor(t("props.screen_length"), p["length"], "screen_length", guid)
+            self._length_editor(t("props.height"), p["height"], "screen_height", guid)
+            self._choice_combo(t("props.slat_direction"), "screen_direction", guid,
+                               [(t("slat.vertical"), "vertical"), (t("slat.horizontal"), "horizontal")], p["direction"])
+            self._length_editor(t("props.slat_width"), p["width"], "screen_width", guid)
+            self._length0_editor(t("props.slat_gap"), p["gap"], "screen_gap", guid)
+            self._length_editor(t("props.slat_depth"), p["thickness"], "screen_thickness", guid)
+            self._length0_editor(t("props.ripado_frame"), p.get("frame", 0.0), "screen_frame", guid)
+            battens = int(round(float(p.get("battens") or 0)))
+            self._choice_combo(t("props.ripado_battens"), "screen_battens", guid,
+                               [(t("ripado.no_battens") if n == 0 else str(n), n) for n in range(0, 7)], battens)
         elif kind == "loose":                              # (0.440) a piece of loose furniture: its sizes
             self._length_editor(t("props.width"), p["width"], "loose_width", guid)
             self._length_editor(t("props.depth"), p["depth"], "loose_depth", guid)

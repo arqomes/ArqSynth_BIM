@@ -614,6 +614,19 @@ def ripado_panel_icon():
     return theme.icon(pm)
 
 
+def ripado_screen_icon():
+    """Free-standing slatted screen (0.441): upright slats standing on the floor line, nothing behind them."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 0.9))
+    p.setBrush(QtGui.QColor("#d9b98c"))
+    for x in (5, 10, 15, 20, 25):
+        p.drawRect(QtCore.QRectF(x, 4, 3, 23))
+    p.setPen(_pen(BLUE, 1.6))
+    p.drawLine(QtCore.QPointF(2, 28), QtCore.QPointF(30, 28))
+    p.end()
+    return theme.icon(pm)
+
+
 def loose_furniture_icon():
     """Loose furniture (0.440): an armchair seen from the front — its back, its arms, its cushion, its legs."""
     pm, p = _canvas()
@@ -2722,6 +2735,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "perforated_panel": perforated_panel_icon,                                # (0.389)
               "ripado_panel": ripado_panel_icon,                                        # (0.434)
               "loose_furniture": loose_furniture_icon,                                  # (0.440)
+              "ripado_screen": ripado_screen_icon,                                      # (0.441)
               "organic_roof": organic_roof_icon,                                        # (0.390)
     "param_surface": param_surface_icon,                                      # (0.395)
               "paint": paint_icon,                                                      # (0.391)

@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.440.0
+# Guia das ferramentas — ArqSynth BIM 0.441.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.440.0.
+ArqSynth BIM 0.441.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -107,7 +107,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 3. [Gerenciar](#3-gerenciar) — 21 comandos
 4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
 5. [Terreno](#5-terreno) — 11 comandos
-6. [Arquitetura](#6-arquitetura) — 49 comandos
+6. [Arquitetura](#6-arquitetura) — 50 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
 9. [Colaborar](#9-colaborar) — 19 comandos
@@ -949,7 +949,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Ripado (ripas de 0,04 m × 0,04 m, passo 0,08 m): passe o rato por uma parede e clique — a face inteira — ou arraste de um canto ao outro — um retângulo. Clique num ripado para o escolher. Esc: Selecionar.
 - **Teclas:** Clique: a face inteira · Arraste: um retângulo · Clique num ripado: escolhê-lo · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.173 «Ripado, canelado e painel perfurado»
+- **Passos de teste (TESTAR.md):** 0.441 «Ripado solto»; 0.434 «Ripado como ferramenta própria»; 0.173 «Ripado, canelado e painel perfurado»
 
 #### Revestimento de parede
 
@@ -978,6 +978,12 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **O que faz:** Guarda a face plana de esboço escolhida como perfil do projeto, com um nome: a ferramenta Perfil corre-o ao longo de paredes, lajes ou linhas.
 - **Passos de teste (TESTAR.md):** 0.245 «Um perfil desenhado por si»
+
+#### Ripado solto
+
+- **Como se usa:** Ripado solto (2,40 m de altura, ripas de 0,04 m, passo 0,08 m): clique no início da linha.
+- **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
+- **Passos de teste (TESTAR.md):** 0.441 «Ripado solto»
 
 ### Arquitetura ▸ Mobiliário
 
@@ -1013,7 +1019,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Lista de corte…
 
 - **O que faz:** A lista de corte dos móveis escolhidos (nenhum: todos): os painéis e as ferragens, os ripados e perfurados; para CSV ou para o DXF da CNC.
-- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.389 «Painel perfurado»; 0.169 «Móveis e lista de corte»
+- **Passos de teste (TESTAR.md):** 0.441 «Ripado solto»; 0.434 «Ripado como ferramenta própria»; 0.389 «Painel perfurado»; 0.169 «Móveis e lista de corte»
 
 ---
 
@@ -1828,4 +1834,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*248 comandos descritos, gerados do ArqSynth BIM 0.440.0.*
+*249 comandos descritos, gerados do ArqSynth BIM 0.441.0.*
