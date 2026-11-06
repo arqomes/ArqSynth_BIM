@@ -1279,8 +1279,9 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
    Propriedades; o pacote de Cabo Verde com os arts. 27.º, 30.º, 40.º e o Anexo I. Teste: um T2 com a sala pequena → o
    rodapé vermelho~~ (0.417.0; e as Propriedades do projeto que eram do passo 1: país, uso, obra, altura; o
    indicador ficou à esquerda do rodapé — à direita empurrava os botões do rodapé a 1280 px).
-3. **O painel Verificação:** a lista, Ir para, Exceção com justificação, filtros, as marcas na vista; as verificações que
-   já existem entram como fontes.
+3. ~~**O painel Verificação:** a lista, Ir para, Exceção com justificação, filtros, as marcas na vista; as verificações que
+   já existem entram como fontes~~ (0.418.0; as exceções no IFC com as definições do projeto; as outras verificações a
+   um clique no mesmo painel — os resultados delas continuam nas janelas próprias).
 4. **Escadas, rampas, corredores e guardas:** os medidores e as regras dos arts. 35.º–39.º; ✓ / ⚠ ao desenhar;
    «Corrigir».
 5. **Iluminação, ventilação e forma:** envidraçado ÷ área até 6 m, círculos e quadrados inscritos, profundidade,

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.418.0 — 2026-11-06
+
+**O Verificador, passo 3: o painel Verificação, as exceções e as outras verificações num só lugar.**
+
+- **Colaborar ▸ Verificar ▸ Verificação** (ou o indicador do rodapé ▸ Abrir o painel de verificação): tudo o que o
+  Verificador encontrou, **por fogo** (e «Edifício e espaços comuns») ou **por regulamento**, com o resultado e o
+  artigo; o resumo em cima («CTE: 2 incumprimento(s), 0 aviso(s), 0 exceção(ões), 10 a cumprir, 8 por medir»).
+- **Filtros:** incumprimentos e avisos, só incumprimentos, exceções, por medir, tudo.
+- Um clique numa linha **leva ao sítio** (abre a planta, escolhe e enquadra); **Porquê** diz a regra, o medido, o
+  exigido e a fonte; o botão direito tem os mesmos.
+- **Exceção…**: aceitar uma falha com a razão escrita (por exemplo «vontade expressa do dono de obra», CTE art. 27.º
+  n.º 7). Fica no projeto (IFC), sai da contagem do rodapé e da faixa vermelha, aparece no filtro «Exceções» com a
+  razão — e irá para a ficha de verificação. **Tirar a exceção** desfaz; Ctrl+Z também.
+- **Outras verificações ▾**: os conflitos entre disciplinas, o IFC para certificação, os requisitos IDS, a instalação
+  elétrica e a estrutura (EC2 / EC6) a um clique, no mesmo painel.
+
 ## 0.417.0 — 2026-11-06
 
 **O Verificador, passo 2: as regras, o vigilante e o alerta vermelho no rodapé.** (O dono: «se for inferior à

@@ -66,6 +66,7 @@ class Finding:
     status: str                 # "ok" | "fail" | "unknown"
     value: object = None
     limit: object = None
+    excepted: dict = None       # (0.418) the architect's exception for it ({"why", "when"}), or None
 
     @property
     def key(self):
@@ -73,7 +74,8 @@ class Finding:
 
     @property
     def failed(self):
-        return self.status == "fail"
+        """Failing — and not accepted as an exception."""
+        return self.status == "fail" and not self.excepted
 
 
 LIMIT_KEYS = ("min", "max", "min_table", "max_table", "min_rank")

@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.417.0
+# Guia das ferramentas — ArqSynth BIM 0.418.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.417.0.
+ArqSynth BIM 0.418.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -110,7 +110,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 6. [Arquitetura](#6-arquitetura) — 47 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
-9. [Colaborar](#9-colaborar) — 16 comandos
+9. [Colaborar](#9-colaborar) — 17 comandos
 10. [Anotar](#10-anotar) — 18 comandos
 11. [Visualizar](#11-visualizar) — 37 comandos
 12. [Render](#12-render) — 10 comandos
@@ -1304,6 +1304,11 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 
 ### Colaborar ▸ Verificar
 
+#### Verificação
+
+- **O que faz:** O painel da Verificação: tudo o que o Verificador encontrou, por fogo ou por regulamento — um clique leva ao sítio; «Porquê» diz a regra; «Exceção…» aceita uma falha com a razão escrita. E as outras verificações do programa num só lugar.
+- **Passos de teste (TESTAR.md):** 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»; 0.163 «Modelo analítico e verificação»
+
 - **Detetar conflitos…** — o mesmo de Instalações ▸ Coordenação.
 
 #### Verificar IFC para certificação
@@ -1582,7 +1587,7 @@ Vistas, estilos gráficos, câmaras e painéis.
 
 #### Painéis
 
-- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Regras gráficas · Requisitos (IDS) · Notas (BCF)
+- **Escolhas:** Propriedades · Pavimentos · Navegador do Projeto · Tabelas · Regras gráficas · Requisitos (IDS) · Notas (BCF) · Verificação
 - **Passos de teste (TESTAR.md):** 0.280 «Chapas e painéis»; 0.181 «Painéis da fachada de vidro»
 
 #### Vista seguinte  ·  tecla Ctrl+Tab
@@ -1787,4 +1792,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*241 comandos descritos, gerados do ArqSynth BIM 0.417.0.*
+*242 comandos descritos, gerados do ArqSynth BIM 0.418.0.*

@@ -28,6 +28,27 @@ class Result:
     def count(self, severity):
         return sum(1 for f in self.findings if f.failed and f.rule.severity == severity)
 
+    def counts(self):
+        """{"error", "warning", "excepted", "ok", "unknown"}: how many of each."""
+        return {"error": self.count("error"), "warning": self.count("warning"),
+                "excepted": sum(1 for f in self.findings if f.excepted),
+                "ok": sum(1 for f in self.findings if f.status == "ok"),
+                "unknown": sum(1 for f in self.findings if f.status == "unknown")}
+
+    def dwelling_of(self, finding, facts):
+        """The dwelling a finding is about (its name), or None: a room's, a door's (of the room inside), its own."""
+        s = finding.subject
+        if s.kind == "dwelling":
+            return s.id
+        for g in s.elements:
+            if g in facts.of_room:
+                return facts.of_room[g]
+        if s.kind == "door":
+            for side in facts.sides.get(s.id, ()):
+                if side in facts.of_room:
+                    return facts.of_room[side]
+        return None
+
     def of(self, element):
         """The findings about one room / door (its GlobalId) or dwelling (its name)."""
         return [f for f in self.findings if f.subject.id == element or element in f.subject.elements]
@@ -113,6 +134,10 @@ def check(doc, settings=None, all_packs=None, default_country=None, force=False)
     ctx = ms.Context(doc, facts, settings)
     result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and facts.rooms else [], chosen,
                     settings)
+    exceptions = settings.get("exceptions") or {}
+    for f in result.findings:                            # (0.418: what the architect accepted, with why)
+        if f.status == "fail" and f.key in exceptions:
+            f.excepted = dict(exceptions[f.key])
     _KEPT[id(doc)] = (key, result)
     return result
 

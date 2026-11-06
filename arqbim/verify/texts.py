@@ -90,6 +90,48 @@ STRINGS = {
                              "arquiteto o conferir. O Verificador avisa — nunca impede de desenhar.",
                              "The rules' values come from the published texts; each stays «to be confirmed» until the "
                              "architect checks it. The Verifier warns — it never stops the drawing."),
+    # (0.418) the Verification panel
+    "act.verify_panel": ("Verificação", "Verification"),
+    "tip.verify_panel": ("O painel da Verificação: tudo o que o Verificador encontrou, por fogo ou por regulamento — "
+                         "um clique leva ao sítio; «Porquê» diz a regra; «Exceção…» aceita uma falha com a razão "
+                         "escrita. E as outras verificações do programa num só lugar.",
+                         "The Verification panel: everything the Verifier found, by dwelling or by regulation — a "
+                         "click takes you there; «Why» says the rule; «Exception…» accepts a failure with its reason. "
+                         "And the program's other checks in one place."),
+    "verify.menu.panel": ("Abrir o painel de verificação", "Open the verification panel"),
+    "verify.panel.title": ("Verificação", "Verification"),
+    "verify.panel.filter.problems": ("Incumprimentos e avisos", "Failures and warnings"),
+    "verify.panel.filter.failures": ("Só incumprimentos", "Failures only"),
+    "verify.panel.filter.excepted": ("Exceções", "Exceptions"),
+    "verify.panel.filter.unknown": ("Por medir", "Not measured"),
+    "verify.panel.filter.all": ("Tudo", "Everything"),
+    "verify.panel.group.dwelling": ("Por fogo", "By dwelling"),
+    "verify.panel.group.law": ("Por regulamento", "By regulation"),
+    "verify.panel.except": ("Exceção…", "Exception…"),
+    "verify.panel.unexcept": ("Tirar a exceção", "Remove the exception"),
+    "verify.panel.except_title": ("Exceção — {rule}", "Exception — {rule}"),
+    "verify.panel.except_ask": ("Porque é aceite (fica no projeto e na ficha de verificação):",
+                                "Why it is accepted (kept in the project and in the verification sheet):"),
+    "verify.panel.except_hint": ("Vontade expressa do dono de obra (CTE, art. 27.º, n.º 7).",
+                                 "The owner's express will (CTE, art. 27, no. 7)."),
+    "verify.panel.excepted": ("exceção: {why}", "exception: {why}"),
+    "verify.panel.other": ("Outras verificações ▾", "Other checks ▾"),
+    "verify.panel.other.clashes": ("Conflitos entre disciplinas", "Clashes between disciplines"),
+    "verify.panel.other.check_ifc": ("IFC para certificação", "IFC for certification"),
+    "verify.panel.other.check_ids": ("Requisitos IDS…", "IDS requirements…"),
+    "verify.panel.other.electrical_check": ("Instalação elétrica", "Electrical installation"),
+    "verify.panel.other.verify_ec2": ("Estrutura (EC2 / EC6)", "Structure (EC2 / EC6)"),
+    "verify.panel.col.what": ("O quê", "What"),
+    "verify.panel.col.result": ("Resultado", "Result"),
+    "verify.panel.col.article": ("Artigo", "Article"),
+    "verify.panel.building": ("Edifício e espaços comuns", "Building and common areas"),
+    "verify.panel.none": ("Escolha os regulamentos do projeto para o Verificador o vigiar.",
+                          "Choose the project's regulations for the Verifier to watch it."),
+    "verify.panel.summary": ("{laws}: {e} incumprimento(s), {w} aviso(s), {x} exceção(ões), {ok} a cumprir, "
+                             "{u} por medir.",
+                             "{laws}: {e} failure(s), {w} warning(s), {x} exception(s), {ok} complying, "
+                             "{u} not measured."),
+    "cmd.verify_exception": ("Exceção na verificação", "Verification exception"),
     "verify.props.group": ("Verificação", "Verification"),
     "verify.props.ok": ("✓ {value} ({side} {limit})", "✓ {value} ({side} {limit})"),
     "verify.props.fail": ("✗ {value} ({side} {limit})", "✗ {value} ({side} {limit})"),

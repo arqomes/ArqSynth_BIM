@@ -230,5 +230,26 @@ class CheckCV(unittest.TestCase):
         self.assertEqual([f.status for f in hall_ok], ["ok"])
 
 
+class Exceptions(unittest.TestCase):
+    def test_an_exception_is_not_counted(self):
+        """0.418: the entrance door's failure accepted (the reason kept in the project's settings): no longer a
+        failure, still found (marked excepted); taken away: it fails again."""
+        from arqbim.verify import check, project
+        doc = Document()
+        t2_house(doc)
+        settings = dict(CV)
+        result = check.check(doc, settings, force=True)
+        door = next(f for f in result.failures if f.rule.id == "CV-CTE-30-1a")
+        settings["exceptions"] = {door.key: {"why": "Porta existente, edifício classificado"}}
+        bim.set_verify_settings(doc, settings)
+        stored = project.settings(doc)
+        self.assertEqual(stored["exceptions"][door.key]["why"], "Porta existente, edifício classificado")
+        result = check.check(doc, stored, force=True)
+        self.assertEqual(result.failures, [])
+        self.assertEqual(result.counts()["excepted"], 1)
+        doc.undo()
+        self.assertEqual(len(check.check(doc, dict(CV), force=True).failures), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

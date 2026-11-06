@@ -265,12 +265,20 @@ def _check_ids(d):
 
 
 def _verify_settings(d):
-    """(0.417) The project's regulations: a law's sheet with § and a tick."""
+    """(0.417) The project's regulations: a law's sheet with § and a gear."""
     _sheet(d, 6, 3, 18, 25)
     d.text(6, 7, 16, 10, "§", size=10)
     for y in (19, 23):
         d.ink(1.0).line(10, y, 19, y)
-    _tick(d, 23, 22)
+    _gear(d, 23, 22, 4.5)
+
+
+def _verify_panel(d):
+    """(0.418) The Verification panel: a law's sheet with § and what passes and fails."""
+    _sheet(d, 4, 3, 18, 25)
+    d.text(4, 7, 16, 10, "§", size=10)
+    _tick(d, 22, 15, 0.8)
+    _cross(d, 24, 24, 3.0)
 
 
 def _check_ifc(d):
@@ -961,7 +969,7 @@ DRAWN = {"wall_rect": _wall_rect, "wall_circle": _wall_circle, "wall_arc": _wall
          "theme_escuro": _swatch("escuro"), "theme_grafite": _swatch("grafite"), "theme_studio": _theme_studio,
          "ai_install": _ai_install, "box": _box, "box_selection": _box_selection, "cad_links": _cad_links,
          "check_ids": _check_ids, "check_ifc": _check_ifc, "clashes": _clashes, "close_view": _close_view,
-         "verify_settings": _verify_settings,                                                          # (0.417)
+         "verify_settings": _verify_settings, "verify_panel": _verify_panel,                           # (0.417)
          "cloud_links": _cloud_links, "component_close": _component_close, "component_edit": _component_edit,
          "component_make": _component_make, "delete": _delete, "dimension_style": _dimension_style,
          "electrical_check": _electrical_check, "element_hatches": _element_hatches, "export_image": _export_image,

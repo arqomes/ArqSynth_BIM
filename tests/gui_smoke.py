@@ -827,6 +827,7 @@ def bim_flow():
     properties_types_flow()           # (0.414)
     verifier_reader_flow()            # (0.416)
     verifier_footer_flow()            # (0.417)
+    verifier_panel_flow()             # (0.418)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -20903,6 +20904,63 @@ def verifier_footer_flow():
     check("verificador_rodape_vermelho", first and red and tinted and chosen and grouped and back and units_seen,
           "1.º={} faixa={} cor={} ir_para={} grupo={} desfeito={} unidades={} | {!r} | {!r}".format(
               first, red, tinted, chosen, grouped, back, units_seen, said, v.button.text()))
+
+
+def verifier_panel_flow():
+    """0.418: the T2 house of Cabo Verde with the small living room — Colaborar ▸ Verificação opens the panel: under
+    «Fogo A» the living room's area and the entrance door, ✗; a click on the living room's line chooses it in the plan;
+    «Exceção…» with a reason: it is no longer counted (the footer «CTE ✗ 1»), the filter «Exceções» lists it with its
+    reason; Ctrl+Z: counted again. Captured: 418_painel_verificacao.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "CV", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    rooms = _t2_house()
+    spec = catalog.BY_KEY["parede_alv_20"]
+    across = B.add_wall(doc, np.array((0.0, 2.6, 0.0)), np.array((5.0, 2.6, 0.0)), spec)
+    B.add_opening(doc, across, catalog.OPENING_BY_KEY["porta_90"], B.wall_frame(doc, across), 3.5, -1)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    win.set_tool("select")
+    win.ribbon_item("verify_panel").trigger()
+    pump(800)
+    panel = win.verify_panel
+    text = panel.text()
+    listed = panel.isVisible() and "Fogo A" in text and "Sala (Fogo A) — Área mínima da sala | ✗ 11,52 m²" in text \
+        and "largura útil" not in text.split("\n")[0] and "Porta 1 — Sala" in text
+    item = None
+    for k in range(panel.tree.topLevelItemCount()):
+        top = panel.tree.topLevelItem(k)
+        for j in range(top.childCount()):
+            if top.child(j).text(0).startswith("Sala (Fogo A) — Área"):
+                item = top.child(j)
+    if item is not None:
+        panel.tree.setCurrentItem(item)
+        panel._clicked(item)
+        pump(400)
+    chosen = vp.selected_rooms == {rooms["Sala"]}
+    shot("418_painel_verificacao.png")
+    finding = panel.current()
+    if finding is not None:
+        win.verify_exception(finding, "Sala de estúdio aceite pela câmara")
+        pump(500)
+    counted = win.verifier.button.text() == "CTE ✗ 1"
+    panel.filter.setCurrentIndex(panel.filter.findData("excepted"))
+    pump(200)
+    excepted = "exceção: Sala de estúdio aceite pela câmara" in panel.text()
+    panel.filter.setCurrentIndex(panel.filter.findData("problems"))
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(600)
+    back = win.verifier.button.text() == "CTE ✗ 2"
+    panel.hide()
+    win.open_view("3d", None)
+    pump(300)
+    check("verificador_painel", listed and chosen and counted and excepted and back,
+          "lista={} escolhida={} contada={} exceção={} desfeito={} | {!r}".format(
+              listed, chosen, counted, excepted, back, text[:400]))
 
 
 def wheel(steps):

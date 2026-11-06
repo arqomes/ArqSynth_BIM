@@ -121,6 +121,8 @@ class Verifier(QtCore.QObject):
         self.on_goto = None                 # fn(finding)
         self.on_marks = None                # fn({GlobalId: "fail" | "warn"})
         self.on_settings = None             # fn(): the project's regulations dialog
+        self.on_panel = None                # fn(): (0.418) the Verification panel shown
+        self.on_result = None               # fn(result): (0.418) each new result (the panel follows)
         self._model = getattr(doc, "ifc", None)
         self.timer = QtCore.QTimer(self)
         self.timer.setSingleShot(True)
@@ -130,6 +132,7 @@ class Verifier(QtCore.QObject):
         self.button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         self.button.setAutoRaise(True)
         menu = QtWidgets.QMenu(self.button)
+        menu.addAction(t("verify.menu.panel"), lambda: self.on_panel and self.on_panel())          # (0.418)
         menu.addAction(t("verify.menu.settings"), lambda: self.on_settings and self.on_settings())
         self.marks_action = menu.addAction(t("verify.menu.marks"))
         self.marks_action.setCheckable(True)
@@ -187,6 +190,8 @@ class Verifier(QtCore.QObject):
             self.shown = None
         if self.on_marks is not None:
             self.on_marks(self.marks())
+        if self.on_result is not None:
+            self.on_result(result)
 
     def marks(self):
         """{room / door GlobalId: "fail" | "warn"} of what fails, for the plan (none when the marks are off)."""

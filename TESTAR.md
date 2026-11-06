@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.418 — O painel Verificação e as exceções
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.418.0**. Abra a casa do teste da 0.417, com a
+   sala pequena (passo 6 da 0.417) e o país Cabo Verde.
+2. Clique no separador **Colaborar** e em **Verificação** (o botão grande com §, no painel Verificar): em baixo abre-se
+   o painel **Verificação**, com o resumo («CTE: 2 incumprimento(s)…») e, debaixo de **Fogo A**, a porta de entrada e
+   a sala, a vermelho.
+3. Clique na linha da sala: a planta abre-se, enquadra a sala e escolhe-a.
+4. Clique em **Porquê**: a janela com o Anexo I. Feche-a.
+5. Clique em **Exceção…**, escreva «Sala de estúdio aceite pela câmara» e **OK**: a linha passa a cinzento com
+   «exceção: …», o rodapé passa a **CTE ✗ 1**.
+6. Na primeira lista do painel escolha **Exceções**: está lá, com a razão. Volte a **Incumprimentos e avisos**.
+7. Carregue em **Ctrl+Z**: a sala volta a contar (CTE ✗ 2). Com a linha escolhida, **Tirar a exceção** faz o mesmo.
+8. Abra **Outras verificações ▾** e escolha **Conflitos entre disciplinas**: abre a verificação de conflitos de sempre.
+
 ## 0.417 — O Verificador: as regras e o alerta vermelho no rodapé
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.417.0**. Abra a casa do teste da 0.416 (ou faça-a

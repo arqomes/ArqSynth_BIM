@@ -55,6 +55,7 @@ from . import (context_bar, graphic_rules, icons, ids_panel, menus, notes_panel,
 from . import presentation_panel
 from . import room_program as room_program_panel
 from . import verify_bar                                    # (0.417) the Verifier
+from . import verify_panel                                  # (0.418) its panel
 
 Key = QtCore.Qt.Key
 Mod = QtCore.Qt.KeyboardModifier
@@ -413,6 +414,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.verifier.on_goto = self._verify_goto
         self.verifier.on_marks = lambda marks: self.viewport.set_verify_marks(marks)
         self.verifier.on_settings = lambda: self.verify_settings()
+        self.verify_panel = verify_panel.dock(self, beside=self.ids_panel)                   # (0.418)
+        vpanel = self.verify_panel
+        vpanel.on_goto, vpanel.on_why = self._verify_goto, self.verifier.why
+        vpanel.on_except, vpanel.on_settings = self.verify_exception, lambda: self.verify_settings()
+        vpanel.on_other = lambda name: self.ribbon_item(name).trigger()
+        self.verifier.on_panel = self.show_verify_panel
+        self.verifier.on_result = lambda result: vpanel.show_result(self.doc, result)
+        self.panels_menu.addAction(vpanel.toggleViewAction())
         self.doc.subscribe(lambda changed, removed: self.verifier.changed())
         self.viewport.selection_listeners.append(lambda ids: self._refresh_properties())
         self.viewport.axes_listeners.append(lambda axes: self._refresh_properties())
@@ -711,6 +720,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_missing_data.setToolTip(t("tip.missing_data"))
         self.act_worktop = self._action(t("act.worktop"), lambda: self.add_worktop(), icon=icons.worktop_icon())    # (0.170)
         self.act_verify_settings = self._action(t("act.verify_settings"), lambda: self.verify_settings())  # (0.417)
+        self.act_verify_panel = self._action(t("act.verify_panel"), lambda: self.show_verify_panel())      # (0.418)
         self.act_check_ids = self._action(t("act.check_ids"), lambda: self.check_ids())
         self.act_check_ifc = self._action(t("act.check_ifc"), lambda: self.check_ifc())
         self.act_site_location = self._action(t("act.site_location"), lambda: self.site_location())
@@ -3067,12 +3077,36 @@ class MainWindow(QtWidgets.QMainWindow):
         from ..verify import check as check_mod
         from . import verify_settings as dialog
         height, _n = check_mod._building_height(self.doc)
-        values = dialog.ask(self, self.verifier.settings(), height)
+        current = self.verifier.settings()
+        values = dialog.ask(self, current, height)
         if values is None:
             return None
-        bim.set_verify_settings(self.doc, values)
+        merged = dict(current)                     # (0.418: the exceptions kept)
+        merged.update(values)
+        bim.set_verify_settings(self.doc, merged)
         self.verifier.run()
-        return values
+        return merged
+
+    def show_verify_panel(self):
+        """(0.418) The Verification panel shown (in front of the panels beside it), the check as it is now."""
+        self.verify_panel.show()
+        self.verify_panel.raise_()
+        self.verifier.run()
+
+    def verify_exception(self, finding, why):
+        """(0.418) A failure accepted as an exception (why: the reason, kept in the project), or the exception taken
+        away (why None). One undo step."""
+        import datetime
+        settings = dict(self.verifier.settings())
+        exceptions = dict(settings.get("exceptions") or {})
+        if why is None:
+            exceptions.pop(finding.key, None)
+        else:
+            exceptions[finding.key] = {"why": why, "when": datetime.date.today().isoformat(),
+                                       "rule": finding.rule.id, "subject": finding.subject.name}
+        settings["exceptions"] = exceptions
+        bim.set_verify_settings(self.doc, settings)
+        self.verifier.run()
 
     def _verify_goto(self, finding):
         """«Ir para»: the plan of the storey of what fails, it chosen and framed (a room, a door; a dwelling's rooms)."""
