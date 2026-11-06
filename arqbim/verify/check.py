@@ -5,6 +5,8 @@ be measured; and each finding said in words («Sala (Fogo A): área 12,40 m² �
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from ..i18n import decimal_sep, lang, t
 from . import dwellings as dw
 from . import measures as ms
@@ -70,7 +72,7 @@ def subjects(ctx):
     facts, settings = ctx.facts, ctx.settings
     building_use = settings.get("building_use", "habitacao")
     language = lang()
-    out = {"room": [], "dwelling": [], "door": [], "building": []}
+    out = {"room": [], "dwelling": [], "door": [], "building": [], "stair": [], "ramp": [], "railing": []}
     ranks = {}
     for d in facts.dwellings:
         bedrooms = sorted((g for g in d.rooms if g in facts.rooms and uses.is_bedroom(facts.rooms[g].use)
@@ -79,7 +81,8 @@ def subjects(ctx):
             ranks[g] = k + 1
         out["dwelling"].append(ms.Subject(
             "dwelling", d.name, "{} ({})".format(d.name, d.typology), list(d.rooms),
-            props={"typology": d.typology, "building_use": building_use, "bedrooms": d.bedrooms}))
+            props={"typology": d.typology, "building_use": building_use, "bedrooms": d.bedrooms,
+                   "t3_ou_mais": "sim" if d.bedrooms >= 3 else "nao"}))
     for g, r in facts.rooms.items():
         d = facts.dwelling_of(g)
         name = r.name or uses.label(r.use, language)
@@ -114,10 +117,51 @@ def subjects(ctx):
     out["building"].append(ms.Subject("building", "building", t("verify.building"), [],
                                       props={"building_use": building_use, "height": height, "storeys": storeys,
                                              "work": settings.get("work", "nova")}))
+    # (0.419) the corridors' length (a short one may be narrower: CTE art. 44.º n.º 2); a bedroom's area band (the
+    # square it must hold: CTE art. 41.º c)
+    for s in out["room"]:
+        if s.props["use"] in ("corredor", "vestibulo"):
+            length = ms.measure(ctx, s, "comprimento")
+            s.props["curto"] = "sim" if length is not None and length <= 1.50 + 1e-6 else "nao"
+        area = facts.rooms[s.id].area
+        s.props["faixa_area"] = "menos_de_7" if area < 7.0 - 1e-6 else ("7_a_10.5" if area < 10.5 - 1e-6
+                                                                        else "10.5_ou_mais")
+    # (0.419) the stairs, ramps and railings: where they are — in a dwelling, or in common use
+    band = "acima_28" if height is not None and height > 28.0 + 1e-6 else "ate_28"
+    has_common = any(uses.is_common(r.use) for r in facts.rooms.values())
+    locate = _locator(facts)
+    for obj in list(ctx.doc.objects.values()):
+        kind = {"IfcStair": "stair", "IfcRamp": "ramp", "IfcRailing": "railing"}.get(getattr(obj, "ifc_class", ""))
+        if kind is None or getattr(obj, "mesh", None) is None:
+            continue
+        lo, hi = (np.asarray(c, dtype=float) for c in obj.mesh.bounds())
+        room = locate(obj.storey, (lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0)
+        in_dwelling = room is not None and room in facts.of_room
+        common = (room is not None and uses.is_common(facts.rooms[room].use)) or (has_common and not in_dwelling)
+        out[kind].append(ms.Subject(kind, obj.id, obj.name or t("verify.kind." + kind), [obj.id], obj.storey,
+                                    props={"common": common, "in_dwelling": in_dwelling, "height_band": band,
+                                           "building_use": building_use}))
     return out
 
 
+def _locator(facts):
+    """room_at(storey, x, y): the room there (its GlobalId), or None."""
+    from shapely.geometry import Point
+    polys = [(r.storey, g, dw._polygon(r)) for g, r in facts.rooms.items()]
+
+    def room_at(storey, x, y):
+        here = Point(float(x), float(y))
+        found = [(poly.area, g) for s, g, poly in polys if s == storey and poly.contains(here)]
+        return min(found)[1] if found else None
+    return room_at
+
+
 _KEPT = {}
+
+
+def _elements(doc):
+    """Whether there are stairs, ramps or railings to check (a project with no rooms yet may have them)."""
+    return any(getattr(o, "ifc_class", "") in ("IfcStair", "IfcRamp", "IfcRailing") for o in doc.objects.values())
 
 
 def check(doc, settings=None, all_packs=None, default_country=None, force=False):
@@ -132,8 +176,8 @@ def check(doc, settings=None, all_packs=None, default_country=None, force=False)
     chosen = project.active(settings, all_packs)
     rules = project.active_rules(settings, all_packs)
     ctx = ms.Context(doc, facts, settings)
-    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and facts.rooms else [], chosen,
-                    settings)
+    result = Result(revision, rules_mod.run(ctx, rules, subjects(ctx)) if rules and (facts.rooms or _elements(doc))
+                    else [], chosen, settings)
     exceptions = settings.get("exceptions") or {}
     for f in result.findings:                            # (0.418: what the architect accepted, with why)
         if f.status == "fail" and f.key in exceptions:

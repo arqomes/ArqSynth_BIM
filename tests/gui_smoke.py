@@ -20874,14 +20874,15 @@ def verifier_footer_flow():
     win.set_tool("select")
     pump(700)                                                # (the watcher: 0,3 s after the last change)
     v = win.verifier
-    first = v.button.text() == "CTE ✗ 1" and "Porta 1 — Sala: largura útil 0,76 m" in v.strip.shown_text()
+    # (the entrance door, 0,76 m; and, 0.419, no bathroom — errors — and no storage — a warning)
+    first = v.button.text() == "CTE ✗ 2 ⚠ 1" and "Porta 1 — Sala: largura útil 0,76 m" in v.strip.shown_text()
     spec = catalog.BY_KEY["parede_alv_20"]
     across = B.add_wall(doc, np.array((0.0, 2.6, 0.0)), np.array((5.0, 2.6, 0.0)), spec)
     B.add_opening(doc, across, catalog.OPENING_BY_KEY["porta_90"], B.wall_frame(doc, across), 3.5, -1)
     pump(800)
     said = v.strip.shown_text()
     red = v.strip.isVisible() and "Sala (Fogo A): área útil 11,52 m²" in said and "mínimo 14,00 m²" in said \
-        and v.strip.kind == "fail" and v.button.text() == "CTE ✗ 2"
+        and v.strip.kind == "fail" and v.button.text() == "CTE ✗ 4 ⚠ 1"     # (+ its circle: CTE art. 41.º b)
     tinted = vp.verify_marks.get(rooms["Sala"]) == "fail"
     shot("417_rodape_vermelho.png")
     v.strip.goto.click()
@@ -20892,7 +20893,7 @@ def verifier_footer_flow():
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(800)
-    back = not v.strip.isVisible() and v.button.text() == "CTE ✗ 1" and rooms["Sala"] not in vp.verify_marks
+    back = not v.strip.isVisible() and v.button.text() == "CTE ✗ 2 ⚠ 1" and rooms["Sala"] not in vp.verify_marks
     size = win.size()                                        # (the footer still has room for its own buttons, on the
     win.resize(1536, size.height())                          #  owner's 1536 px screen)
     pump(300)
@@ -20947,14 +20948,14 @@ def verifier_panel_flow():
     if finding is not None:
         win.verify_exception(finding, "Sala de estúdio aceite pela câmara")
         pump(500)
-    counted = win.verifier.button.text() == "CTE ✗ 1"
+    counted = win.verifier.button.text() == "CTE ✗ 3 ⚠ 1"
     panel.filter.setCurrentIndex(panel.filter.findData("excepted"))
     pump(200)
     excepted = "exceção: Sala de estúdio aceite pela câmara" in panel.text()
     panel.filter.setCurrentIndex(panel.filter.findData("problems"))
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(600)
-    back = win.verifier.button.text() == "CTE ✗ 2"
+    back = win.verifier.button.text() == "CTE ✗ 4 ⚠ 1"
     panel.hide()
     win.open_view("3d", None)
     pump(300)

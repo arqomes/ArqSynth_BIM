@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.419.0 — 2026-11-06
+
+**O Verificador, passo 4: escadas, rampas, guardas, circulação, a forma dos compartimentos, as instalações sanitárias
+e os arrumos** (CTE de Cabo Verde, mais 20 regras; 34 ao todo).
+
+- **Escadas** (art. 35.º): espelho até 0,18 m, cobertor de 0,28 m ou mais; largura 1,10 m numa escada da habitação,
+  1,20 m numa de uso comum (1,40 m num edifício com mais de 28 m); desnível de cada lanço comum até 2,40 m; altura
+  livre de 2,20 m por cima de cada degrau (medida até à laje ou viga de cima).
+- **Rampas** de uso comum (art. 36.º): inclinação até 6 %, lanços até 6,00 m, largura de 1,00 m.
+- **Guardas** em espaços comuns (art. 131.º): 0,90 m de altura.
+- **Forma dos compartimentos** (art. 41.º): a sala tem de inscrever um círculo de 2,70 m; os quartos um quadrado de
+  2,40 m (2,60 m a partir de 10,5 m²); a cozinha 2,10 m na dimensão menor e um círculo de 1,50 m livre de móveis.
+- **Instalações sanitárias** (art. 43.º): no T0–T2, uma completa (sanita, lavatório e base de chuveiro ou banheira)
+  com 3,00 m²; a partir do T3, duas; um círculo de 1,50 m livre das louças (aviso).
+- **Entrada e circulação** (art. 44.º): o vestíbulo inscreve um círculo de 1,50 m; os corredores têm 1,10 m na parte
+  mais estreita (0,90 m se tiverem até 1,50 m de comprido).
+- **Arrumos** (art. 45.º, aviso): despensas, arrecadações e roupeiros do fogo — 1,50 m² no T0/T1, 2,50 m² no T2, 3,00 m²
+  do T3 para cima.
+- Uma escada, rampa ou guarda é «de uso comum» quando está num espaço comum, ou fora dos fogos num edifício que os
+  tem; numa moradia é da habitação.
+- As medidas novas: a largura mais estreita de um compartimento (onde ele «se parte em dois» ao encolher das paredes —
+  apanha o gargalo de um corredor), o maior círculo e o maior quadrado inscritos, o círculo livre do que está no chão
+  (louças, móveis, armários).
+
 ## 0.418.0 — 2026-11-06
 
 **O Verificador, passo 3: o painel Verificação, as exceções e as outras verificações num só lugar.**

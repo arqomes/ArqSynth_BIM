@@ -27,6 +27,7 @@ class Facts:
     dwellings: list = field(default_factory=list)    # dw.Dwelling
     of_room: dict = field(default_factory=dict)      # room GlobalId -> its dwelling's name
     infos: dict = field(default_factory=dict)        # GlobalId -> ifc.space_info(…)
+    inside: dict = field(default_factory=dict)       # (0.419) room GlobalId -> [(object id, its kind)] inside it
     sides: dict = field(default_factory=dict)        # door GlobalId -> (room or «~place» or None, the same)
 
     def dwelling(self, name):
@@ -68,7 +69,8 @@ def _kind_of(ifc, obj):
     elif cls == "IfcFurniture":
         params = ifc._params(e)
         if params.get("Elemento") == "cabinet":
-            return "kitchen_cabinet" if params.get("Modulo") in ("base", "wall", "tall") else None
+            return "kitchen_cabinet" if params.get("Modulo") in ("base", "wall", "tall") else \
+                ("wardrobe" if params.get("Modulo") == "wardrobe" else None)
         if getattr(e, "PredefinedType", None) == "BED":
             return "bed"
         if getattr(e, "PredefinedType", None) == "SOFA":
@@ -134,6 +136,7 @@ def read(doc, force=False):
         room = room_at(obj.storey, float(lo[0] + hi[0]) / 2, float(lo[1] + hi[1]) / 2)
         if room is not None:
             contents[room][kind] = contents[room].get(kind, 0) + 1
+            facts.inside.setdefault(room, []).append((obj.id, kind))
     language = lang()
     for g, info in facts.infos.items():
         space = doc.ifc.by_guid(g)

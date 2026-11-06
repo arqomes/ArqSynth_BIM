@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.419 — Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.419.0**. Abra a casa da 0.417 (país Cabo Verde).
+2. O rodapé tem agora mais incumprimentos: abra o painel (**Colaborar ▸ Verificação**). Debaixo de **Fogo A** aparece
+   «Instalação sanitária completa… ✗ 0,00 m²» — a casa ainda não tem casa de banho — e, a laranja, os **arrumos**.
+3. Faça uma casa de banho: com a **Parede**, feche um canto da casa com cerca de 2 × 1,8 m e ponha-lhe uma **Porta**;
+   ponha lá um **Ambiente**. Em **Instalações ▸ Louça sanitária**, escolha **Sanita** e clique junto de uma parede da
+   casa de banho; depois **Lavatório** e **Base de duche**.
+4. No painel, a linha da instalação sanitária passa a ✓ (se a casa de banho tiver 3 m² ou mais). Nas Propriedades da
+   casa de banho, o grupo Verificação mostra também o «círculo livre de móveis».
+5. **Escada:** Arquitetura ▸ Circulação ▾ ▸ Escada; na barra, **Largura** `1,00`; clique dentro da casa e para onde
+   ela sobe. No painel aparece «Largura das escadas das habitações ✗ 1,00 m (mínimo 1,10 m)». Mude a largura nas
+   Propriedades para `1,20`: passa a ✓.
+6. **Corredor:** desenhe duas paredes paralelas a 1,00 m uma da outra e ponha lá um Ambiente chamado «Corredor»: «Largura
+   dos espaços de circulação ✗ 1,00 m (mínimo 1,10 m)».
+7. **Quarto:** num quarto de 3,0 × 2,3 m (6,9 m² — menos de 7 m²) não se pede quadrado; aumente-o para 3,2 × 2,3 m
+   (7,36 m²): «O quarto tem de inscrever um quadrado ✗ 2,30 m (mínimo 2,40 m)».
+
 ## 0.418 — O painel Verificação e as exceções
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.418.0**. Abra a casa do teste da 0.417, com a

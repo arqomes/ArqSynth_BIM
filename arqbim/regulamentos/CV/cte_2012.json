@@ -109,6 +109,154 @@
       "unit": "m2", "severity": "warning"
     },
     {
+      "id": "CV-CTE-35-6-espelho", "topic": "escada.espelho", "article": "art. 35.º, n.º 6",
+      "title": "Altura do degrau (espelho)",
+      "text": "A altura máxima de um degrau, espelho, é de 0,18 m (…).",
+      "subject": "stair", "measure": "espelho", "max": 0.18, "unit": "m", "severity": "error",
+      "fix": "Mais degraus para o mesmo desnível (a escada fica mais comprida)."
+    },
+    {
+      "id": "CV-CTE-35-6-cobertor", "topic": "escada.cobertor", "article": "art. 35.º, n.º 6",
+      "title": "Profundidade do degrau (cobertor)",
+      "text": "(…) e a sua profundidade mínima, cobertor, é de 0,28 m, sendo para determinação da profundidade do degrau considerada a medida que excede a projecção vertical do degrau superior.",
+      "subject": "stair", "measure": "cobertor", "min": 0.28, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-35-2", "topic": "escada.largura_comum", "article": "art. 35.º, n.º 2",
+      "title": "Largura das escadas de uso comum",
+      "text": "A largura útil mínima das escadas e patamares de uso comum deve ser: a) 1,20 m, nos edifícios de altura até 28,00 m; b) 1,40 m, nos edifícios de altura superior a 28,00 m.",
+      "subject": "stair", "where": {"common": true},
+      "measure": "largura_util", "min_table": {"by": "height_band", "values": {"ate_28": 1.20, "acima_28": 1.40}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-35-3", "topic": "escada.largura_habitacao", "article": "art. 35.º, n.º 3",
+      "title": "Largura das escadas das habitações",
+      "text": "A largura útil mínima das escadas das habitações ou de outras unidades de ocupação, que não façam parte de um caminho de evacuação do edifício, deve ser de 1,10 m.",
+      "subject": "stair", "where": {"common": false},
+      "measure": "largura_util", "min": 1.10, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-35-10", "topic": "escada.desnivel_lanco", "article": "art. 35.º, n.º 10",
+      "title": "Desnível de cada lanço (uso comum)",
+      "text": "Cada lanço de escadas de uso comum dos edifícios não pode vencer um desnível superior a 2,40 m (…).",
+      "subject": "stair", "where": {"common": true},
+      "measure": "desnivel_lanco", "max": 2.40, "unit": "m", "severity": "error",
+      "fix": "Um patamar a meio (uma escada em L ou em U)."
+    },
+    {
+      "id": "CV-CTE-35-11", "topic": "escada.altura_livre", "article": "art. 35.º, n.º 11",
+      "title": "Altura livre da escada",
+      "text": "As escadas devem garantir uma altura livre mínima de utilização de 2,20 m em toda a sua extensão, sendo medida entre o tecto e os patamares ou os limites dos degraus.",
+      "subject": "stair", "measure": "altura_livre", "min": 2.20, "unit": "m", "severity": "error",
+      "fix": "Abrir mais a laje por cima da escada."
+    },
+    {
+      "id": "CV-CTE-36-1", "topic": "rampa.inclinacao", "article": "art. 36.º, n.º 1",
+      "title": "Inclinação das rampas de uso comum",
+      "text": "As rampas dos edifícios, em espaços de utilização comum, devem ter uma inclinação máxima de 6%.",
+      "subject": "ramp", "where": {"common": true},
+      "measure": "inclinacao", "max": 6.0, "unit": "%", "severity": "error",
+      "fix": "Uma rampa mais comprida para o mesmo desnível (6 % = 1 m de desnível em 16,7 m)."
+    },
+    {
+      "id": "CV-CTE-36-2", "topic": "rampa.lanco", "article": "art. 36.º, n.º 2",
+      "title": "Extensão dos lanços das rampas",
+      "text": "Os lanços das rampas não devem ter extensão superior a 6,00 m, devendo cada lanço ser precedido e seguido por plataforma de descanso, com largura igual à da rampa e o comprimento mínimo de 1,50 m.",
+      "subject": "ramp", "where": {"common": true},
+      "measure": "comprimento_lanco", "max": 6.0, "unit": "m", "severity": "error",
+      "fix": "Dividir a rampa em lanços de até 6 m com patamares de 1,50 m."
+    },
+    {
+      "id": "CV-CTE-36-3", "topic": "rampa.largura", "article": "art. 36.º, n.º 3",
+      "title": "Largura das rampas de uso comum",
+      "text": "As rampas dos edifícios, em espaços de utilização comum, devem ter largura e altura úteis mínimas, respectivamente de 1,00 m e 2,20 m.",
+      "subject": "ramp", "where": {"common": true},
+      "measure": "largura_util", "min": 1.00, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-41-b", "topic": "forma.sala", "article": "art. 41.º, al. b)",
+      "title": "A sala tem de inscrever um círculo de 2,70 m",
+      "text": "As dimensões da sala devem permitir a inscrição de um círculo de diâmetro maior ou igual a 2,70 m.",
+      "subject": "room", "where": {"use": ["sala", "sala_cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "circulo_inscrito", "min": 2.70, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-41-c", "topic": "forma.quartos", "article": "art. 41.º, al. c)",
+      "title": "O quarto tem de inscrever um quadrado (2,40 m; 2,60 m a partir de 10,5 m²)",
+      "text": "Nos quartos de área maior ou igual a 7,00 m² deve poder inscrever-se um quadrado com 2,40 m de lado, e nos quartos de área maior ou igual a 10,50 m² deve poder inscrever-se um quadrado com 2,60 m de lado.",
+      "subject": "room", "where": {"use": ["quarto"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "quadrado_inscrito", "min_table": {"by": "faixa_area", "values": {"7_a_10.5": 2.40, "10.5_ou_mais": 2.60}}, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-41-d-largura", "topic": "forma.cozinha_largura", "article": "art. 41.º, al. d)",
+      "title": "Dimensão menor da cozinha",
+      "text": "Na cozinha, a dimensão menor não deve ser inferior a 2,10 m (…).",
+      "subject": "room", "where": {"use": ["cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "largura_min", "min": 2.10, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-41-d-livre", "topic": "forma.cozinha_livre", "article": "art. 41.º, al. d)",
+      "title": "Espaço livre na cozinha (cilindro de 1,50 m)",
+      "text": "(…) devendo ainda existir uma área livre que permita inscrever um cilindro assente no pavimento, com 1,50 m de diâmetro e 0,30 m de altura.",
+      "subject": "room", "where": {"use": ["cozinha", "sala_cozinha"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "circulo_livre", "min": 1.50, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-43-3", "topic": "is.completa", "article": "art. 43.º, n.º 3",
+      "title": "Instalação sanitária completa (base de chuveiro, lavatório, retrete; 3,00 m²)",
+      "text": "Os fogos tipo T0, T1 e T2 devem ser dotados com uma instalação sanitária com a área mínima de 3,00 m² e o seguinte equipamento mínimo: base de chuveiro, lavatório e bacia de retrete.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "is_completa_maior", "min": 3.00, "unit": "m2", "severity": "error",
+      "fix": "Pôr numa instalação sanitária de 3 m² ou mais a sanita, o lavatório e a base de duche (Instalações ▸ Louça sanitária)."
+    },
+    {
+      "id": "CV-CTE-43-5", "topic": "is.numero", "article": "art. 43.º, n.º 5",
+      "title": "Duas instalações sanitárias a partir de T3",
+      "text": "Os fogos de tipologia igual ou superior a T3 devem ser dotados com o mínimo de duas instalações sanitárias, ambas, no mínimo, com as características enunciadas no n.º 3.",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "n_is_completas", "min_table": {"by": "t3_ou_mais", "values": {"sim": 2}},
+      "unit": "", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-43-4", "topic": "is.livre", "article": "art. 43.º, n.º 4",
+      "title": "Espaço livre na instalação sanitária (cilindro de 1,50 m)",
+      "text": "O equipamento deve ser colocado de modo a deixar livre um espaço onde possa inscrever-se um cilindro com base assente no pavimento, de 1,50 m de diâmetro e 0,30 m de altura (…).",
+      "subject": "room", "where": {"use": ["instalacao_sanitaria"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "circulo_livre", "min": 1.50, "unit": "m", "severity": "warning"
+    },
+    {
+      "id": "CV-CTE-44-1", "topic": "circulacao.entrada", "article": "art. 44.º, n.º 1",
+      "title": "Espaço de entrada (círculo de 1,50 m)",
+      "text": "Os espaços de entrada devem permitir a inscrição no pavimento de um círculo de diâmetro igual ou superior a 1,50 m.",
+      "subject": "room", "where": {"use": ["vestibulo"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "circulo_inscrito", "min": 1.50, "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-44-2", "topic": "circulacao.largura", "article": "art. 44.º, n.º 2",
+      "title": "Largura dos espaços de circulação",
+      "text": "Os espaços de circulação devem ter largura igual ou superior a 1,10 m, mas no caso de corredores de comprimento igual ou inferior a 1,50 m, essa largura pode reduzir-se a 0,90 m.",
+      "subject": "room", "where": {"use": ["corredor", "vestibulo"], "in_dwelling": true, "building_use": ["habitacao", "misto"]},
+      "measure": "largura_min", "min_table": {"by": "curto", "values": {"sim": 0.90, "nao": 1.10}},
+      "unit": "m", "severity": "error"
+    },
+    {
+      "id": "CV-CTE-45-2", "topic": "arrumos.area", "article": "art. 45.º, n.º 2",
+      "title": "Área de arrumos (despensas e roupeiros)",
+      "text": "As habitações devem dispor de áreas para arrumos (…) destinadas a despensas de apoio à cozinha e roupeiros (…) iguais ou superiores a: T0 e T1 — 1,50 m²; T2 — 2,50 m²; maiores ou iguais a T3 — 3,00 m².",
+      "subject": "dwelling", "where": {"building_use": ["habitacao", "misto"]},
+      "measure": "area_arrumos", "min_table": {"by": "typology", "values": {"T0": 1.5, "T1": 1.5, "T2": 2.5}, "else": 3.0},
+      "unit": "m2", "severity": "warning",
+      "fix": "Um compartimento «Arrumos» ou «Despensa», ou roupeiros (Arquitetura ▸ Mobiliário)."
+    },
+    {
+      "id": "CV-CTE-131-3", "topic": "guarda.altura", "article": "art. 131.º, n.º 3",
+      "title": "Altura das guardas (espaços comuns)",
+      "text": "Em edifícios públicos, equipamentos colectivos, via pública e espaços comuns de prédios de habitação, deve assegurar-se que as guardas possuem uma altura mínima de 0,90 m, uma distância máxima entre prumos de 0,13 m (…).",
+      "subject": "railing", "where": {"common": true},
+      "measure": "altura", "min": 0.90, "unit": "m", "severity": "error"
+    },
+    {
       "id": "CV-CTE-40-10", "topic": "area.fogo_bruta", "article": "art. 40.º, n.os 4 e 10",
       "title": "Área bruta mínima do fogo",
       "text": "As áreas brutas dos fogos têm os seguintes valores mínimos: T0 29,40; T1 42; T2 54; T3 68,40; T4 80,40; T5 94,80; T6 105,60 m²; Tn = 1,2 × Ahab (somatório dos compartimentos úteis).",

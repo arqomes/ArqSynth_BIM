@@ -208,6 +208,176 @@ def door_clear(ctx, guid):
     return ctx.keep(("door", guid), make)
 
 
+# ------------------------------------------------------------------ a room's shape (0.419)
+
+def _poly(room):
+    from shapely.geometry import Polygon
+    poly = Polygon(room.outline, room.holes)
+    return poly if poly.is_valid else poly.buffer(0)
+
+
+def _pieces(geom):
+    if geom.is_empty:
+        return 0
+    return len(getattr(geom, "geoms", [geom]))
+
+
+def inscribed_circle(poly):
+    """The diameter (m) of the largest circle inside a plan (its pole of inaccessibility)."""
+    from shapely.ops import polylabel
+    if poly.is_empty:
+        return 0.0
+    if poly.geom_type == "MultiPolygon":
+        return max(inscribed_circle(p) for p in poly.geoms)
+    centre = polylabel(poly, tolerance=0.005)
+    return 2.0 * float(poly.exterior.distance(centre) if not poly.interiors else poly.boundary.distance(centre))
+
+
+def narrowest(poly):
+    """A room's narrowest width (m): eroded from its walls, the half-width at which it splits in two (a neck) or is
+    gone — a corridor 1,20 m wide with a door jamb leaving 0,90 m: 0,90."""
+    whole = _pieces(poly)
+    lo, hi = 0.0, inscribed_circle(poly) / 2.0 + 0.01
+    for _k in range(18):
+        mid = (lo + hi) / 2.0
+        eroded = poly.buffer(-mid, join_style=2)
+        if eroded.is_empty or _pieces(eroded) > whole or eroded.area < 1e-6:
+            hi = mid
+        else:
+            lo = mid
+    return round(2.0 * lo, 3)
+
+
+def inscribed_square(poly):
+    """The side (m) of the largest square, square to the walls, that fits in a room."""
+    lo, hi = 0.0, inscribed_circle(poly) / 2.0 * 1.5 + 0.01
+    for _k in range(18):
+        mid = (lo + hi) / 2.0
+        eroded = poly.buffer(-mid, join_style=2, mitre_limit=10.0)
+        if eroded.is_empty or eroded.area < 1e-8:
+            hi = mid
+        else:
+            lo = mid
+    return round(2.0 * lo, 3)
+
+
+def free_circle(ctx, room):
+    """The diameter (m) of the largest circle on a room's floor clear of what stands in it (fittings, cabinets,
+    furniture): the CTE's cylinder of 1,50 m in a kitchen (art. 41.º d) and a bathroom (art. 43.º n.º 4)."""
+    from shapely.geometry import MultiPoint
+    from shapely.ops import unary_union
+    poly = _poly(room)
+    blocks = []
+    for obj_id, _kind in ctx.facts.inside.get(room.guid, ()):
+        obj = ctx.doc.get(obj_id)
+        mesh = getattr(obj, "mesh", None)
+        if mesh is None:
+            continue
+        v = np.asarray(mesh.verts, dtype=float).reshape(-1, 3)
+        low = v[v[:, 2] <= v[:, 2].min() + 0.30]                  # (what stands on the floor, up to 0,30 m)
+        if len(low) >= 3:
+            blocks.append(MultiPoint([tuple(p) for p in low[:, :2]]).convex_hull)
+    clear = poly.difference(unary_union(blocks)) if blocks else poly
+    return inscribed_circle(clear)
+
+
+def _room_shape(name):
+    def fn(ctx, s):
+        room = ctx.facts.rooms.get(s.id)
+        poly = _poly(room)
+        if name == "circulo_inscrito":
+            return inscribed_circle(poly)
+        if name == "largura_min":
+            return narrowest(poly)
+        if name == "quadrado_inscrito":
+            return inscribed_square(poly)
+        if name == "circulo_livre":
+            return free_circle(ctx, room)
+        if name == "comprimento":
+            box = poly.minimum_rotated_rectangle
+            pts = np.asarray(box.exterior.coords)[:4]
+            return float(max(np.linalg.norm(pts[1] - pts[0]), np.linalg.norm(pts[2] - pts[1])))
+        return None
+    return fn
+
+
+# ------------------------------------------------------------------ stairs, ramps, railings (0.419)
+
+def stair_info(ctx, guid):
+    """{rise, width, going, risers, riser, flights: [(foot (3,), way (2,), n, h)], world placement}."""
+    def make():
+        from ..core import stairs as core_stairs
+        ifc = ctx.doc.ifc
+        p = ifc.stair_params(guid)
+        n, h = core_stairs.risers(p["rise"])
+        m = np.asarray(ifc.placement(guid), dtype=float)
+        flights = []
+        for piece in core_stairs.layout(p["form"], p["rise"], p["width"], p["going"], p["turn"]):
+            if piece[0] != "flight":
+                continue
+            _kind, (ox, oy), (dx, dy), k, hk, z0 = piece
+            foot = m @ np.array((ox, oy, z0, 1.0))
+            way = m[:2, :2] @ np.array((dx, dy))
+            flights.append((foot[:3], way / max(np.linalg.norm(way), 1e-9), int(k), float(hk)))
+        return {"rise": p["rise"], "width": p["width"], "going": p["going"], "risers": n, "riser": h,
+                "flights": flights, "form": p["form"]}
+    return ctx.keep(("stair", guid), make)
+
+
+def stair_headroom(ctx, guid):
+    """The clear height (m) over a stair's treads, to what is over them (the slab above, a beam), at the lowest."""
+    info = stair_info(ctx, guid)
+    lowest = None
+    for foot, way, n, h in info["flights"]:
+        for i in range(n):
+            p = foot[:2] + way * info["going"] * (i + 0.5)
+            z = foot[2] + h * (i + 1)
+            for cls, lo, hi, verts, tris in ctx.solids():
+                if cls not in ABOVE or hi[2] <= z + 0.5 or not (lo[0] <= p[0] <= hi[0] and lo[1] <= p[1] <= hi[1]):
+                    continue
+                hit = _ray_hits([tuple(p)], z + 0.5, verts, tris, up=True)[0]
+                if not np.isnan(hit):
+                    lowest = hit - z if lowest is None else min(lowest, hit - z)
+    return None if lowest is None else round(float(lowest), 3)
+
+
+def ramp_info(ctx, guid):
+    start, end, width, rise, _t = ctx.doc.ifc.ramp_params(guid)
+    length = float(np.linalg.norm(np.asarray(end)[:2] - np.asarray(start)[:2]))
+    return {"length": length, "width": float(width), "rise": float(rise)}
+
+
+# ------------------------------------------------------------------ the dwelling's bathrooms and storage (0.419)
+
+def _complete_bathrooms(ctx, d):
+    """The dwelling's complete bathrooms (a toilet, a basin and a shower or a bath): [area]."""
+    out = []
+    for g in d.rooms:
+        r = ctx.facts.rooms.get(g)
+        c = ctx.facts.contents.get(g, {})
+        if r is not None and r.use == "instalacao_sanitaria" and c.get("toilet") and c.get("basin") and \
+                (c.get("shower") or c.get("bath")):
+            out.append(float(r.area))
+    return out
+
+
+def _storage_area(ctx, d):
+    """The dwelling's storage (CTE art. 45.º): its storerooms and pantries, and its wardrobes' floor."""
+    total = 0.0
+    for g in d.rooms:
+        r = ctx.facts.rooms.get(g)
+        if r is not None and r.use == "arrumos":
+            total += float(r.area)
+        for obj_id, kind in ctx.facts.inside.get(g, ()):
+            if kind == "wardrobe":
+                obj = ctx.doc.get(obj_id)
+                if obj is not None and getattr(obj, "mesh", None) is not None:
+                    v = np.asarray(obj.mesh.verts, dtype=float).reshape(-1, 3)
+                    span = v.max(axis=0) - v.min(axis=0)
+                    total += float(span[0] * span[1])
+    return round(total, 3)
+
+
 # ------------------------------------------------------------------ the registry
 
 def _room(ctx, subject):
@@ -233,6 +403,30 @@ MEASURES = {
         "area_util": lambda ctx, s: float(_room(ctx, s).area),
         "pe_direito_min": lambda ctx, s: _height_measure(ctx, _room(ctx, s), 1.0),
         "pe_direito_80": lambda ctx, s: _height_measure(ctx, _room(ctx, s), 0.8),
+        "circulo_inscrito": _room_shape("circulo_inscrito"),          # (0.419)
+        "largura_min": _room_shape("largura_min"),
+        "quadrado_inscrito": _room_shape("quadrado_inscrito"),
+        "circulo_livre": _room_shape("circulo_livre"),
+        "comprimento": _room_shape("comprimento"),
+    },
+    "stair": {                                                        # (0.419)
+        "espelho": lambda ctx, s: round(stair_info(ctx, s.id)["riser"], 4),
+        "cobertor": lambda ctx, s: float(stair_info(ctx, s.id)["going"]),
+        "largura_util": lambda ctx, s: float(stair_info(ctx, s.id)["width"]),
+        "desnivel_lanco": lambda ctx, s: max((n * h for _f, _w, n, h in stair_info(ctx, s.id)["flights"]),
+                                             default=None),
+        "altura_livre": lambda ctx, s: stair_headroom(ctx, s.id),
+        "blondel": lambda ctx, s: round(2.0 * stair_info(ctx, s.id)["riser"] + stair_info(ctx, s.id)["going"], 4),
+    },
+    "ramp": {
+        "inclinacao": lambda ctx, s: (lambda r: 100.0 * r["rise"] / r["length"] if r["length"] > 1e-6 else None)(
+            ramp_info(ctx, s.id)),
+        "comprimento_lanco": lambda ctx, s: ramp_info(ctx, s.id)["length"],
+        "largura_util": lambda ctx, s: ramp_info(ctx, s.id)["width"],
+        "desnivel": lambda ctx, s: ramp_info(ctx, s.id)["rise"],
+    },
+    "railing": {
+        "altura": lambda ctx, s: float(ctx.doc.ifc.railing_params(s.id)["height"]),
     },
     "dwelling": {
         "area_bruta": lambda ctx, s: dwelling_gross_area(ctx, _dwelling(ctx, s)),
@@ -243,6 +437,9 @@ MEASURES = {
         "n_quartos": lambda ctx, s: float(_dwelling(ctx, s).bedrooms),
         "area_sala_cozinha_suplementos": lambda ctx, s: _use_area(
             ctx, _dwelling(ctx, s), ("sala", "cozinha", "sala_cozinha", "refeicoes", "tratamento_roupa")),
+        "area_arrumos": lambda ctx, s: _storage_area(ctx, _dwelling(ctx, s)),                    # (0.419)
+        "is_completa_maior": lambda ctx, s: max(_complete_bathrooms(ctx, _dwelling(ctx, s)), default=0.0),
+        "n_is_completas": lambda ctx, s: float(len(_complete_bathrooms(ctx, _dwelling(ctx, s)))),
     },
     "door": {
         "largura_util": lambda ctx, s: (door_clear(ctx, s.id) or (None,))[0],

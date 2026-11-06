@@ -190,7 +190,9 @@ class CheckCV(unittest.TestCase):
         doc = Document()
         t2_house(doc)
         failed, result = self.failures(doc)
-        self.assertEqual(sorted(failed), ["CV-CTE-30-1a"])
+        # (0.419: it has no bathroom — CTE art. 43.º n.º 3 — and no storage — art. 45.º, a warning)
+        self.assertEqual(sorted(failed), ["CV-CTE-30-1a", "CV-CTE-43-3", "CV-CTE-45-2"])
+        self.assertEqual(failed["CV-CTE-45-2"].rule.severity, "warning")
         door = failed["CV-CTE-30-1a"]
         self.assertAlmostEqual(door.value, 0.76)
         self.assertEqual("Porta 1 — Sala: largura útil 0,76 m — CTE, art. 30.º, n.º 1, al. a): mínimo 0,90 m "
@@ -230,6 +232,86 @@ class CheckCV(unittest.TestCase):
         self.assertEqual([f.status for f in hall_ok], ["ok"])
 
 
+class Shapes(unittest.TestCase):
+    def test_widths_circles_squares(self):
+        """0.419: a corridor 1,20 × 6 m: its narrowest width 1,20 — a neck of 0,90 in it: 0,90; an L of 1,20 arms:
+        1,20; a living room 4 × 3: a circle of 3 m, a square of 3 m."""
+        from shapely.geometry import Polygon
+        from arqbim.verify import measures as ms
+        corridor = Polygon(square(0, 0, 6, 1.2))
+        self.assertAlmostEqual(ms.narrowest(corridor), 1.20, places=2)
+        neck = corridor.difference(Polygon(square(3, 0.9, 3.2, 1.2)))
+        self.assertAlmostEqual(ms.narrowest(neck), 0.90, places=2)
+        ell = Polygon([(0, 0), (6, 0), (6, 1.2), (1.2, 1.2), (1.2, 5), (0, 5)])
+        self.assertAlmostEqual(ms.narrowest(ell), 1.20, places=2)
+        room = Polygon(square(0, 0, 4, 3))
+        self.assertAlmostEqual(ms.inscribed_circle(room), 3.0, places=2)
+        self.assertAlmostEqual(ms.inscribed_square(room), 3.0, places=2)
+
+
+class StairsRampsBathrooms(unittest.TestCase):
+    def test_a_house_stair_too_narrow(self):
+        """0.419: a stair 1,00 m wide in a house (no common areas: the dwelling's own) — under the CTE's 1,10 m (art.
+        35.º n.º 3); its riser (2,80 m in 16: 0,175) and tread (0,28) pass; nothing over it: its headroom not
+        measured."""
+        from arqbim.verify import check
+        doc = Document()
+        t2_house(doc)
+        stair = bim.add_stair(doc, np.array((6.0, 5.0, 0.0)), np.array((1.0, 0.0, 0.0)), catalog.BY_KEY["laje_15"],
+                              rise=2.80, width=1.0, going=0.28)
+        result = check.check(doc, dict(CV), force=True)
+        mine = {f.rule.id: f for f in result.findings if f.subject.id == stair}
+        self.assertEqual(mine["CV-CTE-35-3"].status, "fail")
+        self.assertAlmostEqual(mine["CV-CTE-35-3"].value, 1.0)
+        self.assertEqual((mine["CV-CTE-35-6-espelho"].status, mine["CV-CTE-35-6-cobertor"].status), ("ok", "ok"))
+        self.assertAlmostEqual(mine["CV-CTE-35-6-espelho"].value, 0.175)
+        self.assertEqual(mine["CV-CTE-35-11"].status, "unknown")
+        self.assertNotIn("CV-CTE-35-2", mine)                            # (not a common stair)
+
+    def test_a_steep_ramp_in_a_common_hall(self):
+        """A ramp of 0,40 m in 4 m (10 %) in a building's common hall: over the CTE's 6 % (art. 36.º n.º 1)."""
+        from arqbim.verify import check
+        doc = Document()
+        spec = catalog.BY_KEY["parede_alv_20"]
+        bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 4.0, 0.0),
+                                                     (0.0, 4.0, 0.0))], spec)
+        bim.add_room(doc, (4.0, 2.0), "Átrio comum")
+        ramp = bim.add_ramp(doc, np.array((1.0, 2.0, 0.0)), np.array((5.0, 2.0, 0.0)), catalog.BY_KEY["laje_15"],
+                            1.20, 0.40)
+        result = check.check(doc, dict(CV), force=True)
+        mine = {f.rule.id: f for f in result.findings if f.subject.id == ramp}
+        self.assertEqual(mine["CV-CTE-36-1"].status, "fail")
+        self.assertAlmostEqual(mine["CV-CTE-36-1"].value, 10.0, places=3)
+        self.assertEqual((mine["CV-CTE-36-2"].status, mine["CV-CTE-36-3"].status), ("ok", "ok"))
+        self.assertIn("inclinação 10,00 %", check.message(mine["CV-CTE-36-1"]))
+
+    def test_a_complete_bathroom(self):
+        """A studio: a living room and, through a door, a room «Ambiente» 1,8 × 3,8 m with a toilet, a basin and a
+        shower — a bathroom by what is in it, complete, 6,84 m² (≥ 3,00: CTE art. 43.º n.º 3 passes)."""
+        from arqbim.verify import check
+        doc = Document()
+        spec = catalog.BY_KEY["parede_alv_20"]
+        outer = bim.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0),
+                                                             (0.0, 4.0, 0.0))], spec)
+        inner = bim.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+        door = catalog.OPENING_BY_KEY["porta_90"]
+        bim.add_opening(doc, outer[0], door, bim.wall_frame(doc, outer[0]), 1.5, -1)
+        bim.add_opening(doc, inner, door, bim.wall_frame(doc, inner), 1.5, -1)
+        bim.add_room(doc, (2.0, 2.0), "Sala")
+        bath = bim.add_room(doc, (5.0, 2.0), "Ambiente")
+        for kind, at in (("wc", (4.6, 3.9)), ("basin", (5.4, 3.9)), ("shower", (5.0, 1.0))):
+            bim.add_fixture(doc, np.array(at + (0.0,)), kind, angle=180.0)
+        result = check.check(doc, dict(CV), force=True)
+        from arqbim.verify import reader
+        facts = reader.read(doc)
+        self.assertEqual(facts.rooms[bath].use, "instalacao_sanitaria")
+        complete = next(f for f in result.findings if f.rule.id == "CV-CTE-43-3")
+        self.assertEqual(complete.status, "ok", (complete.value, facts.contents[bath], facts.rooms[bath].area,
+                                                 [(o.ifc_class, np.round(o.mesh.bounds(), 2).tolist())
+                                                  for o in doc.objects.values()
+                                                  if o.is_bim and o.ifc_class == "IfcSanitaryTerminal"]))
+
+
 class Exceptions(unittest.TestCase):
     def test_an_exception_is_not_counted(self):
         """0.418: the entrance door's failure accepted (the reason kept in the project's settings): no longer a
@@ -245,10 +327,10 @@ class Exceptions(unittest.TestCase):
         stored = project.settings(doc)
         self.assertEqual(stored["exceptions"][door.key]["why"], "Porta existente, edifício classificado")
         result = check.check(doc, stored, force=True)
-        self.assertEqual(result.failures, [])
+        self.assertNotIn(door.key, {f.key for f in result.failures})
         self.assertEqual(result.counts()["excepted"], 1)
         doc.undo()
-        self.assertEqual(len(check.check(doc, dict(CV), force=True).failures), 1)
+        self.assertIn(door.key, {f.key for f in check.check(doc, dict(CV), force=True).failures})
 
 
 if __name__ == "__main__":

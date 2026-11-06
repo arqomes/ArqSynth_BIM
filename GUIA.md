@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.418.0
+# Guia das ferramentas — ArqSynth BIM 0.419.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.418.0.
+ArqSynth BIM 0.419.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -868,13 +868,13 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Reta, 1,00 m de largura, a subir 2,80 m: clique no meio do primeiro degrau (no chão).
 - **Teclas:** Dois cliques: o pé e o sentido · X / Y: bloquear o eixo · Esc: cancelar
-- **Passos de teste (TESTAR.md):** 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
+- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
 
 #### Rampa
 
 - **Como se usa:** Rampa (Laje de concreto 15 cm, 1,20 m de largura, a subir 0,50 m): clique no meio do pé da rampa.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.205 «Rampas de acesso entre plataformas»
+- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.205 «Rampas de acesso entre plataformas»
 
 #### Elevador
 
@@ -885,7 +885,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Guarda (barras verticais, 1,00 m): clique nos pontos do caminho; Enter termina, Delete apaga o último. (Tab muda.)
 - **Teclas:** Tab: caminho → vazio → escada · Enter: terminar o caminho · Delete: último ponto · Esc: cancelar
-- **Passos de teste (TESTAR.md):** 0.414 «Painel Propriedades arrumado; tipos guardados e aplicados»; 0.413 «O plano de trabalho fica guardado com o projeto»; 0.261 «Guardas de escada contínuos»; 0.260 «O editor de tipos de guarda»; 0.259 «As cores dos guardas no 3D»; 0.258 «Tipos de guarda-corpo»
+- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.414 «Painel Propriedades arrumado; tipos guardados e aplicados»; 0.413 «O plano de trabalho fica guardado com o projeto»; 0.261 «Guardas de escada contínuos»; 0.260 «O editor de tipos de guarda»; 0.259 «As cores dos guardas no 3D»
 
 #### Tipos de guarda…
 
@@ -1171,7 +1171,7 @@ Redes elétricas, de água, de esgoto e AVAC.
 
 - **Como se usa:** sanita: passe sobre a face de uma parede — encosta-se a ela, virada para o ambiente — e clique. Longe das paredes: no ponto, R / Shift+R roda. A verde, a zona livre à frente.
 - **Teclas:** Clique: a louça ali · R / Shift+R: rodar · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»
+- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»
 
 #### Tubo
 
@@ -1307,7 +1307,7 @@ Trabalho em equipa, vínculos, verificação IFC e notas.
 #### Verificação
 
 - **O que faz:** O painel da Verificação: tudo o que o Verificador encontrou, por fogo ou por regulamento — um clique leva ao sítio; «Porquê» diz a regra; «Exceção…» aceita uma falha com a razão escrita. E as outras verificações do programa num só lugar.
-- **Passos de teste (TESTAR.md):** 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»; 0.163 «Modelo analítico e verificação»
+- **Passos de teste (TESTAR.md):** 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»; 0.163 «Modelo analítico e verificação»
 
 - **Detetar conflitos…** — o mesmo de Instalações ▸ Coordenação.
 
@@ -1792,4 +1792,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*242 comandos descritos, gerados do ArqSynth BIM 0.418.0.*
+*242 comandos descritos, gerados do ArqSynth BIM 0.419.0.*

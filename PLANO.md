@@ -1282,8 +1282,11 @@ antiga de cal; local húmido sem revestimento impermeável; parede mais fina do 
 3. ~~**O painel Verificação:** a lista, Ir para, Exceção com justificação, filtros, as marcas na vista; as verificações que
    já existem entram como fontes~~ (0.418.0; as exceções no IFC com as definições do projeto; as outras verificações a
    um clique no mesmo painel — os resultados delas continuam nas janelas próprias).
-4. **Escadas, rampas, corredores e guardas:** os medidores e as regras dos arts. 35.º–39.º; ✓ / ⚠ ao desenhar;
-   «Corrigir».
+4. ~~**Escadas, rampas, corredores e guardas:** os medidores e as regras dos arts. 35.º–39.º~~ (0.419.0; e a forma
+   dos compartimentos do art. 41.º, as instalações sanitárias do 43.º, a circulação do 44.º, os arrumos do 45.º e as
+   guardas do 131.º). Por fazer: os corrimãos (número e prolongamentos, arts. 35.º e 36.º), os patamares, a altura
+   livre das rampas; ✓ / ⚠ na barra das ferramentas ao desenhar e «Corrigir» (o vigilante já avisa 0,3 s depois de
+   cada clique).
 5. **Iluminação, ventilação e forma:** envidraçado ÷ área até 6 m, círculos e quadrados inscritos, profundidade,
    obstáculos fronteiros, horas de sol.
 6. **Portugal:** RGEU, DL 163/2006 e o U do REH, tirados do texto oficial com o dono; Cabo Verde → Portugal supletivo.
