@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.436.0 — 2026-11-06
+
+**Fachada de vidro em arco e por face**, como no addon. Na ferramenta **Parede cortina**, a barra de cima tem agora
+**Forma**:
+
+- **Linha**: como sempre, dois cliques.
+- **Arco (3 cliques)**: clique no início, no fim e num ponto por onde o arco passa, como no arco da Parede. Não precisa
+  de estar numa parede curva. Também se pode escrever a corda e depois o raio.
+- **Por face**: passe o rato por uma face de pé de um volume (um esboço feito com o Empurrar/Puxar) ou de uma parede.
+  Aparece o retângulo da fachada com os montantes e as travessas. Um clique põe a fachada por fora dessa face, com o
+  comprimento e a altura dela (as faces ao lado no mesmo plano contam juntas).
+
+**Corrigido:** desde a 0.433, mudar nas Propriedades o raio ou o ângulo de um arco, ou fazer o madeiramento de uma
+cobertura, dava um erro interno e a mudança ficava a meio. A causa era uma linha da 0.433 (o declive das lajes).
+
 ## 0.435.0 — 2026-11-06
 
 **Escadas prontas a colocar**, como o «Gerar escada» do addon: a escada inteira presa ao rato, posta com um clique.

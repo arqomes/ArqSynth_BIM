@@ -1732,6 +1732,65 @@ def face_outline(doc, obj_id, face_index, point):
     return None
 
 
+def upright_face(doc, obj_id, face_index, point):
+    """(0.436, the addon's «Fachada de vidro por face») The upright rectangle that frames an upright face under a click
+    — of a sketch volume or an element — with the faces beside it on the same plane: (a, b, height, normal) — a, b the
+    ends of its bottom edge (at its lowest, in the plane), normal level and out of it — or None (a level or sloping
+    face, nothing there)."""
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import unary_union
+    from ..core.mesh import polygon_normal
+    obj = doc.get(obj_id)
+    mesh = getattr(obj, "mesh", None)
+    if obj is None or mesh is None or face_index is None or face_index >= len(mesh.faces):
+        return None
+    verts = np.asarray(mesh.verts, dtype=float)
+    if not obj.is_bim and getattr(obj, "matrix", None) is not None:
+        verts = (np.column_stack((verts, np.ones(len(verts)))) @ np.asarray(obj.matrix, dtype=float).T)[:, :3]
+    faces = mesh.faces
+    normals = getattr(mesh, "normals", None)
+
+    def normal_of(fi):
+        if obj.is_bim and normals is not None:
+            return np.asarray(normals[fi], dtype=float)
+        return polygon_normal(verts[list(faces[fi])])
+
+    n = normal_of(face_index)
+    if np.linalg.norm(n) < 1e-9 or abs(n[2]) > 0.02 * np.linalg.norm(n):
+        return None
+    n = np.array((n[0], n[1], 0.0)) / np.linalg.norm(n[:2])
+    d = float(n @ verts[list(faces[face_index])][0])
+    along = np.array((-n[1], n[0], 0.0))
+    if obj.is_bim and normals is not None:            # (an element's triangles: those on its plane, at once)
+        tris = np.asarray(faces, dtype=np.int64)
+        cand = np.nonzero(np.asarray(normals, dtype=float) @ n >= 0.9995)[0]
+        on = cand[np.abs(verts[tris[cand]] @ n - d).max(axis=1) <= 1e-4] if len(cand) else cand
+        rings = [verts[tris[fi]] for fi in on]
+    else:                                             # (a sketch's faces, each its own polygon)
+        rings = [verts[list(faces[fi])] for fi in range(len(faces)) if float(normal_of(fi) @ n) >= 0.9995]
+        rings = [pts for pts in rings if np.abs(pts @ n - d).max() <= 1e-4]
+    parts = []
+    for pts in rings:                                 # (the faces on its plane, as its outline in it: along, up)
+        poly = Polygon([(float(q @ along), float(q[2])) for q in pts])
+        if poly.area > 1e-9:
+            parts.append(poly.buffer(1e-6))
+    if not parts:
+        return None
+    merged = unary_union(parts)
+    here = Point(float(np.asarray(point, dtype=float) @ along), float(point[2]))
+    region = next((q for q in getattr(merged, "geoms", [merged]) if q.buffer(1e-4).contains(here)), None)
+    if region is None:
+        return None
+    u0, z0, u1, z1 = region.bounds
+    if u1 - u0 < 0.05 or z1 - z0 < 0.05:
+        return None
+    base = n * d
+    a = base + along * u0
+    b = base + along * u1
+    a[2] = b[2] = z0
+    return a, b, z1 - z0, n
+
+
 def wall_spec_for(thickness):
     """(0.159) The wall type for a thickness drawn: the catalogue's or the project's of that thickness (to 5 mm),
     else a new one — plastered masonry from 10 cm, a board under that. (0.342) Not a load-bearing concrete one: a

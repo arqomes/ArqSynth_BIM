@@ -4791,6 +4791,24 @@ _STRINGS = {
     "cmd.curtain_wall_edit": ("Mudar fachada", "Change curtain wall"),
     "ctx.mullions": ("Montantes a cada", "Mullions every"),
     "ctx.transoms": ("Travessas a cada", "Transoms every"),
+    # (0.436) the curtain wall along a free arc, or over an upright face (the addon's circular and «por face»)
+    "ctx.cw_shape": ("Forma", "Shape"),
+    "cwshape.line": ("Linha", "Line"),
+    "cwshape.arc": ("Arco (3 cliques)", "Arc (3 clicks)"),
+    "cwshape.face": ("Por face", "By face"),
+    "hint.curtain_arc_start": ("Fachada de vidro em arco ({h} de altura): clique no início do arco.",
+                               "Curtain wall along an arc ({h} high): click the start of the arc."),
+    "hint.curtain_arc_end": ("Clique no fim do arco (ou escreva o comprimento da corda e Enter).",
+                             "Click the end of the arc (or type the chord's length and Enter)."),
+    "hint.curtain_arc_bulge": ("Mova o rato para curvar o arco e clique (ou escreva o raio e Enter).",
+                               "Move the mouse to bend the arc and click (or type its radius and Enter)."),
+    "hint.curtain_face": ("Fachada de vidro por face (montantes até {m}, travessas até {t}): passe o rato por uma face de "
+                          "pé de um volume ou de uma parede e clique — a fachada fica por fora dela, do tamanho dela.",
+                          "Curtain wall by face (mullions up to {m}, transoms up to {t}): move over an upright face of a "
+                          "volume or a wall and click — the curtain wall goes just outside it, as big as it."),
+    "tip.curtain_face_none": ("Aqui não: escolha uma face de pé", "Not here: choose an upright face"),
+    "err.curtain_face_none": ("A fachada por face precisa de uma face de pé (a de um volume, de uma parede…).",
+                              "A curtain wall by face needs an upright face (a volume's, a wall's…)."),
     "hint.curtain_wall": ("Fachada de vidro ({h} de altura, montantes até {m}, travessas até {t}): clique no início "
                           "da linha.",
                           "Curtain wall ({h} high, mullions up to {m}, transoms up to {t}): click the start of its "

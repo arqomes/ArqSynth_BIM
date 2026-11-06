@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.436 — Fachada de vidro em arco e por face
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.436.0**. Faça Ctrl+N.
+2. Faça um volume: carregue em **R**, desenhe um retângulo de 6 × 4 m no chão e, com o **Push/Pull** (P), suba-o
+   9 m.
+3. Clique em **Arquitetura ▸ Parede cortina**. Na barra de cima, em **Forma**, escolha **Por face**.
+4. Passe o rato pela face da frente do volume: aparece o retângulo da fachada, com os montantes e as travessas, e a
+   dica «6,00 m × 9,00 m».
+5. Clique: a fachada fica por fora dessa face. Passe para a face do lado e clique: outra fachada.
+6. Passe o rato pelo topo do volume: a dica diz «Aqui não: escolha uma face de pé».
+7. Em **Forma**, escolha **Arco (3 cliques)**. Na planta, clique num ponto, depois noutro 4 m ao lado e depois num
+   ponto 1 m para fora do meio: fica uma fachada em arco, sem parede nenhuma.
+8. Em **Forma**, volte a **Linha**: a ferramenta volta a ser a de sempre.
+
 ## 0.435 — Escadas prontas a colocar
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.435.0**. Faça Ctrl+N e abra a planta do Térreo.

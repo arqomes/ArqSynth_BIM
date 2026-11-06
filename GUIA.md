@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.435.0
+# Guia das ferramentas — ArqSynth BIM 0.436.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.435.0.
+ArqSynth BIM 0.436.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -276,7 +276,7 @@ Operações gerais de criação e edição geométrica.
 #### Arco  ·  tecla A
 
 - **Como se usa:** Arco: clique onde começa (no chão ou numa face).
-- **Passos de teste (TESTAR.md):** 0.375 «Arcos e curvas de Bézier no perfil da parede»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.296 «Folhas de abrir dentro do arco»; 0.294 «Vãos em arco»
+- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.375 «Arcos e curvas de Bézier no perfil da parede»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.296 «Folhas de abrir dentro do arco»; 0.294 «Vãos em arco»
 
 #### Retângulo  ·  tecla R
 
@@ -747,13 +747,13 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.408 «Cotas interiores: alinham-se com a parede mais perto; Ctrl+clique acrescenta»
+- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»
 
 #### Fachada de vidro
 
 - **Como se usa:** Fachada de vidro (2,80 m de altura, montantes até 1,50 m, travessas até 1,00 m): clique no início da linha.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.252 «A fachada de vidro numa parede curva»; 0.188 «Fachada de vidro embutida numa parede»; 0.181 «Painéis da fachada de vidro»
+- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.252 «A fachada de vidro numa parede curva»; 0.188 «Fachada de vidro embutida numa parede»; 0.181 «Painéis da fachada de vidro»
 
 #### Retangular
 
@@ -768,12 +768,12 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Arco
 
 - **O que faz:** Uma parede curva: o início, o fim e a flecha.
-- **Passos de teste (TESTAR.md):** 0.375 «Arcos e curvas de Bézier no perfil da parede»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.296 «Folhas de abrir dentro do arco»; 0.294 «Vãos em arco»
+- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.375 «Arcos e curvas de Bézier no perfil da parede»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.296 «Folhas de abrir dentro do arco»; 0.294 «Vãos em arco»
 
 #### Por face
 
 - **O que faz:** Paredes ao longo do contorno de uma laje ou de uma face de esboço (um clique).
-- **Passos de teste (TESTAR.md):** 0.374 «Ferramentas de arquitetura do addon; os temas do estudo»
+- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»
 
 #### Varinha mágica
 
@@ -1822,4 +1822,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*247 comandos descritos, gerados do ArqSynth BIM 0.435.0.*
+*247 comandos descritos, gerados do ArqSynth BIM 0.436.0.*

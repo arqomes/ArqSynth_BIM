@@ -6586,7 +6586,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_slab_corner_height(doc, guid, full[1], value)
             elif action == "slab_slope":                   # (0.433) falling from a side, % (value: (%, side))
                 bim.set_slab_slope(doc, guid, *value)
-                from ..i18n import decimal_sep
                 self.message(t("info.slab_slope", s=int(value[1]) + 1,
                                p="{:.2f}".format(value[0]).rstrip("0").rstrip(".").replace(".", decimal_sep())))
             elif action == "slab_flat":                    # (0.433) flat again

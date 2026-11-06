@@ -840,6 +840,7 @@ def bim_flow():
     sloped_slab_flow()                # (0.433)
     ripado_tool_flow()                # (0.434)
     stair_ready_flow()                # (0.435)
+    curtain_shapes_flow()             # (0.436)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -6434,6 +6435,60 @@ def stair_ready_flow():
     shot("435_escada_pronta.png")
     check("escada_pronta", on_bar and turned and preview and placed,
           "barra={} rodada={} previa={} posta={} {}".format(on_bar, turned, preview, placed, where))
+
+
+def curtain_shapes_flow():
+    """0.436 (the addon's «Fachada de vidro» circular and «por face»): a 6 × 4 × 9 m volume; the Curtain wall tool,
+    «Forma ▸ Por face», a click on its front face: a curtain wall 6 m long and 9 m high just in front of it; «Forma ▸
+    Arco», three clicks — (8, 8), (12, 8) and (10, 9) —: one along that arc (radius 2,5 m), free of any wall."""
+    from arqbim.core import sketch_geometry as sg
+    from arqbim.model.document import AddObject, SketchObject
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    m = sg.rectangle_matrix(np.array((0.0, 0.0, 0.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0)))
+    mesh = sg.rectangle_mesh(6.0, 4.0)
+    sg.push_pull(mesh, 0, m, 9.0)
+    doc.execute(AddObject(SketchObject("Volume", m, mesh)))
+    win.views.open(("3d",))
+    vp.set_view("front")
+    vp.zoom_extents()
+    pump(500)
+    win.tool_actions["curtain_wall"].trigger()
+    pump(200)
+    win._context_option("shape", "face")
+    pump(100)
+    move(near((3.0, -0.001, 4.5)), 3)
+    pump(150)
+    shown = win.tool._face is not None
+    click()
+    pump(600)
+    walls = [e.GlobalId for e in doc.ifc.file.by_type("IfcCurtainWall")]
+    by_face = None
+    if len(walls) == 1:
+        p = doc.ifc.curtain_params(walls[0])
+        by_face = (round(p["length"], 3), round(p["height"], 3), round(float(p["start"][1]), 3))
+    face_ok = by_face == (6.0, 9.0, -0.075)
+    win._context_option("shape", "arc")
+    vp.set_view("top", center=(10.0, 7.0, 0.0), radius=8.0)
+    pump(400)
+    for q in ((8.0, 8.0, 0.0), (12.0, 8.0, 0.0), (10.0, 9.0, 0.0)):
+        move(near(q), 3)
+        pump(80)
+        click()
+        pump(150)
+    pump(500)
+    arc = [e.GlobalId for e in doc.ifc.file.by_type("IfcCurtainWall") if e.GlobalId not in walls]
+    radius = round(doc.ifc.curtain_params(arc[0])["radius"] or 0.0, 2) if len(arc) == 1 else None
+    arc_ok = radius is not None and abs(radius - 2.5) < 0.08 and doc.ifc.host_wall(arc[0]) is None
+    win._context_option("shape", "line")
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    vp.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    shot("436_fachada_arco_face.png")
+    check("fachada_arco_e_face", shown and face_ok and arc_ok,
+          "mostrada={} face={} arco_raio={}".format(shown, by_face, radius))
 
 
 def stair_waist_flow():
