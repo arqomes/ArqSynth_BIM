@@ -13,6 +13,7 @@ from ..core import arcs, band_solid, placement
 from ..core.classify import box_from_axis
 from ..core.inference import ON_FACE
 from ..core.sketch_geometry import ray_plane
+from ..core.temp_dims import revit as revit_look
 from ..core.units import format_length, format_slope, parse_lengths
 from ..core.walls import REFERENCES, axis_lock, find_joint, horizontal_dir, offset_axis
 from ..i18n import decimal_sep, lang, t
@@ -21,8 +22,8 @@ from ..ifc import systems as systems_model
 from ..model import bim
 from ..render.viewport import AXIS_U, AXIS_V, PREVIEW
 from .base import (
-    LEFT, RIGHT, SNAP_COLORS, Option, Tool, drawing_dims, infer_point, inferred_style, level_plane, outside_dim,
-    show_snap, show_start_reference, start_reference,
+    LEFT, RIGHT, SNAP_COLORS, Option, Tool, drawing_dims, glyph_of, infer_point, inferred_style, level_plane,
+    outside_dim, show_snap, show_start_reference, snapped_edge, start_reference,
 )
 
 Z = np.array((0.0, 0.0, 1.0))
@@ -605,28 +606,33 @@ class WallTool(_PointTool):
         self._hover = (p, snap)
         if self._start is None:
             if on_axis:
-                self.viewport.show_marker(p, SNAP_COLORS["endpoint"])
+                if revit_look():                          # (0.446: Revit's glyph, an end's square)
+                    self.viewport.show_marker(None)
+                    self.viewport.show_glyph("endpoint", p)
+                else:
+                    self.viewport.show_marker(p, SNAP_COLORS["endpoint"])
                 self.viewport.show_tip(t("snap.wall_axis"), p)
             else:
                 show_snap(self.viewport, snap, p)
             self._start_ref = None if on_axis else start_reference(snap)
             show_start_reference(self.viewport, self._start_ref, p)
             return
-        tip, color = None, PREVIEW
+        tip, color, glyph, edge = None, PREVIEW, None, None
         if self._first is not None and self._count >= 2 and self._near_screen(self._first[2], x, y):
-            end, tip = self._first[2].copy(), t("snap.close")
+            end, tip, glyph = self._first[2].copy(), t("snap.close"), "endpoint"
         elif on_axis:
-            end, tip, color = p, t("snap.wall_axis"), SNAP_COLORS["endpoint"]
+            end, tip, color, glyph = p, t("snap.wall_axis"), SNAP_COLORS["endpoint"], "endpoint"
         elif snap is not None:
             tip, color, _line = inferred_style(snap)
-            end = p
+            end, glyph, edge = p, glyph_of(snap), snapped_edge(snap)
         else:
             end, axis = axis_lock(self._start, p)
             if axis:
                 tip = t("snap.axis_" + axis)
                 color = AXIS_U if axis == "x" else AXIS_V
+                glyph = "axis_" + axis
         self._end = end
-        self._preview(tip, color)
+        self._preview(tip, color, glyph, edge)
 
     def pointer_down(self, x, y, button, modifiers):
         if button == RIGHT:
@@ -724,20 +730,33 @@ class WallTool(_PointTool):
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
 
-    def _preview(self, tip, color):
+    def _preview(self, tip, color, glyph=None, edge=None):
         a, b = offset_axis(self._start, self._end, self.reference, self.spec.thickness)
         way = (b - a)[:2]
         if float(np.linalg.norm(way)) < 1e-6:
             return
-        # (0.383) the wall as a solid — its faces shaded, its edges —, as the rectangle, the circle and the arc
         side = np.array((-way[1], way[0])) / float(np.linalg.norm(way)) * self.spec.thickness / 2
-        tris, segs = band_solid.band_solid([a[:2] + side, b[:2] + side], [a[:2] - side, b[:2] - side],
-                                           float(a[2]), self.height, closed=False)
-        segs = segs + [self._start, self._end]                        # + the line being drawn
-        self.viewport.show_volume(tris, segs, [color] * len(segs))
+        if revit_look() and self.viewport.plan:
+            # (0.446) as Revit's in a plan: the wall's outline, and the line being drawn as its location line, dashed,
+            # going on past both ends
+            z = float(a[2])
+            corners = [np.array((*c, z)) for c in (a[:2] + side, b[:2] + side, b[:2] - side, a[:2] - side)]
+            outline = [p for k in range(4) for p in (corners[k], corners[(k + 1) % 4])]
+            self.viewport.show_drawn(outline, (self._start, self._end))
+        else:
+            # (0.383) the wall as a solid — its faces shaded, its edges —, as the rectangle, the circle and the arc
+            self.viewport.show_drawn()
+            tris, segs = band_solid.band_solid([a[:2] + side, b[:2] + side], [a[:2] - side, b[:2] - side],
+                                               float(a[2]), self.height, closed=False)
+            segs = segs + [self._start, self._end]                    # + the line being drawn
+            self.viewport.show_volume(tris, segs, [color] * len(segs))
         length = float(np.linalg.norm((self._end - self._start)[:2]))
         drawing_dims(self.viewport, self._start, self._end)           # (its length and angle, as Revit)
-        self.viewport.show_marker(self._end, color)
+        if revit_look():                                  # (0.446) Revit's glyph, magenta; the edge snapped to, lit
+            self.viewport.show_marker(None)
+            self.viewport.show_glyph(glyph, self._end, edge)
+        else:
+            self.viewport.show_marker(self._end, color)
         self.viewport.show_tip(tip or "", self._end)
         self.host.set_vcb(_fmt(length))
 

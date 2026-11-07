@@ -14,6 +14,7 @@ import numpy as np
 from ..core.inference import ON_EDGE, ON_FACE, ON_GUIDE, POINT_KINDS
 from ..core.sketch_geometry import face_world_normal, plane_axes, ray_plane
 from ..core.temp_dims import TempAngle, TempDim, across, level_angle
+from ..core.temp_dims import revit as revit_look
 from ..core.tracking import CROSSING, FOOT, LOCKED, infer, inference_lines
 from ..i18n import t
 
@@ -137,7 +138,17 @@ def moved_enough(a, b):
 
 def show_snap(viewport, snap, point=None):
     """Coloured marker + tooltip for an inference — a snap or a point found on an alignment
-    (tracking.Inferred) — or a plain marker at `point`."""
+    (tracking.Inferred) — or a plain marker at `point`. (0.446) As Revit's: its glyph in magenta (□ an end, △ a
+    middle, ⊥ a foot…) and the edge snapped to lit, no marker."""
+    if revit_look() and hasattr(viewport, "show_glyph"):
+        viewport.show_marker(None)
+        if snap is None:
+            viewport.show_glyph()
+            viewport.show_tip("", None)
+            return
+        viewport.show_glyph(glyph_of(snap), snap.point, snapped_edge(snap))
+        viewport.show_tip(inferred_style(snap)[0], snap.point)
+        return
     if snap is None:
         viewport.show_marker(point)
         viewport.show_tip("", None)
@@ -145,6 +156,26 @@ def show_snap(viewport, snap, point=None):
     tip, marker, _line = inferred_style(snap)
     viewport.show_marker(snap.point, marker)
     viewport.show_tip(tip, snap.point)
+
+
+def glyph_of(found):
+    """(0.446) The Revit glyph of a snap or a point found (render/viewport.glyph_of)."""
+    from ..render.viewport import glyph_of as of
+    return of(found)
+
+
+def snapped_edge(found):
+    """(0.446) The edge a point found lies on — the nearest point on it, or the foot on it —, to be lit: (a, b) or None."""
+    if found is None:
+        return None
+    snap = getattr(found, "snap", None) or found
+    if getattr(snap, "kind", None) in (ON_EDGE, ON_GUIDE) and getattr(snap, "edge", None) is not None:
+        return snap.edge
+    if getattr(found, "kind", None) == FOOT:
+        for line in getattr(found, "lines", None) or ():
+            if getattr(line, "edge", None) is not None:
+                return line.edge
+    return None
 
 
 def _line_colour(line):
@@ -295,7 +326,15 @@ def drawing_dims(viewport, a, b, normal=None, extra=()):
     angles = []
     if abs(normal[2]) > 0.999 and np.linalg.norm((b - a)[:2]) > 1e-6:
         deg = level_angle(a, b)
-        if min(deg % 90.0, 90.0 - deg % 90.0) > 0.05:
+        if revit_look():
+            # (0.446) as Revit's: the angle from a grey reference line along the red axis, a wide arc (as long as
+            # most of what is drawn, on the screen) — shown upright too (90°), not level (0°, 180°)
+            if min(deg % 180.0, 180.0 - deg % 180.0) > 0.05:
+                (x0, y0), (x1, y1) = viewport.project(a), viewport.project(b)
+                length_px = float(np.hypot(x1 - x0, y1 - y0)) if np.all(np.isfinite((x0, y0, x1, y1))) else 120.0
+                angles.append(TempAngle(a, np.array((1.0, 0.0, 0.0)), deg if deg <= 180 else deg - 360.0, Z_UP,
+                                        radius_px=float(np.clip(0.85 * length_px, 40.0, 260.0))))
+        elif min(deg % 90.0, 90.0 - deg % 90.0) > 0.05:
             angles.append(TempAngle(a, np.array((1.0, 0.0, 0.0)), deg if deg <= 180 else deg - 360.0, Z_UP))
     viewport.show_temp_dims(dims, angles)
 

@@ -30,6 +30,24 @@ TOUCH = 1e-3         # walls closer than this touch (joined): no relation betwee
 SAME_FLOOR = 1.0     # walls whose bases are this close are on the same floor
 ACROSS_AT = 0.2      # the relations across a wall are measured this far along the overlap (its length's value is in
 #                      the middle)
+# (0.446) how they look — the owner, with Revit's pictures: «quero ter essa experiência no desenho como a do revit»:
+# "revit": thin lines with a small oblique cross on each end, the value beside the line on its far side (no box), the
+# angle a wide arc from a grey reference line, crossed at its ends; "addon": as 0.372 (open arrows, the value on a box)
+LOOK = {"name": "revit"}
+TICK_PX = 5.0        # (0.446) half a cross's stroke
+TEXT_GAP_PX = 3.0    # (0.446) between a dimension's line and its value
+REF_OVER = 1.45      # (0.446) an angle's reference line goes on this far past its arc (in radii)
+
+
+def revit():
+    """(0.446) Are they drawn as Revit's?"""
+    return LOOK["name"] == "revit"
+
+
+def _cross(p, d, n, size):
+    """The two strokes of a small oblique cross at p (Revit's tick): along d ± n, `size` from p each way."""
+    u, v = (d + n) / math.sqrt(2.0), (d - n) / math.sqrt(2.0)
+    return [(p - u * size, p + u * size), (p - v * size, p + v * size)]
 
 
 @dataclass
@@ -114,6 +132,12 @@ def dim_segments(dim, world_per_px, dashed=False):
             segs.append((l1 + d * t0, l1 + d * min(t0 + on, length)))
     else:
         segs.append((l1, l2))
+    if revit():                                          # (0.446) a cross on each end, the value beside the line
+        segs += _cross(l1, d, n, TICK_PX * px) + _cross(l2, d, n, TICK_PX * px)
+        if abs(dim.offset_px) > 1e-9:
+            gap, over = GAP_PX * px, OVER_PX * px
+            segs += [(a + n * gap, l1 + n * over), (b + n * gap, l2 + n * over)]
+        return segs, (l1 + l2) / 2
     arrow, wing = ARROW_PX * px, WING_PX * px
     inside = length > 2.5 * arrow
     for end, back in ((l1, d), (l2, -d)):              # back: from the end into the line
@@ -133,12 +157,20 @@ def arc_segments(angle, world_per_px, steps=None):
     c, s0, n = (np.asarray(v, dtype=float) for v in (angle.center, angle.start, angle.normal))
     r = angle.radius_px * world_per_px
     s1 = np.cross(n, s0)
-    steps = steps or max(4, int(abs(angle.degrees) / 6))
+    steps = steps or max(4, int(abs(angle.degrees) / (3 if revit() else 6)))
     pts = [c + r * (math.cos(math.radians(a)) * s0 + math.sin(math.radians(a)) * s1)
            for a in np.linspace(0.0, angle.degrees, steps + 1)]
-    segs = [(c, c + s0 * r * 1.25)] + list(zip(pts, pts[1:]))
     mid = math.radians(angle.degrees / 2)
-    label = c + r * 1.35 * (math.cos(mid) * s0 + math.sin(mid) * s1)
+    out = math.cos(mid) * s0 + math.sin(mid) * s1
+    if revit():                                          # (0.446) the reference line well past the arc, a cross on
+        end = math.radians(angle.degrees)               # each of the arc's ends; the value just outside its middle
+        d1 = math.cos(end) * s0 + math.sin(end) * s1
+        crosses = _cross(pts[0], s0, s1, TICK_PX * world_per_px) + _cross(pts[-1], d1, np.cross(n, d1),
+                                                                          TICK_PX * world_per_px)
+        return [(c, c + s0 * r * REF_OVER)] + list(zip(pts, pts[1:])) + crosses, \
+            c + out * (r + 12.0 * world_per_px)
+    segs = [(c, c + s0 * r * 1.25)] + list(zip(pts, pts[1:]))
+    label = c + r * 1.35 * out
     return segs, label
 
 

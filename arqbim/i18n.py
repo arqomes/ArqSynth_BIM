@@ -1910,6 +1910,21 @@ _STRINGS = {
                                  "Detail level set by this view's view template (change it in the template)."),
     "tip.foot.detail_3d": ("Nível de detalhe: nas plantas, nos cortes e nos alçados.",
                            "Detail level: in the plans, the sections and the elevations."),
+    # (0.446) how drawing looks (the header's theme button)
+    "act.draw_revit": ("Desenho como no Revit", "Drawing as in Revit"),
+    "act.draw_addon": ("Desenho como no addon ArqSynth", "Drawing as in the ArqSynth addon"),
+    "tip.draw_revit": ("Ao desenhar: o contorno do que se desenha e a linha de localização tracejada, cotas temporárias "
+                       "com traços nas pontas e o valor a laranja, o ângulo num arco largo, os snaps com símbolos "
+                       "magenta (□ ponta, △ meio, ⊥ perpendicular, ↔ horizontal…).",
+                       "While drawing: the outline being drawn and its dashed location line, temporary dimensions "
+                       "crossed at their ends with orange values, the angle on a wide arc, the snaps' magenta glyphs "
+                       "(□ end, △ middle, ⊥ perpendicular, ↔ horizontal…)."),
+    "tip.draw_addon": ("Ao desenhar: cotas temporárias com setas e o valor numa caixa escura, o volume do que se "
+                       "desenha, os snaps com pontos coloridos (como na versão 0.372).",
+                       "While drawing: temporary dimensions with arrows and values on dark boxes, the volume being "
+                       "drawn, the snaps as coloured dots (as in version 0.372)."),
+    "info.draw_revit": ("Desenho como no Revit.", "Drawing as in Revit."),
+    "info.draw_addon": ("Desenho como no addon ArqSynth.", "Drawing as in the ArqSynth addon."),
     "foot.detail.coarse": ("Grosso", "Coarse"),
     "foot.detail.medium": ("Médio", "Medium"),
     "foot.detail.fine": ("Fino", "Fine"),

@@ -557,6 +557,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.act_canvas_dark.isChecked()), checkable=True)
         self.act_canvas_dark.setToolTip(t("tip.canvas_dark"))
         self.act_canvas_dark.setChecked(theme.dark_views())
+        # (0.446) how drawing looks — the temporary dimensions, the angle, the snaps' glyphs, the outline being drawn: as
+        # Revit's (the owner: «quero ter essa experiência no desenho como a do revit»), or as the addon's (0.372)
+        looks = QtGui.QActionGroup(self)
+        self.act_draw_revit = self._action(t("act.draw_revit"), lambda: self.set_draw_look("revit"), checkable=True)
+        self.act_draw_addon = self._action(t("act.draw_addon"), lambda: self.set_draw_look("addon"), checkable=True)
+        for act, tip in ((self.act_draw_revit, "tip.draw_revit"), (self.act_draw_addon, "tip.draw_addon")):
+            looks.addAction(act)
+            act.setToolTip(t(tip))
+        saved = str(QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("desenho/aspeto", "revit"))
+        self.set_draw_look(saved if saved in ("revit", "addon") else "revit", remember=False)
         for act, key in ((self.act_zoom_all, "Shift+Z"), (self.act_zoom_selection, "Shift+F"),
                          (self.act_view_back, "Alt+←"), (self.act_view_forward, "Alt+→")):
             act.setToolTip("{}   ({})".format(act.text(), key))
@@ -3105,6 +3115,8 @@ class MainWindow(QtWidgets.QMainWindow):
                          self.act_theme_grafite, self.act_theme_revit])
         menu.addSeparator()
         menu.addActions([self.act_theme_studio, self.act_canvas_dark])
+        menu.addSeparator()                               # (0.446) how drawing looks: as Revit's, as the addon's
+        menu.addActions([self.act_draw_revit, self.act_draw_addon])
         if show:
             button = self.header.buttons.get("theme")
             menu.exec(button.mapToGlobal(QtCore.QPoint(0, button.height())) if button is not None
@@ -4353,6 +4365,19 @@ class MainWindow(QtWidgets.QMainWindow):
         menu.addActions([self.act_select_all, self.act_select_invert, self.act_select_none])
         self._selection_menu = menu                   # (tests)
         menu.popup(menus.menu_point(menu, self.canvas.mapToGlobal(QtCore.QPoint(int(x), int(y)))))
+
+    def set_draw_look(self, name, remember=True):
+        """(0.446) How drawing looks: "revit" — the outline being drawn and its dashed location line, the temporary
+        dimensions crossed at their ends with their values orange beside them, the angle's wide arc from a grey
+        reference line, the snaps' magenta glyphs — or "addon" (0.372: arrows, values on dark boxes, coloured dots).
+        Kept for the next session."""
+        from ..core import temp_dims
+        temp_dims.LOOK["name"] = "addon" if name == "addon" else "revit"
+        (self.act_draw_addon if name == "addon" else self.act_draw_revit).setChecked(True)
+        if remember:
+            QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("desenho/aspeto", temp_dims.LOOK["name"])
+            self.viewport.clear_overlays()
+            self.message(t("info.draw_" + temp_dims.LOOK["name"]))
 
     def set_dim_faces(self, on, remember=True):
         """(0.361) A wall's temporary dimensions to the walls round it from face to face (on: the clear distances),

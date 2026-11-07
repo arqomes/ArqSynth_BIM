@@ -125,6 +125,18 @@ TEMP_DIM_LOOK = {False: {"measure": "#2f86dc", "relation": "#5aa6e6", "strong": 
                  True: {"measure": "#59b3ff", "relation": "#80d1ff", "strong": "#ffffff", "box": "#15181c",
                         "box_strong": "#2f7fd8", "text": "#ffffff"}}
 TEMP_DIM_FONT = {"measure": 12, "relation": 11, "strong": 12}   # px
+# (0.446) as Revit's (core/temp_dims.LOOK "revit"): thin blue-grey lines crossed at their ends, each value orange
+# beside its line with no box (a box only on the one under the mouse or typed over), an angle's reference line grey
+REVIT_DIM_LOOK = {False: {"measure": "#55639c", "relation": "#6b78ad", "strong": "#1f5fd6", "box": None,
+                          "box_strong": "#1f5fd6", "text": "#c4560c", "text_strong": "#ffffff", "ref": "#8d939c"},
+                  True: {"measure": "#8c98d0", "relation": "#9aa5d6", "strong": "#ffffff", "box": None,
+                         "box_strong": "#2f7fd8", "text": "#eaa35e", "text_strong": "#ffffff", "ref": "#9aa1ab"}}
+REVIT_DIM_FONT = {"measure": 14, "relation": 13, "strong": 14}   # px (0.446: Revit's values, a little larger)
+
+
+def _dim_font(name):
+    """(0.446) A temporary dimension's value's height (px): Revit's, or the addon's."""
+    return (REVIT_DIM_FONT if temp_dims.revit() else TEMP_DIM_FONT)[name]
 TEMP_DIM_PAD = 6.0                          # px of the box each side of its value…
 TEMP_DIM_BOX_H = 1.6                        # …and its height, in the value's heights
 TEMP_DIM_RAISE = 0.12                       # the value raised in its box (digits have nothing below the line), in heights
@@ -134,6 +146,51 @@ GLYPH_EM = {**{c: 0.572 for c in "0123456789"}, ",": 0.26, ".": 0.26, " ": 0.26,
             "[": 0.30, "]": 0.30, "↔": 1.0, "-": 0.32, "²": 0.38}
 TEMP_DIM_LINE_PX = 5                       # a click this near a relation's line: it, not what is under it…
 TEMP_DIM_HIDDEN = 0.15                     # m: …unless something there is this much nearer than the line (in front)
+GLYPH_COLOR = (0.88, 0.10, 0.84, 1.0)      # (0.446) Revit's snap glyphs, magenta…
+GLYPH_PX = 7.5                             # …this many pixels from their middle to their edge
+
+
+def _ring(n=14, r=1.0):
+    pts = [(r * math.cos(2 * math.pi * k / n), r * math.sin(2 * math.pi * k / n)) for k in range(n + 1)]
+    return list(zip(pts, pts[1:]))
+
+
+# (0.446) each snap's glyph as Revit draws it, in strokes ((x0, y0), (x1, y1)) about its point (x right, y up; ±1 its
+# edge): an end a square, a middle a triangle, where lines cross an ×, the nearest point on an edge an hourglass, a foot
+# a ⊥ (with its square corner), parallel two strokes, along the red / green axis a double arrow, a centre a circle
+GLYPHS = {
+    "endpoint": [((-1, -1), (1, -1)), ((1, -1), (1, 1)), ((1, 1), (-1, 1)), ((-1, 1), (-1, -1))],
+    "midpoint": [((-1, -0.8), (1, -0.8)), ((1, -0.8), (0, 1)), ((0, 1), (-1, -0.8))],
+    "intersection": [((-1, -1), (1, 1)), ((-1, 1), (1, -1))],
+    "nearest": [((-1, 1), (1, 1)), ((1, 1), (-1, -1)), ((-1, -1), (1, -1)), ((1, -1), (-1, 1))],
+    "perpendicular": [((-1, -1), (1, -1)), ((0, -1), (0, 1)), ((0, -0.45), (0.45, -0.45)), ((0.45, -0.45), (0.45, -1))],
+    "parallel": [((-0.85, -1), (-0.15, 1)), ((0.15, -1), (0.85, 1))],
+    "horizontal": [((-1, 0), (1, 0)), ((-1, 0), (-0.5, 0.45)), ((-1, 0), (-0.5, -0.45)), ((1, 0), (0.5, 0.45)),
+                   ((1, 0), (0.5, -0.45))],
+    "center": _ring(),
+    "extension": [((-1, 0), (-0.35, 0)), ((0.35, 0), (1, 0)), ((0, -0.35), (0, 0.35))],
+}
+GLYPH_OF = {"endpoint": "endpoint", "intersection": "intersection", "crossing": "intersection", "midpoint": "midpoint",
+            "origin": "center", "on_edge": "nearest", "on_guide": "nearest", "perpendicular_foot": "perpendicular",
+            "perpendicular": "perpendicular", "parallel": "parallel", "extension": "extension",
+            "axis_x": "axis_x", "align_x": "axis_x", "axis_y": "axis_y", "align_y": "axis_y"}
+
+
+def glyph_of(found):
+    """(0.446) The glyph of a snap or a point found (core/tracking.Inferred, inference.Snap), or of a kind's name: a
+    GLYPHS key, "axis_x" / "axis_y" (the double arrow along that axis), or None (on a face, anywhere)."""
+    if found is None:
+        return None
+    kind = found if isinstance(found, str) else getattr(found, "kind", None)
+    if kind == "locked":
+        lines = getattr(found, "lines", None) or []
+        kind = lines[0].kind if lines else None
+    return GLYPH_OF.get(kind, kind if kind in GLYPHS else None)
+
+
+DRAW_INK = {False: (0.24, 0.25, 0.27, 1.0), True: (0.80, 0.81, 0.83, 1.0)}     # (0.446) an outline being drawn…
+LOCATION_COLOR = {False: (0.09, 0.50, 0.66, 1.0), True: (0.20, 0.58, 0.73, 1.0)}   # …its location line (Revit's teal)
+LIT_EDGE_COLOR = {False: (0.10, 0.62, 0.88, 1.0), True: (0.45, 0.85, 1.00, 1.0)}   # (0.446) the edge snapped to
 PARALLEL_COLOR = (0.85, 0.10, 0.75, 1.0)   # magenta, as SketchUp's parallel / perpendicular
 EXTENSION_COLOR = (0.45, 0.45, 0.45, 1.0)
 ACQUIRED_COLOR = (0.35, 0.35, 0.35, 1.0)
@@ -3880,6 +3937,23 @@ class Viewport:
         self._acquired = gfx.Points(gfx.Geometry(positions=np.zeros((1, 3), np.float32)),
                                     _overlay_material(gfx.PointsMarkerMaterial, marker="plus", size=13,
                                                       color=ACQUIRED_COLOR, edge_width=0))
+        # (0.446) as Revit's, drawing in a plan: the element's outline (no volume) and its location line, dashed, going
+        # on past both ends
+        self._outline = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32)),
+                                 _overlay_material(gfx.LineSegmentMaterial, thickness=2.6, color=DRAW_INK[False],
+                                                   aa=True))
+        self._location = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32)),
+                                  _overlay_material(gfx.LineSegmentMaterial, thickness=1.3, color=LOCATION_COLOR[False],
+                                                    dash_pattern=(7, 4), aa=True))
+        # (0.446) Revit's snap glyph at the point found (magenta), and the edge snapped to, lit
+        self._glyph = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32)),
+                               _overlay_material(gfx.LineSegmentMaterial, thickness=1.8, color=GLYPH_COLOR, aa=True))
+        self._glyph.render_order = 4
+        self._lit_edge = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32)),
+                                  _overlay_material(gfx.LineSegmentMaterial, thickness=3.0, color=LIT_EDGE_COLOR[False],
+                                                    aa=True))
+        self._glyph_args = None       # (glyph, point, camera) as last shown: drawn again when the view moves
+        self.glyph_shown = None       # (tests) the glyph shown, or None
         # temporary dimensions (0.61, core/temp_dims.py): their lines, and a text for each value
         self._tdim_lines = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32),
                                                  colors=np.zeros((2, 4), np.float32)),
@@ -3934,7 +4008,8 @@ class Viewport:
         self.label_text = ""
         self.alignment_kinds = []     # the kinds of the lines shown dashed (for tests)
         for wobj in (self._fill, self._volume, self._lines, self._marker, self._label, self._tip, self._align,
-                     self._acquired, self._tdim_lines, self._tdim_strong, self._tdim_marks, self._grip_ends,
+                     self._acquired, self._outline, self._location, self._glyph, self._lit_edge, self._tdim_lines,
+                     self._tdim_strong, self._tdim_marks, self._grip_ends,
                      self._grip_mids, self._grip_adds, self._grip_subs, self._grip_arrows, self._region_fill,
                      self._region_line):
             wobj.visible = False
@@ -3975,6 +4050,59 @@ class Viewport:
         self._volume.visible = bool(len(tris))
         self._fill.visible = False
         self.show_lines(segments, colors)
+
+    def show_glyph(self, glyph=None, point=None, edge=None):
+        """(0.446) Revit's snap glyph (glyph_of: a GLYPHS key, or "axis_x" / "axis_y") at `point`, magenta, its size in
+        pixels — and `edge` (a, b), the edge snapped to, lit. None: hidden."""
+        if edge is not None:
+            self._lit_edge.geometry = gfx.Geometry(positions=_f32([edge[0], edge[1]]))
+            self._lit_edge.material.color = LIT_EDGE_COLOR[views_canvas.DARK]
+        self._lit_edge.visible = edge is not None
+        strokes = GLYPHS.get("horizontal" if glyph in ("axis_x", "axis_y") else glyph)
+        if strokes is None or point is None:
+            self._glyph.visible = False
+            self._glyph_args = self.glyph_shown = None
+            self.redraw()
+            return
+        point = np.asarray(point, dtype=float)
+        self._glyph_args = (glyph, point, self._camera_key())
+        self.glyph_shown = glyph
+        m = np.asarray(self.camera.world.matrix, dtype=float)
+        right, up, toward = (m[:3, k] / max(float(np.linalg.norm(m[:3, k])), 1e-12) for k in range(3))
+        if glyph in ("axis_x", "axis_y"):                # (the double arrow along that axis, as it is seen)
+            d = np.array((1.0, 0.0, 0.0) if glyph == "axis_x" else (0.0, 1.0, 0.0))
+            d = d - float(d @ toward) * toward
+            if float(np.linalg.norm(d)) > 1e-6:
+                right = d / float(np.linalg.norm(d))
+                up = np.cross(toward, right)
+        size = GLYPH_PX * self.world_per_pixel(point)
+        segs = [point + (right * x + up * y) * size for stroke in strokes for x, y in stroke]
+        self._glyph.geometry = gfx.Geometry(positions=_f32(segs))
+        self._glyph.visible = True
+        self.redraw()
+
+    def show_drawn(self, outline=(), location=()):
+        """(0.446) As Revit's, drawing in a plan: the element's outline — segments (pairs of points) in the canvas'
+        ink, no volume — and its location line, dashed, `location` (a→b) going on past both ends across the view.
+        Nothing: both hidden."""
+        dark = views_canvas.DARK
+        if len(outline):
+            self._outline.geometry = gfx.Geometry(positions=_f32(outline))
+            self._outline.material.color = DRAW_INK[dark]
+        self._outline.visible = bool(len(outline))
+        if len(location) == 2:
+            a, b = (np.asarray(p, dtype=float) for p in location)
+            d = b - a
+            length = float(np.linalg.norm(d))
+            if length > 1e-9:
+                d = d / length
+                far = max(length, 900.0 * self.world_per_pixel((a + b) / 2))
+                self._location.geometry = gfx.Geometry(positions=_f32([a - d * far, b + d * far]))
+                self._location.material.color = LOCATION_COLOR[dark]
+        self._location.visible = len(location) == 2
+        if len(outline) or len(location):
+            self._volume.visible = self._fill.visible = self._lines.visible = False
+        self.redraw()
 
     def show_lines(self, segments=(), colors=()):
         if len(segments):
@@ -4020,10 +4148,12 @@ class Viewport:
         axes through the point drawn from are not: the tool's own line shows them), and a cross on
         each point acquired (self.tracking)."""
         segs, colors, kinds = [], [], []
+        revit = temp_dims.revit()
         for line in lines if point is not None else ():
             if line.kind.startswith("axis_"):
                 continue
-            colour = (AXIS_COLORS[line.kind[-1]] if line.kind.startswith("align_")
+            colour = (LOCATION_COLOR[views_canvas.DARK] if revit       # (0.446: Revit's, teal)
+                      else AXIS_COLORS[line.kind[-1]] if line.kind.startswith("align_")
                       else EXTENSION_COLOR if line.kind == "extension" else PARALLEL_COLOR)
             start = line.point if line.kind != "extension" else min(
                 line.edge, key=lambda e: float(np.linalg.norm(np.asarray(e) - point)))
@@ -4049,7 +4179,8 @@ class Viewport:
         the view moves)."""
         self._tdim_args = ((list(dims), list(angles), active, hover, typed, self._camera_key())
                            if (dims or angles) else None)
-        look = TEMP_DIM_LOOK[views_canvas.DARK]
+        revit = temp_dims.revit()                          # (0.446: as Revit's, or as the addon's)
+        look = (REVIT_DIM_LOOK if revit else TEMP_DIM_LOOK)[views_canvas.DARK]
         drawn = {False: ([], []), True: ([], [])}          # strong? → (segments' ends, their colours)
         texts, shown = [], []
         for dim in dims:
@@ -4064,22 +4195,38 @@ class Viewport:
                 segs += [p, q]
                 colors += [colour, colour]
             text = format_length(dim.value, decimal_sep())
-            if dim.kind == "relation":
+            if revit:
+                text = text.rsplit(" ", 1)[0]            # (0.446: the number alone, as Revit writes it)
+            elif dim.kind == "relation":
                 text = RELATION_MARK + text
             if dim is active and typed:
                 text = "[ {} ]".format(typed)
-            texts.append((text, at, look["box_strong" if strong else "box"], self._dim_turn(dim),
-                          TEMP_DIM_FONT[name]))
+            beside = None                                 # (0.446) Revit's: the value beside its line, on its far side
+            if revit and not strong and dim.kind != "label":
+                n = temp_dims.across(dim.a, dim.b, np.asarray(dim.normal, dtype=float))
+                beside = None if n is None else n * (1.0 if dim.side >= 0 else -1.0)
+            box = look["box_strong"] if strong else look["box"] if look["box"] or dim.kind != "label" else "#1b1f24"
+            texts.append((text, at, box, self._dim_turn(dim), _dim_font(name), beside,
+                          look.get("text_strong", look["text"]) if strong else look["text"]))
             shown.append((dim, at, text))
         for angle in angles:
             s, at = temp_dims.arc_segments(angle, self.world_per_pixel(angle.center))
             segs, colors = drawn[False]
             colour = _physical_in(look["measure"], False)
-            for p, q in s:
+            reference = _physical_in(look.get("ref", look["measure"]), False)
+            for k, (p, q) in enumerate(s):
                 segs += [p, q]
-                colors += [colour, colour]
-            texts.append((format_angle(abs(angle.degrees), decimal_sep()), at, look["box"], self._dim_turn(None),
-                          TEMP_DIM_FONT["measure"]))
+                colors += [reference, reference] if (revit and k == 0) else [colour, colour]
+            if revit:                                     # (0.446) its value along the arc, at its middle, two places
+                c, s0, nn = (np.asarray(v, dtype=float) for v in (angle.center, angle.start, angle.normal))
+                mid = math.radians(angle.degrees / 2.0)
+                tangent = -math.sin(mid) * s0 + math.cos(mid) * np.cross(nn, s0)
+                along = temp_dims.TempDim(np.asarray(at) - tangent, np.asarray(at) + tangent, nn)
+                texts.append(("{:.2f}°".format(abs(angle.degrees)).replace(".", decimal_sep()), at, None,
+                              self._dim_turn(along), _dim_font("measure"), np.zeros(3), look["text"]))
+            else:
+                texts.append((format_angle(abs(angle.degrees), decimal_sep()), at, look["box"], self._dim_turn(None),
+                              TEMP_DIM_FONT["measure"], None, look["text"]))
         for line, (segs, colors) in ((self._tdim_lines, drawn[False]), (self._tdim_strong, drawn[True])):
             if segs:
                 line.geometry = gfx.Geometry(positions=_f32(segs), colors=np.array(colors, np.float32))
@@ -4090,7 +4237,8 @@ class Viewport:
             label = gfx.Text(text=" ", font_size=0.1, screen_space=False, anchor="middle-center",
                              material=_overlay_material(gfx.TextMaterial, color=look["text"]), render_order=2)
             box = gfx.Mesh(gfx.plane_geometry(1.0, 1.0),
-                           _overlay_material(gfx.MeshBasicMaterial, color=look["box"], side="both"))
+                           _overlay_material(gfx.MeshBasicMaterial, color=look["box"] or look["box_strong"],
+                                             side="both"))
             box.render_order = 1
             for w in (label, box):
                 w.visible = False
@@ -4100,12 +4248,16 @@ class Viewport:
         marks = []                                          # (0.372) the «↔» of the relations, drawn in strokes
         for k, (label, box) in enumerate(zip(self._tdim_texts, self._tdim_boxes)):
             if k < len(texts):
-                text, at, colour, turn, size = texts[k]
+                text, at, colour, turn, size, beside, ink = texts[k]
                 px = self.world_per_pixel(at)
                 width, height = label_width_px(text, size) + 2 * TEMP_DIM_PAD, size * TEMP_DIM_BOX_H
                 right = np.asarray(la.vec_transform_quat((1.0, 0.0, 0.0), turn), dtype=float)
                 up = np.asarray(la.vec_transform_quat((0.0, 1.0, 0.0), turn), dtype=float)
-                middle = np.asarray(at, dtype=float) + up * (height / 2.0 * px)    # (its bottom edge on the line)
+                if beside is not None:                    # (0.446: Revit's — beside its line, or centred there)
+                    middle = np.asarray(at, dtype=float) + np.asarray(beside, dtype=float) * (
+                        (temp_dims.TEXT_GAP_PX + size * 0.62) * px)
+                else:
+                    middle = np.asarray(at, dtype=float) + up * (height / 2.0 * px)    # (its bottom edge on the line)
                 words, shift = text, 0.0
                 if text.startswith(RELATION_MARK):          # (the letter's arrow is small and blurred at this size)
                     words = text[len(RELATION_MARK):]
@@ -4119,15 +4271,17 @@ class Viewport:
                         marks += [middle + (right * a[0] + up * a[1]) * px, middle + (right * b[0] + up * b[1]) * px]
                 label.set_text(words)
                 label.font_size = size * px
-                label.material.color = look["text"]
+                label.material.color = ink
                 place = middle + (right * shift + up * TEMP_DIM_RAISE * size) * px
                 label.local.position = tuple(float(c) for c in place)
                 label.local.rotation = turn
-                box.material.color = colour
-                box.local.position = tuple(float(c) for c in middle)
-                box.local.rotation = turn
-                box.local.scale = (width * px, height * px, 1.0)
-            label.visible = box.visible = k < len(texts)
+                if colour is not None:                    # (0.446: Revit's values have no box)
+                    box.material.color = colour
+                    box.local.position = tuple(float(c) for c in middle)
+                    box.local.rotation = turn
+                    box.local.scale = (width * px, height * px, 1.0)
+            label.visible = k < len(texts)
+            box.visible = k < len(texts) and texts[k][2] is not None
         if marks:
             self._tdim_marks.geometry = gfx.Geometry(positions=_f32(marks))
         self._tdim_marks.visible = bool(marks)
@@ -4321,6 +4475,8 @@ class Viewport:
         if self._tdim_args is not None and self._tdim_args[-1] != self._camera_key():
             dims, angles, active, hover, typed, _key = self._tdim_args
             self.show_temp_dims(dims, angles, active, hover, typed)
+        if self._glyph_args is not None and self._glyph_args[-1] != self._camera_key():
+            self.show_glyph(*self._glyph_args[:2])           # (0.446: its size in pixels)
         self._follow_pens()
 
     def paper_mm_px(self):
@@ -4377,15 +4533,29 @@ class Viewport:
         """The temporary dimension whose value is under (x, y) — to type over it — or None. (0.361: the value is
         written along its line.)"""
         best = None
+        revit = temp_dims.revit()
         for dim, at, text in self.temp_dims:
             if dim.key is None:
                 continue
-            sx, sy = self.project(at)
-            (ex, ey), (nx, ny) = self._dim_frame(dim)
-            along, up = (x - sx) * ex + (y - sy) * ey, (x - sx) * nx + (y - sy) * ny
-            size = TEMP_DIM_FONT["relation" if dim.kind == "relation" else "measure"]
+            size = _dim_font("relation" if dim.kind == "relation" else "measure")
             half = label_width_px(text, size) / 2.0 + TEMP_DIM_PAD          # (0.372: its box, on its line)
             height = size * TEMP_DIM_BOX_H
+            n = temp_dims.across(dim.a, dim.b, np.asarray(dim.normal, dtype=float)) if revit else None
+            if n is not None and dim.kind != "label":     # (0.446: Revit's — beside its line, on its far side…)
+                n = n * (1.0 if dim.side >= 0 else -1.0)
+                centre = np.asarray(at, dtype=float) + n * ((temp_dims.TEXT_GAP_PX + size * 0.62)
+                                                            * self.world_per_pixel(at))
+                sx, sy = self.project(centre)
+                (ex, ey), (nx, ny) = self._dim_frame(dim)
+                along, up = (x - sx) * ex + (y - sy) * ey, (x - sx) * nx + (y - sy) * ny
+                if abs(along) <= half and abs(up) <= height / 2.0 + 3:
+                    d = abs(along) + abs(up)
+                    if best is None or d < best[0]:
+                        best = (d, dim)
+                        continue
+            sx, sy = self.project(at)                      # (…or over the middle of its line, as the addon's box)
+            (ex, ey), (nx, ny) = self._dim_frame(dim)
+            along, up = (x - sx) * ex + (y - sy) * ey, (x - sx) * nx + (y - sy) * ny
             low = 2 if dim.kind == "relation" else -4      # (0.361: a relation's line itself is clicked apart)
             if abs(along) <= half and low <= up <= height + 2:
                 d = abs(along) + abs(up - height / 2.0)
@@ -4421,8 +4591,9 @@ class Viewport:
 
     def clear_overlays(self):
         for wobj in (self._fill, self._volume, self._lines, self._marker, self._label, self._tip, self._align,
-                     self._acquired):
+                     self._acquired, self._outline, self._location, self._glyph, self._lit_edge):
             wobj.visible = False
+        self._glyph_args = self.glyph_shown = None
         self.tip_text = ""
         self.label_text = ""
         self.alignment_kinds = []

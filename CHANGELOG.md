@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.446.0 — 2026-11-07
+
+**Desenhar como no Revit** (o dono, com 13 capturas do Revit: «quero ter essa experiência no desenho como a do
+revit»).
+
+- **A parede em planta**, enquanto se desenha: o contorno a cinzento (sem volume azul) e a linha de localização a
+  tracejado azul-petróleo, a prolongar-se para lá das duas pontas.
+- **Cotas temporárias** como as do Revit: linhas finas azul-acinzentadas com um pequeno × em cada ponta e as linhas
+  de chamada, o valor a laranja ao lado da linha (do lado de fora), sem caixa e sem a unidade. A caixa azul só
+  aparece na cota sob o rato ou quando se escreve por cima. Clicar no valor ou no meio da linha deixa escrever.
+- **Ângulo**: um arco largo (do tamanho de quase toda a parede no ecrã) a partir de uma linha de referência
+  cinzenta na horizontal, com × nas pontas e o valor com duas casas («135,00°») escrito ao longo do arco. Aparece
+  também a 90°; na horizontal não.
+- **Snaps com os símbolos do Revit**, a magenta, em vez dos pontos coloridos: □ ponta, △ meio, × interseção,
+  ⧗ mais próximo (numa aresta), ⊥ perpendicular, ∥ paralelo, ↔ / ↕ horizontal / vertical, ○ centro. A aresta da
+  parede onde o rato se prende acende a azul. As linhas de alinhamento ficam a tracejado azul-petróleo. A dica com
+  o nome do snap continua.
+- Vale para todas as ferramentas que desenham (parede, linha…), no ecrã claro e nas vistas escuras.
+- O aspeto anterior (o do addon, 0.372) continua: botão **Tema** do cabeçalho ▸ «Desenho como no addon ArqSynth».
+  A escolha fica guardada.
+
 ## 0.445.0 — 2026-11-07
 
 **Botão do nível de detalhe no rodapé, como no Revit** (o dono: «um botão rápido para escolher o nível de

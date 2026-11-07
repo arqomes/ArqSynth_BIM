@@ -5084,6 +5084,39 @@ class TemporaryDimensions(unittest.TestCase):
 
     def test_dimension_lines_and_angle(self):
         from arqbim.core import temp_dims as td
+        look = td.LOOK["name"]
+        td.LOOK["name"] = "addon"                          # (as the addon draws them, 0.361–0.372)
+        try:
+            self._addon_lines_and_angle(td)
+        finally:
+            td.LOOK["name"] = look
+
+    def test_revit_lines_and_angle(self):
+        """0.446 — as Revit's: a small oblique cross on each end of the line (no arrows), the extension lines going on
+        past it; an angle's grey reference line well past its wide arc, a cross on each of the arc's ends, its value
+        just outside the arc's middle."""
+        from arqbim.core import temp_dims as td
+        look = td.LOOK["name"]
+        td.LOOK["name"] = "revit"
+        try:
+            dim = td.TempDim(np.zeros(3), np.array((4.0, 0.0, 0.0)), np.array((0.0, 0.0, 1.0)))
+            segs, label = td.dim_segments(dim, 0.01)
+            np.testing.assert_allclose(segs[0], ((0, 0.22, 0), (4, 0.22, 0)), atol=1e-12)    # the line, 22 px off
+            np.testing.assert_allclose(label, (2, 0.22, 0), atol=1e-12)
+            self.assertEqual(len(segs), 1 + 4 + 2)          # the line, two crosses of two strokes, two extension lines
+            ends = np.array([p for s in segs[1:3] for p in s])
+            np.testing.assert_allclose(ends.mean(axis=0), (0, 0.22, 0), atol=1e-12)   # a cross centred on the end
+            np.testing.assert_allclose(np.linalg.norm(segs[1][1] - segs[1][0]), 0.10, atol=1e-12)    # 2 × 5 px
+            angle = td.TempAngle(np.zeros(3), np.array((1.0, 0, 0)), 90.0, np.array((0.0, 0, 1)), radius_px=200.0)
+            arc, at = td.arc_segments(angle, 0.01)
+            np.testing.assert_allclose(arc[0], ((0, 0, 0), (2.9, 0, 0)), atol=1e-9)    # the reference line, past it
+            self.assertTrue(any(np.allclose(p, (0, 2.0, 0), atol=1e-9) for s in arc for p in s))   # the arc's end
+            self.assertGreater(float(np.linalg.norm(at)), 2.0)                 # its value outside the arc
+            self.assertTrue(td.revit())
+        finally:
+            td.LOOK["name"] = look
+
+    def _addon_lines_and_angle(self, td):
         dim = td.TempDim(np.zeros(3), np.array((4.0, 0.0, 0.0)), np.array((0.0, 0.0, 1.0)))
         segs, label = td.dim_segments(dim, 0.01)                       # 1 px = 1 cm: drawn 22 cm to the left
         np.testing.assert_allclose(segs[0][0], (0, 0.22, 0), atol=1e-12)
@@ -6088,7 +6121,9 @@ class Disciplines(unittest.TestCase):
                      "selectable",
                      "zoom_all", "zoom_selection", "view_back", "view_forward", "tool_type",
                      # (0.402: a dimension string's — on the contextual bar and its right button, as Revit's)
-                     "dim_eq", "dim_text", "dim_add", "dim_witness", "dim_text_back"}
+                     "dim_eq", "dim_text", "dim_add", "dim_witness", "dim_text_back",
+                     # (0.446: how drawing looks — in the header's theme menu)
+                     "draw_revit", "draw_addon"}
         self.assertEqual(acts - placed - elsewhere, set())
         for d in ("modeling", "architecture", "structure", "services", "terrain", "annotate", "massing"):
             self.assertEqual(ribbon.items_of(d)[0], "select")
