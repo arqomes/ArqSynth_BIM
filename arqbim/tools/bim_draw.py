@@ -9,7 +9,7 @@ import math
 
 import numpy as np
 
-from ..core import arcs, band_solid, placement
+from ..core import arcs, band_solid, placement, temp_dims
 from ..core.classify import box_from_axis
 from ..core.inference import ON_FACE
 from ..core.sketch_geometry import ray_plane
@@ -20,10 +20,10 @@ from ..i18n import decimal_sep, lang, t
 from ..ifc import catalog
 from ..ifc import systems as systems_model
 from ..model import bim
-from ..render.viewport import AXIS_U, AXIS_V, PREVIEW
+from ..render.viewport import AXIS_U, AXIS_V, PARALLEL_COLOR, PREVIEW
 from .base import (
-    LEFT, RIGHT, SNAP_COLORS, Option, Tool, drawing_dims, glyph_of, infer_point, inferred_style, level_plane,
-    outside_dim, show_snap, show_start_reference, snapped_edge, start_reference,
+    LEFT, RIGHT, SNAP_COLORS, Option, Tool, direction_snap, drawing_dims, glyph_of, infer_point, inferred_style,
+    level_plane, outside_dim, show_snap, show_start_reference, snap_tip, snapped_edge, start_reference,
 )
 
 Z = np.array((0.0, 0.0, 1.0))
@@ -32,6 +32,7 @@ AXES = {"x": np.array((1.0, 0.0, 0.0)), "y": np.array((0.0, 1.0, 0.0))}
 CLOSE_PX = 14
 AXIS_END_PX = 12
 MIN_LENGTH = 0.05
+PARALLEL_REACH = 20.0   # (0.447) m: the walls this near the one being drawn are looked at for its parallel neighbours
 WALL_SHAPES = ("line", "rect", "arc", "circle", "face", "wand")   # (0.102, 0.103) the Wall tool: point by point, a
 #                                                          rectangle, an arc, a circle, a face's outline; (0.374) the
 #                                                          magic wand (a window over two parallel lines of a drawing)
@@ -626,11 +627,19 @@ class WallTool(_PointTool):
             tip, color, _line = inferred_style(snap)
             end, glyph, edge = p, glyph_of(snap), snapped_edge(snap)
         else:
-            end, axis = axis_lock(self._start, p)
-            if axis:
-                tip = t("snap.axis_" + axis)
-                color = AXIS_U if axis == "x" else AXIS_V
-                glyph = "axis_" + axis
+            # (0.448, the owner) every 45° and parallel to the walls and lines there, as Revit's; Shift lets go
+            found = direction_snap(self.doc, self._start, p) if "Shift" not in (modifiers or ()) else None
+            if found is not None:
+                end, kind, edge, degrees = found
+                tip, glyph = snap_tip(kind, degrees), kind
+                color = AXIS_U if kind == "axis_x" else AXIS_V if kind == "axis_y" else PARALLEL_COLOR
+            else:
+                end, axis = (p.copy(), None) if "Shift" in (modifiers or ()) else axis_lock(self._start, p)
+                end[2] = self._start[2]
+                if axis:
+                    tip = t("snap.axis_" + axis)
+                    color = AXIS_U if axis == "x" else AXIS_V
+                    glyph = "axis_" + axis
         self._end = end
         self._preview(tip, color, glyph, edge)
 
@@ -730,6 +739,28 @@ class WallTool(_PointTool):
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
 
+    def _parallel_dims(self, a, b):
+        """(0.447) As Revit's while a wall is drawn: its distance to the nearest parallel wall on each side (overlapping
+        it), from axis to axis or from face to face as the walls' temporary dimensions (`host.dim_faces`) — relations
+        on what they measure. a, b: the axis being drawn."""
+        if float(np.linalg.norm((np.asarray(b) - np.asarray(a))[:2])) < MIN_LENGTH:
+            return []
+        ends = self._axis_ends().reshape(-1, 2, 3)          # (the walls near it only: one look at all of them)
+        if not len(ends):
+            return []
+        lo = np.minimum(a, b)[:2] - PARALLEL_REACH
+        hi = np.maximum(a, b)[:2] + PARALLEL_REACH
+        near = np.flatnonzero((ends[:, :, :2].max(axis=1) >= lo).all(axis=1) &
+                              (ends[:, :, :2].min(axis=1) <= hi).all(axis=1) &
+                              (np.abs(ends[:, 0, 2] - float(a[2])) < temp_dims.SAME_FLOOR))
+        axes = self._wall_axes()
+        others = [axes[k] for k in near]
+        if not others:
+            return []
+        faces = bool(getattr(self.host, "dim_faces", False))
+        found = temp_dims.wall_relations((a, b), self.spec.thickness, others, faces=faces)
+        return [temp_dims.TempDim(r.a, r.b, Z, offset_px=0.0, kind="relation") for r in found if r.kind == "side"]
+
     def _preview(self, tip, color, glyph=None, edge=None):
         a, b = offset_axis(self._start, self._end, self.reference, self.spec.thickness)
         way = (b - a)[:2]
@@ -751,7 +782,8 @@ class WallTool(_PointTool):
             segs = segs + [self._start, self._end]                    # + the line being drawn
             self.viewport.show_volume(tris, segs, [color] * len(segs))
         length = float(np.linalg.norm((self._end - self._start)[:2]))
-        drawing_dims(self.viewport, self._start, self._end)           # (its length and angle, as Revit)
+        drawing_dims(self.viewport, self._start, self._end,          # (its length and angle, as Revit)
+                     extra=self._parallel_dims(a, b))                # (0.447: and to the parallel walls beside it)
         if revit_look():                                  # (0.446) Revit's glyph, magenta; the edge snapped to, lit
             self.viewport.show_marker(None)
             self.viewport.show_glyph(glyph, self._end, edge)

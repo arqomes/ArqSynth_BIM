@@ -36,6 +36,7 @@ from .base import (
     LEFT, RIGHT, SNAP_COLORS, Option, Tool, drawing_dims, point_from, show_snap, show_start_reference, start_plane,
     start_reference,
 )
+from ..core.temp_dims import revit as revit_look
 
 CLOSE_PX = 12
 MIN_LENGTH = 0.001
@@ -393,6 +394,11 @@ class LineTool(Tool):
             self.viewport.show_polygon([], segments=[last, end], colors=[line, line])
         length = float(np.linalg.norm(end - last))
         drawing_dims(self.viewport, last, end, self._normal)          # (its length and angle, as Revit)
-        self.viewport.show_marker(end, marker)
+        if revit_look():                                  # (0.448: Revit's glyph — put by point_from — not a dot)
+            self.viewport.show_marker(None)
+            if self._closing:
+                self.viewport.show_glyph("endpoint", end)
+        else:
+            self.viewport.show_marker(end, marker)
         self.viewport.show_tip(tip, end if tip else None)
         self.host.set_vcb(_fmt(length))

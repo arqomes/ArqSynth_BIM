@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.448.0 — 2026-11-07
+
+**Snap a 0°, 45°, 90° e paralelo às paredes e linhas** (o dono: «no desenho deve ter snap a 0, 45, 90 grau. Se
+desenhar uma linha ou construir uma parede a 30º, quando desenhar outra parede inclinada na mesma direção, ele faz o
+snap de paralelo assim a nova parede é desenhada com segurança na mesma direção»).
+
+- A desenhar paredes e linhas em planta (num plano horizontal), a direção prende-se sozinha, até 2,5° de desvio:
+  - a cada 45°: 0°, 45°, 90°, 135°… (na horizontal e na vertical com o símbolo ↔ / ↕; nas diagonais ∠, «A 45°»);
+  - **paralela a qualquer parede ou linha** que esteja até 20 m dali: a nova fica exatamente na mesma direção, com o
+    símbolo ∥, a dica «Paralela» e a parede ou linha de referência acesa a azul.
+- Fica o que estiver mais perto da direção do rato. Um snap a um ponto (ponta, meio, aresta…) continua a ganhar.
+- **Shift** solta a direção (para desenhar a 31° de propósito).
+- Vale também para Mover e Rodar, que usam o mesmo cálculo do ponto.
+
+## 0.447.0 — 2026-11-07
+
+**Mais do Revit no desenho** (o dono: «Sim, segue», sobre o que faltava das capturas).
+
+- **Ao desenhar uma parede**, a distância até à parede paralela mais próxima de cada lado (que a acompanhe no
+  comprimento), como no Revit: de eixo a eixo, ou de face a face quando as cotas das paredes estão «Face a face».
+  Só se olha para as paredes até 20 m dali (não se percorre o modelo inteiro a cada movimento do rato).
+- **Parede escolhida**: as setas ⇆ para a virar, ao meio, do lado de fora (a face onde as camadas começam), como no
+  Revit. Um clique no losango do meio vira a parede (as camadas trocam de face; Ctrl+Z desfaz). O «+» das pontas
+  continua.
+- **Tornar a cota permanente**: nas plantas e nos cortes, cada cota temporária da parede escolhida tem por baixo do
+  valor o pequeno ícone vermelho ├┤ do Revit. Um clique põe na vista uma cota permanente igual, presa às paredes que
+  mede — acompanha-as quando mudam.
+- Do que as capturas mostram, fica por fazer arrastar as pontas da parede pelos pontos azuis (o Revit tem-nos; aqui
+  as pontas têm o «+» para continuar a desenhar).
+
 ## 0.446.0 — 2026-11-07
 
 **Desenhar como no Revit** (o dono, com 13 capturas do Revit: «quero ter essa experiência no desenho como a do

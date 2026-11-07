@@ -168,12 +168,13 @@ GLYPHS = {
     "horizontal": [((-1, 0), (1, 0)), ((-1, 0), (-0.5, 0.45)), ((-1, 0), (-0.5, -0.45)), ((1, 0), (0.5, 0.45)),
                    ((1, 0), (0.5, -0.45))],
     "center": _ring(),
+    "angle": [((-1, -0.8), (1, -0.8)), ((-1, -0.8), (0.55, 1))],          # (0.448) an angle's step (45°…): ∠
     "extension": [((-1, 0), (-0.35, 0)), ((0.35, 0), (1, 0)), ((0, -0.35), (0, 0.35))],
 }
 GLYPH_OF = {"endpoint": "endpoint", "intersection": "intersection", "crossing": "intersection", "midpoint": "midpoint",
             "origin": "center", "on_edge": "nearest", "on_guide": "nearest", "perpendicular_foot": "perpendicular",
             "perpendicular": "perpendicular", "parallel": "parallel", "extension": "extension",
-            "axis_x": "axis_x", "align_x": "axis_x", "axis_y": "axis_y", "align_y": "axis_y"}
+            "axis_x": "axis_x", "align_x": "axis_x", "axis_y": "axis_y", "align_y": "axis_y", "angle": "angle"}
 
 
 def glyph_of(found):
@@ -191,6 +192,9 @@ def glyph_of(found):
 DRAW_INK = {False: (0.24, 0.25, 0.27, 1.0), True: (0.80, 0.81, 0.83, 1.0)}     # (0.446) an outline being drawn…
 LOCATION_COLOR = {False: (0.09, 0.50, 0.66, 1.0), True: (0.20, 0.58, 0.73, 1.0)}   # …its location line (Revit's teal)
 LIT_EDGE_COLOR = {False: (0.10, 0.62, 0.88, 1.0), True: (0.45, 0.85, 1.00, 1.0)}   # (0.446) the edge snapped to
+PERMANENT_COLOR = (0.84, 0.25, 0.16, 1.0)  # (0.447) Revit's «make permanent» icon, red
+PERMANENT_PX = 6.0                         # (0.447) its half width (px)…
+PERMANENT_PICK_PX = 9.0                    # …and a click this near its middle takes it
 PARALLEL_COLOR = (0.85, 0.10, 0.75, 1.0)   # magenta, as SketchUp's parallel / perpendicular
 EXTENSION_COLOR = (0.45, 0.45, 0.45, 1.0)
 ACQUIRED_COLOR = (0.35, 0.35, 0.35, 1.0)
@@ -3970,6 +3974,12 @@ class Viewport:
                                                       aa=True))
         self._tdim_marks.render_order = 3
         self.temp_dims = []           # [(TempDim, where its value is (world), its text)] shown
+        # (0.447) Revit's «make this temporary dimension permanent» icon under each value (a plan's, a section's)
+        self._tdim_icons = gfx.Line(gfx.Geometry(positions=np.zeros((2, 3), np.float32)),
+                                    _overlay_material(gfx.LineSegmentMaterial, thickness=1.6, color=PERMANENT_COLOR,
+                                                      aa=True))
+        self._tdim_icons.render_order = 3
+        self.temp_dim_icons = []      # [(TempDim, the icon's middle (world))] shown
         # grips of the lines selected (0.62): squares on their ends, diamonds in their middles
         self._grip_ends = gfx.Points(gfx.Geometry(positions=np.zeros((1, 3), np.float32)),
                                      _overlay_material(gfx.PointsMarkerMaterial, marker="square", size=10,
@@ -4009,7 +4019,7 @@ class Viewport:
         self.alignment_kinds = []     # the kinds of the lines shown dashed (for tests)
         for wobj in (self._fill, self._volume, self._lines, self._marker, self._label, self._tip, self._align,
                      self._acquired, self._outline, self._location, self._glyph, self._lit_edge, self._tdim_lines,
-                     self._tdim_strong, self._tdim_marks, self._grip_ends,
+                     self._tdim_strong, self._tdim_marks, self._tdim_icons, self._grip_ends,
                      self._grip_mids, self._grip_adds, self._grip_subs, self._grip_arrows, self._region_fill,
                      self._region_line):
             wobj.visible = False
@@ -4182,7 +4192,8 @@ class Viewport:
         revit = temp_dims.revit()                          # (0.446: as Revit's, or as the addon's)
         look = (REVIT_DIM_LOOK if revit else TEMP_DIM_LOOK)[views_canvas.DARK]
         drawn = {False: ([], []), True: ([], [])}          # strong? → (segments' ends, their colours)
-        texts, shown = [], []
+        texts, shown, icons = [], [], []
+        drawing = revit and self.current_view() is not None     # (0.447: a plan, a section — not the 3D view)
         for dim in dims:
             s, at = temp_dims.dim_segments(dim, self.world_per_pixel((np.asarray(dim.a) + np.asarray(dim.b)) / 2))
             if not s and dim.kind != "label":            # (0.386: a label is its box alone)
@@ -4209,6 +4220,15 @@ class Viewport:
             texts.append((text, at, box, self._dim_turn(dim), _dim_font(name), beside,
                           look.get("text_strong", look["text"]) if strong else look["text"]))
             shown.append((dim, at, text))
+            if drawing and dim.key is not None and dim.kind != "label":
+                # (0.447) Revit's «make permanent» icon, beyond its value (a plan's, a section's)
+                n = temp_dims.across(dim.a, dim.b, np.asarray(dim.normal, dtype=float))
+                if n is not None:
+                    n = n * (1.0 if dim.side >= 0 else -1.0)
+                    size = _dim_font(name)
+                    px = self.world_per_pixel(at)
+                    icons.append((dim, np.asarray(at, dtype=float) + n * (
+                        (temp_dims.TEXT_GAP_PX + size * 1.24 + PERMANENT_PX + 2.0) * px), self._dim_turn(dim)))
         for angle in angles:
             s, at = temp_dims.arc_segments(angle, self.world_per_pixel(angle.center))
             segs, colors = drawn[False]
@@ -4285,8 +4305,29 @@ class Viewport:
         if marks:
             self._tdim_marks.geometry = gfx.Geometry(positions=_f32(marks))
         self._tdim_marks.visible = bool(marks)
+        strokes = []                                        # (0.447) each «make permanent» icon: a little ├─┤
+        for _dim, middle, turn in icons:
+            right = np.asarray(la.vec_transform_quat((1.0, 0.0, 0.0), turn), dtype=float)
+            up = np.asarray(la.vec_transform_quat((0.0, 1.0, 0.0), turn), dtype=float)
+            k = PERMANENT_PX * self.world_per_pixel(middle)
+            for (x0, y0), (x1, y1) in (((-1, 0), (1, 0)), ((-1, -0.6), (-1, 0.6)), ((1, -0.6), (1, 0.6))):
+                strokes += [middle + (right * x0 + up * y0) * k, middle + (right * x1 + up * y1) * k]
+        if strokes:
+            self._tdim_icons.geometry = gfx.Geometry(positions=_f32(strokes))
+        self._tdim_icons.visible = bool(strokes)
+        self.temp_dim_icons = [(dim, middle) for dim, middle, _turn in icons]
         self.temp_dims = shown
         self.redraw()
+
+    def temp_dim_icon_at(self, x, y):
+        """(0.447) The temporary dimension whose «make permanent» icon is under (x, y), or None."""
+        best = None
+        for dim, middle in self.temp_dim_icons:
+            sx, sy = self.project(middle)
+            d = math.hypot(x - sx, y - sy)
+            if d <= PERMANENT_PICK_PX and (best is None or d < best[0]):
+                best = (d, dim)
+        return best[1] if best else None
 
     def _dim_angle(self, dim):
         """(0.361) The angle on the screen (radians, counter-clockwise, within ±90° so that it reads upright) of a

@@ -7,6 +7,7 @@ A tool receives pointer events in logical pixels and typed measurements
     host.set_hint(text), host.set_vcb(text), host.message(text, warning=False)
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -349,6 +350,83 @@ def outside_dim(a, b, inside, normal=None, key=None):
     return dim
 
 
+ANGLE_STEP = 45.0           # (0.448) drawing on a level snaps every 45° (0°, 45°, 90°…), as Revit's…
+ANGLE_SNAP_DEG = 2.5        # …and parallel to the walls and lines there, within this many degrees
+PARALLEL_REACH = 20.0       # m: the walls and lines this near are looked at for it
+_DIRECTIONS = {"key": None, "value": None}
+
+
+def level_directions(doc):
+    """(0.448) The walls' axes and the loose lines of the model lying level: (unit directions (K, 2), their edges
+    (K, 2, 3)), worked out once per change of the model."""
+    key = (id(doc), getattr(doc, "revision", None))
+    if _DIRECTIONS["key"] == key and _DIRECTIONS["value"] is not None:
+        return _DIRECTIONS["value"]
+    from ..model import bim, line_edit
+    edges = []
+    try:
+        edges += [(np.asarray(s, dtype=float), np.asarray(e, dtype=float)) for _g, s, e, _t in bim.wall_axes(doc)]
+    except (RuntimeError, AttributeError, KeyError, ValueError, TypeError):
+        pass                                            # (the IFC still being read)
+    for obj in list(getattr(doc, "objects", {}).values()):
+        if line_edit.is_lines(obj):
+            edges += [(a, b) for _i, _j, a, b in line_edit.segments(obj)]
+    edges = np.array([e for e in edges if abs(float(e[1][2] - e[0][2])) < 1e-6
+                      and float(np.linalg.norm((e[1] - e[0])[:2])) > 0.05], dtype=float).reshape(-1, 2, 3)
+    d = edges[:, 1, :2] - edges[:, 0, :2]
+    dirs = d / np.maximum(np.linalg.norm(d, axis=1), 1e-12)[:, None] if len(edges) else np.zeros((0, 2))
+    _DIRECTIONS["key"], _DIRECTIONS["value"] = key, (dirs, edges)
+    return dirs, edges
+
+
+def direction_snap(doc, last, p):
+    """(0.448, the owner: «no desenho deve ter snap a 0, 45, 90 grau… ele faz o snap de paralelo assim a nova parede
+    é desenhada com segurança na mesma direção») The point `p` drawn to from `last` on a level, brought onto the
+    nearest snapping direction within ANGLE_SNAP_DEG: every 45° — the red and green axes, the diagonals — or parallel
+    to a wall or a loose line within PARALLEL_REACH. Returns (point, kind — "axis_x" / "axis_y" / "angle" /
+    "parallel" —, the edge it is parallel to or None, its angle in degrees) or None."""
+    last, p = np.asarray(last, dtype=float), np.asarray(p, dtype=float)
+    v = (p - last)[:2]
+    length = float(np.linalg.norm(v))
+    if length < 1e-6:
+        return None
+    heading = math.degrees(math.atan2(v[1], v[0]))
+    best = None                                          # (deviation, kind, edge, unit direction)
+    for k in range(int(round(360.0 / ANGLE_STEP))):
+        a = k * ANGLE_STEP
+        dev = abs((heading - a + 180.0) % 360.0 - 180.0)
+        if dev <= ANGLE_SNAP_DEG and (best is None or dev < best[0]):
+            kind = "axis_x" if a % 180.0 == 0 else "axis_y" if a % 180.0 == 90.0 else "angle"
+            best = (dev, kind, None, np.array((math.cos(math.radians(a)), math.sin(math.radians(a)))))
+    dirs, edges = level_directions(doc)
+    if len(edges):
+        mid = (edges[:, 0, :2] + edges[:, 1, :2]) / 2
+        half = np.linalg.norm(edges[:, 1, :2] - edges[:, 0, :2], axis=1) / 2
+        near = (np.linalg.norm(mid - last[:2], axis=1) - half <= PARALLEL_REACH) & \
+            (np.abs(edges[:, 0, 2] - last[2]) < 1.0)
+        u = v / length
+        cos = np.abs(dirs @ u)
+        for k in np.flatnonzero(near & (cos >= math.cos(math.radians(ANGLE_SNAP_DEG)))):
+            d = dirs[k] if float(dirs[k] @ u) >= 0 else -dirs[k]
+            dev = math.degrees(math.acos(min(1.0, float(cos[k]))))
+            if best is None or dev < best[0] - 1e-6:
+                best = (dev, "parallel", (edges[k, 0].copy(), edges[k, 1].copy()), d)
+    if best is None:
+        return None
+    _dev, kind, edge, d = best
+    q = last.copy()
+    q[:2] = last[:2] + d * float(v @ d)
+    q[2] = p[2]
+    return q, kind, edge, math.degrees(math.atan2(d[1], d[0])) % 360.0
+
+
+def snap_tip(kind, degrees):
+    """(0.448) The tip of a direction snap."""
+    if kind == "angle":
+        return t("snap.angle", a="{:g}".format(round(degrees, 1)))
+    return t("snap.parallel_to" if kind == "parallel" else "snap." + kind)
+
+
 def point_from(viewport, last, normal, x, y, modifiers=()):
     """The point under the mouse when drawing on from `last` (Line, Move, Rotate), in SketchUp's
     order with the alignments (tracking.infer): Shift's locked line > points (endpoint,
@@ -359,10 +437,15 @@ def point_from(viewport, last, normal, x, y, modifiers=()):
     followed are shown dashed. Returns (point, tip, marker colour, line colour) or None."""
     from ..render.viewport import PREVIEW
     found, _snap, _hit = infer_point(viewport, x, y, last, modifiers, plane=(np.asarray(last, dtype=float), normal))
+    glyphs = revit_look() and hasattr(viewport, "show_glyph")      # (0.446: Revit's glyph for what is found)
     if found is not None:
         viewport.show_alignments(found.lines, found.point)
         tip, marker, line = inferred_style(found)
+        if glyphs:
+            viewport.show_glyph(glyph_of(found), found.point, snapped_edge(found))
         return found.point.copy(), tip, marker, line
+    if glyphs:
+        viewport.show_glyph()
     viewport.show_alignments()
     origin, direction = viewport.ray(x, y)
     p = ray_plane(origin, direction, last, normal)
@@ -370,6 +453,15 @@ def point_from(viewport, last, normal, x, y, modifiers=()):
         p = ray_plane(origin, direction, last, -normal)
     if p is None:
         return None
+    if abs(float(np.asarray(normal, dtype=float)[2])) > 0.999 and "Shift" not in (modifiers or ()):
+        found = direction_snap(viewport.doc, last, p)    # (0.448) on a level: every 45°, parallel to what is there
+        if found is not None:
+            q, kind, edge, degrees = found
+            if glyphs:
+                viewport.show_glyph(kind, q, edge)
+            from ..render.viewport import AXIS_U, AXIS_V, PARALLEL_COLOR
+            colour = AXIS_U if kind == "axis_x" else AXIS_V if kind == "axis_y" else PARALLEL_COLOR
+            return q, snap_tip(kind, degrees), colour, colour
     return p, "", PREVIEW, PREVIEW
 
 

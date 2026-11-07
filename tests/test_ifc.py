@@ -12298,6 +12298,120 @@ class ViewStyles(unittest.TestCase):
         doc.modified = False
 
 
+class DrawingAsRevit(unittest.TestCase):
+    """0.447 — drawing as Revit's (the owner's pictures): a wall being drawn measured to the parallel walls beside it;
+    a wall chosen alone with its flip arrow out of its outside face; a temporary dimension made permanent, hung on the
+    walls it measures (it follows them)."""
+
+    @staticmethod
+    def _host(doc, viewport=None):
+        from types import SimpleNamespace
+        return SimpleNamespace(doc=doc, viewport=viewport, dim_faces=False, message=lambda *a, **k: None,
+                               set_hint=lambda *a: None, set_vcb=lambda *a: None)
+
+    def test_parallel_walls_while_drawing(self):
+        from arqbim.tools.bim_draw import WallTool
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            bim.add_wall(doc, (0.0, 0.0, 0.0), (0.0, 5.0, 0.0), w20)            # left, 3 m from the one drawn
+            bim.add_wall(doc, (4.0, 0.0, 0.0), (4.0, 5.0, 0.0), w20)            # right, 1 m
+            bim.add_wall(doc, (40.0, 0.0, 0.0), (40.0, 5.0, 0.0), w20)          # far away: not looked at
+            tool = WallTool(self._host(doc))
+            dims = tool._parallel_dims(np.array((3.0, 1.0, 0.0)), np.array((3.0, 4.0, 0.0)))
+            self.assertEqual(sorted(round(d.value, 4) for d in dims), [1.0, 3.0])        # (axis to axis)
+            self.assertTrue(all(d.kind == "relation" for d in dims))
+            tool.host.dim_faces = True
+            dims = tool._parallel_dims(np.array((3.0, 1.0, 0.0)), np.array((3.0, 4.0, 0.0)))
+            self.assertEqual(sorted(round(d.value, 4) for d in dims), [0.8, 2.8])        # (face to face)
+        finally:
+            doc.modified = False
+
+    def test_wall_flip_arrow(self):
+        from arqbim.tools.select import wall_flips
+        doc = Document()
+        try:
+            wall = bim.add_wall(doc, (0.0, 0.0, 0.0), (4.0, 0.0, 0.0), catalog.BY_KEY["parede_alv_20"])
+            guid, flips, segs = wall_flips(doc, {wall})
+            what, middle, a, b = flips[0]
+            self.assertEqual((guid, what), (wall, "wall"))
+            self.assertAlmostEqual(float(middle[0]), 2.0)                       # (at the wall's middle…)
+            self.assertGreater(abs(float(a[1])), 0.1)                           # (…out of its face)
+            self.assertTrue(len(segs) >= 3)
+            side = np.sign(float(middle[1]))
+            bim.flip_walls(doc, [wall])
+            self.assertEqual(np.sign(float(wall_flips(doc, {wall})[1][0][1][1])), -side)   # (flipped: the other face)
+            self.assertIsNone(wall_flips(doc, set()))
+        finally:
+            doc.modified = False
+
+    def test_direction_snap(self):
+        """0.448 — the owner: «snap a 0, 45, 90 grau… se desenhar uma linha ou construir uma parede a 30º, quando
+        desenhar outra parede inclinada na mesma direção, ele faz o snap de paralelo»."""
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.tools.base import direction_snap
+        from arqbim.tools.bim_draw import WallTool
+        doc = Document()
+        try:
+            polar = lambda p, deg, r: np.asarray(p, dtype=float) + r * np.array(           # noqa: E731
+                (math.cos(math.radians(deg)), math.sin(math.radians(deg)), 0.0))
+            self.assertEqual(direction_snap(doc, np.zeros(3), polar((0, 0, 0), 44.0, 3.0))[1], "angle")    # 45°
+            q = direction_snap(doc, np.zeros(3), polar((0, 0, 0), 91.5, 3.0))
+            self.assertEqual(q[1], "axis_y")
+            self.assertAlmostEqual(float(q[0][0]), 0.0, places=9)                                       # upright
+            self.assertIsNone(direction_snap(doc, np.zeros(3), polar((0, 0, 0), 30.0, 3.0)))           # (free)
+            wall = bim.add_wall(doc, (0.0, 0.0, 0.0), polar((0, 0, 0), 30.0, 4.0), catalog.BY_KEY["parede_alv_20"])
+            start = np.array((1.0, 3.0, 0.0))
+            q = direction_snap(doc, start, polar(start, 31.8, 2.5))                    # another wall, nearly so
+            self.assertEqual(q[1], "parallel")
+            self.assertAlmostEqual(q[3], 30.0, places=6)                               # exactly its way
+            self.assertIsNotNone(q[2])                                                 # (the wall lit)
+            self.assertIsNone(direction_snap(doc, start, polar(start, 34.0, 2.5)))     # (too far from it)
+            line = SketchObject("l", I4, PolyMesh([(10.0, 0.0, 0.0), tuple(polar((10, 0, 0), 62.0, 3.0))],
+                                                  lines=[(0, 1)]))
+            doc.execute(AddObject(line))                                               # a loose line at 62°
+            q = direction_snap(doc, np.array((12.0, 0.0, 0.0)), polar((12, 0, 0), 241.0, 2.0))   # the other way
+            self.assertEqual(q[1], "parallel")
+            self.assertAlmostEqual(q[3], 242.0, places=6)
+            tool = WallTool(self._host(doc))                   # the Wall tool: Shift lets the direction go
+            tool._start = start.copy()
+            tool._preview = lambda *a, **k: None
+            tool._wall_point = lambda x, y, level, modifiers=(): (polar(start, 31.8, 2.5), None, False)
+            tool.pointer_move(0, 0, ())
+            self.assertAlmostEqual(math.degrees(math.atan2(*(tool._end - start)[1::-1])), 30.0, places=6)
+            tool.pointer_move(0, 0, ("Shift",))
+            self.assertAlmostEqual(math.degrees(math.atan2(*(tool._end - start)[1::-1])), 31.8, places=6)
+        finally:
+            doc.modified = False
+
+    def test_temporary_dimension_made_permanent(self):
+        from types import SimpleNamespace
+        from arqbim.core import temp_dims
+        from arqbim.model import dimensions as dims_model
+        from arqbim.tools.select import SelectTool
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            wall = bim.add_wall(doc, (0.0, 0.0, 0.0), (4.0, 0.0, 0.0), w20)
+            view = ("plan", doc.active_storey)
+            vp = SimpleNamespace(selection_listeners=[], axes_listeners=[], annotation_listeners=[],
+                                 current_view=lambda: view, world_per_pixel=lambda p: 0.01)
+            tool = SelectTool(self._host(doc, vp))
+            dim = temp_dims.TempDim(np.array((0.0, 0.1, 0.0)), np.array((4.0, 0.1, 0.0)), np.array((0, 0, 1.0)),
+                                    key=("wall_length", wall), offset_px=30.0)
+            tool._make_permanent(dim)
+            self.assertEqual(len(doc.dimensions), 1)
+            made = doc.dimensions[0]
+            self.assertEqual(made.view, view)
+            self.assertEqual([r[0] if r else None for r in made.refs], [wall, wall])    # (hung on the wall)
+            self.assertAlmostEqual(float(made.at[1]), 0.1 + 0.30, places=6)              # (where its line was)
+            bim.resize_wall(doc, wall, at_end=1.0)                                      # the wall 1 m longer…
+            a, b = dims_model.ends(doc, made)
+            self.assertAlmostEqual(float(np.linalg.norm(np.asarray(b) - np.asarray(a))), 5.0, places=6)   # …it too
+        finally:
+            doc.modified = False
+
+
 class JoinsByMaterial(unittest.TestCase):
     """0.320 — the cut and the views joined by material, as Revit cleans up joins (model/cut_joins.py,
     model/seen_joins.py): a room's walls cut — their block one ring, the plaster turning the corners in a mitre, the

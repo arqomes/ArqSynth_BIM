@@ -1910,6 +1910,8 @@ _STRINGS = {
                                  "Detail level set by this view's view template (change it in the template)."),
     "tip.foot.detail_3d": ("Nível de detalhe: nas plantas, nos cortes e nos alçados.",
                            "Detail level: in the plans, the sections and the elevations."),
+    "info.dim_permanent": ("Cota permanente de {v} posta na vista (segue as paredes). Ctrl+Z desfaz.",
+                           "A permanent {v} dimension put in the view (it follows the walls). Ctrl+Z undoes."),
     # (0.446) how drawing looks (the header's theme button)
     "act.draw_revit": ("Desenho como no Revit", "Drawing as in Revit"),
     "act.draw_addon": ("Desenho como no addon ArqSynth", "Drawing as in the ArqSynth addon"),
@@ -5548,6 +5550,8 @@ _STRINGS = {
     "snap.align_z": ("Alinhado com o ponto (azul)", "Aligned with the point (blue)"),
     "snap.crossing": ("Cruzamento de alinhamentos", "Where the alignments cross"),
     "snap.parallel": ("Paralelo à aresta", "Parallel to the edge"),
+    "snap.parallel_to": ("Paralela (à parede ou linha acesa)", "Parallel (to the wall or line lit)"),   # (0.448)
+    "snap.angle": ("A {a}°", "At {a}°"),                                                              # (0.448)
     "snap.perpendicular": ("Perpendicular à aresta", "Perpendicular to the edge"),
     "snap.perpendicular_foot": ("Perpendicular à aresta (pé)", "Perpendicular to the edge (foot)"),
     "snap.extension": ("No prolongamento da aresta", "On the edge's extension"),

@@ -221,6 +221,7 @@ def section_grips(doc, viewport, name):
 FLIP_LONG = 0.30            # m: (0.359; 0.404: inside the door) a door's flip arrows this long…
 FLIP_HEAD = 0.06            # m: …their heads this long
 FLIP_PICK_PX = 14           # (0.404) a click this near an arrow (anywhere along it) flips
+WALL_FLIP_GAP = 0.10        # (0.447) m: a wall's flip arrow this far out of its outside face
 DIM_SNAP_PX = 8             # (0.405) a value / a dimension line dragged this near an alignment snaps to it
 DIM_GUIDE = (0.85, 0.10, 0.75, 1.0)   # (0.405) its guide lines (as the alignments' colour)
 
@@ -269,6 +270,31 @@ def door_flips(doc, ids):
     flips.append(("side", (a + b) / 2, a, b))
     segs += _double_arrow(a, b, FLIP_HEAD)
     return guid, flips, segs
+
+
+def wall_flips(doc, ids):
+    """(0.447) A straight wall with layers chosen alone, as Revit's flip control: (its GlobalId, [("wall", the middle of
+    its arrow, a, b)], the arrow's segments) — a double arrow across the wall at its middle, just out of the face its
+    layers start from (its outside, as Revit's) — else None."""
+    if len(ids) != 1 or doc.loading:
+        return None
+    guid = next(iter(ids))
+    obj = doc.get(guid)
+    if obj is None or not obj.is_bim or doc.ifc.kind_of(guid) != "wall":
+        return None
+    sense = doc.ifc.layer_sense(guid)
+    if sense is None:
+        return None
+    a, b, thickness = doc.ifc.wall_axis(guid)
+    d = (np.asarray(b, dtype=float) - np.asarray(a, dtype=float)) * (1.0, 1.0, 0.0)
+    length = float(np.linalg.norm(d))
+    if length < 1e-6:
+        return None
+    d = d / length
+    out = np.array((d[1], -d[0], 0.0)) * (1.0 if sense == "POSITIVE" else -1.0)
+    p0 = (np.asarray(a, dtype=float) + np.asarray(b, dtype=float)) / 2 + out * (thickness / 2 + WALL_FLIP_GAP)
+    p1 = p0 + out * FLIP_LONG
+    return guid, [("wall", (p0 + p1) / 2, p0, p1)], _double_arrow(p0, p1, FLIP_HEAD)
 
 
 def wall_ends(doc, ids):
@@ -594,6 +620,15 @@ class SelectTool(Tool):
         if self._door_flips is not None:                   # (0.359) a door's flips: their arrows, a grip in each
             self.viewport.show_grips([], [p for _w, p, *_ends in self._door_flips[1]], (), self._door_flips[2])
             return
+        if self._wall_ends is not None:                    # (0.447) a wall's flip arrow, as Revit's, with its «+»
+            try:
+                self._door_flips = wall_flips(self.doc, self.viewport.selection)
+            except (KeyError, ValueError, TypeError, AttributeError, RuntimeError):
+                self._door_flips = None
+            if self._door_flips is not None:
+                self.viewport.show_grips([], [p for _w, p, *_ends in self._door_flips[1]], self._wall_ends[1],
+                                         self._door_flips[2])
+                return
         self.viewport.show_grips(ends, [(a + b) / 2 for a, b in self._grip_segments],
                                  self._wall_ends[1] if self._wall_ends is not None else ())
 
@@ -760,11 +795,31 @@ class SelectTool(Tool):
                     self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
         self._refresh_dims(keep=False)
 
+    def _make_permanent(self, dim):
+        """(0.447) As Revit's icon under a temporary dimension: a dimension of this view from its ends, each hung on the
+        wall it lies on (so it follows it), its line where the temporary one's was. One undo step."""
+        from ..model import dimensions as dims_model
+        view = self.viewport.current_view()
+        if view is None:
+            return
+        a, b = np.asarray(dim.a, dtype=float), np.asarray(dim.b, dtype=float)
+        walls = dims_model._walls_of(self.doc, view[1]) if view[0] == "plan" else []
+        refs = [dims_model.hang(self.doc, dims_model._nearest_wall(walls, p), p) if walls else None for p in (a, b)]
+        n = temp_dims.across(a, b, np.asarray(dim.normal, dtype=float))
+        at = (a + b) / 2
+        if n is not None and abs(dim.offset_px) > 1e-9:
+            at = at + n * (1.0 if dim.side >= 0 else -1.0) * dim.offset_px * self.viewport.world_per_pixel(at)
+        made = dims_model.Dimension(view, a, b, at, refs, at_ref=dims_model.hang_line(self.doc, refs, at))
+        self.doc.execute(dims_model.AddDimension(made, t("cmd.dimension")))
+        self.host.message(t("info.dim_permanent", v=format_length(dim.value, decimal_sep())))
+
     def _flip_at(self, x, y):
         """(0.404) The door's flip arrow under (x, y) — within FLIP_PICK_PX of it on the screen, anywhere along it —:
         its index, or None."""
         best = None
-        for k, (_what, _middle, a, b) in enumerate(self._door_flips[1]):
+        for k, (what, _middle, a, b) in enumerate(self._door_flips[1]):
+            if what == "wall":                            # (0.447: a wall's only by its middle grip — the arrow is
+                continue                                  # beside its face, where the wall itself is clicked)
             pa, pb = (np.array(self.viewport.project(p), dtype=float) for p in (a, b))
             ab = pb - pa
             q = np.array((x, y), dtype=float)
@@ -1604,8 +1659,12 @@ class SelectTool(Tool):
             elif self._door_flips is not None and grip[0] == "middle":   # (0.359) a door's flip arrow
                 guid, flips, _segs = self._door_flips
                 what = flips[grip[1]][0]
-                bim.flip_door(self.doc, guid, hinge=what == "hinge", side=what == "side")
-                self.host.message(t("info.door_flipped_" + what))
+                if what == "wall":                        # (0.447) a wall's, as Revit's: its layers turned over
+                    flipped = bim.flip_walls(self.doc, [guid])
+                    self.host.message(t("info.flip_walls", n=len(flipped)) if flipped else t("info.flip_walls_none"))
+                else:
+                    bim.flip_door(self.doc, guid, hinge=what == "hinge", side=what == "side")
+                    self.host.message(t("info.door_flipped_" + what))
             elif self._section_grips is not None:         # (0.358) a section's end, or its «turn»
                 if grip[0] == "middle":
                     self.doc.flip_section(self._section_grips[0])
@@ -1638,6 +1697,10 @@ class SelectTool(Tool):
         if self._section is not None:                     # (0.358) a click elsewhere: the section let go
             self._section = None
             self._refresh_dims(keep=False)
+        made = self.viewport.temp_dim_icon_at(x, y) if hasattr(self.viewport, "temp_dim_icon_at") else None
+        if made is not None:                              # (0.447) Revit's icon: the temporary dimension made permanent
+            self._make_permanent(made)
+            return
         # a temporary dimension's value: type over it — (0.392) not on a double click on a line, whose length's box,
         # laid toward it, can reach the point clicked
         dim = self.viewport.temp_dim_at(x, y) if not again else None
