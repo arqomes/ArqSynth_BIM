@@ -23,6 +23,7 @@ TOUCH = 1e-4         # m: two outlines this close touch
 # along the crack (one line across the corner)
 CLOSE = 2e-5
 MITRE = 20.0         # a closing's corners kept sharp (bevelled only when sharper than ~6°)
+EDGE = 1e-5          # (0.444) m: a finish turned round an end reaches this far into the layers beside it
 PARALLEL = 0.9       # |cos| over it: two elements' layers run the same way (walls in a row), not across each other
 SAME = 1e-3          # m: two bands this close are one (walls in a row, of one thickness)
 CORE, FINISH = 1, 5  # a layer's strength (as Revit's priorities): an element's core, its other layers
@@ -105,18 +106,22 @@ def bands(layers, origin, u, v, strengths=None):
     return out
 
 
-def join(fills, whose, classes=None, banded=None, apart=None):
+def join(fills, whose, classes=None, banded=None, apart=None, covers=None, wrap=False):
     """fills [(outline (N, 2), key)] and each one's element (drawings._fills) joined: overlaps left to the stronger
     layer, the walls' corners and tees cleaned up. classes: {element: IFC class}; banded: bands(); apart (0.333):
     {frozenset((a, b))} of elements unjoined by hand — not cleaned up together, the line between them kept
-    (Fills.breaks). The same (fills, whose) back — an element's outlines its parts' (rings_of: outer ones
+    (Fills.breaks). (0.444) wrap: the walls' finishes turned round their ends and the jambs of their openings where
+    nothing covers them (`_wrap_ends`; a plan's) — covers: outlines of what else covers them (a door's lining drawn
+    by its pieces). The same (fills, whose) back — an element's outlines its parts' (rings_of: outer ones
     counter-clockwise, holes clockwise)."""
-    if len(set(whose)) < 2:
+    if len(set(whose)) < (1 if wrap else 2) or not len(fills):
         return fills, whose
     apart = apart or set()
     elements = _elements(fills, whose, classes or {}, banded or {})
     _butt_joins(elements, apart)
     _overlaps(elements, apart)
+    if wrap:
+        _wrap_ends(elements, covers or ())
     out, owners, by = Fills(), [], {}
     out.parts = {}
     for e in elements:
@@ -305,7 +310,7 @@ def _butt(y, row_points, group, box):
         return
     across_y = _slab(ny, cy, ylo, yhi, box)                       # y's band, on through x
     # where y's band goes through x, next to y
-    corner = _union([p for p in _polys(_and(x_whole, across_y)) if p.area > AREA and p.distance(y_whole) <= TOUCH])
+    corner = _union(_touching([p for p in _polys(_and(x_whole, across_y)) if p.area > AREA], y_whole))
     if corner.is_empty:
         return
     # a corner (L) when x is on one side of y's band only; against its side (T) when on both
@@ -342,6 +347,154 @@ def _butt(y, row_points, group, box):
             for x in group:
                 x.take(piece)
             y.give(key, strength, piece)
+
+
+def _touching(pieces, start):
+    """The pieces that touch `start` — (0.443) and those that touch them, on: a wall's layers left a hair apart (cut
+    at its other corner, their ends there a crack from each other) are still one corner, not only the layer next to
+    the other wall (the outer plaster stopped short of the corner)."""
+    kept = [k for k, p in enumerate(pieces) if p.distance(start) <= TOUCH]
+    rest = [k for k in range(len(pieces)) if k not in kept]
+    grown = bool(kept)
+    while grown and rest:
+        grown = False
+        for k in list(rest):
+            if any(pieces[k].distance(pieces[j]) <= TOUCH for j in kept):
+                kept.append(k)
+                rest.remove(k)
+                grown = True
+    return [pieces[k] for k in kept]
+
+
+def _wrap_ends(elements, covers=()):
+    """(0.444) As Revit's «wrapping at ends / at inserts»: where a wall's cut ends across its thickness with nothing
+    against it — a free end, a hole's jamb, the jambs of a window or a door whose frame is thinner than the wall —, the
+    finish of each face (its outermost layer, when it is not the core) turns round the end with its own thickness, up
+    to the middle of the core (the whole end when only one face has one); where a frame, a lining (`covers`: a door
+    drawn by its pieces), another wall or a column touches the end, it stops there."""
+    import shapely
+    from shapely.strtree import STRtree
+    walls = [e for e in elements if e.cls in WALLS and e.band is not None and len(e.layers) >= 2 and e.parts]
+    if not walls:
+        return
+    owners = [e for e in elements if e.parts]
+    geometries = [e.whole() for e in owners]
+    geometries += [p for p in (_clean(_snap(shapely.Polygon(r))) for r in covers if len(r) >= 3) if not p.is_empty]
+    whose = owners + [None] * (len(geometries) - len(owners))
+    grown = shapely.buffer(np.array(geometries, dtype=object), TOUCH)      # (what lies a hair from them, covered)
+    tree = STRtree(grown)
+    for e in walls:
+        turns = _turns(e.layers)
+        if not turns:
+            continue
+        n, c, _lo, _hi = e.band
+        t = np.array((-n[1], n[0]))
+        whole = e.whole()
+        segs = np.array(_segments(whole), dtype=float).reshape(-1, 2, 2)
+        d = segs[:, 1] - segs[:, 0]
+        length = np.linalg.norm(d, axis=1)
+        segs = segs[(length > 1e-3) & (np.abs(d @ n) > 0.999 * length)]   # (across the wall: not a face, a mitre)
+        if not len(segs):
+            continue
+        lines = shapely.linestrings(segs)
+        found = {}
+        for k, j in zip(*tree.query(lines, predicate="intersects")):
+            if whose[j] is not e:
+                found.setdefault(int(k), []).append(grown[j])
+        bare = []                                            # (the stretches of those ends nothing covers)
+        for k, line in enumerate(lines):
+            exposed = line
+            for g in found.get(k, ()):
+                exposed = exposed.difference(g)
+                if exposed.is_empty:
+                    break
+            bare += [np.asarray(part.coords, dtype=float)[[0, -1]] for part in _lines(exposed)]
+        quads = _turn_at(np.array(bare, dtype=float).reshape(-1, 2, 2), whole, n, c, t, turns) if bare else {}
+        if not quads:
+            continue
+        # (each wall's at once: its finishes' strips taken from all its layers, then each given to its finish)
+        taken = _and(whole, shapely.union_all([q for qs in quads.values() for q in qs]))
+        if taken.area <= AREA:
+            continue
+        e.take(taken)
+        if len(quads) == 1:                                  # (the most often: one plaster on both faces)
+            (key, strength), = quads
+            e.give(key, strength, taken)
+            continue
+        given = None
+        for (key, strength), qs in quads.items():
+            region = _and(taken, shapely.union_all(qs))
+            if given is not None:
+                region = _minus(region, given)
+            if region.area > AREA:
+                e.give(key, strength, region)
+                given = region if given is None else _union([given, region])
+
+
+def _turn_at(ends, whole, n, c, t, turns):
+    """(0.444) The strips of a wall's finishes turned round its ends (or stretches of them) that nothing covers — ends
+    (M, 2, 2): each one's two points —: {(key, strength): [quadrilateral]}, all at once."""
+    import shapely
+    across = ends @ n + c                                                    # (M, 2)
+    keep = (np.linalg.norm(ends[:, 1] - ends[:, 0], axis=1) >= 1e-3) & (np.abs(across[:, 1] - across[:, 0]) >= 1e-6)
+    ends, across = ends[keep], across[keep]
+    if not len(ends):
+        return {}
+    mid = ends.mean(axis=1)
+    ahead = shapely.contains_xy(whole, *(mid + t * 1e-3).T)
+    behind = shapely.contains_xy(whole, *(mid - t * 1e-3).T)
+    keep = ahead != behind                                   # (not a crack inside the wall, nor a hair)
+    ends, across, ahead = ends[keep], across[keep], ahead[keep]
+    if not len(ends):
+        return {}
+    inward = np.where(ahead, 1.0, -1.0)[:, None] * t                         # (M, 2)
+    lo, hi = across.min(axis=1), across.max(axis=1)
+    out = {}
+    for key, w0, w1, depth, strength in turns:
+        # (a hair into the layers beside it and out of the end, so that no sliver of the block is left)
+        g0, g1 = np.maximum(lo, w0 - EDGE), np.minimum(hi, w1 + EDGE)
+        ok = g1 - g0 > 1e-6
+        if not ok.any():
+            continue
+        same = next((k for k in out if k[0] == key), None)   # (one finish on both faces: one strip set)
+        if same is not None and same[1] != strength:
+            out[(key, min(strength, same[1]))] = out.pop(same)
+            same = (key, min(strength, same[1]))
+        target = same or (key, strength)
+        a, b, s, step = ends[ok, 0], ends[ok, 1], across[ok], inward[ok]
+        # (the end's points that far across, along it: it may lean a hair)
+        p0 = a + (b - a) * ((g0[ok] - s[:, 0]) / (s[:, 1] - s[:, 0]))[:, None]
+        p1 = a + (b - a) * ((g1[ok] - s[:, 0]) / (s[:, 1] - s[:, 0]))[:, None]
+        corners = np.stack((p0 - step * TOUCH, p1 - step * TOUCH, p1 + step * depth, p0 + step * depth), axis=1)
+        out.setdefault(target, []).extend(shapely.polygons(corners))
+    return out
+
+
+def _turns(layers):
+    """(0.444) What of a wall's layers [(key, e0, e1, strength)] (across it, in order) turns round its ends: [(key, from,
+    to — across —, its thickness, strength)] — each face's outermost layer when it is not the core, up to the middle of
+    the core (to the other face when only one face has one)."""
+    core = min(s for *_r, s in layers)
+    middle = [(e0, e1) for _k, e0, e1, s in layers if s == core]
+    m = (min(e0 for e0, _e1 in middle) + max(e1 for _e0, e1 in middle)) / 2.0
+    lo, hi = layers[0], layers[-1]
+    low, high = lo[3] > core, hi[3] > core
+    out = []
+    if low:
+        out.append((lo[0], lo[2], m if high else hi[2], lo[2] - lo[1], lo[3]))
+    if high:
+        out.append((hi[0], m if low else lo[1], hi[1], hi[2] - hi[1], hi[3]))
+    return [w for w in out if w[3] > 1e-6 and w[2] - w[1] > 1e-6]
+
+
+def _segments(geometry):
+    """The edges of a region's rings: [(a (2,), b (2,))]."""
+    out = []
+    for poly in _polys(geometry):
+        for ring in [poly.exterior, *poly.interiors]:
+            c = np.asarray(ring.coords, dtype=float)
+            out += list(zip(c[:-1], c[1:]))
+    return out
 
 
 def _overlaps(elements, apart=()):
@@ -442,7 +595,7 @@ def _union(geometries, grid=None):
     if grid is None:
         return _clean(shapely.union_all(geometries))
     if len(geometries) < 8:
-        return _closed(shapely.union_all(geometries, grid_size=grid), grid)
+        return _closed(_union_all(geometries, grid), grid)
     # many (a material's parts over a storey): only those that touch joined — each group at once, much quicker
     from shapely.geometry import MultiPolygon
     from shapely.strtree import STRtree
@@ -465,7 +618,7 @@ def _union(geometries, grid=None):
         groups.setdefault(find(i), []).append(polys[i])
     out = []
     for members in groups.values():
-        joined = _closed(shapely.union_all(members, grid_size=grid) if len(members) > 1 else members[0], grid)
+        joined = _closed(_union_all(members, grid) if len(members) > 1 else members[0], grid)
         out += [p for p in _polys(joined) if p.area > AREA]
     return out[0] if len(out) == 1 else MultiPolygon(out)
 
@@ -479,7 +632,23 @@ def _closed(geometry, grid):
     if geometry.is_empty:
         return _clean(geometry)
     grown = shapely.buffer(geometry, CLOSE, join_style="mitre", mitre_limit=MITRE)
-    return _clean(shapely.set_precision(shapely.buffer(grown, -CLOSE, join_style="mitre", mitre_limit=MITRE), grid))
+    shrunk = shapely.buffer(grown, -CLOSE, join_style="mitre", mitre_limit=MITRE)
+    out = shapely.set_precision(shrunk, grid)
+    if not out.is_valid:                 # (0.444: rarely a ring rounded onto itself — mended, else left unrounded)
+        out = shapely.make_valid(out, method="structure", keep_collapsed=False)
+        if not out.is_valid:
+            out = shrunk
+    return _clean(out)
+
+
+def _union_all(geometries, grid):
+    """(0.444) shapely.union_all on the grid — and, when GEOS cannot node them on it (a topology error), mended and
+    joined without it, rather than the drawing failing."""
+    import shapely
+    try:
+        return shapely.union_all(geometries, grid_size=grid)
+    except shapely.errors.GEOSException:
+        return shapely.union_all([shapely.make_valid(g) for g in geometries])
 
 
 def _minus(a, b):

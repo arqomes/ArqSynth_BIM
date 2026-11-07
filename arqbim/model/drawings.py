@@ -186,8 +186,10 @@ def _shown(doc, obj, settings):
 
 @material_looks.one_pass()                      # (0.352: each wall's layers read once)
 def _draw(doc, objects, normal, offset, origin, u, v, title, hidden=True, rule=None, detail="fine", look=None,
-          elements=None):
+          elements=None, covers=()):
     """hidden: leave out the edges that something in front hides (the drawing is seen along `normal`).
+    covers (0.444): outlines of what covers the walls' jambs but is not among `objects` (a plan's doors drawn by their
+    symbols: their linings' pieces) — no finish turned round them.
     rule: the view's graphic rule — what is cut is then filled with its colours (graphic_rules.cut_colours).
     detail (0.65): what is cut filled solid ("coarse"), with its material's hatch ("medium"), or by
     layers ("fine"). look (0.315): the view's style (view_styles.ViewStyle) — the faces seen painted (shaded or in
@@ -263,13 +265,15 @@ def _draw(doc, objects, normal, offset, origin, u, v, title, hidden=True, rule=N
             else drawing2d.flatten(segs, origin, u, v)
         if len(kept):
             seen_patterns.append((kept, colour))
-    fills, hatches, cut_patterns, whose = _fills(doc, cut, cut3d, owners, origin, u, v, rule, detail, look, elements)
+    # (0.359) a plan's doors by their pieces, each its own outline and hatch — not merged into one mass; (0.444) their
+    # linings cover the jambs (no finish turned round them)
+    pieces, _piece_owners = door_pieces(doc, objects, n, origin, u, v, detail)
+    fills, hatches, cut_patterns, whose = _fills(doc, cut, cut3d, owners, origin, u, v, rule, detail, look, elements,
+                                                 [ring for ring, _h in pieces] + list(covers))
     # (0.320) each material's parts as one (a thin line only where the material changes), and one thick line round
     # all that is cut (model/cut_joins.py)
     regions = cut_joins.merged(fills, whose)
     joined = [(ring, key) for key, region in regions.items() for ring in drawing2d.rings_of(region)]
-    # (0.359) a plan's doors by their pieces, each its own outline and hatch — not merged into one mass
-    pieces, _piece_owners = door_pieces(doc, objects, n, origin, u, v, detail)
     cut_patterns = _with_own_patterns(doc, cut_patterns, pieces)
     drawing = Drawing(title, cut + [ring for ring, _h in pieces], lines,
                       [hatches.get(i) for i in owners] + [h for _r, h in pieces], fills=joined + pieces)
@@ -288,11 +292,13 @@ def _draw(doc, objects, normal, offset, origin, u, v, title, hidden=True, rule=N
     return drawing
 
 
-def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look=None, elements=None):
+def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look=None, elements=None, covers=None):
     """What is cut, filled by material — (fills [(outline (N, 2), hatch)], {element: its main hatch}, {hatch: the
     material's own (background, foreground)}): each layer its own (detail "fine"), a column through a wall taken out
     of it, a graphic rule's colours, the view style's cut (0.315), (0.331) the view's own hatch for an element — over
-    its category's and its materials', one hatch for all of it."""
+    its category's and its materials', one hatch for all of it. (0.444) In a plan, the walls' finishes turned round
+    their free ends and their openings' jambs (cut_joins._wrap_ends) — covers: the doors drawn by their pieces
+    (door_pieces' outlines), which cover the jambs they line."""
     cut_ids = sorted(set(owners))                                   # (of what is cut only)
     category = {} if look is None or look.cut == "material" else {"own": False}   # (0.315: the category's hatches)
     hatches = _ask_ifc(doc, "hatches", cut_ids, **category) if owners else {}
@@ -346,8 +352,10 @@ def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look
     # and their tees' cores in through the plaster (model/cut_joins.py)
     classes = {owner: getattr(doc.get(owner), "ifc_class", None) for owner in cut_ids}
     strengths = _ask_ifc(doc, "layer_strengths", cut_ids) if across else {}     # (0.334: each layer's, by its type)
+    plan = abs(float(np.cross(np.asarray(u, dtype=float), np.asarray(v, dtype=float))[2])) > 0.99
     fills, whose = cut_joins.join(fills, whose, classes, cut_joins.bands(across, origin, u, v, strengths),
-                                  _unjoined(doc, cut_ids))                  # (0.333: not those unjoined by hand)
+                                  _unjoined(doc, cut_ids),                  # (0.333: not those unjoined by hand)
+                                  covers=covers, wrap=plan and detail == "fine")
     own_cuts = sorted({h for _r, h in fills if isinstance(h, str) and h.startswith(MATERIAL_CUT)})
     patterns = dict(_ask_ifc(doc, "cut_patterns", own_cuts)) if own_cuts else {}
     patterns.update(dict(overrides.values()))
@@ -408,8 +416,9 @@ def cut_fills(doc, objects, normal, offset, origin, u, v, rule=None, detail="fin
         cut += drawing2d.oriented([drawing2d.flatten(ring, origin, u, v) for ring in rings])
         owners += [obj.id] * len(rings)
         cut3d += rings
-    fills, _hatches, patterns, whose = _fills(doc, cut, cut3d, owners, origin, u, v, rule, detail, look, elements)
     pieces, piece_owners = door_pieces(doc, objects, n, origin, u, v, detail)
+    fills, _hatches, patterns, whose = _fills(doc, cut, cut3d, owners, origin, u, v, rule, detail, look, elements,
+                                              [ring for ring, _h in pieces])
     if pieces:
         fills, whose = list(fills) + pieces, list(whose) + piece_owners
         patterns = _with_own_patterns(doc, patterns, pieces)
@@ -665,9 +674,12 @@ def plan(doc, storey, title, cut_height=None, underlay=True):
                         and float(o.mesh.bounds()[1][2]) < bottom)]
     symbols = doc.plan_symbols([o.id for o in objects if o.ifc_class == "IfcDoor" and o.storey == storey])
     origin, u, v = np.array((0.0, 0.0, level)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+    # (0.444) the doors drawn by their symbols: their linings still cover the jambs (no plaster turned round them)
+    lined = door_pieces(doc, [o for o in objects if o.id in symbols], np.array((0.0, 0.0, -1.0)), origin, u, v)[0] \
+        if symbols else []
     drawing = _draw(doc, [o for o in objects if o.id not in symbols], np.array((0.0, 0.0, -1.0)),
                     -(level + cut_height), origin, u, v, title, rule=settings.rule, detail=settings.detail,
-                    look=drawn_look(doc, settings), elements=settings.elements)
+                    look=drawn_look(doc, settings), elements=settings.elements, covers=[r for r, _h in lined])
     if symbols:
         drawing.symbols = drawing2d.flatten(np.concatenate(list(symbols.values())), origin, u, v)
     drawing = _add_dimensions(doc, drawing, ("plan", storey), origin, u, v)

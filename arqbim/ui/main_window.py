@@ -1588,6 +1588,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fill_style_menu()
         self.scale_button = self._footer_button(bar, "scale", t("tip.foot.scale"), text="1:100")
         self.scale_button.menu().aboutToShow.connect(self._fill_scale_menu)
+        # (0.445) the drawing's detail level beside its scale, as in Revit's view control bar: Coarse, Medium, Fine
+        self._detail_icons = {level: icons.detail_level_icon(level) for level in templates_model.DETAILS}
+        self.detail_button = self._footer_button(bar, "detail", t("tip.foot.detail_3d"),
+                                                 icon=self._detail_icons["fine"])
+        group = QtGui.QActionGroup(self.detail_button)
+        for level in templates_model.DETAILS:
+            act = self.detail_button.menu().addAction(self._detail_icons[level], t("foot.detail." + level),
+                                                      lambda v=level: self._footer_edit("view_detail", v))
+            act.setData(level)
+            act.setCheckable(True)
+            group.addAction(act)
         self.act_ground_grid = QtGui.QAction(icons.ground_grid_icon(), t("props.view_grid"), self)
         self.act_ground_grid.setCheckable(True)
         self.act_ground_grid.triggered.connect(lambda on: self._footer_edit("view_grid", bool(on)))
@@ -1721,6 +1732,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scale_button.setEnabled(drawing and not by_template)
         self.scale_button.setToolTip(t("tip.foot.scale_template") if by_template else t("tip.foot.scale") if drawing
                                      else t("tip.foot.scale_3d"))
+        level = (s.detail or "fine") if drawing else "fine"                    # (0.445)
+        self.detail_button.setIcon(self._detail_icons.get(level, self._detail_icons["fine"]))
+        self.detail_button.setEnabled(drawing and not by_template)
+        self.detail_button.setToolTip(t("tip.foot.detail_template") if by_template else
+                                      t("tip.foot.detail", level=t("foot.detail." + level)) if drawing
+                                      else t("tip.foot.detail_3d"))
+        for act in self.detail_button.menu().actions():
+            act.setChecked(act.data() == level)
         self.orientation_button.setEnabled(not self.doc.loading)
 
     def set_units(self, unit, remember=True):

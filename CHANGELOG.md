@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.445.0 — 2026-11-07
+
+**Botão do nível de detalhe no rodapé, como no Revit** (o dono: «um botão rápido para escolher o nível de
+visualização como do Revit»).
+
+- No rodapé, ao lado da escala, um botão com o nível de detalhe da vista: **Grosso** (paredes cheias), **Médio**
+  (a trama do material) e **Fino** (as camadas). O ícone mostra o nível em que a vista está.
+- Serve nas plantas, nos cortes e nos alçados (na vista 3D fica apagado). Quando a vista tem um modelo de vista, o
+  nível é o do modelo e o botão fica apagado, como a escala.
+- É o mesmo que «Nível de detalhe» nas Propriedades da vista (um passo de desfazer).
+
+## 0.444.0 — 2026-11-07
+
+**O reboco contorna as pontas livres e as ombreiras dos vãos** (o dono, com capturas: «quando há furo, ou uma
+janela que não tem aro largo, ou uma porta de correr com caixilho de alumínio, o reboco precisa contornar; na
+parede com extremidade livre, o reboco precisa contornar»).
+
+- Em planta, com o nível de detalhe Fino, o acabamento de cada face da parede (a camada de fora, quando não é o
+  núcleo) dá a volta, com a sua espessura, onde a parede acaba à vista: numa ponta livre, nas ombreiras de um furo,
+  e nas ombreiras das janelas e portas cujo caixilho é mais estreito do que a parede — aí entra até ao caixilho.
+  Como o «Wrapping» do Revit, nas pontas e nos vãos.
+- Onde o aro de uma porta, outra parede ou um pilar tapa a ombreira, o reboco não entra (as portas com aro largo
+  ficam como estavam).
+- Num piso com 1100 elementos e 1200 ombreiras, o corte fica cerca de 20 % mais lento (1,9 → 2,3 s).
+- De passagem: o fecho de fendas da 0.442 podia, num caso raro (visto numa parede em L rodada com o reboco a
+  contornar), deixar um polígono cruzado e o desenho falhava com um erro de geometria; agora a geometria é
+  consertada e, se a junção falhar, faz-se sem a grelha — o desenho segue sempre.
+
+## 0.443.0 — 2026-11-07
+
+**O reboco dá a volta à esquina onde a sala fecha** (o dono: «Sim, corrige», sobre o que a 0.442 encontrou).
+
+- Numa sala desenhada de seguida e muito rodada (45°, 72°…), na esquina onde a cadeia de paredes fecha, o reboco
+  exterior parava antes da esquina e o bloco chegava à face de fora.
+- A causa era da mesma família da 0.442: as camadas da primeira parede, recortadas na outra ponta dela, ficavam a
+  um fio umas das outras; a esquina só apanhava a camada encostada à outra parede (o reboco de dentro).
+- Agora a esquina apanha também as camadas que tocam nessa, e assim por diante: a meia-esquadria é feita na parede
+  inteira. Em 390 salas rodadas ao acaso, nenhum reboco ficou aberto; o tempo do corte não muda.
+
 ## 0.442.0 — 2026-11-07
 
 **Sem linhas a mais nas esquinas das paredes** (o dono, com captura: «linhas invasoras na junção das paredes à

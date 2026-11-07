@@ -17606,8 +17606,18 @@ def footer_flow():
         fifty.trigger()
         pump(200)
         scaled = doc.view_settings(plan).scale == 50 and win.scale_button.text() == "1:50" and win.scale_button.isEnabled()
+        # (0.445) the detail level beside the scale, as Revit's: Coarse, then Fine again
+        levels = {a.data(): a for a in win.detail_button.menu().actions()}
+        levels["coarse"].trigger()
+        pump(200)
+        detailed = doc.view_settings(plan).detail == "coarse" and levels["coarse"].isChecked() and \
+            "Grosso" in win.detail_button.toolTip() and win.detail_button.isEnabled()
+        levels["fine"].trigger()
+        pump(200)
+        detailed = detailed and (doc.view_settings(plan).detail or "fine") == "fine" and levels["fine"].isChecked()
     else:
         scaled = not win.scale_button.isEnabled()
+        detailed = not win.detail_button.isEnabled()
     vp.set_selection({guid})
     pump(200)
     win.set_units("cm")
@@ -17633,10 +17643,11 @@ def footer_flow():
     pump(200)
     check("rodape_vista_escala_unidades_pavimento",
           placed and styled and undone and grid_off and grid_on and north_east and back and home and drawing
-          and scaled and in_cm and in_m and storey,
-          "no_rodape={} estilo={} desfeito={} grelha={}/{} nordeste={} tras={} inicial={} planta={} escala={} cm={} "
-          "m={} pavimento={} ({})".format(placed, styled, undone, grid_off, grid_on, north_east, back, home, drawing,
-                                          scaled, in_cm, in_m, storey, win.props.text().split("\n")[:3]))
+          and scaled and detailed and in_cm and in_m and storey,
+          "no_rodape={} estilo={} desfeito={} grelha={}/{} nordeste={} tras={} inicial={} planta={} escala={} "
+          "detalhe={} cm={} m={} pavimento={} ({})".format(placed, styled, undone, grid_off, grid_on, north_east, back,
+                                                           home, drawing, scaled, detailed, in_cm, in_m, storey,
+                                                           win.props.text().split("\n")[:3]))
 
 
 def many_properties_flow():

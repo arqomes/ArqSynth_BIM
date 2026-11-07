@@ -5329,7 +5329,8 @@ class Schedules(unittest.TestCase):
         self.assertEqual({h for _r, h in with_door.fills}, {"gypsum", "masonry"})   # by layer (0.320: each material's
         self.assertEqual(len(with_door.outline), 3)                                 # parts joined; the thick line)
         self.assertAlmostEqual(sum(Drawing2D_area(r) for r, h in with_door.fills if h == "masonry"),
-                               (4.2 + 4.0) * 0.16, places=6)          # the block: 16 cm of the 20
+                               (4.2 + 4.0) * 0.16 - 4 * 0.02 * 0.16, places=6)   # the block: 16 cm of the 20 —
+        # (0.444) less the plaster turned round the walls' 4 free ends (2 cm each); the door's lining covers its jambs
         sym = with_door.symbols.reshape(-1, 2)                         # its symbol: linings, leaf, swing arc
         self.assertTrue(len(with_door.symbols) > 10 and np.all(sym[:, 0] > 1.0 - 0.05 - 1e-6)     # (0.288: and its
                         and np.all(sym[:, 0] < 1.8 + 0.05 + 1e-6), sym.min(axis=0))            # casings, 5 cm on)
@@ -12381,6 +12382,56 @@ class JoinsByMaterial(unittest.TestCase):
                             max(abs(float(d @ ux[:2])), abs(float(d @ uy[:2]))) / length < 0.999:
                         across.append(s)
             self.assertEqual(across, [])
+        finally:
+            doc.modified = False
+
+    def test_closing_corner_turned(self):
+        """0.443 — a room drawn as one chain, turned 72,4°: at the corner where the chain closes, the first wall's
+        layers (cut apart at its other corner, a hair from each other) were two pieces, the corner took only the inner
+        plaster and the outer plaster stopped short of it. Now both plasters are rings round the room."""
+        from arqbim.model import drawings
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            a = math.radians(72.4)
+            ux, uy = np.array((math.cos(a), math.sin(a), 0.0)), np.array((-math.sin(a), math.cos(a), 0.0))
+            o = np.array((-20.8404, 7.0293, 0.0))
+            bim.add_wall_loop(doc, [o, o + ux * 6.5894, o + ux * 6.5894 + uy * 3.485, o + uy * 3.485], w20)
+            regions = self._regions(drawings.plan(doc, doc.active_storey, "P"))
+            self.assertEqual(self._count(regions["masonry"]), 1)
+            plasters = list(getattr(regions["gypsum"], "geoms", [regions["gypsum"]]))
+            self.assertEqual(len(plasters), 2)                                   # (outside and inside…)
+            self.assertEqual([len(p.interiors) for p in plasters], [1, 1])      # (…each a ring round the room)
+        finally:
+            doc.modified = False
+
+    def test_finish_turned_round_ends_and_jambs(self):
+        """0.444 — as Revit's wrapping at ends and at inserts: the plaster turns round a wall's free end and a hole's
+        jambs (2 cm, the block set back), into the jambs of an aluminium door up to its frame; not where a door's
+        lining covers the jamb."""
+        from shapely.geometry import Point
+        from arqbim.model import drawings
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            wall = bim.add_wall(doc, (0.0, 0.0, 0.0), (10.0, 0.0, 0.0), w20)
+            frame = bim.wall_frame(doc, wall)
+            bim.add_wall_opening(doc, wall, 2.0, 0.8, 2.0, 0.0)                          # a hole 2,0 – 2,8
+            bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_sacada_140"], frame, 4.0, -1)   # 4,0 – 5,4
+            bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], frame, 7.0, -1)            # 7,0 – 7,8
+            regions = self._regions(drawings.plan(doc, doc.active_storey, "P"))
+            gypsum, masonry = regions["gypsum"], regions["masonry"]
+            self.assertTrue(gypsum.contains(Point(0.01, 0.0)))          # (the free end: plaster across it…)
+            self.assertTrue(masonry.contains(Point(0.03, 0.0)))         # (…the block set back 2 cm)
+            self.assertTrue(gypsum.contains(Point(9.99, 0.0)))
+            self.assertTrue(gypsum.contains(Point(1.99, 0.0)))          # (the hole's jambs)
+            self.assertTrue(gypsum.contains(Point(2.81, 0.0)))
+            self.assertTrue(masonry.contains(Point(1.97, 0.0)))
+            self.assertTrue(gypsum.contains(Point(3.99, 0.07)))         # (the aluminium door: from each face…)
+            self.assertTrue(gypsum.contains(Point(3.99, -0.07)))
+            self.assertFalse(gypsum.contains(Point(3.99, 0.0)))         # (…up to its frame)
+            self.assertTrue(masonry.contains(Point(6.99, 0.0)))         # (the lined door: its lining covers the jamb)
+            self.assertFalse(gypsum.contains(Point(6.99, 0.07)))
         finally:
             doc.modified = False
 

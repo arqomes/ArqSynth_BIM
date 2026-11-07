@@ -2567,6 +2567,33 @@ def ground_grid_icon():
     return theme.icon(pm)
 
 
+def detail_level_icon(level="fine"):
+    """(0.445) A drawing's detail level, as Revit's view control bar shows it: a square — empty (coarse), with a few
+    hatch lines (medium), cross-hatched close (fine)."""
+    pm, p = _canvas()
+    box = QtCore.QRectF(5, 5, 22, 22)
+    p.setPen(QtCore.Qt.PenStyle.NoPen)
+    p.setBrush(QtGui.QColor("#ffffff"))
+    p.drawRect(box)
+    if level in ("medium", "fine"):
+        p.save()
+        p.setClipRect(box)
+        p.setPen(_pen(QtGui.QColor("#5b6b80"), 1.1))
+        step = 7.0 if level == "medium" else 4.5
+        k = -30.0
+        while k < 40.0:
+            p.drawLine(QtCore.QPointF(k, 32), QtCore.QPointF(k + 32, 0))          # (/ /)
+            if level == "fine":
+                p.drawLine(QtCore.QPointF(k, 0), QtCore.QPointF(k + 32, 32))      # (\ \)
+            k += step
+        p.restore()
+    p.setPen(_pen(INK, 1.6))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawRect(box)
+    p.end()
+    return theme.icon(pm)
+
+
 def _box(p, x, y, w=10, h=10, fill=FILL):
     p.setPen(_pen(INK, 1.6))
     p.setBrush(fill)
