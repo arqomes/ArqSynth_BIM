@@ -18,8 +18,8 @@ from ..i18n import decimal_sep, t
 from ..model.document import AddObject, ReplaceMesh, SketchObject
 from ..render.viewport import AXIS_U, AXIS_V
 from .base import (
-    LEFT, RIGHT, SQUARE_COLOR, Tool, infer_point, inferred_style, moved_enough, outside_dim, show_snap,
-    show_start_reference, start_plane, start_reference,
+    LEFT, RIGHT, SQUARE_COLOR, Tool, draw_option, infer_point, inferred_style, moved_enough, outside_dim, show_snap,
+    show_start_reference, start_plane, start_reference, switch_draw,
 )
 
 MIN_SIDE = 0.001
@@ -68,6 +68,13 @@ class RectangleTool(Tool):
 
     def hint(self):
         return t("hint.rect.end") if self._op else t("hint.rect.start")
+
+    def options(self):
+        return [draw_option("rectangle")]                   # (0.450: the drawing tools, as Revit's «Draw» panel)
+
+    def set_option(self, key, value):
+        if key == "draw":
+            switch_draw(self, value)
 
     def vcb_title(self):
         return t("vcb.dims")

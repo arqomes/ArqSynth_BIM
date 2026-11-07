@@ -12384,6 +12384,228 @@ class DrawingAsRevit(unittest.TestCase):
         finally:
             doc.modified = False
 
+    def test_pick_lines_and_offset(self):
+        """0.451 — Revit's «Pick Lines» and «Offset» (the owner: «criar por seleção… criar com offset a x distância»):
+        a wall on the line picked, moved by the offset to the mouse's side — its body on that side when drawn by a
+        face —; a wall drawn point by point that far to the left of its way."""
+        from types import SimpleNamespace
+        from arqbim.tools import pick_lines
+        from arqbim.tools.bim_draw import WallTool
+        doc = Document()
+        real = pick_lines.edge_at
+        try:
+            edge = (np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)))
+            vp = SimpleNamespace(ray=lambda x, y: (np.array((2.0, 1.0, 10.0)), np.array((0.0, 0.0, -1.0))),
+                                 clear_overlays=lambda: None, show_tip=lambda *a: None, plan=False,
+                                 tracking=SimpleNamespace(clear=lambda: None))
+            tool = WallTool(self._host(doc, vp))
+            pick_lines.edge_at = lambda viewport, document, x, y: edge          # (the line under the mouse)
+            tool.shape, tool.offset = "pick", 0.5
+            a, b, _e = tool._picked_wall(0, 0)                                   # (the mouse at y = 1: its left)
+            self.assertAlmostEqual(float(a[1]), 0.5)
+            self.assertAlmostEqual(float(np.linalg.norm(b - a)), 4.0)
+            tool.reference = "right"                                             # by its right face: the body left
+            a, b, _e = tool._picked_wall(0, 0)
+            self.assertAlmostEqual(float(a[1]), 0.6)                             # (0,5 + 0,20 / 2)
+            tool._pick_down(0, 0)
+            walls = [g for g, _s, _e2, _t in bim.wall_axes(doc)]
+            self.assertEqual(len(walls), 1)
+            s, e, _th = doc.ifc.wall_axis(walls[0])
+            self.assertAlmostEqual(float(s[1]), 0.6, places=6)
+            self.assertAlmostEqual(float(np.linalg.norm(e - s)), 4.0, places=6)
+            tool.reference, tool.offset = "axis", 0.3                            # drawn point by point
+            a, b = tool._drawn_axis(np.array((0.0, 2.0, 0.0)), np.array((0.0, 6.0, 0.0)))
+            self.assertAlmostEqual(float(a[0]), -0.3)                            # (left of going up: −x)
+            self.assertEqual(pick_lines.side_of((0, 0, 0), (4, 0, 0), (1, -1, 0)), -1.0)
+        finally:
+            pick_lines.edge_at = real
+            doc.modified = False
+
+    def test_fillet_arc(self):
+        """0.452 — Revit's «Fillet Arc» (the owner: «o arco por seleção de 2 elementos»): two walls in an L, a radius
+        of 1 m — both cut back 1 m from the corner, a curved wall between them, tangent, joined to both; the radius
+        from the mouse along the bisector; too big a radius refused."""
+        from arqbim.core.fillet import fillet
+        f = fillet(((0, 0), (5, 0)), (2, 0), ((5, -1), (5, 4)), (5, 2), radius=1.0)
+        np.testing.assert_allclose(f.cross, (5, 0))
+        self.assertEqual(f.ends, ("end", "start"))
+        np.testing.assert_allclose(f.tangents[0], (4, 0), atol=1e-9)
+        np.testing.assert_allclose(f.tangents[1], (5, 1), atol=1e-9)
+        np.testing.assert_allclose(f.centre, (4, 1), atol=1e-9)
+        self.assertAlmostEqual(abs(math.degrees(f.sweep)), 90.0, places=6)
+        g = fillet(((0, 0), (5, 0)), (2, 0), ((5, -1), (5, 4)), (5, 2), through=(5 - 0.3, 0.3))   # (by the mouse)
+        self.assertAlmostEqual(g.radius, 0.3 * 2 ** 0.5 / (2 ** 0.5 - 1), places=6)
+        self.assertIsNone(fillet(((0, 0), (5, 0)), (2, 0), ((0, 1), (5, 1)), (2, 1), radius=1.0))   # (parallel)
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            a = bim.add_wall(doc, (0.0, 0.0, 0.0), (5.0, 0.0, 0.0), w20)
+            b = bim.add_wall(doc, (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), w20, prev=(a, np.array((1.0, 0.0, 0.0))))
+            arc = bim.fillet_walls(doc, a, (2.0, 0.0), b, (5.0, 2.0), 1.0, w20)
+            sa, ea, _t = doc.ifc.wall_axis(a)
+            sb, eb, _t = doc.ifc.wall_axis(b)
+            self.assertAlmostEqual(float(ea[0]), 4.0, places=6)                 # (cut back to the arc)
+            self.assertAlmostEqual(float(sb[1]), 1.0, places=6)
+            self.assertEqual(doc.ifc.kind_of(arc), "curved_wall")
+            centre, radius, _start, sweep, _h, _th = doc.ifc.curved_wall_params(arc)
+            self.assertAlmostEqual(radius, 1.0, places=6)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (4.0, 1.0), atol=1e-6)
+            self.assertAlmostEqual(abs(math.degrees(sweep)), 90.0, places=4)
+            # (its ends on theirs: tangent, one band — no joint recorded, there is no corner to clean up)
+            np.testing.assert_allclose(doc.ifc.joint_end(arc, "start").point[:2], ea[:2], atol=1e-6)
+            np.testing.assert_allclose(doc.ifc.joint_end(arc, "end").point[:2], sb[:2], atol=1e-6)
+            with self.assertRaises(Exception):                                  # (a radius past a wall's end)
+                bim.fillet_walls(doc, a, (2.0, 0.0), b, (5.0, 2.0), 9.0, w20)
+        finally:
+            doc.modified = False
+
+    def test_fillet_lines(self):
+        """0.452 — the fillet arc between two loose lines of one chain (an L): each trimmed to its tangent point (the
+        corner they shared split), the arc drawn between them in the chain's sketch; one undo step."""
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model import line_edit
+        doc = Document()
+        try:
+            chain = SketchObject("l", I4, PolyMesh([(0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0)],
+                                                   lines=[(0, 1), (1, 2)]))
+            doc.execute(AddObject(chain))
+            first = (chain.id, *line_edit.segment_at(doc, chain.id, (0, 0, 0), (4, 0, 0)))
+            second = (chain.id, *line_edit.segment_at(doc, chain.id, (4, 0, 0), (4, 3, 0)))
+            line_edit.fillet_lines(doc, first, (2.0, 0.0, 0.0), second, (4.0, 2.0, 0.0), 1.0)
+            segs = [(np.round(a, 6), np.round(b, 6)) for _i, _j, a, b in line_edit.segments(doc.get(chain.id))]
+            ends = {tuple(p) for s in segs for p in s}
+            self.assertIn((3.0, 0.0, 0.0), ends)                               # (trimmed back 1 m)
+            self.assertIn((4.0, 1.0, 0.0), ends)
+            self.assertNotIn((4.0, 0.0, 0.0), {tuple(p) for s in segs[:2] for p in s})   # (the corner no longer used)
+            self.assertGreater(len(segs), 4)                                   # (+ the arc's pieces)
+            arc = [p for s in segs[2:] for p in s]
+            self.assertTrue(all(abs(float(np.linalg.norm(np.asarray(p)[:2] - (3.0, 1.0))) - 1.0) < 1e-6
+                                for p in arc))                                 # (all on the circle round (3, 1))
+            doc.undo()
+            self.assertEqual(len(doc.get(chain.id).mesh.lines), 2)            # (one step)
+        finally:
+            doc.modified = False
+
+    def test_chain_and_radius(self):
+        """0.453 — Revit's «Chain» and «Radius» on the Wall's and the Line's bars: with a radius, the chain's corner
+        rounded (a curved wall between the two, tangent); the chain off, each wall — each line — starts with a click
+        of its own."""
+        from types import SimpleNamespace
+        from arqbim.tools.bim_draw import WallTool
+        from arqbim.tools.line import LineTool
+        doc = Document()
+        try:
+            vp = SimpleNamespace(clear_overlays=lambda: None, show_tip=lambda *a: None, plan=True,
+                                 tracking=SimpleNamespace(clear=lambda: None), is_shown=lambda obj: True,
+                                 view_direction=lambda: np.array((0.0, 0.0, -1.0)))
+            tool = WallTool(self._host(doc, vp))
+            tool.spec = catalog.BY_KEY["parede_alv_20"]
+            self.assertIn("chain", [o.key for o in tool.options()])
+            tool.set_option("radius", 1.0)
+            tool._start = np.array((0.0, 0.0, 0.0))
+            tool._add(np.array((5.0, 0.0, 0.0)))
+            tool._add(np.array((5.0, 4.0, 0.0)))
+            kinds = lambda: sorted(doc.ifc.kind_of(o.id) for o in doc.objects.values()   # noqa: E731
+                                   if o.is_bim and o.ifc_class in ("IfcWall", "IfcWallStandardCase"))
+            self.assertEqual(kinds(), ["curved_wall", "wall", "wall"])
+            arc = next(o.id for o in doc.objects.values() if o.is_bim and doc.ifc.kind_of(o.id) == "curved_wall")
+            centre, radius, _s, _sweep, _h, _th = doc.ifc.curved_wall_params(arc)
+            self.assertAlmostEqual(radius, 1.0, places=6)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (4.0, 1.0), atol=1e-6)
+            np.testing.assert_allclose(tool._start, (5.0, 4.0, 0.0))                       # (the chain goes on)
+            tool.set_option("chain", False)
+            tool._add(np.array((0.0, 4.0, 0.0)))
+            self.assertIsNone(tool._start)                                                 # (the next: a click)
+            self.assertEqual(len(kinds()), 5)                                              # (+ its corner rounded)
+            # the Line: the chain off, each line a sketch of its own
+            line = LineTool(self._host(doc, vp))
+            self.assertIn("chain", [o.key for o in line.options()])
+            line.set_option("chain", False)
+            line._pts, line._normal = [np.array((0.0, 10.0, 0.0))], np.array((0.0, 0.0, 1.0))
+            line._add(np.array((3.0, 10.0, 0.0)))
+            self.assertEqual(line._pts, [])
+        finally:
+            doc.modified = False
+
+    def test_revit_arcs(self):
+        """0.454 — Revit's «Center-ends Arc» and «Tangent End Arc» on the Wall's bar: an arc about a centre, from its
+        start, turning the way asked; an arc leaving a wall's end tangent to it (its axis from the wall's axis, whatever
+        the line drawn), the next going on from its end — tangent arcs, then straight again."""
+        from types import SimpleNamespace
+        from arqbim.core import arcs
+        from arqbim.tools.bim_draw import WallTool, _short_angle
+        c, r, _s, sw = arcs.arc_tangent((0, 0), (1, 0), (1, 1))               # a quarter turn to the left
+        np.testing.assert_allclose(c, (0, 1), atol=1e-9)
+        self.assertAlmostEqual(r, 1.0)
+        self.assertAlmostEqual(math.degrees(sw), 90.0)
+        c, r, s, sw = arcs.arc_tangent((0, 0), (1, 0), (-1, -1))              # behind, on the right: ¾ clockwise
+        np.testing.assert_allclose(c, (0, -1), atol=1e-9)
+        self.assertAlmostEqual(math.degrees(sw), -270.0)
+        np.testing.assert_allclose(arcs.along(s + sw, sw), (0, 1), atol=1e-9)  # (where it goes at its end)
+        self.assertIsNone(arcs.arc_tangent((0, 0), (1, 0), (3, 0)))           # (straight ahead)
+        _c, r, s, sw = arcs.arc_from_centre((0, 0), (2, 0), (0, 3), 1)
+        self.assertEqual((round(r, 9), round(math.degrees(sw), 9)), (2.0, 90.0))
+        self.assertAlmostEqual(math.degrees(arcs.arc_from_centre((0, 0), (2, 0), (0, 3), -1)[3]), -270.0)
+        self.assertEqual(arcs.turn_of((0, 0), (2, 0), (1, -0.1)), -1)
+        self.assertAlmostEqual(math.degrees(_short_angle((0, 0), (2, 0), (0, -3))), -90.0)
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            wall = bim.add_wall(doc, (0.0, 0.0, 0.0), (4.0, 0.0, 0.0), w20)
+            vp = SimpleNamespace(clear_overlays=lambda: None, show_tip=lambda *a: None, plan=True,
+                                 tracking=SimpleNamespace(clear=lambda: None))
+            tool = WallTool(self._host(doc, vp))
+            pts, dirs = tool._wall_ends()                                      # (each end, the way out of it)
+            self.assertEqual(sorted((tuple(np.round(p[:2], 6)), tuple(np.round(d, 6))) for p, d in zip(pts, dirs)),
+                             [((0.0, 0.0), (-1.0, 0.0)), ((4.0, 0.0), (1.0, 0.0))])
+            curved = lambda: [o.id for o in doc.objects.values()                                 # noqa: E731
+                              if o.is_bim and doc.ifc.kind_of(o.id) == "curved_wall"]
+            # the tangent arc from the wall's end at (4, 0), to (5, 1): a quarter round (4, 1)
+            tool.set_option("shape", "arc_tangent")
+            tool._way_out_at = lambda x, y, level: (np.array((4.0, 0.0, 0.0)), np.array((1.0, 0.0)))
+            tool._tangent_down(0, 0, ())
+            tool._tangent_finish(arcs.arc_tangent(tool._tangent[0], tool._tangent[1], (5.0, 1.0)))
+            arc = curved()[0]
+            centre, radius, _s, sweep, _h, _th = doc.ifc.curved_wall_params(arc)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (4.0, 1.0), atol=1e-6)
+            self.assertAlmostEqual(radius, 1.0, places=6)
+            self.assertAlmostEqual(abs(math.degrees(sweep)), 90.0, places=4)
+            np.testing.assert_allclose(tool._tangent[0], (5.0, 1.0, 0.0), atol=1e-9)   # (the next from its end…)
+            np.testing.assert_allclose(tool._tangent[1], (0.0, 1.0), atol=1e-9)        # (…going on its way)
+            tool.set_option("shape", "line")                                           # straight again, from there
+            np.testing.assert_allclose(tool._start, (5.0, 1.0, 0.0), atol=1e-9)
+            tool._add(np.array((5.0, 4.0, 0.0)))
+            self.assertEqual(len(bim.wall_axes(doc)), 2)
+            tool.set_option("shape", "arc_tangent")                                    # and round again
+            np.testing.assert_allclose(tool._tangent[1], (0.0, 1.0), atol=1e-9)
+            tool.cancel()
+            # drawn by its left face, from the wall's start (out to −x): its axis still starts on the wall's axis
+            tool.reference = "left"
+            tool._way_out_at = lambda x, y, level: (np.array((0.0, 0.0, 0.0)), np.array((-1.0, 0.0)))
+            tool._tangent_down(0, 0, ())
+            a = tool._tangent[0]
+            np.testing.assert_allclose(a, (0.0, -0.1, 0.0), atol=1e-9)
+            tool._tangent_finish(arcs.arc_tangent(a, (-1.0, 0.0), a[:2] + (-1.0, -1.0)))
+            new = [g for g in curved() if g != arc][0]
+            centre, radius, start, sweep, _h, _th = doc.ifc.curved_wall_params(new)
+            ends = [arcs.point_at(centre, radius, x) for x in (start, start + sweep)]
+            self.assertLess(min(float(np.linalg.norm(e)) for e in ends), 1e-6)         # (one end at (0, 0))
+            tool.cancel()
+            # the centre-ends arc: its centre (where the mouse is), its radius typed, then 90° typed
+            tool.reference = "axis"
+            tool.set_option("shape", "arc_center")
+            tool._hover = (np.array((10.0, 0.0, 0.0)), None)
+            tool._centre_typed("2")
+            tool._centre_typed("90")
+            last = [g for g in curved() if g not in (arc, new)][0]
+            centre, radius, _s, sweep, _h, _th = doc.ifc.curved_wall_params(last)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (10.0, 0.0), atol=1e-6)
+            self.assertAlmostEqual(radius, 2.0, places=6)
+            self.assertAlmostEqual(abs(math.degrees(sweep)), 90.0, places=4)
+            self.assertEqual(tool._arc, [])                                            # (done: the tool again)
+        finally:
+            doc.modified = False
+
     def test_temporary_dimension_made_permanent(self):
         from types import SimpleNamespace
         from arqbim.core import temp_dims

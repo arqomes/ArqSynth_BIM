@@ -60,9 +60,12 @@ class DraftTool(_PointTool):
         return self.shape == "text" and len(self._points) == 1
 
     def options(self):
-        opts = [Option("shape", t("ctx.draft_shape"), "choice", self.shape,
-                       tuple((k, t("draft." + k)) for k in notes2d.KINDS))]
-        if self.shape == "region":
+        # (0.450) as icons on the bar, as Revit's «Draw» panel — a mask beside the region (a region filled white)
+        shapes = [k for k in notes2d.KINDS]
+        shapes.insert(shapes.index("region") + 1, "mask")
+        shown = "mask" if self.shape == "region" and self.hatch == "mask" else self.shape
+        opts = [Option("shape", t("ctx.draft_shape"), "choice", shown, tuple((k, t("draft." + k)) for k in shapes))]
+        if self.shape == "region" and self.hatch != "mask":
             opts.append(Option("hatch", t("ctx.draft_hatch"), "choice", self.hatch,
                                tuple((h, t("drafthatch." + h)) for h in notes2d.HATCHES)))
         if self.shape == "text":
@@ -78,7 +81,13 @@ class DraftTool(_PointTool):
         return opts
 
     def set_option(self, key, value):
+        if key == "shape" and value == "mask":           # (0.450) a masking region: a region filled white
+            self.set_shape("region")
+            self.hatch = "mask"
+            return
         if key == "shape" and value in notes2d.KINDS:
+            if value == "region" and self.hatch == "mask":
+                self.hatch = "diagonal"
             self.set_shape(value)
             return
         if key == "hatch" and value in notes2d.HATCHES:

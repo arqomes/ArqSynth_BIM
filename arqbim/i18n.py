@@ -2936,6 +2936,51 @@ _STRINGS = {
     "err.wall_face_none": ("Clique numa laje (não circular) ou numa face horizontal de um esboço.",
                            "Click a slab (not a round one) or a level face of a sketch."),
     "wallshape.wand": ("Varinha mágica (num desenho)", "Magic wand (on a drawing)"),
+    # (0.451) Revit's «Pick Lines» and «Offset»
+    "wallshape.pick": ("Escolher linhas (sobre uma linha ou aresta)", "Pick lines (on a line or an edge)"),
+    "hint.wall.pick": ("Escolher linhas — {type}, {ref}: clique numa linha, aresta, face de parede, eixo da grelha ou "
+                       "linha de um desenho; a parede fica sobre ela, do lado do rato, com o Afastamento da barra.",
+                       "Pick lines — {type}, {ref}: click a line, an edge, a wall's face, a grid axis or a drawing's "
+                       "line; the wall lies on it, on the mouse's side, at the bar's Offset."),
+    "tip.wall_pick": ("Parede de {l} aqui (clique)", "A {l} wall here (click)"),
+    "tip.wall_pick_none": ("Aponte para uma linha ou aresta", "Point at a line or an edge"),
+    "info.wall_picked": ("Parede de {l} sobre a linha escolhida ({type}). Clique noutra, ou Esc. Ctrl+Z desfaz.",
+                         "A {l} wall on the line picked ({type}). Click another one, or Esc. Ctrl+Z undoes."),
+    "ctx.offset": ("Afastamento", "Offset"),
+    # (0.452) Revit's «Fillet Arc»
+    "cmd.fillet": ("Arco de concordância", "Fillet arc"),
+    "wallshape.fillet": ("Arco de concordância (entre 2 paredes)", "Fillet arc (between 2 walls)"),
+    "hint.wall.fillet_0": ("Arco de concordância — {type}: clique na 1.ª parede (do lado que fica).",
+                           "Fillet arc — {type}: click the 1st wall (on the side that stays)."),
+    "hint.wall.fillet_1": ("Arco de concordância: clique na 2.ª parede (do lado que fica).",
+                           "Fillet arc: click the 2nd wall (on the side that stays)."),
+    "hint.wall.fillet_2": ("Arco de concordância: mova o rato para o raio e clique, ou escreva o raio e Enter. Esc "
+                           "recomeça.", "Fillet arc: move the mouse for the radius and click, or type the radius and "
+                           "Enter. Esc starts again."),
+    "tip.fillet_pick": ("Escolha a {n}.ª parede", "Pick wall {n}"),
+    "tip.fillet_line": ("Escolha a {n}.ª linha", "Pick line {n}"),
+    # (0.453) Revit's «Chain» and «Radius» on the options bar
+    "ctx.chain": ("Cadeia", "Chain"),
+    "ctx.corner_radius": ("Raio dos cantos", "Corner radius"),
+    "info.corner_not_rounded": ("(o canto não foi arredondado: o raio de {r} é grande demais para estes troços)",
+                                "(the corner was not rounded: the {r} radius is too big for these pieces)"),
+    "draw.fillet": ("Arco de concordância (entre 2 linhas)", "Fillet arc (between 2 lines)"),
+    "hint.line.fillet_0": ("Arco de concordância: clique na 1.ª linha (do lado que fica).",
+                           "Fillet arc: click the 1st line (on the side that stays)."),
+    "hint.line.fillet_1": ("Arco de concordância: clique na 2.ª linha (do lado que fica).",
+                           "Fillet arc: click the 2nd line (on the side that stays)."),
+    "hint.line.fillet_2": ("Arco de concordância: mova o rato para o raio e clique, ou escreva o raio e Enter. Esc "
+                           "recomeça.", "Fillet arc: move the mouse for the radius and click, or type the radius and "
+                           "Enter. Esc starts again."),
+    "info.fillet_lines": ("Arco de concordância de raio {r}; as duas linhas foram aparadas até ele. Ctrl+Z desfaz.",
+                          "A fillet arc of radius {r}; the two lines were trimmed to it. Ctrl+Z undoes."),
+    "tip.fillet_radius": ("Raio {r}", "Radius {r}"),
+    "err.fillet_none": ("Não há arco aqui: as paredes são paralelas, ou o raio é grande demais.",
+                        "No arc here: the walls are parallel, or the radius is too big."),
+    "info.fillet": ("Arco de concordância de raio {r} entre as duas paredes ({type}); elas foram aparadas até ele. "
+                    "Ctrl+Z desfaz.", "A fillet arc of radius {r} between the two walls ({type}); they were trimmed "
+                    "to it. Ctrl+Z undoes."),
+    "refuse.too_big": ("o raio é grande demais para estes troços", "the radius is too big for these pieces"),
     "hint.wall.wand": ("Varinha mágica: arraste uma janela sobre as duas linhas de uma parede de um desenho (DWG/DXF "
                        "ligado ou linhas de esboço): a parede fica entre elas, com a espessura medida.",
                        "Magic wand: drag a window over a wall's two lines in a drawing (a linked DWG/DXF or sketch "
@@ -4267,6 +4312,24 @@ _STRINGS = {
     "drafthatch.cross": ("Cruzada", "Crossed"),
     "drafthatch.solid": ("Cheia (cinzento)", "Solid (grey)"),
     "drafthatch.none": ("Sem trama", "No hatch"),
+    # (0.450) Revit's masking region; the drawing tools side by side on the contextual bar, as Revit's «Draw» panel
+    "drafthatch.mask": ("Máscara (branca, esconde o que está por baixo)", "Mask (white, hides what is under it)"),
+    "draft.mask": ("Máscara (esconde o que está por baixo)", "Masking region (hides what is under it)"),
+    "ctx.draw": ("Desenhar", "Draw"),
+    "draw.line": ("Linha", "Line"),
+    "draw.line_arc": ("Linha com arcos (Tab)", "Line with arcs (Tab)"),
+    "draw.rectangle": ("Retângulo", "Rectangle"),
+    "draw.circle": ("Círculo / polígono", "Circle / polygon"),
+    "draw.arc": ("Arco", "Arc"),
+    "draw.bezier": ("Curva de Bézier", "Bézier curve"),
+    "draw.freehand": ("Linha livre (à mão)", "Freehand line"),
+    "draw.pick": ("Escolher linhas (sobre uma linha ou aresta)", "Pick lines (on a line or an edge)"),   # (0.451)
+    "hint.line.pick": ("Escolher linhas: clique numa linha, aresta, face de parede, eixo da grelha ou linha de um "
+                       "desenho — uma linha fica sobre ela, do lado do rato, com o Afastamento da barra.",
+                       "Pick lines: click a line, an edge, a wall's face, a grid axis or a drawing's line — a line "
+                       "lies on it, on the mouse's side, at the bar's Offset."),
+    "info.line_on_picked": ("Linha de {l} sobre a escolhida. Clique noutra, ou Esc. Ctrl+Z desfaz.",
+                            "A {l} line on the one picked. Click another one, or Esc. Ctrl+Z undoes."),
     "vcb.text": ("Texto", "Text"),
     "hint.draft_view": ("Desenho 2D: abra uma planta, um corte ou um alçado — o desenho fica nessa vista.",
                         "2D drawing: open a plan, a section or an elevation — the drawing stays in that view."),
@@ -5466,7 +5529,26 @@ _STRINGS = {
     "refuse.merge_not_in_line": ("as paredes não estão em linha", "the walls are not in line"),
     "refuse.merge_apart": ("as paredes não se tocam de ponta a ponta", "the walls do not touch end to end"),
     # curved walls (0.103)
-    "wallshape.arc": ("Arco", "Arc"),
+    "wallshape.arc": ("Arco (início, fim, raio)", "Arc (start, end, radius)"),
+    "wallshape.arc_center": ("Arco por centro e pontas", "Center-ends arc"),
+    "wallshape.arc_tangent": ("Arco tangente na ponta", "Tangent end arc"),
+    "hint.wall.centre_0": ("Arco por centro e pontas — {type}, desenhada {ref}: clique no centro do arco.",
+                           "Center-ends arc — {type}, drawn {ref}: click the arc's centre."),
+    "hint.wall.centre_1": ("Clique no início do arco: dá o raio (ou digite o raio + Enter). Esc cancela.",
+                           "Click the arc's start: it gives the radius (or type the radius + Enter). Esc cancels."),
+    "hint.wall.centre_2": ("Clique no fim do arco: vira para o lado para onde leva o rato (ou digite o ângulo em graus "
+                           "+ Enter). Desenhada {ref} (Tab muda). Esc cancela.",
+                           "Click the arc's end: it turns the way you take the mouse (or type the angle in degrees "
+                           "+ Enter). Drawn {ref} (Tab changes it). Esc cancels."),
+    "hint.wall.tangent_0": ("Arco tangente na ponta — {type}: clique na ponta de uma parede; o arco sai dela, "
+                            "tangente.",
+                            "Tangent end arc — {type}: click a wall's end; the arc leaves it, tangent."),
+    "hint.wall.tangent_1": ("Clique no fim do arco (ou digite a distância + Enter); os arcos seguem tangentes, em "
+                            "cadeia — escolha «Linha» na barra e a cadeia segue a direito. Desenhada {ref}. Esc "
+                            "termina.",
+                            "Click the arc's end (or type the distance + Enter); the arcs go on tangent, in a chain "
+                            "— choose «Line» on the bar and the chain goes on straight. Drawn {ref}. Esc ends."),
+    "tip.wall_tangent_none": ("Leve o rato à ponta de uma parede", "Take the mouse to a wall's end"),
     "wallshape.circle": ("Círculo", "Circle"),
     "hint.wall.arc_start": ("{type}, desenhada {ref}: clique no início do arco.",
                             "{type}, drawn {ref}: click the arc's start."),

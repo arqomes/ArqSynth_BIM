@@ -1,0 +1,57 @@
+"""(0.451) Revit's «Pick Lines» (the owner: «criar por seleção»): the line or edge under the mouse — a loose line, a CAD
+line drawn as one, any element's level edge (a wall's face in a plan, a slab's side), a grid axis — as a level segment,
+the side of it the mouse is on, and that segment moved by an offset to that side (Revit's «Offset» on the options
+bar). Shared by the Wall and the Line tools."""
+
+import numpy as np
+
+from ..core.inference import ON_EDGE, ON_GUIDE
+from .align import level_edges, nearest_edge
+
+INSIDE_PX = 15.0     # a click inside an element takes its edge this near (pixels), not a far one
+
+
+def edge_at(viewport, doc, x, y):
+    """The level segment (a, b) under (x, y) — a grid axis, an edge or a line snapped to, or the edge of the element
+    under the mouse within INSIDE_PX —, or None."""
+    k = viewport.grid_axis_at(x, y) if hasattr(viewport, "grid_axis_at") else None
+    if k is not None and "grid" not in getattr(viewport, "unselectable", ()):
+        axis = doc.grids[k]
+        z = float(viewport.grid_level())
+        return np.array((*axis.start[:2], z)), np.array((*axis.end[:2], z))
+    snap, _hit = viewport.snap(x, y)
+    if snap is not None:
+        if snap.kind in (ON_EDGE, ON_GUIDE) and snap.edge is not None:
+            a, b = (np.asarray(p, dtype=float) for p in snap.edge)
+            if abs(float(b[2] - a[2])) < 1e-6 and float(np.linalg.norm((b - a)[:2])) > 1e-4:
+                return a, b
+        if snap.obj_id is not None:                      # (a point snapped — an end, a middle: its element's edge)
+            edges = level_edges(doc.get(snap.obj_id))
+            found = nearest_edge(edges, snap.point)
+            if found is not None and found[1] <= 1e-3:
+                return tuple(edges[found[0]])
+    hit = viewport.pick_point(x, y)
+    if hit is not None:
+        edges = level_edges(doc.get(hit[0]))
+        found = nearest_edge(edges, hit[2])
+        if found is not None and found[1] <= INSIDE_PX * viewport.world_per_pixel(np.asarray(hit[2], dtype=float)):
+            return tuple(edges[found[0]])
+    return None
+
+
+def side_of(a, b, point):
+    """+1 when `point` is to the left of a→b (seen from above), -1 to the right (on it: the left)."""
+    d = np.asarray(b, dtype=float)[:2] - np.asarray(a, dtype=float)[:2]
+    w = np.asarray(point, dtype=float)[:2] - np.asarray(a, dtype=float)[:2]
+    return -1.0 if float(d[0] * w[1] - d[1] * w[0]) < 0 else 1.0
+
+
+def offset_segment(a, b, distance, side):
+    """a→b moved `distance` across, to `side` (+1 its left)."""
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    d = (b - a)[:2]
+    n = float(np.linalg.norm(d))
+    if n < 1e-12 or not distance:
+        return a.copy(), b.copy()
+    left = np.array((-d[1] / n, d[0] / n, 0.0))
+    return a + left * distance * side, b + left * distance * side

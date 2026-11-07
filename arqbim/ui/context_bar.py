@@ -12,7 +12,18 @@ from PySide6 import QtCore, QtWidgets
 from ..core.units import format_length, parse_length
 from ..i18n import decimal_sep
 from ..ifc import catalog
-from . import theme, type_thumbs
+from . import shape_icons, theme, type_thumbs
+
+# (0.450) the choices drawn as a row of icons, as Revit's «Draw» panel — a tool's shape, an arc's way of drawing, the
+# drawing tools one goes to from another —, when there is an icon for each of their values (ui/shape_icons.py)
+ICON_KEYS = ("shape", "mode", "draw")
+ICON_PX = 20
+
+
+def iconic(option):
+    """(0.450) Is this choice shown as a row of icons?"""
+    return option.kind == "choice" and option.key in ICON_KEYS and len(option.choices) > 1 and \
+        all(shape_icons.has(v) for v, _text in option.choices)
 
 def style():
     """(0.183, the interface's panel 3) the window's colour, the tool's icon and name first, the fields framed; one
@@ -109,7 +120,26 @@ class ContextBar(QtWidgets.QToolBar):
     def _add_option(self, option):
         if option.kind != "toggle":
             self.addWidget(self._label("{}:".format(option.label), "ctx_label"))
-        if option.kind == "choice":
+        if iconic(option):
+            # (0.450) a row of icons, the one in use lit, each one's name in its tip — as Revit's «Draw» panel
+            widget = QtWidgets.QWidget(self)
+            widget.setProperty("icons", True)
+            row = QtWidgets.QHBoxLayout(widget)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(1)
+            for value, text in option.choices:
+                button = QtWidgets.QToolButton(widget)
+                button.setIcon(shape_icons.icon(value))
+                button.setIconSize(QtCore.QSize(ICON_PX, ICON_PX))
+                button.setToolTip(text)
+                button.setAutoRaise(True)
+                button.setCheckable(True)
+                button.setChecked(value == option.value)
+                button.setObjectName("ctx_{}_{}".format(option.key, value))
+                button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+                button.clicked.connect(lambda _on=False, k=option.key, v=value, b=button: self._picked(k, v, b))
+                row.addWidget(button)
+        elif option.kind == "choice":
             # (0.313) a choice of types (walls, slabs, doors…): each with its miniature, large in the list
             widget = type_thumbs.TypeCombo() if any(_type_spec(v) for v, _text in option.choices) else \
                 QtWidgets.QComboBox()
@@ -170,7 +200,13 @@ class ContextBar(QtWidgets.QToolBar):
             widget, old = self.fields[option.key]
             self.fields[option.key] = (widget, option)
             blocker = QtCore.QSignalBlocker(widget)
-            if option.kind == "choice":
+            if widget.property("icons"):                    # (0.450) a row of icons: the one in use lit
+                if option.choices != old.choices or not iconic(option):
+                    del blocker
+                    return False
+                for button in widget.findChildren(QtWidgets.QToolButton):
+                    button.setChecked(button.objectName() == "ctx_{}_{}".format(option.key, option.value))
+            elif option.kind == "choice":
                 if option.choices != old.choices:
                     self._fill(widget, option)
                 else:
@@ -213,6 +249,13 @@ class ContextBar(QtWidgets.QToolBar):
                 pass
         mark(True)
         QtCore.QTimer.singleShot(INVALID_MS, lambda: mark(False))
+
+    def _picked(self, key, value, button):
+        """(0.450) An icon of a row clicked: that shape (the one in use clicked again stays lit)."""
+        if self.fields[key][1].value == value:
+            button.setChecked(True)
+            return
+        self._changed(key, value)
 
     def _changed(self, key, value):
         if self.on_option is not None:

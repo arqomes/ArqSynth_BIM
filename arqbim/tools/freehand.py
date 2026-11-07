@@ -26,7 +26,8 @@ from ..i18n import decimal_sep, t
 from ..model import line_faces
 from ..model.document import AddObject, SketchObject
 from ..render.viewport import PREVIEW
-from .base import LEFT, RIGHT, Option, Tool, moved_enough, point_from, show_snap, start_plane
+from .base import (LEFT, RIGHT, Option, Tool, draw_option, moved_enough, point_from, show_snap, start_plane,
+                   switch_draw)
 
 CLOSE_PX = 12               # the end this near the start (on the screen): closed
 STEP_PX = 3.0               # a freehand point kept every this many pixels while dragging
@@ -68,6 +69,13 @@ class FreehandTool(Tool):
 
     def hint(self):
         return t("hint.freehand.drag" if self._drawing else "hint.freehand.start")
+
+    def options(self):
+        return [draw_option("freehand")]                    # (0.450: the drawing tools, as Revit's «Draw» panel)
+
+    def set_option(self, key, value):
+        if key == "draw":
+            switch_draw(self, value)
 
     def _on_plane(self, x, y):
         origin, direction = self.viewport.ray(x, y)
@@ -164,9 +172,13 @@ class BezierTool(Tool):
         return curves.auto_handles(anchors, auto, closed)
 
     def options(self):
-        return [Option("steps", t("ctx.bezier_steps"), "choice", self.steps, tuple((s, str(s)) for s in STEPS))]
+        return [draw_option("bezier"),                      # (0.450: the drawing tools, as Revit's «Draw» panel)
+                Option("steps", t("ctx.bezier_steps"), "choice", self.steps, tuple((s, str(s)) for s in STEPS))]
 
     def set_option(self, key, value):
+        if key == "draw":
+            switch_draw(self, value)
+            return
         if key == "steps":
             self.steps = int(value)
         self.host.set_hint(self.hint())

@@ -3556,7 +3556,7 @@ def architecture_tools_flow():
     win.set_discipline("architecture", remember=False)
     vp.set_view("top", center=(4.0, 3.0, 0.0), radius=7.0)
     pump(400)
-    on_ribbon = {win.act_wall_rect, win.act_rooms_identify, win.act_areas} | \
+    on_ribbon = {win.act_rooms_identify, win.act_areas} | \
         {win.tool_actions[k] for k in ("niche", "flooring", "gutter", "elevator", "room_separator")} <= \
         set(win.ribbon_actions())
     win.act_wall_rect.trigger()

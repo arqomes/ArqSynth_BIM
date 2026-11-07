@@ -15,7 +15,8 @@ from ..core.units import format_length, parse_lengths
 from ..i18n import decimal_sep, t
 from ..model.document import AddObject, ReplaceMesh, SketchObject
 from ..render.viewport import PREVIEW
-from .base import LEFT, RIGHT, Option, Tool, drawing_dims, infer_point, inferred_style, show_snap, start_plane
+from .base import (LEFT, RIGHT, Option, Tool, draw_option, drawing_dims, infer_point, inferred_style, show_snap,
+                   start_plane, switch_draw)
 
 SIDES = (12, 16, 24, 32, 48, 64)
 MIN_RADIUS = 0.001
@@ -48,9 +49,13 @@ class CircleTool(Tool):
         self._hover_xy = None
 
     def options(self):
-        return [Option("sides", t("ctx.circle_sides"), "choice", self.sides, tuple((s, str(s)) for s in SIDES))]
+        return [draw_option("circle"),                      # (0.450: the drawing tools, as Revit's «Draw» panel)
+                Option("sides", t("ctx.circle_sides"), "choice", self.sides, tuple((s, str(s)) for s in SIDES))]
 
     def set_option(self, key, value):
+        if key == "draw":
+            switch_draw(self, value)
+            return
         if key == "sides":
             self.sides = int(value)
         self.host.set_hint(self.hint())

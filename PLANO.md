@@ -1353,6 +1353,42 @@ patamares, ✓/⚠ ao desenhar e «Corrigir», as espessuras do Anexo II do CTE,
 - As fontes: Cabo Verde do texto do B.O. de 2012 que li (o dono confirma se houve alterações); Portugal do texto
   consolidado oficial (o dono traz ou confirma).
 
+### O painel «Desenhar» do Revit, completo (pedido do dono do projeto, 2026-11-07)
+
+O dono: «no revit temos algumas outras ferramentas interessantes que não devemos deixar de fora; estude esses comandos
+e crie para o ArqSynth. por exemplo criar por seleção, o arco por seleção de 2 elementos, criar com offset a x
+distância etc». As formas já estão em ícones na barra de parâmetros (0.450). O estudo, ferramenta a ferramenta:
+
+| Revit (Modificar ▸ Colocar ▸ Desenhar) | ArqSynth hoje | Passo |
+| --- | --- | --- |
+| Linha, Retângulo, Círculo | Parede e Linha | — |
+| Polígono inscrito / circunscrito | Círculo com lados (só linhas) | 5 |
+| Arco início-fim-raio, arco centro-pontas | Arco de 2 pontos e de centro (linhas); parede só de 3 pontos | 4 |
+| Arco tangente na ponta | «Linha com arcos» (linhas, Tab); parede não | 4 |
+| **Arco de concordância** (escolher 2 elementos) | não há | 2 |
+| Spline | Bézier | — |
+| Elipse, elipse parcial | não há | 5 |
+| **Escolher linhas** (criar sobre uma linha ou aresta existente) | só a varinha (2 linhas paralelas de um desenho) | 1 |
+| Escolher faces / escolher paredes | «Por face» / a varinha (laje dentro das paredes) | — |
+| Barra: **Afastamento** (a X da linha desenhada ou escolhida) | não há | 1 |
+| Barra: **Raio** (cantos arredondados ao desenhar em cadeia) | só no perfil (Alt + clique num canto) | 3 |
+| Barra: **Cadeia** (desligada: troços soltos) | sempre em cadeia | 3 |
+
+1. ~~**Afastamento e Escolher linhas** (Parede e Linha)~~ (0.451.0: `tools/pick_lines.py`; a parede desenhada fica à
+   esquerda do sentido do desenho, a escolhida do lado do rato; nas lajes / pisos ainda não).
+2. ~~**Arco de concordância**~~ (0.452.0: `core/fillet.py`, `IfcModel.fillet_walls`, `line_edit.fillet_lines`. Por
+   fazer: a parede curva fica tangente às duas mas sem junta registada — mover uma parede depois não arrasta o
+   arco).
+3. ~~**Raio e Cadeia** na barra da Parede e da Linha: com «Raio» ligado, cada canto da cadeia sai arredondado com esse
+   raio; com «Cadeia» desligada, cada troço começa num clique novo.~~ (0.453.0: o Raio só na Parede — nas linhas o
+   arco de concordância acrescenta vértices e a cadeia continua do último; fica por fazer o Raio da Linha.)
+4. ~~**Arcos da parede como os do Revit**: início-fim-raio, centro-pontas e tangente na ponta (continuar a cadeia em
+   arco).~~ (0.454.0: o «Arco» que havia é o início-fim-raio; novos `arcs.arc_tangent` / `arc_from_centre`; a cadeia
+   passa de «Linha» a «Arco tangente» e volta sem se partir. Por fazer: o arco e a parede reta que se tocam não
+   ficam ligados — mover uma não arrasta a outra.)
+5. **Polígonos e elipses**: polígono inscrito e circunscrito (paredes, linhas, lajes, regiões) e elipse / elipse
+   parcial (linhas, regiões, desenho 2D).
+
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.
 - ~~Investigar: no papel, o contorno grosso das paredes falhou uma vez num canto (a união dos contornos pelo Qt, `pdf._paths`); não se repetiu ao desenhar de novo.~~ (0.253.0: os contornos saíam do corte num sentido ou noutro; agora orientados por elemento; 0.254.0: o pilar recorta a parede no papel.)

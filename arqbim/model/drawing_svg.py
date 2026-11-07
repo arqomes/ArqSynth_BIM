@@ -44,8 +44,9 @@ def svg(drawing, scale=50):
                 out.append('<path d="{}" stroke="#000" stroke-width="{}" fill="none"/>'.format(
                     path(pts, closed), pen))
         elif kind == "region":
+            fill = "#fff" if ann[2] == "mask" else "#000"       # (0.450: a mask white, hiding what is under it)
             for pts, _closed in ann[1]:
-                out.append('<path d="{}" fill="#000" stroke="none"/>'.format(path(pts, True)))
+                out.append('<path d="{}" fill="{}" stroke="none"/>'.format(path(pts, True), fill))
     if getattr(drawing, "dims", ()):                    # (0.398: laid out by core/dim_layout, as on paper)
         from ..core import dim_layout
         layout = dim_layout.of_drawing(drawing.dims, getattr(drawing, "dim_style", None) or {}, scale / 1000.0,

@@ -275,6 +275,8 @@ def write(path, drawing, scale=100):
         w.text("SALAS", np.asarray(at) - np.array((0.0, 2.0)) * mm, 2.1 * mm, area, centred=True)
     for item in getattr(drawing, "annotations", ()):
         kind, shapes, hatch, text, at, size = item[:6]
+        if kind == "region" and hatch == "mask":          # (0.450) a masking region: nothing of it in a CAD file
+            continue
         for pts, closed in shapes:
             w.polyline("DESENHO", pts, closed)
         if kind == "region" and shapes and hatch in ("diagonal", "cross"):

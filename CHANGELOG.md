@@ -1,5 +1,82 @@
 # Changelog
 
+## 0.454.0 — 2026-11-07
+
+**Os arcos da parede como os do Revit.** Dois ícones novos em Parede ▸ Forma (o «Arco» que já havia é o
+«início, fim, raio» do Revit).
+
+- **Arco por centro e pontas**: clique no centro, depois no início do arco (dá o raio), depois no fim — o arco vira
+  para o lado para onde leva o rato. Também por teclado: o raio + Enter, depois o ângulo em graus + Enter.
+- **Arco tangente na ponta**: clique na ponta de uma parede (reta ou curva); o arco sai dela tangente e segue o rato
+  até ao clique. Os arcos seguintes continuam tangentes, em cadeia (Esc termina; a opção «Cadeia» desligada faz um
+  arco só). Escolher «Linha» na barra a meio da cadeia continua-a a direito, e voltar ao «Arco tangente» continua-a
+  em arco, como no Revit. Com a parede desenhada pela face, o eixo do arco sai do eixo da parede.
+- Limite: o arco e a parede reta que se tocam ficam tangentes mas não ligados — mover uma depois não arrasta a outra.
+
+## 0.453.0 — 2026-11-07
+
+**Cadeia e Raio na barra, como no Revit.**
+
+- **Parede ▸ Forma ▸ Linha**: duas opções novas na barra de parâmetros.
+  - **Raio dos cantos**: com um valor maior que zero, cada canto da cadeia sai arredondado com esse raio enquanto se
+    desenha (uma parede curva tangente entre as duas, do mesmo tipo); ao fechar a cadeia no 1.º ponto, também esse
+    canto. Se o raio não cabe nos troços, o canto fica vivo e a mensagem diz porquê.
+  - **Cadeia** (ligada por omissão): desligada, cada parede começa num clique novo, em vez de continuar da ponta
+    da anterior.
+- **Linha ▸ Desenhar**: a mesma **Cadeia** — desligada, cada linha (ou arco) fica sozinha e a próxima começa num
+  clique novo.
+- Limite: o Raio ainda não existe na Linha (use o Arco de concordância depois de desenhar).
+
+## 0.452.0 — 2026-11-07
+
+**Arco de concordância entre dois elementos, como o «Fillet Arc» do Revit** (o dono: «o arco por seleção de 2
+elementos»).
+
+- **Parede ▸ Forma ▸ Arco de concordância** (ícone novo): clique numa parede, depois noutra (do lado que fica de cada
+  uma); o arco tangente às duas segue o rato, com o raio escrito ao lado; um clique cria-o (ou escreva o raio e
+  Enter). As duas paredes são aparadas ou estendidas até ao arco e a parede curva fica entre elas, do tipo escolhido
+  na barra, sem junta em planta.
+- **Linha ▸ Desenhar ▸ Arco de concordância**: o mesmo para duas linhas soltas (o canto que partilhavam é separado);
+  um só passo de desfazer.
+- Recusado, com a razão, quando as duas são paralelas ou o raio é maior do que os troços.
+- Limite: a parede curva toca as duas paredes nas pontas, tangente, mas não fica «ligada» a elas — se mover uma das
+  paredes depois, o arco não vai atrás.
+
+## 0.451.0 — 2026-11-07
+
+**Escolher linhas e Afastamento, como no Revit** (o dono: «criar por seleção… criar com offset a x distância»).
+
+- **Parede ▸ Forma ▸ Escolher linhas** (ícone novo): um clique numa linha, numa aresta de qualquer elemento (a face
+  de uma parede em planta, o lado de uma laje), num eixo da grelha ou numa linha de um desenho cria a parede sobre
+  ela, a todo o comprimento; a linha escolhida acende a azul e a parede aparece antes do clique. Com a referência
+  pela face, o corpo da parede fica do lado do rato.
+- **Afastamento** na barra da Parede (formas Linha e Escolher linhas): a parede fica a essa distância da linha
+  desenhada (à esquerda do sentido do desenho; um valor negativo, à direita) ou da linha escolhida (do lado do rato).
+- **Linha ▸ Desenhar ▸ Escolher linhas**: uma linha sobre a linha ou aresta escolhida, com o seu Afastamento.
+- O estudo do painel «Desenhar» do Revit e o que falta ficou no PLANO.md (secção própria, 5 passos).
+
+## 0.450.0 — 2026-11-07
+
+**As formas de desenho em ícones na barra de parâmetros, como o painel «Desenhar» do Revit** (o dono, com capturas:
+«no Revit quando ativar comando de parede, piso, linha… aparece essas opções que permite desenhar em retângulo,
+arco etc. … poderia ser em ícones para ocupar menos espaços»).
+
+- A escolha da forma de cada comando de desenho passou de lista a **fila de ícones** na barra de parâmetros, com a
+  forma em uso acesa e o nome na dica:
+  - **Parede**: linha, retângulo, arco, círculo, por face, varinha mágica;
+  - **Laje**: retângulo, polígono, círculo, varinha mágica; **Cobertura**: varinha, retângulo, polígono, por face,
+    blocos; **Teto** e **Piso**: varinha, retângulo, polígono;
+  - **Lote**: retângulo, polígono, terreno; **Plataforma**: retângulo, polígono;
+  - **Desenho 2D**: linha, polilinha, retângulo, círculo, arco, região, **máscara**, texto, cota de nível, nível,
+    nota-chave.
+- **Linha, Retângulo, Círculo, Arco, Bézier e Linha livre** têm a mesma fila «Desenhar» (com «Linha com arcos»):
+  um clique noutro ícone passa para essa ferramenta. O Arco mostra ainda os seus modos em ícones.
+- **Máscara** (nova, como a «Masking Region» do Revit): uma região branca que esconde o que está por baixo. No papel
+  (PDF e SVG) não tem contorno; no ecrã o contorno fica ténue, para a poder escolher; no DXF não sai. Também está na
+  lista «Trama» das regiões.
+- Na fita, Arquitetura ▸ Paredes deixou de ter os botões Retangular, Circular, Arco, Por face e Varinha mágica (estão
+  na barra; os atalhos W + letra continuam).
+
 ## 0.449.0 — 2026-11-07
 
 **Alinhar com linhas, pisos e qualquer elemento** (o dono, com captura: «o comando alinhar precisa melhorar e deve

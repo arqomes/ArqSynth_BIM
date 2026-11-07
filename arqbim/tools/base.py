@@ -133,6 +133,34 @@ class Tool:
         pass
 
 
+# (0.450) the drawing tools of lines, side by side on the contextual bar as Revit's «Draw» panel: a click on one goes to
+# it (straight lines, lines with arcs, a rectangle, a circle, an arc, a Bézier curve, by hand)
+SKETCH_DRAW = ("line", "line_arc", "rectangle", "circle", "arc", "fillet", "bezier", "freehand", "pick")
+#               (0.451: pick lines; 0.452: a fillet arc between two lines)
+
+
+def draw_option(current):
+    """(0.450) The contextual bar's row of the drawing tools, `current` lit."""
+    return Option("draw", t("ctx.draw"), "choice", current, tuple((k, t("draw." + k)) for k in SKETCH_DRAW))
+
+
+def switch_draw(tool, value):
+    """(0.450) Another of the drawing tools chosen on the bar: the window goes to it (a line's arcs: the Line tool
+    with its arcs on). True when it did."""
+    if value not in SKETCH_DRAW:
+        return False
+    target = "line" if value in ("line", "line_arc", "pick", "fillet") else value
+    if target != tool.name and hasattr(tool.host, "set_tool"):
+        tool.host.set_tool(target)
+    now = getattr(tool.host, "tool", None)
+    if target == "line" and now is not None and getattr(now, "name", None) == "line":
+        now.arc = value == "line_arc"
+        now.picking = value == "pick"                     # (0.451: picking lines)
+        now.filleting = value == "fillet"                 # (0.452: a fillet arc)
+        now.host.set_hint(now.hint())
+    return True
+
+
 def moved_enough(a, b):
     return np.hypot(a[0] - b[0], a[1] - b[1]) > DRAG_THRESHOLD_PX
 

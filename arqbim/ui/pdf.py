@@ -305,12 +305,16 @@ def _annotations(painter, annotations, to_page, dpmm, pen, gstyle=None):
         path.closeSubpath()
         if hatch == "solid":
             painter.fillPath(path, QtGui.QColor("#9a9a9a"))
+        elif hatch == "mask":                                # (0.450) a masking region: white, hiding what is under
+            painter.fillPath(path, WHITE)
         elif hatch in ("diagonal", "cross"):
             painter.fillPath(path, WHITE)
             _hatch(painter, path, (45,) if hatch == "diagonal" else (45, -45), HATCH_SPACING * dpmm, pen(hatch_pen))
     painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
     for item in annotations:
         shapes = item[1]
+        if item[0] == "region" and item[2] == "mask":        # (0.450: a mask's outline is not on paper)
+            continue
         line, width = (item[6], item[7]) if len(item) > 7 else ("continuous", None)
         width = float(width) if width else styles_model.pen(gstyle, "drawn")
         p = pen(width)

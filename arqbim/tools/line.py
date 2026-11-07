@@ -28,15 +28,17 @@ import numpy as np
 from ..core.lines import LOOP_TOL, chain_loops, drop_collinear, polygon_frame, tangent_arc
 from ..core.mesh import PolyMesh
 from ..core.units import format_length, parse_lengths
-from ..i18n import decimal_sep, t
-from ..model import imprint, line_faces
+from ..i18n import decimal_sep, refusal, t
+from ..model import imprint, line_edit, line_faces
 from ..model.document import AddObject, ReplaceMesh, ReplaceObjects, SketchObject
 from ..render.viewport import PREVIEW
 from .base import (
-    LEFT, RIGHT, SNAP_COLORS, Option, Tool, drawing_dims, point_from, show_snap, show_start_reference, start_plane,
-    start_reference,
+    LEFT, RIGHT, SNAP_COLORS, Option, Tool, draw_option, drawing_dims, point_from, show_snap, show_start_reference,
+    start_plane, start_reference, switch_draw,
 )
+from ..core.sketch_geometry import ray_plane
 from ..core.temp_dims import revit as revit_look
+from . import pick_lines
 
 CLOSE_PX = 12
 MIN_LENGTH = 0.001
@@ -59,16 +61,155 @@ class LineTool(Tool):
         super().__init__(host)
         self._hover_xy = None
         self.arc = False        # (0.151) the next segments arcs, tangent to the one before
+        self.picking = False    # (0.451) Revit's «Pick Lines»: a line on the line or edge clicked…
+        self.offset = 0.0       # …this far from it, on the mouse's side
+        self.filleting = False  # (0.452) Revit's «Fillet Arc»: two lines picked, the arc between them
+        self.chain = True       # (0.453) Revit's «Chain»: off, each line starts with a click of its own
+        self._fillet = []       # …the pieces picked: [((obj_id, i, j), the point clicked, (a, b) world)]
+        self._fillet_now = None
         self._reset()
 
     def options(self):
-        return [Option("shape", t("ctx.line_shape"), "choice", "arc" if self.arc else "line",
-                       (("line", t("lineshape.line")), ("arc", t("lineshape.arc"))))]
+        # (0.450) the drawing tools side by side, as Revit's «Draw» panel — its arcs one of them (Tab still turns them
+        # on and off); (0.451) picking lines, with their offset
+        current = "pick" if self.picking else "fillet" if self.filleting else "line_arc" if self.arc else "line"
+        opts = [draw_option(current)]
+        if self.picking:
+            opts.append(Option("offset", t("ctx.offset"), "length", float(self.offset)))
+        elif not self.filleting:                             # (0.453) Revit's «Chain»
+            opts.append(Option("chain", t("ctx.chain"), "toggle", self.chain))
+        return opts
 
     def set_option(self, key, value):
         if key == "shape":
             self.arc = value == "arc"
+        elif key == "draw" and value in ("line", "line_arc", "pick", "fillet"):
+            self.cancel()
+            self.picking = value == "pick"
+            self.filleting = value == "fillet"
+            self.arc = value == "line_arc"
+        elif key == "draw":
+            switch_draw(self, value)
+            return
+        elif key == "offset":
+            self.offset = float(value)
+        elif key == "chain":
+            self.chain = bool(value)
         self.host.set_hint(self.hint())
+
+    # ------------------------------------------------------------ (0.452) Revit's «Fillet Arc» on lines
+
+    def _segment_at(self, x, y):
+        """(the piece (obj_id, i, j), the point under the mouse, its ends (a, b) world) of the loose line under the
+        mouse, or None."""
+        snap, _hit = self.viewport.snap(x, y)
+        if snap is None or snap.obj_id is None:
+            return None
+        obj = self.doc.get(snap.obj_id)
+        if not line_edit.is_lines(obj) or obj.curve:
+            return None
+        point = np.asarray(snap.point, dtype=float)
+        best = None
+        for i, j, a, b in line_edit.segments(obj):
+            d = b - a
+            s = float(np.clip((point - a) @ d / max(float(d @ d), 1e-12), 0.0, 1.0))
+            gap = float(np.linalg.norm(a + d * s - point))
+            if best is None or gap < best[0]:
+                best = (gap, (snap.obj_id, i, j), (a, b))
+        if best is None or best[0] > 1e-3:
+            return None
+        return best[1], point, best[2]
+
+    def _fillet_move(self, x, y):
+        if len(self._fillet) < 2:
+            found = self._segment_at(x, y)
+            self.viewport.clear_overlays()
+            if found is not None and hasattr(self.viewport, "show_glyph"):
+                self.viewport.show_glyph(None, None, found[2])
+            self.viewport.show_tip(t("tip.fillet_line", n=len(self._fillet) + 1), found[1] if found else None)
+            return
+        from ..core.fillet import arc_points, fillet
+        (_sa, keep_a, ea), (_sb, keep_b, eb) = self._fillet[:2]
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, ea[0], np.array((0.0, 0.0, 1.0)))
+        f = fillet(ea, keep_a, eb, keep_b, through=mouse) if mouse is not None else None
+        self._fillet_now = f
+        if f is None:
+            self.viewport.clear_overlays()
+            return
+        z = float(ea[0][2])
+        pts = [np.array((*p, z)) for p in arc_points(f)]
+        segs = [q for a, b in zip(pts, pts[1:]) for q in (a, b)]
+        self.viewport.show_polygon([], segments=segs, colors=[PREVIEW] * len(segs))
+        if hasattr(self.viewport, "show_glyph"):
+            self.viewport.show_glyph()
+        self.viewport.show_tip(t("tip.fillet_radius", r=_fmt(f.radius)), pts[len(pts) // 2])
+        self.host.set_vcb(_fmt(f.radius))
+
+    def _fillet_down(self, x, y, radius=None):
+        if len(self._fillet) < 2:
+            found = self._segment_at(x, y)
+            if found is None:
+                self.host.message(t("tip.fillet_line", n=len(self._fillet) + 1), warning=True)
+                return
+            if self._fillet and self._fillet[0][0] == found[0]:
+                return
+            self._fillet.append(found)
+            self.host.set_hint(self.hint())
+            return
+        f = self._fillet_now if radius is None else True
+        if f is None:
+            self.host.message(t("err.fillet_none"), warning=True)
+            return
+        (seg_a, keep_a, _ea), (seg_b, keep_b, _eb) = self._fillet[:2]
+        r = radius if radius is not None else self._fillet_now.radius
+        try:
+            line_edit.fillet_lines(self.doc, seg_a, keep_a, seg_b, keep_b, r, t("cmd.fillet"))
+        except line_edit.LineRefused as exc:
+            self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return
+        self.host.message(t("info.fillet_lines", r=_fmt(r)))
+        self._fillet, self._fillet_now = [], None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+
+    def _pick_move(self, x, y):
+        """(0.451) The line a click would make on the line or edge under the mouse, shown."""
+        found = self._picked(x, y)
+        if found is None:
+            self.viewport.clear_overlays()
+            return
+        a, b, edge = found
+        self.viewport.show_polygon([], segments=[a, b], colors=[PREVIEW, PREVIEW])
+        if hasattr(self.viewport, "show_glyph"):
+            self.viewport.show_glyph(None, None, edge)
+        self.host.set_vcb(_fmt(float(np.linalg.norm(b - a))))
+
+    def _picked(self, x, y):
+        """(a, b, the edge picked) of the line a click would make, or None: on the edge, moved by the offset to the
+        mouse's side."""
+        edge = pick_lines.edge_at(self.viewport, self.doc, x, y)
+        if edge is None:
+            return None
+        a, b = (np.asarray(p, dtype=float) for p in edge)
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, a, np.array((0.0, 0.0, 1.0)))
+        side = pick_lines.side_of(a, b, mouse if mouse is not None else (a + b) / 2)
+        a, b = pick_lines.offset_segment(a, b, abs(self.offset), side)
+        return a, b, edge
+
+    def _pick_down(self, x, y):
+        found = self._picked(x, y)
+        if found is None:
+            self.host.message(t("tip.wall_pick_none"), warning=True)
+            return
+        a, b, _edge = found
+        self._reset()
+        self._pts = [a]
+        self._append_line(b)
+        self._reset()
+        self.viewport.clear_overlays()
+        self.host.message(t("info.line_on_picked", l=_fmt(float(np.linalg.norm(b - a)))))
 
     def tab(self):
         """Tab: straight lines ↔ arcs (0.151)."""
@@ -88,6 +229,7 @@ class LineTool(Tool):
         return tangent_arc(last, tangent, p, self._normal)
 
     def _reset(self):
+        self._fillet, self._fillet_now = [], None       # (0.452: the lines picked for a fillet, let go)
         self._pts = []          # points of the current chain (world)
         self._normal = None     # plane of the first click: where free points go
         self._obj_id = None     # sketch object holding the chain's lines
@@ -97,6 +239,10 @@ class LineTool(Tool):
         self._start_ref = None  # …and where a typed distance would start from (base.start_reference)
 
     def hint(self):
+        if self.picking:                                     # (0.451)
+            return t("hint.line.pick")
+        if self.filleting:                                   # (0.452)
+            return t("hint.line.fillet_" + str(min(len(self._fillet), 2)))
         if self.arc:
             return t("hint.line.arc_next") if self._pts else t("hint.line.arc_start")
         return t("hint.line.next") if self._pts else t("hint.line.start")
@@ -108,6 +254,12 @@ class LineTool(Tool):
 
     def pointer_move(self, x, y, modifiers):
         self._hover_xy = (x, y)
+        if self.picking:                                     # (0.451) Revit's «Pick Lines»
+            self._pick_move(x, y)
+            return
+        if self.filleting:                                   # (0.452) Revit's «Fillet Arc»
+            self._fillet_move(x, y)
+            return
         if not self._pts:
             plane = start_plane(self.host, x, y, modifiers)
             show_snap(self.viewport, plane.snap if plane else None, plane.point if plane else None)
@@ -127,6 +279,12 @@ class LineTool(Tool):
             self.cancel()
             return
         if button != LEFT:
+            return
+        if self.picking:                                     # (0.451) a line on the line or edge clicked
+            self._pick_down(x, y)
+            return
+        if self.filleting:                                   # (0.452) two lines, then the arc between them
+            self._fillet_down(x, y)
             return
         if not self._pts:
             plane = start_plane(self.host, x, y, modifiers)
@@ -150,6 +308,10 @@ class LineTool(Tool):
             self.host.message(t("err.bad_value", t=text), warning=True)
             return
         length = values[0]
+        if self.filleting:                                   # (0.452) the fillet's radius typed
+            if len(self._fillet) >= 2 and length is not None and length > 0:
+                self._fillet_down(0, 0, radius=length)
+            return
         if not self._pts:
             if self._start_ref is None or self._hover is None:
                 self.host.message(t("hint.start_typed"), warning=True)
@@ -228,6 +390,7 @@ class LineTool(Tool):
         else:
             self.host.message(t("info.line", l=_fmt(float(np.linalg.norm(p - last)))))
         self.host.set_vcb(_fmt(float(np.linalg.norm(p - last))))
+        self._chain_off()
 
     def _add_arc(self, p):
         """(0.151) An arc to p, kept as its pieces (one undo step each, as lines); back at the first point, the
@@ -247,6 +410,13 @@ class LineTool(Tool):
             self._close()
             return
         self.host.message(t("info.arc", n=len(pts)))
+        self._chain_off()
+
+    def _chain_off(self):
+        """(0.453) Revit's «Chain» off: the piece just drawn stands alone, the next starts with a click."""
+        if not self.chain:
+            self._reset()
+            self.host.set_hint(self.hint())
 
     def _append_line(self, p, to_first=False):
         """Keep one more segment of the chain (one undo step)."""

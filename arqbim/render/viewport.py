@@ -193,6 +193,7 @@ DRAW_INK = {False: (0.24, 0.25, 0.27, 1.0), True: (0.80, 0.81, 0.83, 1.0)}     #
 LOCATION_COLOR = {False: (0.09, 0.50, 0.66, 1.0), True: (0.20, 0.58, 0.73, 1.0)}   # …its location line (Revit's teal)
 LIT_EDGE_COLOR = {False: (0.10, 0.62, 0.88, 1.0), True: (0.45, 0.85, 1.00, 1.0)}   # (0.446) the edge snapped to
 PERMANENT_COLOR = (0.84, 0.25, 0.16, 1.0)  # (0.447) Revit's «make permanent» icon, red
+MASK_EDGE = "#b8b8b8"                      # (0.450) a masking region's outline on the screen (none on paper)
 PERMANENT_PX = 6.0                         # (0.447) its half width (px)…
 PERMANENT_PICK_PX = 9.0                    # …and a click this near its middle takes it
 PARALLEL_COLOR = (0.85, 0.10, 0.75, 1.0)   # magenta, as SketchUp's parallel / perpendicular
@@ -2784,7 +2785,9 @@ class Viewport:
         groups = {}                                      # (line type, pen mm) -> (segments, colours) (0.126)
         drawn = styles_model.pen(getattr(self.doc, "graphic_style", None), "drawn")
         for ann in anns:
-            color = _physical(EDGE_SELECTED if ann in self.selected_annotations else EDGE_COLOR)
+            masking = ann.kind == "region" and ann.hatch == "mask"      # (0.450: its outline faint — not on paper)
+            color = _physical(EDGE_SELECTED if ann in self.selected_annotations else
+                              MASK_EDGE if masking else EDGE_COLOR)
             group = groups.setdefault((ann.extra.get("line", "continuous"), float(ann.extra.get("width") or drawn)),
                                       ([], []))
             for a, b in notes2d.segments(ann, origin, u, v):
@@ -2794,15 +2797,16 @@ class Viewport:
                 owned.append(ann)
             if ann.kind == "region":
                 ring = notes2d.shape(ann, origin, u, v)
-                if ring and ann.hatch == "solid":
+                if ring and ann.hatch in ("solid", "mask"):
                     pts = np.array([to3(p) for p in ring[0][0]])
                     try:
                         tris = triangulate_polygon(pts)
                     except Exception:
                         tris = []
-                    if tris:
+                    if tris:                                 # (0.450: a mask in the paper's colour, hiding)
+                        colour = views_canvas.ink("#ffffff") if ann.hatch == "mask" else "#9a9a9a"
                         fill = gfx.Mesh(gfx.Geometry(positions=_f32(pts), indices=np.array(tris, np.uint32)),
-                                        _mat(gfx.MeshBasicMaterial, color="#9a9a9a", side="both"))
+                                        _mat(gfx.MeshBasicMaterial, color=colour, side="both"))
                         self._ann_objects.append(fill)
                 elif ring:
                     for a, b in notes2d.hatch_lines(ring[0][0], ann.hatch, notes2d.HATCH_SPACING * scale / 1000.0):

@@ -407,6 +407,94 @@ class PatternWindow(unittest.TestCase):
         self.assertIsInstance(d.draft(), str)
 
 
+class DrawPanel(unittest.TestCase):
+    """0.450 — as Revit's «Draw» panel (the owner: «… poderia ser em ícones para ocupar menos espaços»): a tool's shapes
+    on the contextual bar as a row of icons, the one in use lit, a click on another choosing it; the drawing tools of
+    lines side by side, a click going to another; the 2D drawing's mask (a region filled white, its outline not on
+    paper)."""
+
+    @staticmethod
+    def _host(doc):
+        from types import SimpleNamespace
+        host = SimpleNamespace(doc=doc, viewport=SimpleNamespace(current_view=lambda: None,
+                                                                 tracking=SimpleNamespace(clear=lambda: None),
+                                                                 clear_overlays=lambda: None),
+                               set_hint=lambda *a: None, set_vcb=lambda *a: None, message=lambda *a, **k: None)
+        return host
+
+    def test_shapes_as_icons(self):
+        from arqbim.tools.bim_draw import WallTool
+        from arqbim.ui import context_bar
+        doc = Document()
+        try:
+            tool = WallTool(self._host(doc))
+            picked = []
+            window = QtWidgets.QMainWindow()
+            bar = context_bar.ContextBar("ctx", window)
+            bar.on_option = lambda k, v: picked.append((k, v))
+            bar.show_items([("option", o) for o in tool.options()])
+            row = bar.fields["shape"][0]
+            self.assertTrue(row.property("icons"))
+            buttons = {b.objectName(): b for b in row.findChildren(QtWidgets.QToolButton)}
+            self.assertEqual(len(buttons), 10)             # line, rectangle, 3 arcs, circle, fillet, pick, face, wand
+            self.assertTrue(buttons["ctx_shape_line"].isChecked())
+            self.assertFalse(buttons["ctx_shape_line"].icon().isNull())
+            buttons["ctx_shape_pick"].click()
+            self.assertEqual(picked, [("shape", "pick")])
+            tool.set_option("shape", "pick")
+            self.assertFalse(bar.sync(tool.options()))              # (0.453: no Chain, no Radius there — made again)
+            bar.show_items([("option", o) for o in tool.options()])
+            buttons = {b.objectName(): b for b in bar.fields["shape"][0].findChildren(QtWidgets.QToolButton)}
+            tool.set_option("offset", 0.5)
+            self.assertTrue(bar.sync(tool.options()))               # (the same settings: kept in step)
+            self.assertTrue(buttons["ctx_shape_pick"].isChecked() and not buttons["ctx_shape_line"].isChecked())
+            buttons["ctx_shape_pick"].click()                       # (the one in use again: it stays)
+            self.assertEqual(len(picked), 1)
+            self.assertTrue(buttons["ctx_shape_pick"].isChecked())
+            tool.set_option("shape", "rect")                        # (no Offset for a rectangle: made again)
+            self.assertFalse(bar.sync(tool.options()))
+            bar.show_items([("option", o) for o in tool.options() if o.key == "type"])   # (a type stays a list)
+            self.assertIsInstance(bar.fields["type"][0], QtWidgets.QComboBox)
+            window.deleteLater()
+        finally:
+            doc.modified = False
+
+    def test_drawing_tools_and_mask(self):
+        from arqbim.model import annotations as notes2d
+        from arqbim.tools.base import switch_draw
+        from arqbim.tools.draft import DraftTool
+        from arqbim.tools.line import LineTool
+        doc = Document()
+        try:
+            host = self._host(doc)
+            went = []
+
+            def set_tool(name):
+                went.append(name)
+                host.tool = tools[name]
+            tools = {"line": LineTool(host), "rectangle": object()}
+            host.set_tool = set_tool
+            host.tool = tools["line"]
+            line = tools["line"]
+            self.assertEqual(line.options()[0].key, "draw")
+            line.set_option("draw", "line_arc")                     # (its arcs, as Tab)
+            self.assertTrue(line.arc and not went)
+            line.set_option("draw", "rectangle")                    # another tool
+            self.assertEqual(went, ["rectangle"])
+            host.tool = line
+            self.assertTrue(switch_draw(line, "line") and not line.arc)
+            draft = DraftTool(host)
+            draft.cancel = lambda: None
+            draft.set_option("shape", "mask")
+            self.assertEqual((draft.shape, draft.hatch), ("region", "mask"))
+            self.assertEqual(draft.options()[0].value, "mask")      # (the mask's icon lit)
+            draft.set_option("shape", "region")
+            self.assertEqual(draft.hatch, "diagonal")
+            self.assertIn("mask", notes2d.HATCHES)
+        finally:
+            doc.modified = False
+
+
 class HatchesOnScreen(unittest.TestCase):
     """0.317 — a plan's cut for the screen as on paper (model/cut_hatches.py): a wall's block with its own background
     (pink) and lines, its plaster in its category's grey, a column in its category's dark fill; each element apart (its

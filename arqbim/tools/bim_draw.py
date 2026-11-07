@@ -15,8 +15,8 @@ from ..core.inference import ON_FACE
 from ..core.sketch_geometry import ray_plane
 from ..core.temp_dims import revit as revit_look
 from ..core.units import format_length, format_slope, parse_lengths
-from ..core.walls import REFERENCES, axis_lock, find_joint, horizontal_dir, offset_axis
-from ..i18n import decimal_sep, lang, t
+from ..core.walls import REFERENCES, axis_lock, axis_offset, find_joint, horizontal_dir, left_normal, offset_axis
+from ..i18n import decimal_sep, lang, refusal, t
 from ..ifc import catalog
 from ..ifc import systems as systems_model
 from ..model import bim
@@ -25,6 +25,7 @@ from .base import (
     LEFT, RIGHT, SNAP_COLORS, Option, Tool, direction_snap, drawing_dims, glyph_of, infer_point, inferred_style,
     level_plane, outside_dim, show_snap, show_start_reference, snap_tip, snapped_edge, start_reference,
 )
+from . import pick_lines
 
 Z = np.array((0.0, 0.0, 1.0))
 ANGLES = (0, 90, 180, 270)
@@ -33,9 +34,14 @@ CLOSE_PX = 14
 AXIS_END_PX = 12
 MIN_LENGTH = 0.05
 PARALLEL_REACH = 20.0   # (0.447) m: the walls this near the one being drawn are looked at for its parallel neighbours
-WALL_SHAPES = ("line", "rect", "arc", "circle", "face", "wand")   # (0.102, 0.103) the Wall tool: point by point, a
+WALL_SHAPES = ("line", "rect", "arc", "arc_center", "arc_tangent", "circle", "fillet", "pick", "face",
+               "wand")                                  # (0.102, 0.103) the Wall tool: point by point, a
+#                                                          (0.454: Revit's «Center-ends Arc» and «Tangent End Arc»)
+#                                                          (0.452: a fillet arc between two walls picked)
+#                                                          (0.451: on a line or an edge picked, Revit's «Pick Lines»)
 #                                                          rectangle, an arc, a circle, a face's outline; (0.374) the
 #                                                          magic wand (a window over two parallel lines of a drawing)
+ARCS = ("arc", "arc_center", "arc_tangent")             # (0.454) the shapes drawn as one curved wall
 
 
 def _fmt(v):
@@ -44,6 +50,13 @@ def _fmt(v):
 
 def _name(spec):
     return spec.name_pt if lang() == "pt" else spec.name_en
+
+
+def _short_angle(centre, a, b):
+    """(0.454) The angle (radians, -π…π) from a to b about the centre, the shorter way."""
+    u = math.atan2(a[1] - centre[1], a[0] - centre[0])
+    v = math.atan2(b[1] - centre[1], b[0] - centre[0])
+    return (v - u + math.pi) % (2 * math.pi) - math.pi
 
 
 def type_option(spec, kind, key="type", label="ctx.type", keep=None):
@@ -140,14 +153,19 @@ class WallTool(_PointTool):
         self.height = bim.WALL_HEIGHT
         self.reference = "axis"     # the drawn line: "axis", "left" face or "right" face (Tab changes it)
         self.shape = "line"         # (0.102) point by point, a rectangle, or along a face's outline
+        self.offset = 0.0           # (0.451) Revit's «Offset»: the wall this far from the line drawn / picked
+        self.chain = True           # (0.453) Revit's «Chain»: off, each wall starts with a click of its own…
+        self.radius = 0.0           # …and «Radius»: the chain's corners rounded (0: sharp)
         self._axes = None           # axis lines of the existing walls (cache)
         self._ends = None           # …their ends as one array (0.225)
+        self._way_out = None        # (0.454) every wall's ends with the way out of each, for a tangent arc
         host.doc.subscribe(self._forget_axes)
         self._reset_chain()
 
     def _forget_axes(self, changed, removed):
         self._axes = None
         self._ends = None
+        self._way_out = None
 
     def _wall_axes(self):
         if self._axes is None:
@@ -199,6 +217,10 @@ class WallTool(_PointTool):
         self._arc = []              # (0.103) an arc's start and end clicked so far
         self._curve = None          # (0.103) the arc / circle under the mouse: (centre, radius, start, sweep)
         self._wand = None           # (0.374) the magic wand's window: where it was pressed (screen)
+        self._turn = 0              # (0.454) a centre-ends arc: which way it turns (+1 counter-clockwise)
+        self._tangent = None        # (0.454) a tangent arc: (where it starts, on the drawn line; the way it leaves)
+        self._fillet = []           # (0.452) the walls picked for a fillet arc: [(GlobalId, the point clicked)]
+        self._fillet_now = None     # …and the fillet under the mouse
 
     def set_spec(self, spec):
         self.spec = spec
@@ -207,26 +229,43 @@ class WallTool(_PointTool):
     def _ref_text(self, reference=None):
         """The drawn line's name: along an outline (a rectangle, a circle, a face) its faces are inner and
         outer."""
-        return t(("ref." if self.shape in ("line", "arc") else "refloop.") + (reference or self.reference))
+        return t(("ref." if self.shape in ("line",) + ARCS else "refloop.") + (reference or self.reference))
 
     def options(self):
-        return [type_option(self.spec, "wall"),
+        opts = [type_option(self.spec, "wall"),
                 Option("shape", t("ctx.wall_shape"), "choice", self.shape,
                        tuple((s, t("wallshape." + s)) for s in WALL_SHAPES)),
                 length_option("height", "ctx.height", self.height),
                 Option("reference", t("ctx.reference"), "choice", self.reference,
                        tuple((r, self._ref_text(r)) for r in REFERENCES))]
+        if self.shape in ("line", "pick"):                  # (0.451) Revit's «Offset»
+            opts.append(length_option("offset", "ctx.offset", self.offset))
+        if self.shape in ("line", "arc_tangent"):           # (0.453) Revit's «Chain»…
+            opts.append(Option("chain", t("ctx.chain"), "toggle", self.chain))
+        if self.shape == "line":                            # …and «Radius»
+            opts.append(length_option("radius", "ctx.corner_radius", self.radius))
+        return opts
 
     def set_option(self, key, value):
         if key == "type":
             self.set_spec(catalog.BY_KEY[value])
         elif key == "height" and value > 0.1:
             self.height = value
+        elif key == "offset":
+            self.offset = float(value)
+        elif key == "chain":
+            self.chain = bool(value)
+        elif key == "radius" and float(value) >= 0.0:
+            self.radius = float(value)
         elif key == "reference" and value in REFERENCES:
             self.reference = value
         elif key == "shape" and value in WALL_SHAPES and value != self.shape:
+            # (0.454) from straight walls to tangent arcs and back, as Revit's: the chain goes on where it stands
+            carry = self._chain_end() if {self.shape, value} == {"line", "arc_tangent"} else None
             self.shape = value
             self.cancel()
+            if carry is not None:
+                self._go_on(carry)
         self.host.set_hint(self.hint())
         if self.shape == "line" and self._start is not None and self._end is not None:
             self._preview(None, PREVIEW)
@@ -241,9 +280,18 @@ class WallTool(_PointTool):
             return t("hint.wall.face", type=_name(self.spec), ref=ref)
         if self.shape == "wand":
             return t("hint.wall.wand", type=_name(self.spec), ref=ref)
+        if self.shape == "pick":
+            return t("hint.wall.pick", type=_name(self.spec), ref=ref)
+        if self.shape == "fillet":
+            return t("hint.wall.fillet_" + str(min(len(self._fillet), 2)), type=_name(self.spec))
         if self.shape == "arc":
             return t(("hint.wall.arc_start", "hint.wall.arc_end", "hint.wall.arc_bulge")[len(self._arc)],
                      type=_name(self.spec), ref=ref)
+        if self.shape == "arc_center":                       # (0.454)
+            return t("hint.wall.centre_" + str(min(len(self._arc), 2)), type=_name(self.spec), ref=ref)
+        if self.shape == "arc_tangent":
+            return t("hint.wall.tangent_" + ("1" if self._tangent is not None else "0"), type=_name(self.spec),
+                     ref=ref)
         if self.shape == "circle":
             if self._corner is not None:
                 return t("hint.wall.circle_end", ref=ref)
@@ -327,19 +375,23 @@ class WallTool(_PointTool):
             curve[0], drawn, curve[2] + curve[3] / 2), z)))
         self.host.set_vcb(_fmt(drawn))
 
-    def _curve_finish(self, curve, z):
+    def _curve_finish(self, curve, z, keep=False):
+        """The curved wall for the arc / circle drawn; the tool starts again, unless `keep` (0.454: a chain of tangent
+        arcs goes on). True when made."""
         if curve is None:
-            return
+            return False
         centre, radius, start, sweep = self._curve_axis(curve)
         if radius - self.spec.thickness / 2 < 0.05 or radius * abs(sweep) < MIN_LENGTH:
             self.host.message(t("err.wall_curve_small"), warning=True)
-            return
+            return False
         bim.add_curved_wall(self.doc, (centre[0], centre[1], z), radius, start, sweep, self.spec, self.height,
                             storey=self.doc.active_storey)
         key = "info.wall_circle" if arcs.is_full(sweep) else "info.wall_arc"
         self.host.message(t(key, r=_fmt(curve[1]), a="{:.0f}".format(abs(math.degrees(sweep))),
                             l=_fmt(radius * abs(sweep)), type=_name(self.spec), ref=self._ref_text()))
-        self.cancel()
+        if not keep:
+            self.cancel()
+        return True
 
     def _curve_move(self, x, y, modifiers):
         first = self._arc[0] if self._arc else self._corner
@@ -427,6 +479,237 @@ class WallTool(_PointTool):
             return
         self._curve_finish(curve, self._arc[0][2])
 
+    # ------------------------------------------------------------ Revit's other arcs (0.454)
+
+    def _hover_at(self, x, y, modifiers):
+        """Before the first click: the point under the mouse, its snap shown (as for the arc and the circle)."""
+        p, snap = self._point(x, y, self.doc.work_level(), modifiers=modifiers)
+        if p is None:
+            return None
+        self._hover = (p, snap)
+        show_snap(self.viewport, snap, p)
+        self._start_ref = start_reference(snap)
+        show_start_reference(self.viewport, self._start_ref, p)
+        return p
+
+    def _centre_move(self, x, y, modifiers):
+        """Revit's «Center-ends Arc»: its centre, its start (the radius), then its end — turning the way the mouse
+        goes from the start (decided again while near it, kept past a right angle)."""
+        if not self._arc:
+            self._hover_at(x, y, modifiers)
+            return
+        c = self._arc[0]
+        p, snap = self._point(x, y, c[2], self._arc[-1], modifiers)
+        if p is None:
+            return
+        self._hover = (p, snap)
+        self._end = p
+        if len(self._arc) == 1:                              # the radius, centre -> start
+            self._curve = None
+            self.viewport.show_lines([c, p], [PREVIEW, PREVIEW])
+            drawing_dims(self.viewport, c, p)
+            show_snap(self.viewport, snap, p)
+            self.host.set_vcb(_fmt(float(np.linalg.norm((p - c)[:2]))))
+            return
+        a = self._arc[1]
+        if self._turn == 0 or abs(_short_angle(c, a, p)) < math.pi / 2:
+            self._turn = arcs.turn_of(c, a, p)
+        self._curve = arcs.arc_from_centre(c, a, p, self._turn)
+        if self._curve is None:
+            return
+        self.viewport.show_lines([c, a, c, np.array((*arcs.point_at(c, self._curve[1], sum(self._curve[2:])), c[2]))],
+                                 [PREVIEW] * 4)
+        self._show_curve(self._curve, c[2])
+        show_snap(self.viewport, snap, p)
+        self.host.set_vcb("{:.0f}°".format(abs(math.degrees(self._curve[3]))))
+
+    def _centre_down(self, x, y, modifiers):
+        if not self._arc:
+            p, _snap = self._point(x, y, self.doc.work_level(), modifiers=modifiers)
+            if p is not None:
+                self._arc.append(p)
+                self.host.set_hint(self.hint())
+            return
+        if len(self._arc) == 1:
+            p = self._end
+            if p is not None and np.linalg.norm((p - self._arc[0])[:2]) >= MIN_LENGTH:
+                self._arc.append(np.array((p[0], p[1], self._arc[0][2])))
+                self._turn = 0
+                self.host.set_hint(self.hint())
+            return
+        self._curve_finish(self._curve, self._arc[0][2])
+
+    def _centre_typed(self, text):
+        """The radius typed (after the centre), then the angle in degrees (after the start)."""
+        if len(self._arc) == 2:
+            try:
+                degrees = float(text.replace("°", "").replace(",", ".").strip())
+            except ValueError:
+                self.host.message(t("err.bad_value", t=text), warning=True)
+                return
+            c, a = self._arc
+            turn = self._turn or 1
+            if abs(degrees) < 1e-6 or abs(degrees) > 360.0:
+                return
+            start = math.atan2(a[1] - c[1], a[0] - c[0])
+            sweep = math.copysign(math.radians(abs(degrees)), turn * (1 if degrees > 0 else -1))
+            self._curve_finish((c[:2], float(np.linalg.norm((a - c)[:2])), start, sweep), c[2])
+            return
+        values = parse_lengths(text, 1)
+        if values is None or values[0] is None or values[0] <= 0:
+            self.host.message(t("err.bad_value", t=text), warning=True)
+            return
+        if not self._arc:
+            if self._hover is None:
+                return
+            self._arc.append(self._hover[0].copy())
+        c = self._arc[0]
+        d = (self._end - c) if self._end is not None else np.array((1.0, 0.0, 0.0))
+        d = np.array((d[0], d[1], 0.0))
+        d = d / np.linalg.norm(d) if np.linalg.norm(d) > 1e-9 else np.array((1.0, 0.0, 0.0))
+        self._arc.append(c + d * values[0])
+        self._turn = 0
+        self.host.set_hint(self.hint())
+
+    def _wall_ends(self):
+        """(0.454) Every wall's axis ends and the way out of the wall at each — (points (N, 3), directions (N, 2)) —
+        the straight walls' and the curved ones' (along the arc), kept until the model changes."""
+        if self._way_out is None:
+            pts, dirs = [], []
+            for _g, s, e, _t in self._wall_axes():
+                d = horizontal_dir(s, e)
+                if d is not None:
+                    pts += [e, s]
+                    dirs += [d[:2], -d[:2]]
+            with self.doc.ifc.remembering():
+                for obj in self.doc.objects.values():
+                    if not obj.is_bim or obj.ifc_class not in ("IfcWall", "IfcWallStandardCase") or \
+                            self.doc.ifc.kind_of(obj.id) != "curved_wall":
+                        continue
+                    centre, radius, start, sweep, _h, _th = self.doc.ifc.curved_wall_params(obj.id)
+                    if arcs.is_full(sweep):
+                        continue
+                    for angle, way in ((start + sweep, 1.0), (start, -1.0)):
+                        pts.append(np.array((*arcs.point_at(centre, radius, angle), float(centre[2]))))
+                        dirs.append(arcs.along(angle, sweep) * way)
+            self._way_out = (np.asarray(pts, dtype=float).reshape(-1, 3), np.asarray(dirs, dtype=float).reshape(-1, 2))
+        return self._way_out
+
+    def _way_out_at(self, x, y, level):
+        """The wall end nearest the mouse on the screen, at this level, and the way out of the wall there —
+        (point, direction (2,)) — or None."""
+        pts, dirs = self._wall_ends()
+        on = np.flatnonzero(np.abs(pts[:, 2] - level) <= 1e-4)
+        if not len(on):
+            return None
+        xy = np.asarray(self.viewport.project_many(pts[on]), dtype=float)
+        dist = np.hypot(xy[:, 0] - x, xy[:, 1] - y)
+        dist[np.isnan(dist)] = np.inf
+        k = int(np.argmin(dist))
+        if dist[k] > 2 * AXIS_END_PX:
+            return None
+        return pts[on[k]].copy(), dirs[on[k]].copy()
+
+    def _tangent_move(self, x, y, modifiers):
+        """Revit's «Tangent End Arc»: from a wall's end (or where the chain stands), leaving it along it, to the
+        point clicked."""
+        if self._tangent is None:
+            found = self._way_out_at(x, y, self.doc.work_level())
+            self._hover = None
+            self.viewport.show_alignments()
+            if found is None:
+                p, _snap = self._point(x, y, self.doc.work_level())
+                self.viewport.show_marker(None)
+                self.viewport.show_glyph(None)
+                self.viewport.show_tip(t("tip.wall_tangent_none"), p)
+                return
+            p = found[0]
+            if revit_look():
+                self.viewport.show_marker(None)
+                self.viewport.show_glyph("endpoint", p)
+            else:
+                self.viewport.show_marker(p, SNAP_COLORS["endpoint"])
+            self.viewport.show_tip(t("snap.wall_axis"), p)
+            return
+        a, way = self._tangent
+        p, snap = self._point(x, y, a[2], a, modifiers)
+        if p is None:
+            return
+        self._hover = (p, snap)
+        self._end = p
+        self._curve = arcs.arc_tangent(a, way, p)
+        if self._curve is None:                              # straight ahead: no arc turns there
+            self.viewport.show_volume([])
+            self.viewport.show_label("", None)
+            self.viewport.show_lines([a, p], [PREVIEW, PREVIEW])
+            return
+        self.viewport.show_lines()
+        self._show_curve(self._curve, a[2])
+        show_snap(self.viewport, snap, p)
+
+    def _tangent_down(self, x, y, modifiers):
+        if self._tangent is not None:
+            self._tangent_finish(self._curve)
+            return
+        found = self._way_out_at(x, y, self.doc.work_level())
+        if found is None:
+            self.host.message(t("tip.wall_tangent_none"), warning=True)
+            return
+        point, way = found
+        # the arc drawn as the bar's reference line, its axis starting on the wall's axis
+        drawn = point - left_normal(np.array((*way, 0.0))) * axis_offset(self.reference, self.spec.thickness)
+        self._tangent = (drawn, way)
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+
+    def _tangent_typed(self, text):
+        """The distance to the arc's end, towards the mouse."""
+        values = parse_lengths(text, 1)
+        if values is None or values[0] is None or values[0] <= 0:
+            self.host.message(t("err.bad_value", t=text), warning=True)
+            return
+        if self._tangent is None or self._end is None:
+            return
+        a, way = self._tangent
+        d = (self._end - a)[:2]
+        if float(np.linalg.norm(d)) < 1e-9:
+            return
+        b = a[:2] + d / float(np.linalg.norm(d)) * values[0]
+        self._tangent_finish(arcs.arc_tangent(a, way, b))
+
+    def _tangent_finish(self, curve):
+        a, _way = self._tangent
+        if curve is None or not self._curve_finish(curve, a[2], keep=True):
+            return
+        centre, radius, start, sweep = curve
+        self._count += 1
+        if not self.chain:
+            self.cancel()
+            return
+        end = start + sweep                                  # the next arc leaves this one's end, tangent
+        self._tangent = (np.array((*arcs.point_at(centre, radius, end), a[2])), arcs.along(end, sweep))
+        self._curve = None
+        self._end = None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+
+    def _chain_end(self):
+        """(0.454) Where the chain stands and the way it goes — (point on the drawn line, direction (2,), its first
+        wall, how many) — for it to go on as a tangent arc / a straight wall when the shape changes; or None."""
+        if self.shape == "line" and self._start is not None and self._prev is not None:
+            return self._start.copy(), np.asarray(self._prev[1][:2], dtype=float), self._first, self._count
+        if self.shape == "arc_tangent" and self._tangent is not None:
+            return self._tangent[0].copy(), self._tangent[1].copy(), self._first, self._count
+        return None
+
+    def _go_on(self, carry):
+        point, way, first, count = carry
+        self._first, self._count = first, count
+        if self.shape == "arc_tangent":
+            self._tangent = (point, way)
+        else:
+            self._start = point                              # (no corner to join: wall and arc meet tangent)
+
     # ------------------------------------------------------------ the magic wand (0.374, the addon's wall_magic_wand)
 
     def _wand_lines(self):
@@ -495,11 +778,172 @@ class WallTool(_PointTool):
             self.viewport.show_region()
             self._wand_finish(x0, y0, x, y)
 
+    # ------------------------------------------------------------ (0.451) Revit's «Pick Lines»
+
+    def _picked_wall(self, x, y):
+        """The wall a click would make on the line or edge under the mouse: (axis start, axis end, the edge picked),
+        or None — its location line on the edge moved by the offset to the mouse's side, its body on that side when
+        drawn by a face."""
+        edge = pick_lines.edge_at(self.viewport, self.doc, x, y)
+        if edge is None:
+            return None
+        level = self.doc.work_level()
+        a, b = (np.array((p[0], p[1], level)) for p in edge)
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, np.array((0.0, 0.0, level)), Z)
+        side = pick_lines.side_of(a, b, mouse if mouse is not None else (a + b) / 2)
+        a, b = pick_lines.offset_segment(a, b, abs(self.offset), side)
+        # (the body on the mouse's side: drawn as the left face it lies to the right, as the right face to the left)
+        if (self.reference == "left" and side > 0) or (self.reference == "right" and side < 0):
+            a, b = b, a
+        axis_a, axis_b = offset_axis(a, b, self.reference, self.spec.thickness)
+        return axis_a, axis_b, edge
+
+    def _pick_move(self, x, y):
+        found = self._picked_wall(x, y)
+        if found is None:
+            self.viewport.clear_overlays()
+            self.viewport.show_tip(t("tip.wall_pick_none"), self._point(x, y, self.doc.work_level())[0])
+            return
+        axis_a, axis_b, edge = found
+        way = (axis_b - axis_a)[:2]
+        side = np.array((-way[1], way[0])) / max(float(np.linalg.norm(way)), 1e-12) * self.spec.thickness / 2
+        z = float(axis_a[2])
+        corners = [np.array((*c, z)) for c in (axis_a[:2] + side, axis_b[:2] + side, axis_b[:2] - side,
+                                                axis_a[:2] - side)]
+        if revit_look() and self.viewport.plan:
+            self.viewport.show_drawn([p for k in range(4) for p in (corners[k], corners[(k + 1) % 4])])
+            self.viewport.show_glyph(None, None, edge)
+        else:
+            tris, segs = band_solid.band_solid([c[:2] for c in corners[:2]], [c[:2] for c in corners[:1:-1]],
+                                               z, self.height, closed=False)
+            self.viewport.show_volume(tris, segs, [PREVIEW] * len(segs))
+        length = float(np.linalg.norm(way))
+        self.viewport.show_tip(t("tip.wall_pick", l=_fmt(length)), (axis_a + axis_b) / 2)
+        self.host.set_vcb(_fmt(length))
+
+    def _pick_down(self, x, y):
+        found = self._picked_wall(x, y)
+        if found is None:
+            self.host.message(t("tip.wall_pick_none"), warning=True)
+            return
+        a, b, _edge = found
+        if float(np.linalg.norm((b - a)[:2])) < MIN_LENGTH:
+            return
+        direction = horizontal_dir(a, b)
+        axes = self._wall_axes()
+        start_join = find_joint(a, direction, axes, self.spec.thickness)
+        end_join = find_joint(b, direction, axes, self.spec.thickness)
+        bim.add_wall(self.doc, a, b, self.spec, self.height, start_join=start_join and start_join[:3],
+                     end_join=end_join and end_join[:3], storey=self.doc.active_storey)
+        self.viewport.clear_overlays()
+        self.host.message(t("info.wall_picked", l=_fmt(float(np.linalg.norm((b - a)[:2]))), type=_name(self.spec)))
+
+    # ------------------------------------------------------------ (0.452) Revit's «Fillet Arc»
+
+    def _wall_at(self, x, y):
+        """(a straight wall's GlobalId, the point clicked on it) under the mouse, or None."""
+        hit = self.viewport.pick_point(x, y)
+        if hit is None:
+            return None
+        obj = self.doc.get(hit[0])
+        if obj is None or not obj.is_bim:
+            return None
+        try:
+            if self.doc.ifc.kind_of(obj.id) != "wall":
+                return None
+        except (RuntimeError, AttributeError):
+            return None
+        return obj.id, np.asarray(hit[2], dtype=float)
+
+    def _fillet_of(self, radius=None, through=None):
+        """The fillet (core/fillet) of the two walls picked, of `radius` or through the point `through`, or None."""
+        from ..core.fillet import fillet
+        (a, keep_a), (b, keep_b) = self._fillet[:2]
+        sa, ea, _t = self.doc.ifc.wall_axis(a)
+        sb, eb, _t = self.doc.ifc.wall_axis(b)
+        return fillet((sa, ea), keep_a, (sb, eb), keep_b, radius=radius, through=through)
+
+    def _fillet_move(self, x, y):
+        if len(self._fillet) < 2:
+            found = self._wall_at(x, y)
+            if found is None:
+                self.viewport.clear_overlays()
+                self.viewport.show_tip(t("tip.fillet_pick", n=len(self._fillet) + 1),
+                                       self._point(x, y, self.doc.work_level())[0])
+                return
+            s, e, _t = self.doc.ifc.wall_axis(found[0])
+            self.viewport.show_glyph(None, None, (s, e))
+            self.viewport.show_tip(t("tip.fillet_pick", n=len(self._fillet) + 1), found[1])
+            return
+        from ..core.fillet import arc_points
+        level = float(self.doc.ifc.wall_axis(self._fillet[0][0])[0][2])
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, np.array((0.0, 0.0, level)), Z)
+        f = self._fillet_of(through=mouse) if mouse is not None else None
+        self._fillet_now = f
+        self.viewport.show_glyph()                          # (the wall lit while it was picked: no longer)
+        if f is None:
+            self.viewport.clear_overlays()
+            return
+        pts = arc_points(f)
+        half = self.spec.thickness / 2
+        out = [f.centre + (p - f.centre) * ((f.radius + half) / f.radius) for p in pts]
+        inn = [f.centre + (p - f.centre) * (max(f.radius - half, 1e-3) / f.radius) for p in pts]
+        ring = out + inn[::-1]
+        segs = [np.array((*q, level)) for k in range(len(ring)) for q in (ring[k], ring[(k + 1) % len(ring)])]
+        if revit_look() and self.viewport.plan:
+            self.viewport.show_drawn(segs)
+        else:
+            self.viewport.show_lines(segs, [PREVIEW] * len(segs))
+        self.viewport.show_tip(t("tip.fillet_radius", r=_fmt(f.radius)), np.array((*pts[len(pts) // 2], level)))
+        self.host.set_vcb(_fmt(f.radius))
+
+    def _fillet_down(self, x, y, radius=None):
+        if len(self._fillet) < 2:
+            found = self._wall_at(x, y)
+            if found is None:
+                self.host.message(t("tip.fillet_pick", n=len(self._fillet) + 1), warning=True)
+                return
+            if self._fillet and self._fillet[0][0] == found[0]:
+                return                                       # (the same wall again: another one)
+            self._fillet.append(found)
+            self.host.set_hint(self.hint())
+            return
+        f = self._fillet_of(radius=radius) if radius is not None else getattr(self, "_fillet_now", None)
+        if f is None:
+            self.host.message(t("err.fillet_none"), warning=True)
+            return
+        (a, keep_a), (b, keep_b) = self._fillet[:2]
+        try:
+            bim.fillet_walls(self.doc, a, keep_a, b, keep_b, f.radius, self.spec, self.height,
+                             storey=self.doc.active_storey)
+        except ValueError as exc:
+            self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return
+        self.host.message(t("info.fillet", r=_fmt(f.radius), type=_name(self.spec)))
+        self._fillet = []
+        self._fillet_now = None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+
     def _shape_move(self, x, y, modifiers):
+        if self.shape == "fillet":
+            self._fillet_move(x, y)
+            return
+        if self.shape == "pick":
+            self._pick_move(x, y)
+            return
         if self.shape == "wand":
             if self._wand is not None:
                 (x0, y0) = self._wand
                 self.viewport.show_region([(x0, y0), (x, y0), (x, y), (x0, y)], "window")
+            return
+        if self.shape == "arc_center":                 # (0.454) Revit's «Center-ends Arc»…
+            self._centre_move(x, y, modifiers)
+            return
+        if self.shape == "arc_tangent":                # …and «Tangent End Arc»
+            self._tangent_move(x, y, modifiers)
             return
         if self.shape in ("arc", "circle"):
             self._curve_move(x, y, modifiers)
@@ -539,8 +983,20 @@ class WallTool(_PointTool):
         self.host.set_vcb("{} × {}".format(_fmt(abs(self._du)), _fmt(abs(self._dv))))
 
     def _shape_down(self, x, y, modifiers):
+        if self.shape == "fillet":                     # (0.452) two walls, then the arc between them
+            self._fillet_down(x, y)
+            return
+        if self.shape == "pick":                       # (0.451) a wall on the line or edge clicked
+            self._pick_down(x, y)
+            return
         if self.shape == "wand":                       # (0.374) the window starts where pressed
             self._wand = (float(x), float(y))
+            return
+        if self.shape == "arc_center":                 # (0.454)
+            self._centre_down(x, y, modifiers)
+            return
+        if self.shape == "arc_tangent":
+            self._tangent_down(x, y, modifiers)
             return
         if self.shape in ("arc", "circle"):
             self._curve_down(x, y, modifiers)
@@ -565,9 +1021,19 @@ class WallTool(_PointTool):
         self._rect_finish()
 
     def _shape_typed(self, text):
+        if self.shape == "arc_center":                 # (0.454) a radius, then an angle in degrees
+            self._centre_typed(text)
+            return
+        if self.shape == "arc_tangent":
+            self._tangent_typed(text)
+            return
         values = parse_lengths(text, 2)
         if values is None:
             self.host.message(t("err.bad_value", t=text), warning=True)
+            return
+        if self.shape == "fillet":                     # (0.452) the arc's radius typed
+            if len(self._fillet) >= 2 and values[0] is not None and values[0] > 0:
+                self._fillet_down(0, 0, radius=values[0])
             return
         if self.shape in ("arc", "circle"):
             if values[0] is not None:
@@ -713,7 +1179,7 @@ class WallTool(_PointTool):
             return
         closing = self._first is not None and self._count >= 2 and np.linalg.norm((end - self._first[2])[:2]) < 1e-6
         direction = horizontal_dir(start, end)
-        a, b = offset_axis(start, end, self.reference, self.spec.thickness)   # the wall's axis
+        a, b = self._drawn_axis(start, end)                                   # the wall's axis
         # Corners with walls drawn before, separately (the chain's own corners come from prev / first).
         axes = [w for w in self._wall_axes() if self._prev is None or w[0] != self._prev[0]]
         start_join = None if self._prev is not None else find_joint(a, direction, axes, self.spec.thickness)
@@ -723,21 +1189,45 @@ class WallTool(_PointTool):
                             start_join=start_join and start_join[:3], end_join=end_join and end_join[:3],
                             storey=self.doc.active_storey)
         self._count += 1
+        rounded = []
+        if self.radius > 0 and self._prev is not None:     # (0.453) Revit's «Radius»: the corner rounded
+            rounded.append(self._round_corner(self._prev[0], guid))
+            if closing:
+                rounded.append(self._round_corner(guid, self._first[0]))
         if self._first is None:
             self._first = (guid, direction, start.copy())
         self._prev = (guid, direction)
         text = t("info.wall", l=_fmt(float(np.linalg.norm((end - start)[:2]))), type=_name(self.spec))
         if start_join or end_join:
             text += " " + t("info.wall_joined")
+        if rounded and not all(rounded):
+            text += " " + t("info.corner_not_rounded", r=_fmt(self.radius))
         self.host.message(text)
         if closing:
             self.host.message(t("info.closed", n=self._count))
             self.cancel()
             return
+        if not self.chain:                                  # (0.453) Revit's «Chain» off: the next one apart
+            self._reset_chain()
+            self.viewport.clear_overlays()
+            self.host.set_hint(self.hint())
+            return
         self._start = end.copy()
         self._end = None
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
+
+    def _round_corner(self, a, b):
+        """(0.453) The corner between walls a and b of the chain rounded with the bar's Radius (a fillet arc, each
+        kept on its middle's side). False when it could not be (too big a radius)."""
+        try:
+            keep_a = np.mean(self.doc.ifc.wall_axis(a)[:2], axis=0)
+            keep_b = np.mean(self.doc.ifc.wall_axis(b)[:2], axis=0)
+            bim.fillet_walls(self.doc, a, keep_a, b, keep_b, self.radius, self.spec, self.height,
+                             storey=self.doc.active_storey)
+            return True
+        except (ValueError, RuntimeError):
+            return False
 
     def _parallel_dims(self, a, b):
         """(0.447) As Revit's while a wall is drawn: its distance to the nearest parallel wall on each side (overlapping
@@ -761,8 +1251,18 @@ class WallTool(_PointTool):
         found = temp_dims.wall_relations((a, b), self.spec.thickness, others, faces=faces)
         return [temp_dims.TempDim(r.a, r.b, Z, offset_px=0.0, kind="relation") for r in found if r.kind == "side"]
 
+    def _drawn_axis(self, start, end):
+        """The wall's axis for the line drawn start → end: as its reference says, and (0.451) moved by the offset to
+        the left of the way it is drawn (a negative one: to the right), as Revit's «Offset»."""
+        a, b = offset_axis(start, end, self.reference, self.spec.thickness)
+        d = horizontal_dir(start, end)
+        if self.offset and d is not None:
+            shift = left_normal(d) * self.offset
+            a, b = a + shift, b + shift
+        return a, b
+
     def _preview(self, tip, color, glyph=None, edge=None):
-        a, b = offset_axis(self._start, self._end, self.reference, self.spec.thickness)
+        a, b = self._drawn_axis(self._start, self._end)
         way = (b - a)[:2]
         if float(np.linalg.norm(way)) < 1e-6:
             return

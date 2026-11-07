@@ -57,6 +57,54 @@ def arc_with_radius(a, b, radius, side):
     return arc_through(a, b, through)
 
 
+def arc_tangent(a, direction, b):
+    """(0.454) Revit's «Tangent End Arc»: the arc from a, leaving it along `direction` (plan), to b —
+    (centre, radius, start, sweep), or None when b is straight ahead or behind (no arc turns there)."""
+    a, b, d = _xy(a), _xy(b), _xy(direction)
+    n = float(np.linalg.norm(d))
+    if n < 1e-12:
+        return None
+    d = d / n
+    left = np.array((-d[1], d[0]))
+    v = b - a
+    across = float(v @ left)                                    # how far b lies to the left of the way out
+    if abs(across) < 1e-6 * max(1.0, float(np.linalg.norm(v))):
+        return None
+    signed = float(v @ v) / (2 * across)                        # the centre: that far to the left of a
+    centre = a + left * signed
+    start = math.atan2(a[1] - centre[1], a[0] - centre[0])
+    end = math.atan2(b[1] - centre[1], b[0] - centre[0])
+    sweep = (end - start) % FULL if signed > 0 else -((start - end) % FULL)   # (to the left: counter-clockwise)
+    return centre, abs(signed), start, sweep
+
+
+def arc_from_centre(centre, a, b, turn):
+    """(0.454) Revit's «Center-ends Arc»: about `centre`, from a (its radius) to the direction of b, turning
+    counter-clockwise when `turn` > 0, clockwise otherwise — (centre, radius, start, sweep), or None."""
+    c, a, b = _xy(centre), _xy(a), _xy(b)
+    radius = float(np.linalg.norm(a - c))
+    if radius < 1e-9 or float(np.linalg.norm(b - c)) < 1e-9:
+        return None
+    start = math.atan2(a[1] - c[1], a[0] - c[0])
+    end = math.atan2(b[1] - c[1], b[0] - c[0])
+    sweep = (end - start) % FULL if turn > 0 else -((start - end) % FULL)
+    if abs(sweep) < 1e-6:
+        return None
+    return c, radius, start, sweep
+
+
+def turn_of(centre, a, b):
+    """(0.454) Which way a turns towards b about the centre by the shorter way: +1 counter-clockwise, -1 not."""
+    c, a, b = _xy(centre), _xy(a), _xy(b)
+    u, v = a - c, b - c
+    return 1 if float(u[0] * v[1] - u[1] * v[0]) >= 0 else -1
+
+
+def along(angle, sweep):
+    """(0.454) The unit direction (plan) the arc goes at `angle`, following its sweep."""
+    return np.array((-math.sin(angle), math.cos(angle))) * (1.0 if sweep >= 0 else -1.0)
+
+
 def point_at(centre, radius, angle):
     return np.array((centre[0] + radius * math.cos(angle), centre[1] + radius * math.sin(angle)))
 

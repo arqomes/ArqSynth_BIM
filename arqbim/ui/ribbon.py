@@ -68,8 +68,9 @@ PANELS = {
     # (0.374) as the owner's study (proposta-interface-arqsynth.html): the walls' shapes in sight, the niche, the floor
     # finish, the gutter, the elevator, the room separators, identifying the rooms and their areas
     "architecture": (("select", ("select",)),
-                     ("walls", ("wall", "curtain_wall", ("wall_rect", "wall_circle", "wall_arc"),
-                                ("wall_face", "wall_wand", "curtain_panel"))),
+                     # (0.450, the owner: the shapes on the contextual bar, as Revit's «Draw» panel — not as buttons
+                     # here; Retangular, Circular, Arco, Por face, Varinha mágica stay on W + letter)
+                     ("walls", ("wall", "curtain_wall", "curtain_panel")),
                      ("openings", ("door", "window", ("wall_opening", "roof_opening", "niche"), ("caixilho", "renumber"))),
                      ("floors_roofs", ("slab", "roof", ("flooring", "ceiling", "gutter"),
                                       ("edit_outline", "roof_profile", "drain"))),

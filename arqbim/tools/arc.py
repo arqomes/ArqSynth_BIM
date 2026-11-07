@@ -26,7 +26,7 @@ from ..i18n import decimal_sep, t
 from ..model import imprint, line_edit, line_faces
 from ..model.document import AddObject, SketchObject
 from ..render.viewport import PREVIEW
-from .base import LEFT, RIGHT, Option, Tool, drawing_dims, point_from, show_snap, start_plane
+from .base import LEFT, RIGHT, Option, Tool, draw_option, drawing_dims, point_from, show_snap, start_plane, switch_draw
 
 MODES = ("two", "centre", "three", "pie")
 SEGMENTS = (0, 6, 8, 12, 16, 24, 32, 48)          # 0: by its angle (a piece every 15°)
@@ -68,11 +68,15 @@ class ArcTool(Tool):
     # ------------------------------------------------------------ bar
 
     def options(self):
-        return [Option("mode", t("ctx.arc_mode"), "choice", self.mode, tuple((m, t("arcmode." + m)) for m in MODES)),
+        return [draw_option("arc"),                         # (0.450: the drawing tools, as Revit's «Draw» panel)
+                Option("mode", t("ctx.arc_mode"), "choice", self.mode, tuple((m, t("arcmode." + m)) for m in MODES)),
                 Option("segments", t("ctx.arc_segments"), "choice", self.segments,
                        tuple((s, t("arcseg.auto") if s == 0 else str(s)) for s in SEGMENTS))]
 
     def set_option(self, key, value):
+        if key == "draw":
+            switch_draw(self, value)
+            return
         if key == "mode" and value in MODES:
             self.mode = value
             self.cancel()

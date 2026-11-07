@@ -23,6 +23,8 @@ SPOT_MARK = 0.12            # m: half a spot height's cross (its text worked out
 LEVEL_MARK = 0.15           # m: (0.192) a level mark's radius — a circle quartered, two quarters filled
 MARKS = ("spot", "level")   # the ones whose text is the model's height there
 HATCHES = ("diagonal", "cross", "solid", "none")      # a region on paper: lines at 45°, crossed, filled grey, empty
+# (0.450) …and Revit's masking region: filled white, its outline not on paper — what is under it is hidden
+HATCHES += ("mask",)
 TEXT_SIZE = 2.5             # mm on paper: a text's height (as an architect's lettering)
 HATCH_SPACING = 1.5         # mm on paper between a hatch's lines
 MIN_SIZE = 0.005            # m

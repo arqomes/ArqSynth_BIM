@@ -388,6 +388,37 @@ class WallEditMixin:
         self.set_wall_end(butt, butt_end, *result["butt"])
         return other
 
+    def fillet_walls(self, a, keep_a, b, keep_b, radius, spec, height, name, lang="pt", storey=None):
+        """(0.452, Revit's «Fillet Arc») Walls a and b trimmed / extended to where an arc of `radius`, tangent to their
+        axes on the side of each where it was picked (`keep_*`, plan points), touches them — their joints at those
+        ends let go — and a curved wall of the type `spec` along that arc, joined to both. Returns the new wall."""
+        from ..core.fillet import fillet
+        for g in (a, b):
+            self._require(g, "wall")
+        sa, ea, _ta = self.wall_axis(a)
+        sb, eb, _tb = self.wall_axis(b)
+        f = fillet((sa, ea), keep_a, (sb, eb), keep_b, radius=radius)
+        if f is None:
+            raise EditRefused("parallel")
+        reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+        if any(reach > room - MIN_SIZE for room in f.room):
+            raise EditRefused("too_big")                     # (the radius: further than a wall's other end)
+        for g, s, e, end, at in ((a, sa, ea, f.ends[0], f.tangents[0]), (b, sb, eb, f.ends[1], f.tangents[1])):
+            d = (e - s) * np.array((1.0, 1.0, 0.0))
+            length = float(np.linalg.norm(d))
+            pos = float((np.asarray(at, dtype=float) - s[:2]) @ (d[:2] / length))
+            change = pos - length if end == "end" else -pos
+            if abs(change) > 1e-9:
+                self.resize_wall(g, **({"at_end": change} if end == "end" else {"at_start": change}))
+            else:
+                ifcopenshell.api.geometry.disconnect_path(self.file, element=self.by_guid(g),
+                                                          connection_type="ATEND" if end == "end" else "ATSTART")
+        z = float(sa[2])
+        wall = self.add_curved_wall(spec, (float(f.centre[0]), float(f.centre[1]), z), f.radius, f.start, f.sweep,
+                                    height, name, lang, storey=storey)
+        self.join_ends(wall.GlobalId)
+        return wall
+
     def corner_walls(self, a, keep_a, b, keep_b):
         """Trim / extend walls a and b to the corner where their axes cross, keeping the side of each where
         the point clicked on it is (plan points). Their other joints at those ends are let go."""

@@ -86,6 +86,66 @@ def move_points(doc, moves, label=None):
     return len(found)
 
 
+def segment_at(doc, obj_id, a, b):
+    """(0.452) The piece (i, j) of a lines sketch whose ends are the world points a and b (either way), or None."""
+    obj = doc.get(obj_id)
+    if not is_lines(obj) or obj.curve:
+        return None
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    for i, j, p, q in segments(obj):
+        if (np.linalg.norm(p - a) <= TOL and np.linalg.norm(q - b) <= TOL) or \
+                (np.linalg.norm(p - b) <= TOL and np.linalg.norm(q - a) <= TOL):
+            return i, j
+    return None
+
+
+def fillet_lines(doc, first, keep_first, second, keep_second, radius, label=None):
+    """(0.452, Revit's «Fillet Arc» on lines) Two loose lines' pieces — first = (obj_id, i, j), second likewise —
+    trimmed / extended to where an arc of `radius`, tangent to both on the side of each where it was picked (keep_*:
+    world points), touches them (each its own point there: a corner they shared is split), and the arc drawn between
+    them, a line of the first's sketch. One undo step. LineRefused("parallel") / ("too_big")."""
+    from ..core.fillet import arc_points, fillet
+    (oa_id, ia, ja), (ob_id, ib, jb) = first, second
+    oa, ob = doc.get(oa_id), doc.get(ob_id)
+    wa = [transform_point(oa.matrix, v) for v in oa.mesh.verts]
+    wb = [transform_point(ob.matrix, v) for v in ob.mesh.verts]
+    f = fillet((wa[ia], wa[ja]), keep_first, (wb[ib], wb[jb]), keep_second, radius=radius)
+    if f is None:
+        raise LineRefused("parallel")
+    reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+    if any(reach > room - TOL for room in f.room):
+        raise LineRefused("too_big")
+    meshes = {oa_id: oa.mesh.copy()}
+    if ob_id != oa_id:
+        meshes[ob_id] = ob.mesh.copy()
+    objs = {oa_id: oa, ob_id: ob}
+    z = float(wa[ia][2])
+
+    def local(obj_id, p):
+        m = np.linalg.inv(objs[obj_id].matrix)
+        return (m @ np.array((float(p[0]), float(p[1]), z, 1.0)))[:3]
+
+    def trim(obj_id, i, j, end, point):
+        mesh = meshes[obj_id]
+        new = mesh.add_vert(local(obj_id, point))
+        k = next(n for n, ln in enumerate(mesh.lines) if tuple(ln) in ((i, j), (j, i)))
+        a, b = mesh.lines[k]
+        corner = j if end == "end" else i
+        mesh.lines[k] = (new, b) if a == corner else (a, new)
+        return new
+
+    start = trim(oa_id, ia, ja, f.ends[0], f.tangents[0])
+    trim(ob_id, ib, jb, f.ends[1], f.tangents[1])
+    mesh = meshes[oa_id]                                     # (the arc in the first's sketch)
+    last = start
+    for p in arc_points(f)[1:]:
+        nxt = mesh.add_vert(local(oa_id, p))
+        mesh.lines.append((last, nxt))
+        last = nxt
+    doc.execute(ReplaceMeshes([(k, objs[k].mesh, m) for k, m in meshes.items()], label or ""))
+    return f
+
+
 def set_length(doc, obj_id, i, j, length):
     """Segment iâ†’j `length` long: its end j moves along it (the lines joined at j follow)."""
     obj = doc.get(obj_id)

@@ -1689,6 +1689,23 @@ def add_curved_wall(doc, centre, radius, start, sweep, spec, height=WALL_HEIGHT,
     return doc.execute(cmd).result
 
 
+def fillet_walls(doc, a, keep_a, b, keep_b, radius, spec, height=WALL_HEIGHT, storey=None):
+    """(0.452, Revit's «Fillet Arc») Walls a and b joined by a curved wall of `radius` tangent to both, on the side of
+    each where it was picked (keep_*: plan points) — both trimmed / extended to it. One undo step. Returns the curved
+    wall's GlobalId."""
+    language, prefix = lang(), t("elem.wall")
+    cmd = IfcCommand(t("cmd.fillet"), None)
+
+    def action(ifc):
+        name = "{} {}".format(prefix, ifc.count("IfcWall") + 1)
+        guid = ifc.fillet_walls(a, keep_a, b, keep_b, radius, spec, height, name, language, storey=storey).GlobalId
+        cmd.changed += [g for g in [a, b] + _fillings(doc, a) + _fillings(doc, b) if g not in cmd.changed]
+        return guid
+
+    cmd.action = action
+    return doc.execute(cmd).result
+
+
 def set_curved_wall(doc, guid, radius=None, sweep=None, height=None):
     """A curved wall's radius, sweep (radians) or height — its doors and windows going with it (0.177). One undo
     step."""
