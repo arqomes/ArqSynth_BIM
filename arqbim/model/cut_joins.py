@@ -17,6 +17,12 @@ from ..core import drawing2d
 AREA = 1e-8          # m²: less is no area (a hair's sliver a difference leaves)
 GRID = 1e-6          # m: every corner snapped to it, so that two parts worked out apart meet without a hair between
 TOUCH = 1e-4         # m: two outlines this close touch
+# (0.442) m: a crack this narrow (or narrower than twice it) between the parts of what is cut, closed when they are
+# joined at the end (`_closed`): two walls' parts worked out apart meet along a slanted joint — a mitre of walls a
+# little out of square — whose ends the grid rounds to two points a step apart, and the thick line went in and out
+# along the crack (one line across the corner)
+CLOSE = 2e-5
+MITRE = 20.0         # a closing's corners kept sharp (bevelled only when sharper than ~6°)
 PARALLEL = 0.9       # |cos| over it: two elements' layers run the same way (walls in a row), not across each other
 SAME = 1e-3          # m: two bands this close are one (walls in a row, of one thickness)
 CORE, FINISH = 1, 5  # a layer's strength (as Revit's priorities): an element's core, its other layers
@@ -171,7 +177,13 @@ def merged(fills, whose=None):
 
 def outline(regions):
     """The outlines (rings_of) round all of `merged`'s regions: what is cut, one (its thick line)."""
-    return drawing2d.rings_of(_union(list(regions), GRID).simplify(0.0))
+    return drawing2d.rings_of(whole(regions).simplify(0.0))
+
+
+def whole(regions):
+    """(0.442) All of `merged`'s regions as one — what is cut, its materials together (the cracks between them closed):
+    round it the thick line, on paper (`outline`) and on the screen (cut_hatches)."""
+    return _union(list(regions), GRID)
 
 
 def _elements(fills, whose, classes, banded):
@@ -419,7 +431,7 @@ def _clean(geometry):
 
 def _union(geometries, grid=None):
     """Regions as one; grid: snapped to it (the materials' regions at the end: two parts worked out apart meet
-    without a hair between them)."""
+    without a hair between them) — (0.442) and the cracks left between them closed (`_closed`)."""
     import shapely
     from shapely.geometry import Polygon
     geometries = [g for g in geometries if g is not None and not g.is_empty]
@@ -427,14 +439,16 @@ def _union(geometries, grid=None):
         return Polygon()
     if len(geometries) == 1 and grid is None:
         return geometries[0]
-    if grid is None or len(geometries) < 8:
-        return _clean(shapely.union_all(geometries, grid_size=grid))
+    if grid is None:
+        return _clean(shapely.union_all(geometries))
+    if len(geometries) < 8:
+        return _closed(shapely.union_all(geometries, grid_size=grid), grid)
     # many (a material's parts over a storey): only those that touch joined — each group at once, much quicker
     from shapely.geometry import MultiPolygon
     from shapely.strtree import STRtree
     polys = [p for g in geometries for p in _polys(g)]
     tree = STRtree(polys)
-    a, b = tree.query(polys, predicate="dwithin", distance=grid * 10)
+    a, b = tree.query(polys, predicate="dwithin", distance=max(grid * 10, 2 * CLOSE))
     root = list(range(len(polys)))
 
     def find(i):
@@ -451,9 +465,21 @@ def _union(geometries, grid=None):
         groups.setdefault(find(i), []).append(polys[i])
     out = []
     for members in groups.values():
-        joined = shapely.union_all(members, grid_size=grid) if len(members) > 1 else members[0]
+        joined = _closed(shapely.union_all(members, grid_size=grid) if len(members) > 1 else members[0], grid)
         out += [p for p in _polys(joined) if p.area > AREA]
     return out[0] if len(out) == 1 else MultiPolygon(out)
+
+
+def _closed(geometry, grid):
+    """(0.442) A region joined with its cracks closed — out CLOSE and back in (a morphological closing, its corners
+    mitred, so they stay where they are): two parts that meet along a slanted line, their ends rounded to the grid a
+    step apart, as one (no thick line in and out along the crack); a hair-thin slit into a part, gone. Snapped to the
+    grid again."""
+    import shapely
+    if geometry.is_empty:
+        return _clean(geometry)
+    grown = shapely.buffer(geometry, CLOSE, join_style="mitre", mitre_limit=MITRE)
+    return _clean(shapely.set_precision(shapely.buffer(grown, -CLOSE, join_style="mitre", mitre_limit=MITRE), grid))
 
 
 def _minus(a, b):

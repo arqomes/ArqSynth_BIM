@@ -12348,6 +12348,42 @@ class JoinsByMaterial(unittest.TestCase):
         finally:
             doc.modified = False
 
+    def test_corner_out_of_square(self):
+        """0.442 — an L of walls a little out of square (3°): the two blocks worked out apart met along the mitre with
+        its ends rounded a grid step apart, and the thick line went in and out along the crack — a line across the
+        corner, on the screen and on paper. Now one block, one ring round it all, no line across the corner."""
+        from arqbim.model import cut_hatches, drawings
+        from arqbim.model import graphic_styles as gs
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            a = math.radians(3.0)
+            ux, uy = np.array((math.cos(a), math.sin(a), 0.0)), np.array((-math.sin(a), math.cos(a), 0.0))
+            p1, p2 = ux * 5.0, ux * 5.0 + uy * 4.0
+            first = bim.add_wall(doc, np.zeros(3), p1, w20)
+            bim.add_wall(doc, p1, p2, w20, prev=(first, bim.horizontal_dir(np.zeros(3), p1)))
+            plan = drawings.plan(doc, doc.active_storey, "P")
+            regions = self._regions(plan)
+            self.assertEqual(self._count(regions["masonry"]), 1)                 # (the block: one piece…)
+            self.assertEqual(len(regions["masonry"].interiors), 0)               # (…with no crack in it)
+            self.assertEqual(len(plan.outline), 1)                               # (the thick line: one ring round)
+            objs = [o for o in doc.objects.values() if o.is_bim]
+            n, cut = np.array((0.0, 0.0, -1.0)), 1.2
+            origin, u, v = np.array((0.0, 0.0, cut)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+            fills, own, whose = drawings.cut_fills(doc, objs, n, -cut, origin, u, v)
+            parts = cut_hatches.build(fills, whose, own, gs.defaults(), 50, origin, u, v, n * 0.003)
+            across = []                                    # (the screen's thick and thin lines: none across the corner)
+            for owner in (None, cut_hatches.SEAMS):
+                for s in parts.get(owner, (None, None, np.zeros((0, 2, 3))))[2][:, :, :2]:
+                    d = s[1] - s[0]
+                    length = float(np.linalg.norm(d))
+                    if length > 1e-3 and np.linalg.norm(s.mean(axis=0) - p1[:2]) < 0.45 and \
+                            max(abs(float(d @ ux[:2])), abs(float(d @ uy[:2]))) / length < 0.999:
+                        across.append(s)
+            self.assertEqual(across, [])
+        finally:
+            doc.modified = False
+
     def test_column_in_wall(self):
         from arqbim.model import cut_joins, drawings
         doc = Document()

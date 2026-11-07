@@ -135,7 +135,7 @@ def build(fills, whose, own, gstyle, scale, origin, u, v, lift):
 
     if regions:
         from shapely.ops import unary_union
-        outer = unary_union(list(regions.values())).boundary
+        outer = cut_joins.whole(regions.values()).boundary         # (0.442: the cracks between them closed)
         for part in _lines(outer):
             p = pairs(part)
             if p is not None:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.442.0 — 2026-11-07
+
+**Sem linhas a mais nas esquinas das paredes** (o dono, com captura: «linhas invasoras na junção das paredes à
+medida que desenho e insiro elementos»).
+
+- Em planta (no ecrã, no PDF, no SVG e no DXF), numa esquina de duas paredes um pouco fora do esquadro aparecia às
+  vezes o traço grosso do corte ao longo da meia-esquadria, da esquina de fora até ao fim do bloco, ou um traço
+  curto a atravessar a parede. Os blocos das duas paredes são calculados cada um por si e arredondados a 0,001 mm;
+  numa junta inclinada as duas pontas caíam em casas diferentes do arredondamento e ficava uma fenda de 0,001 mm
+  entre eles, que o contorno seguia. Como dependia dos números exatos, aparecia e desaparecia ao desenhar ou pôr
+  portas e janelas.
+- Agora, ao juntar cada material, as fendas com menos de 0,04 mm fecham-se: um só bloco, uma só linha à volta.
+- Numa varredura de esquinas em L e de salas fechadas (ângulos de 0° a 90°, sítios e medidas ao acaso, com e sem
+  portas e janelas) a linha aparecia em 33 de 242 casos; agora em nenhum. O corte de um piso com 1100 elementos fica
+  cerca de 5 % mais lento (2,9 → 3,05 s).
+
 ## 0.441.0 — 2026-11-06
 
 **Ripado solto** (uma divisória ou um brise sem parede atrás), como o «Apoio: Livre» do ripado do addon.
