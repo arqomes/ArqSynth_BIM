@@ -5257,18 +5257,19 @@ _STRINGS = {
     # align (0.107)
     "tool.align": ("Alinhar", "Align"),
     "cmd.align": ("Alinhar", "Align"),
-    "hint.align": ("Clique na referência: um eixo da grelha, uma aresta ou a face de uma parede. Esc: Selecionar.",
-                   "Click the reference: a grid axis, an edge or a wall's face. Esc: Select."),
-    "hint.align_2": ("Clique na face de uma parede ou pilar paralela à referência (passa para ela), ou numa linha de "
-                     "um padrão — junta de azulejo, fiada de tijolo, acende a laranja (o padrão passa para ela). "
-                     "Botão direito: outra referência.",
-                     "Click a face of a wall or column parallel to the reference (it moves onto it), or a line of a "
-                     "pattern — a tile's joint, a brick course, lit in orange (the pattern moves onto it). Right "
-                     "button: another reference."),
-    "keys.align": ("Clique: a referência, depois as faces — ou as linhas dos padrões — a alinhar  ·  botão direito: "
-                   "outra referência  ·  Esc: Selecionar",
-                   "Click: the reference, then the faces — or the patterns' lines — to align  ·  right button: "
-                   "another reference  ·  Esc: Select"),
+    "hint.align": ("Clique na referência: um eixo da grelha, uma linha, uma aresta ou a face de qualquer elemento. "
+                   "Esc: Selecionar.",
+                   "Click the reference: a grid axis, a line, an edge or a face of any element. Esc: Select."),
+    "hint.align_2": ("Clique no que alinhar, paralelo à referência: uma linha, a aresta de um piso, de uma laje ou de "
+                     "qualquer elemento, a face de uma parede (acende a laranja e passa para a referência), ou numa "
+                     "linha de um padrão — junta de azulejo, fiada de tijolo. Botão direito: outra referência.",
+                     "Click what to align, parallel to the reference: a line, the edge of a floor, a slab or any "
+                     "element, a wall's face (lit in orange, it moves onto the reference), or a line of a pattern — a "
+                     "tile's joint, a brick course. Right button: another reference."),
+    "keys.align": ("Clique: a referência, depois as linhas, arestas e faces — ou as linhas dos padrões — a alinhar  ·  "
+                   "botão direito: outra referência  ·  Esc: Selecionar",
+                   "Click: the reference, then the lines, edges and faces — or the patterns' lines — to align  ·  "
+                   "right button: another reference  ·  Esc: Select"),
     # join / unjoin geometry by hand (0.333)
     "tool.join_geometry": ("Unir geometria", "Join geometry"),
     "tool.unjoin_geometry": ("Desunir geometria", "Unjoin geometry"),
@@ -5331,17 +5332,23 @@ _STRINGS = {
                                   "These elements' patterns were not aligned by hand (Modify ▸ Align)."),
     "align.grid": ("Eixo {tag}", "Axis {tag}"),
     "align.edge": ("Aresta", "Edge"),
+    "align.line": ("Linha", "Line"),                                                       # (0.449)
     "align.face": ("Face da parede", "Wall face"),
     "align.not_parallel": ("Não é paralela à referência", "Not parallel to the reference"),
     "align.move": ("Alinhar: mover {d}", "Align: move {d}"),
-    "err.align_reference": ("Clique num eixo da grelha, numa aresta ou na face de uma parede.",
-                            "Click a grid axis, an edge or a wall's face."),
-    "err.align_face": ("Clique na face de uma parede ou pilar, paralela à referência.",
-                       "Click a face of a wall or column, parallel to the reference."),
-    "info.align_reference": ("Referência: {what}. Agora a face a alinhar.", "Reference: {what}. Now the face to "
-                             "align."),
-    "info.aligned": ("«{name}» alinhada ({d}). Clique noutra face, ou Esc. Ctrl+Z desfaz.",
-                     "“{name}” aligned ({d}). Click another face, or Esc. Ctrl+Z undoes."),
+    "err.align_reference": ("Clique num eixo da grelha, numa linha, numa aresta ou num elemento.",
+                            "Click a grid axis, a line, an edge or an element."),
+    "err.align_face": ("Clique numa linha, aresta ou face paralela à referência (de qualquer elemento).",
+                       "Click a line, an edge or a face parallel to the reference (of any element)."),
+    "info.align_reference": ("Referência: {what}. Agora o que alinhar (linha, aresta, face).",
+                             "Reference: {what}. Now what to align (a line, an edge, a face)."),
+    "info.aligned": ("«{name}» alinhado ({d}). Clique noutro, ou Esc. Ctrl+Z desfaz.",
+                     "“{name}” aligned ({d}). Click another one, or Esc. Ctrl+Z undoes."),
+    "info.align_there": ("«{name}» já está alinhado com a referência.", "“{name}” is aligned with the reference "
+                         "already."),                                                      # (0.449)
+    "refuse.align_across_wall": ("uma porta ou janela só se alinha ao longo da sua parede",
+                                 "a door or window aligns only along its wall"),
+    "refuse.align_not_moved": ("não se pode mover", "it cannot be moved"),
     # tops tied to a slab (0.106)
     "act.attach_top": ("Ligar o topo (laje / cobertura)", "Attach top (slab / roof)"),
     "tip.attach_top": ("As paredes e pilares selecionados sobem (ou descem) até à face de baixo da laje ou "

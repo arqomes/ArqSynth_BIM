@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.449.0 — 2026-11-07
+
+**Alinhar com linhas, pisos e qualquer elemento** (o dono, com captura: «o comando alinhar precisa melhorar e deve
+funcionar com linhas, pisos, e qualquer elementos no projeto»).
+
+- **Referência** (1.º clique): um eixo da grelha, uma linha, qualquer aresta, a face de uma parede — ou, clicando
+  dentro de um elemento (uma laje, um piso, um móvel…), a aresta dele mais perto do rato.
+- **O que se alinha** (2.º clique), paralelo à referência: uma linha, a aresta de um piso, de uma laje, de uma
+  cobertura ou de qualquer elemento, a face de uma parede ou de um pilar; clicando dentro de um elemento, a aresta
+  dele paralela à referência mais perto do rato. A aresta acende a laranja e a dica diz quanto se vai mover.
+- Uma **linha solta** move-se sozinha e as linhas ligadas a ela esticam (como no Revit); uma **porta ou janela**
+  desliza ao longo da parede; qualquer outro elemento move-se inteiro (as paredes ligadas acompanham, como antes).
+- Corrigido: com o rato no meio ou na ponta de uma linha (o snap «ponto médio» / «extremidade»), a linha não era
+  aceite — agora vale a linha onde o ponto está.
+- As linhas dos padrões (azulejos, tijolo) continuam a alinhar-se como na 0.332.
+
 ## 0.448.0 — 2026-11-07
 
 **Snap a 0°, 45°, 90° e paralelo às paredes e linhas** (o dono: «no desenho deve ter snap a 0, 45, 90 grau. Se

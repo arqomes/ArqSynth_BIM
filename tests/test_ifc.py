@@ -12412,6 +12412,68 @@ class DrawingAsRevit(unittest.TestCase):
             doc.modified = False
 
 
+class AlignAnything(unittest.TestCase):
+    """0.449 — the owner: «o comando alinhar … deve funcionar com linhas, pisos, e qualquer elementos no projeto»:
+    any element's level edges, the nearest one (parallel to the reference); a loose line aligned alone (the line
+    joined to it stretching), a slab moved whole, a door slid along its wall."""
+
+    def _tool(self, doc):
+        from types import SimpleNamespace
+        from arqbim.tools.align import AlignTool
+        return AlignTool(SimpleNamespace(doc=doc, viewport=None, message=lambda *a, **k: None,
+                                         set_hint=lambda *a: None, set_vcb=lambda *a: None))
+
+    def test_edges_and_the_nearest(self):
+        from arqbim.tools.align import level_edges, nearest_edge
+        doc = Document()
+        try:
+            slab = bim.add_slab(doc, np.array((0.0, 0.0, 0.0)), 4.0, 3.0, catalog.BY_KEY["laje_12"])
+            edges = level_edges(doc.get(slab))
+            self.assertGreaterEqual(len(edges), 4)
+            k, d = nearest_edge(edges, (3.9, 1.5, 0.0), along=np.array((0.0, 1.0)))      # (its right side)
+            self.assertAlmostEqual(float(edges[k][0][0]), 4.0, places=6)
+            self.assertAlmostEqual(d, 0.1, places=6)
+            k, _d = nearest_edge(edges, (3.9, 1.5, 0.0), along=np.array((1.0, 0.0)))      # (the nearest across)
+            self.assertAlmostEqual(abs(float(edges[k][0][1]) - 1.5), 1.5, places=6)
+            self.assertIsNone(nearest_edge(edges, (1, 1, 0), along=np.array((0.6, 0.8))))   # (none that way)
+        finally:
+            doc.modified = False
+
+    def test_line_slab_and_door_aligned(self):
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model import line_edit
+        doc = Document()
+        try:
+            chain = SketchObject("l", I4, PolyMesh([(0.0, 5.0, 0.0), (4.0, 5.0, 0.0), (4.0, 8.0, 0.0)],
+                                                   lines=[(0, 1), (1, 2)]))
+            doc.execute(AddObject(chain))
+            slab = bim.add_slab(doc, np.array((0.0, 0.0, 0.0)), 4.0, 3.0, catalog.BY_KEY["laje_12"])
+            wall = bim.add_wall(doc, (10.0, 0.0, 0.0), (16.0, 0.0, 0.0), catalog.BY_KEY["parede_alv_20"])
+            door = bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], bim.wall_frame(doc, wall), 1.0, -1)
+            tool = self._tool(doc)
+            self.assertEqual([tool._how(i) for i in (chain.id, slab, door, wall)],
+                             ["line", "element", "filling", "element"])
+            # the upright line moved 1 m across (onto x = 5): it alone; the level one stretches to it
+            a, b = np.array((4.0, 5.0, 0.0)), np.array((4.0, 8.0, 0.0))
+            tool._align(chain.id, np.array((1.0, 0.0)), "line", (a, b))
+            ends = sorted(tuple(np.round(p, 6)) for _i, _j, p, q in line_edit.segments(doc.get(chain.id))
+                          for p in (p, q))
+            self.assertIn((5.0, 8.0, 0.0), ends)
+            self.assertIn((5.0, 5.0, 0.0), ends)
+            self.assertIn((0.0, 5.0, 0.0), ends)                        # (the other end of the level one stays)
+            before = np.asarray(doc.get(slab).mesh.bounds()[0], dtype=float)
+            tool._align(slab, np.array((0.0, -0.5)), "element", None)   # the slab moved whole
+            after = np.asarray(doc.get(slab).mesh.bounds()[0], dtype=float)
+            np.testing.assert_allclose(after - before, (0.0, -0.5, 0.0), atol=1e-6)
+            s0 = float(doc.ifc.filling_state(door)["s"])
+            tool._align(door, np.array((0.5, 0.0)), "filling", None)    # the door along its wall
+            self.assertAlmostEqual(float(doc.ifc.filling_state(door)["s"]) - s0, 0.5, places=6)
+            with self.assertRaises(line_edit.LineRefused):              # (across its wall: refused)
+                tool._align(door, np.array((0.0, 0.5)), "filling", None)
+        finally:
+            doc.modified = False
+
+
 class JoinsByMaterial(unittest.TestCase):
     """0.320 — the cut and the views joined by material, as Revit cleans up joins (model/cut_joins.py,
     model/seen_joins.py): a room's walls cut — their block one ring, the plaster turning the corners in a mitre, the
