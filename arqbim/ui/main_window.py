@@ -354,6 +354,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tree_panel.on_template = self.template_action
         self.rules_panel = graphic_rules.dock(self, beside=self.storeys_panel)
         self.rules_panel.on_rule = self.apply_rule
+        # (0.466) the Library: the components with their miniatures — the project's, a local folder's, the web's
+        from . import library_panel
+        self.library_panel = library_panel.dock(self)
+        lp = self.library_panel
+        lp.project_items = self._library_rows
+        lp.project_shape = lambda guid: self.doc.ifc.component_shape(guid)
+        lp.on_place = lambda guid: self._library_action("place", "component", guid)
+        lp.on_bring, lp.on_save = self.library_bring, self.library_save
+        lp.on_select = lambda guid: self._library_action("select", "component", guid)
         QtCore.QTimer.singleShot(0, self.dock_titles)    # (0.374: a study palette chosen last time — its panels' titles,
         QtCore.QTimer.singleShot(0, self._tint_views)    #  its drawing area)
         self.rules_panel.on_select = self._select_from_tree
@@ -1775,7 +1784,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------ the compact bar and its modules (0.184)
 
     MODULES = ("project", "storeys", "library", "sheets", "rooms", "quantities", "materials", "rules", "settings")
-    LEFT_MODULES = {"project": "tree_panel", "library": "tree_panel", "sheets": "tree_panel",
+    LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
                     "storeys": "storeys_panel", "rules": "rules_panel"}
 
     def _build_modules(self):
@@ -1785,7 +1794,7 @@ class MainWindow(QtWidgets.QMainWindow):
         rooms are the schedules panel's, the materials their window, the settings a menu. A click on the module in
         view folds the left panels away; another brings them back."""
         left = QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
-        self.left_panels = [self.tree_panel, self.storeys_panel, self.rules_panel]
+        self.left_panels = [self.tree_panel, self.storeys_panel, self.rules_panel, self.library_panel]
         # (0.461, the owner: «remover essas abas atuais») one left panel in view at a time — no tabs at their foot
         # (those are the navigator's own now: what its tree shows); the module bar chooses — and a panel brought up
         # (raise_) shows alone
@@ -1872,8 +1881,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not panel.isVisible():
             panel.show()
         QtWidgets.QDockWidget.raise_(panel)
-        name = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules"}.get(
-            next((a for a in ("tree_panel", "storeys_panel", "rules_panel") if getattr(self, a, None) is panel), ""))
+        names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library"}
+        name = names.get(next((a for a in names if getattr(self, a, None) is panel), ""))
         if name and getattr(self, "module_actions", None) and \
                 not (name == "project" and self.module in ("library", "sheets")):
             self.module = name
@@ -1893,9 +1902,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.module = None
                 return
             self._left_up(panel)
-            if name == "library":
-                self.tree_panel.focus(("library",))
-            elif name == "sheets":
+            if name == "sheets":
                 self.tree_panel.focus(("views", "sheets"))
             self.module = name
             self.module_actions[name].setChecked(True)
@@ -5354,6 +5361,42 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.dim_value", v=format_length(typed, decimal_sep()), e=obj.name if obj else guid))
         return moved
 
+    def _library_rows(self):
+        """(0.466) The project's components for the Library panel: [(type GlobalId, name, copies, placeable)]."""
+        try:
+            components = self.doc.ifc.library()["components"]
+        except Exception:                                   # (the IFC still being read)
+            return []
+        return sorted(((g, name, len(copies), placeable) for g, name, copies, placeable in components),
+                      key=lambda row: row[1].lower())
+
+    def library_bring(self, path):
+        """(0.466) A component of the local library (or fetched from the web) brought into the project — one there
+        already: as it is — and placed with the mouse. Returns its type's GlobalId, or None."""
+        from ..model import component_library
+        name = os.path.basename(path)
+        try:
+            guid = self.run_busy(lambda: component_library.bring(self.doc, path), t("lib.reading", f=name))
+        except Exception as exc:                            # (not a component, damaged…)
+            self.message(t("libp.bring_failed", f=name, e=exc), warning=True)
+            return None
+        self._library_action("place", "component", guid)
+        self.message(t("libp.brought", name=self.doc.ifc.by_guid(guid).Name or name))
+        return guid
+
+    def library_save(self, guid):
+        """(0.466) A project's component kept in the local library (a small IFC file of its own), for other projects.
+        Returns its path, or None."""
+        from ..model import component_library
+        panel = self.library_panel
+        try:
+            path = component_library.save_component(self.doc, guid, panel.folder)
+        except Exception as exc:
+            self.message(t("libp.save_failed", e=exc), warning=True)
+            return None
+        self.message(t("libp.saved", name=self.doc.ifc.by_guid(guid).Name or "", f=path))
+        return path
+
     def _library_action(self, action, kind, ref):
         """The Project panel's library: "select" every copy of a component / group model, or
         "place" another copy of a component (with the mouse)."""
@@ -7253,6 +7296,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_properties()
         self._refresh_storeys()
         self._refresh_tree(changed, removed)
+        if hasattr(self, "library_panel") and not self.doc.loading:
+            self.library_panel.mark_stale()                 # (0.466: the project's components, again)
         self._refresh_schedules(changed, removed)
         self._refresh_sheet(changed, removed)
         self._refresh_rule(changed, removed)

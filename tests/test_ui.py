@@ -587,6 +587,104 @@ class LevelEnds(unittest.TestCase):
             doc.modified = False
 
 
+class ComponentLibrary(unittest.TestCase):
+    """0.466 — the owner: «Nessa aba quero uma biblioteca mesmo dos componentes com miniaturas dos componentes assim
+    como no Sketchup. Deve ser feita com as opções de visualização, biblioteca local e web»: a component's miniature; a
+    project's component kept in the local library (an IFC file of its own) and brought into another project; the
+    Library panel — the project's components with their pictures, the folder's (its subfolders categories), the views,
+    a web catalogue read."""
+
+    @staticmethod
+    def _component(doc, name="Mesa"):
+        from arqbim.core import sketch_geometry as sg
+        from arqbim.model.document import AddObject, SketchObject
+        m = sg.rectangle_matrix(np.array((2.0, 1.0, 0.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0)))
+        mesh = sg.rectangle_mesh(1.2, 0.8)
+        sg.push_pull(mesh, 0, m, 0.75)
+        obj = SketchObject("Esboço", m, mesh)
+        doc.execute(AddObject(obj))
+        inst = bim.make_component(doc, [obj.id], name, "furniture")
+        return doc.ifc.component_type(inst)
+
+    def test_library(self):
+        import json
+        import tempfile
+        from arqbim.model import component_library as lib
+        from arqbim.ui import component_thumbs, library_panel
+        doc = Document()
+        other = Document()
+        folder = tempfile.mkdtemp(prefix="arqsynth_biblioteca_")
+        try:
+            guid = self._component(doc)
+            corners, colours = doc.ifc.component_shape(guid)
+            self.assertEqual((corners.shape[1:], len(colours)), ((3, 3), len(corners)))
+            np.testing.assert_allclose(corners.reshape(-1, 3).max(axis=0) - corners.reshape(-1, 3).min(axis=0),
+                                       (1.2, 0.8, 0.75), atol=1e-6)
+            pm = component_thumbs.render(corners, colours, size=96)
+            image = pm.toImage()
+            drawn = sum(image.pixelColor(x, y).alpha() > 0 for x in range(0, 96, 3) for y in range(0, 96, 3))
+            self.assertGreater(drawn, 200)                                     # (a picture, not an empty square)
+            path = lib.save_component(doc, guid, os.path.join(folder, "Mobiliário"))
+            self.assertTrue(path.endswith("Mesa.ifc") and os.path.exists(path))
+            self.assertTrue(lib.save_component(doc, guid, os.path.join(folder, "Mobiliário")).endswith("Mesa 2.ifc"))
+            folders, items = lib.listing(folder)
+            self.assertEqual(([n for n, _p in folders], items), (["Mobiliário"], []))
+            shape = lib.item_shape(path)
+            self.assertEqual(len(shape[0]), len(corners))
+            brought = lib.bring(other, path)                                   # (in another project)
+            self.assertEqual(other.ifc.by_guid(brought).Name, "Mesa")
+            self.assertEqual(lib.bring(other, path), brought)                  # (there already: as it is)
+            name, rows = lib.read_catalogue(json.dumps({"name": "Loja", "items": [
+                {"id": "1", "name": "Cadeira", "file": "cadeira.ifc", "price": "12.5", "author": "Ana"},
+                {"id": "2", "name": "Sem ficheiro"}]}))
+            self.assertEqual((name, [r["name"] for r in rows], rows[0]["price"]), ("Loja", ["Cadeira"], 12.5))
+            self.assertEqual(library_panel.price_text(rows[0]), "12,50 €")
+            # the panel
+            panel = library_panel.LibraryPanel(None)
+            placed, brought_paths = [], []
+            panel.project_items = lambda: [(guid, "Mesa", 1, True)]
+            panel.project_shape = doc.ifc.component_shape
+            panel.on_place, panel.on_bring = placed.append, brought_paths.append
+            panel.set_source("project")
+            self.assertEqual(panel.items(), [("project", guid, "Mesa")])
+            panel.finish_miniatures()
+            self.assertFalse(panel.list.item(0).icon().isNull())
+            panel.list.itemClicked.emit(panel.list.item(0))                   # (one click: placing it at once)
+            self.assertEqual(placed, [guid])
+            self.assertFalse(panel.btn_use.isVisibleTo(panel))                # (no «Colocar» button)
+            for view in ("small", "large", "list", "medium"):
+                panel.set_view(view)
+                self.assertEqual(panel.items(), [("project", guid, "Mesa")])
+            panel.set_folder(folder)                                           # (the local library)
+            self.assertEqual(panel.items(), [("folder", os.path.join(folder, "Mobiliário"), "Mobiliário")])
+            panel._use(panel.list.item(0))                                     # (into the category)
+            self.assertEqual([k for k, _p, _t in panel.items()], ["file", "file"])
+            panel.finish_miniatures()
+            self.assertFalse(panel.list.item(0).icon().isNull())
+            panel.search.setText("2")
+            self.assertEqual([panel.list.item(k).isHidden() for k in range(2)], [True, False])
+            panel.search.setText("")
+            panel._use(panel.list.item(0))
+            self.assertEqual(brought_paths, [path])
+            panel.go_up()
+            self.assertEqual(panel.items()[0][0], "folder")
+            catalogue = os.path.join(folder, "catalogo.json")                  # (a catalogue, as the store's will be)
+            with open(catalogue, "w", encoding="utf-8") as fh:
+                json.dump({"name": "Teste", "items": [{"id": "1", "name": "Mesa web", "file": "Mobiliário/Mesa.ifc"}]},
+                          fh)
+            panel.web_address.setText(QtCore.QUrl.fromLocalFile(catalogue).toString())
+            panel.set_source("web")
+            for _ in range(200):
+                pump()
+                if panel.list.count():
+                    break
+            self.assertEqual([(k, t_.split("\n")[0]) for k, _r, t_ in panel.items()], [("web", "Mesa web")])
+            panel.deleteLater()
+        finally:
+            doc.modified = other.modified = False
+            QtCore.QSettings("ArqSynth", "ArqSynth BIM").remove("biblioteca")
+
+
 class LevelPictures(unittest.TestCase):
     """0.465 — the owner: «acrescentar o tipo de linha de pontos… colocar opções visuais em vez de texto»: the
     levels' look chosen by pictures (each with its words as a tip), a dotted line among them; «=» on and off in the

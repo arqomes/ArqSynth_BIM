@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.466.0 — 2026-11-08
+
+**Biblioteca de componentes com miniaturas, como no SketchUp** (o dono: «A próxima aba que vamos trabalhar é a aba
+Biblioteca, nessa não quero repetição do que já vemos na navegação do projeto… uma biblioteca mesmo dos componentes com
+miniaturas dos componentes assim como no Sketchup. Deve ser feita com as opções de visualização, biblioteca local e web.
+No futuro os criadores poderão vender componentes dentro desse ecossistema»).
+
+- O ícone **Biblioteca** da barra lateral abre agora um painel próprio, em vez do Navegador.
+- **Miniaturas** de cada componente em perspetiva, com as cores das peças, sombreado e as arestas onde a forma dobra,
+  como as do SketchUp. Ficam guardadas e não se desenham duas vezes.
+- **Três fontes**, no topo:
+  - **No projeto**: os componentes deste projeto. **Um clique** na miniatura ativa logo a colocação com o rato, sem
+    botão «Colocar» (o dono: «basta clicar no componente ele ativa o modelo para ser inserido»). Clique direito:
+    guardar na biblioteca local ou selecionar as cópias no modelo.
+  - **Local**: uma pasta neste computador (Documentos/ArqSynth/Biblioteca, ou outra em «Pasta…»), em que as subpastas
+    são categorias. Um componente guardado pelo ArqSynth é um ficheiro IFC próprio, que o Revit e outros programas BIM
+    também leem. Ficheiros SketchUp, Rhino, glTF/GLB, OBJ e STL na pasta também contam. Um clique traz o componente
+    para o projeto e coloca-o; um clique numa pasta abre-a.
+  - **Web**: o lugar da loja ArqSynth, onde criadores vão publicar e vender componentes. Já lê um catálogo pelo
+    endereço (lista com miniatura, autor, licença, preço e ficheiro). Os gratuitos descarregam-se para a biblioteca
+    local e colocam-se; as compras ainda não estão abertas.
+- **Como ver**: miniaturas pequenas, médias ou grandes, ou lista com nomes. Há pesquisa por nome.
+
 ## 0.465.0 — 2026-11-08
 
 **Linha de pontos, opções com desenhos e o «=» ligar/desligar** (o dono: «acrescentar o tipo de linha de pontos. O botão

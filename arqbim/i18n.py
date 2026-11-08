@@ -1824,6 +1824,75 @@ _STRINGS = {
     "tree.import": ("Trazer de outro projeto…", "Bring from another project…"),
     "act.import_components": ("Trazer componentes de outro projeto…", "Bring components from another project…"),
     "lib.title": ("Trazer componentes", "Bring components"),
+    # (0.466) the Library panel: the components with their miniatures (project, local, web)
+    "libp.title": ("Biblioteca", "Library"),
+    "libp.source.project": ("No projeto", "In the project"),
+    "libp.source.local": ("Local", "Local"),
+    "libp.source.web": ("Web", "Web"),
+    "tip.libp.source.project": ("Os componentes deste projeto: um clique e coloca mais uma cópia",
+                                "This project's components: one click and you place one more copy"),
+    "tip.libp.source.local": ("A sua biblioteca neste computador (uma pasta; as subpastas são categorias): um clique "
+                              "traz o componente para o projeto e coloca-o",
+                              "Your library on this computer (a folder; its subfolders are categories): one click "
+                              "brings the component into the project and places it"),
+    "tip.libp.source.web": ("Componentes da web: a loja ArqSynth, onde criadores vão publicar e vender componentes",
+                            "Components from the web: the ArqSynth store, where creators will publish and sell "
+                            "components"),
+    "libp.view": ("Como ver", "View"),
+    "libp.view.small": ("Miniaturas pequenas", "Small miniatures"),
+    "libp.view.medium": ("Miniaturas médias", "Medium miniatures"),
+    "libp.view.large": ("Miniaturas grandes", "Large miniatures"),
+    "libp.view.list": ("Lista com nomes", "List with names"),
+    "libp.search": ("Pesquisar componentes…", "Search components…"),
+    "libp.back": ("Voltar à pasta de cima", "Back to the folder above"),
+    "libp.folder": ("Pasta…", "Folder…"),
+    "tip.libp.folder": ("Escolher a pasta da biblioteca local (fica para as próximas vezes)",
+                        "Choose the local library's folder (kept for the next times)"),
+    "libp.folder_tip": ("Categoria «{name}»: clique para a abrir", "Category “{name}”: click to open it"),
+    "libp.place": ("Colocar", "Place"),
+    "libp.open": ("Abrir", "Open"),
+    "libp.get": ("Obter", "Get"),
+    "libp.save": ("Guardar na biblioteca local", "Keep in the local library"),
+    "tip.libp.save": ("Guarda o componente escolhido como um ficheiro IFC na sua biblioteca local, para o usar noutros "
+                      "projetos", "Keeps the chosen component as an IFC file in your local library, to use it in other "
+                      "projects"),
+    "libp.select_copies": ("Selecionar as cópias no modelo", "Select its copies in the model"),
+    "libp.refresh": ("Atualizar", "Refresh"),
+    "libp.project_none": ("Este projeto ainda não tem componentes. Crie um (Modelagem ▸ Fazer componente), importe um "
+                          "modelo 3D, ou traga um da biblioteca Local.", "This project has no components yet. Make one "
+                          "(Modelling ▸ Make component), import a 3D model, or bring one from the Local library."),
+    "libp.project_tip": ("{name}\n{n} cópia(s) no modelo", "{name}\n{n} cop(ies) in the model"),
+    "libp.project_hint": ("Clique num componente e coloque-o no modelo; clique direito para o guardar na biblioteca "
+                          "local.", "Click a component and place it in the model; right click to keep it in the local "
+                          "library."),
+    "libp.local_none": ("A pasta está vazia: {folder}\nGuarde aqui componentes do projeto (aba «No projeto» ▸ Guardar na "
+                        "biblioteca local) ou copie para ela ficheiros IFC, SketchUp, Rhino, glTF, OBJ ou STL.",
+                        "The folder is empty: {folder}\nKeep project components here («In the project» ▸ Keep in the "
+                        "local library) or copy IFC, SketchUp, Rhino, glTF, OBJ or STL files into it."),
+    "libp.local_hint": ("Um clique traz o componente para o projeto e coloca-o. As pastas são categorias.",
+                        "One click brings the component into the project and places it. Folders are categories."),
+    "libp.file_info": ("{name}\n({f})", "{name}\n({f})"),
+    "libp.free": ("Grátis", "Free"),
+    "libp.web_soon": ("A loja de componentes ArqSynth vem aí: criadores vão poder publicar e vender os seus componentes, "
+                      "que aparecem aqui com miniatura, autor, licença e preço. Já pode ligar um catálogo pelo seu "
+                      "endereço.", "The ArqSynth component store is coming: creators will be able to publish and sell "
+                      "their components, shown here with their miniature, author, licence and price. You can already "
+                      "connect a catalogue by its address."),
+    "libp.web_address": ("Endereço de um catálogo de componentes", "A component catalogue's address"),
+    "libp.web_connect": ("Ligar", "Connect"),
+    "libp.web_reading": ("A ler o catálogo…", "Reading the catalogue…"),
+    "libp.web_read": ("Catálogo «{name}»: {n} componentes.", "Catalogue “{name}”: {n} components."),
+    "libp.web_failed": ("Não foi possível ler: {e}", "Could not read: {e}"),
+    "libp.web_info": ("{name}\nAutor: {author} · Licença: {licence} · {price}",
+                      "{name}\nAuthor: {author} · Licence: {licence} · {price}"),
+    "libp.web_buy_soon": ("«{name}» custa {price}: as compras na loja ArqSynth estão a ser preparadas.",
+                          "“{name}” costs {price}: buying in the ArqSynth store is being prepared."),
+    "libp.web_getting": ("A obter «{name}»…", "Getting “{name}”…"),
+    "libp.bring_failed": ("Não foi possível trazer {f}: {e}", "Could not bring {f}: {e}"),
+    "libp.brought": ("«{name}» trazido para o projeto: clique onde o quer colocar (R roda). Esc termina.",
+                     "“{name}” brought into the project: click where you want it (R turns it). Esc ends."),
+    "libp.save_failed": ("Não foi possível guardar o componente: {e}", "Could not keep the component: {e}"),
+    "libp.saved": ("«{name}» guardado na biblioteca local: {f}", "“{name}” kept in the local library: {f}"),
     "lib.pick": ("Componentes de {f} (escolha um ou mais):", "Components in {f} (choose one or more):"),
     "lib.item": ("{name}   ({cls}; {n} cópia(s) lá)", "{name}   ({cls}; {n} cop(ies) there)"),
     "lib.reading": ("A ler {f}…", "Reading {f}…"),
@@ -1883,7 +1952,8 @@ _STRINGS = {
                         "The views, the sheets, the library and the model by storeys."),
     "tip.mod.storeys": ("Os pavimentos: o ativo, novos, cotas, pisos tipo.", "The storeys: the active one, new ones, "
                                                                               "levels, typical floors."),
-    "tip.mod.library": ("Os componentes e os grupos do projeto.", "The project's components and groups."),
+    "tip.mod.library": ("Os componentes com miniaturas: os do projeto, os da sua biblioteca local e os da web.",
+                        "The components with miniatures: the project's, your local library's and the web's."),
     "tip.mod.sheets": ("As folhas e as vistas postas nelas.", "The sheets and the views on them."),
     "tip.mod.rooms": ("O quadro dos ambientes: áreas e acabamentos.", "The rooms' schedule: areas and finishes."),
     "tip.mod.quantities": ("As tabelas e as quantidades do modelo.", "The model's schedules and quantities."),

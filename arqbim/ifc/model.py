@@ -348,6 +348,26 @@ def _triangle_colours(geometry, n):
     return table[np.where((ids >= 0) & (ids < len(palette)), ids, len(palette))]
 
 
+def type_shape(type_, unit_scale):
+    """(0.466) A type's shape kept once (its first RepresentationMap) in its own frame, metres: (triangles' corners
+    (T, 3, 3), their sRGB (T, 3) — its pieces' colours, grey where they have none). Of any file (a library's too)."""
+    shape_map = type_.RepresentationMaps[0]
+    settings = ifcopenshell.geom.settings()
+    shape = ifcopenshell.geom.create_shape(settings, shape_map.MappedRepresentation)
+    geometry = getattr(shape, "geometry", shape)
+    verts = np.array(geometry.verts, dtype=float).reshape(-1, 3)
+    faces = np.array(geometry.faces, dtype=np.int64).reshape(-1, 3)
+    if not len(verts) or not len(faces):
+        return np.zeros((0, 3, 3)), np.zeros((0, 3))
+    origin = ifcopenshell.util.placement.get_axis2placement(shape_map.MappingOrigin)
+    origin[:3, 3] *= unit_scale
+    verts = verts @ origin[:3, :3].T + origin[:3, 3]
+    colours = _triangle_colours(geometry, len(faces))
+    if colours is None:
+        colours = np.tile(np.array(UNSTYLED[:3], dtype=float), (len(faces), 1))
+    return verts[faces], np.asarray(colours, dtype=float)[:, :3]
+
+
 class Cancelled(Exception):
     """The user stopped a long operation (opening a file)."""
 
@@ -814,6 +834,11 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
         origin[:3, 3] *= self.unit_scale
         verts = verts @ origin[:3, :3].T + origin[:3, 3]
         return verts.min(axis=0), verts.max(axis=0)
+
+    def component_shape(self, type_guid):
+        """(0.466) A component's shape in its own frame, metres — (triangles' corners (T, 3, 3), their sRGB (T, 3)) —,
+        for its miniature in the Library panel."""
+        return type_shape(self.by_guid(type_guid), self.unit_scale)
 
     @staticmethod
     def read_library(path):
