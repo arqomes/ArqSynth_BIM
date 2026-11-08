@@ -304,6 +304,11 @@ def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look
     hatches = _ask_ifc(doc, "hatches", cut_ids, **category) if owners else {}
     # (0.320: of one layer too — a concrete wall's thickness —, for the joins)
     across = _layers_inside(doc, _ask_ifc(doc, "layers", cut_ids, single=True, **category) if owners else {})
+    # (0.460) a curved wall's layers, rings about its centre — in a plan (a section cuts it as one)
+    flat = abs(float(np.cross(np.asarray(u, dtype=float), np.asarray(v, dtype=float))[2])) > 0.99
+    curved = _ask_ifc(doc, "curved_layers", cut_ids, **category) \
+        if owners and flat and detail == "fine" and hasattr(getattr(doc, "ifc", None), "curved_layers") else {}
+    across = {owner: parts for owner, parts in across.items() if owner not in curved}   # (not flat layers)
     layered = {owner: parts for owner, parts in across.items() if len(parts) >= 2}
     coloured = {}
     if rule and owners:
@@ -322,7 +327,7 @@ def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look
         mine = elements.get(owner)
         if mine is not None and (mine[0] or mine[1]):
             overrides[owner] = (ELEMENT_CUT + repr((mine[1], mine[0])), (mine[1], mine[0]))
-    fills, mine = [], {}
+    fills, mine, rounds = [], {}, {}
     for ring, ring2d, owner in zip(cut3d, cut, owners):
         if owner in coloured:
             mine.setdefault(owner, []).append((ring2d, "colour:" + coloured[owner]))
@@ -337,8 +342,14 @@ def _fills(doc, cut, cut3d, owners, origin, u, v, rule=None, detail="fine", look
                 part = drawing2d.clip_between(ring, ln, d0, d1)
                 if part is not None:                                # (its layers' parts turned as its cut, 0.253)
                     mine.setdefault(owner, []).append((drawing2d.flatten(part, origin, u, v), hatch))
+        elif owner in curved:                                       # (0.460: all its outlines first — a circle's
+            rounds.setdefault(owner, []).append((ring, ring2d))     # hole)
         else:
             mine.setdefault(owner, []).append((ring2d, hatches.get(owner)))
+    for owner, pairs in rounds.items():
+        z = float(np.mean([np.asarray(r, dtype=float)[:, 2].mean() for r, _r2 in pairs]))
+        made = _ring_layers(drawing2d.region([r2 for _r, r2 in pairs]), z, curved[owner], origin, u, v)
+        mine.setdefault(owner, []).extend(made or [(r2, hatches.get(owner)) for _r, r2 in pairs])
     over = _cutting(doc, cut, owners)
     whose = []                                                      # (0.317: each fill's element, for the screen)
     for owner, parts in mine.items():
@@ -597,6 +608,45 @@ def _less(parts, cutter):
             out += [(r, hatch) for r in rings]
         else:
             out += [(r, hatch) for r in drawing2d.rings_of(mine.difference(cutter))]
+    return out
+
+
+RING_STEP_DEG = 2.0     # (0.460) a curved wall's layers' rings drawn in pieces of this many degrees
+
+
+def _ring_layers(shape, z, layers, origin, u, v):
+    """(0.460) A curved wall's cut (shape: on paper, a shapely region; z: its height) parted into its layers — rings
+    about its centre: [(outline (N, 2), hatch)]. The outermost and innermost reach past the wall's faces, so that its
+    own outline (its cut) bounds them — no hair between two drawings of one arc."""
+    from shapely.geometry import Point
+    (cx, cy), rings = layers
+    c2 = drawing2d.flatten(np.array([(cx, cy, z)]), origin, u, v)[0]
+    if not shape.is_valid:
+        shape = shape.buffer(0)
+    if shape.is_empty:
+        return []
+    lo, hi = min(r0 for _h, r0, _r1 in rings), max(r1 for _h, _r0, r1 in rings)
+    segments = max(8, int(round(90.0 / RING_STEP_DEG)))
+    out = []
+    for hatch, r0, r1 in rings:
+        r0 = max(r0 - 0.05, 0.0) if r0 <= lo + 1e-9 else r0
+        r1 = r1 + 0.05 if r1 >= hi - 1e-9 else r1
+        band = Point(c2).buffer(r1, quad_segs=segments)
+        if r0 > 1e-9:
+            band = band.difference(Point(c2).buffer(r0, quad_segs=segments))
+        part = shape.intersection(band)
+        for piece in getattr(part, "geoms", [part]):
+            if piece.geom_type != "Polygon" or piece.is_empty or piece.area < 1e-8:
+                continue
+            halves = [piece]
+            if piece.interiors:                 # (a whole circle's ring: in two halves — outlines with no hole)
+                from shapely.geometry import box
+                far = 2.0 * (hi + 1.0)
+                halves = [piece.intersection(box(c2[0] - far, c2[1], c2[0] + far, c2[1] + far)),
+                          piece.intersection(box(c2[0] - far, c2[1] - far, c2[0] + far, c2[1]))]
+            for half in halves:
+                for outline in drawing2d.rings_of(half):
+                    out.append((np.asarray(outline, dtype=float), hatch))
     return out
 
 

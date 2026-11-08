@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.460.0 — 2026-11-08
+
+**A parede curva com as camadas do seu tipo na planta** (o dono: «a parede curva não tem camadas de reboco. devia ter
+já que são mesmo tipo»).
+
+- Na planta (detalhe «Fino»), a parede curva é cortada nas **camadas do seu tipo** como a reta: reboco, bloco e
+  reboco, cada uma em anel à volta do centro, com as mesmas tramas. Isto vale para os arcos e para os círculos
+  completos.
+- Numa concordância entre paredes retas, o reboco de fora e o de dentro **seguem pela curva** sem linha onde as paredes
+  se encontram; o bloco fica um só.
+- O mesmo nas folhas em PDF e DXF (desenham a planta do mesmo modo). Em corte, a parede curva continua com a trama do
+  seu material principal.
+
 ## 0.459.0 — 2026-11-08
 
 **Lados e arcos do polígono, parede sobre um arco e raio da parede curva, como no Revit** (o dono: «não consigo

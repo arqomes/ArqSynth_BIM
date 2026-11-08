@@ -2086,6 +2086,41 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                              for material, n, d0, d1 in spans]
         return out
 
+    def curved_layers(self, guids, own=True):
+        """(0.460, the owner: «a parede curva não tem camadas de reboco. devia ter já que são mesmo tipo») {GlobalId:
+        (centre (x, y), [(hatch, r0, r1)])} of the curved walls made of 2+ material layers: each layer the ring
+        r0 <= |p - centre| <= r1 in the plan, from its IfcMaterialLayerSetUsage as a straight wall's (layers()) — its
+        offsets along the left of the way it was drawn (turning counter-clockwise: towards the centre)."""
+        out, known = {}, {}
+        for guid in guids:
+            try:
+                if self.kind_of(guid) != "curved_wall":
+                    continue
+                e = self.by_guid(guid)
+                usage = ifcopenshell.util.element.get_material(e, should_skip_usage=False)
+                if usage is None or not usage.is_a("IfcMaterialLayerSetUsage"):
+                    continue
+                layers = usage.ForLayerSet.MaterialLayers or ()
+                if len(layers) < 2:
+                    continue
+                centre, radius, _start, sweep, _h, _t = self.curved_wall_params(guid)
+            except (KeyError, ValueError, TypeError, AttributeError):
+                continue
+            way = 1.0 if sweep >= 0 else -1.0
+            s = self.unit_scale
+            sense = -1.0 if usage.DirectionSense == "NEGATIVE" else 1.0
+            at = (usage.OffsetFromReferenceLine or 0.0) * s
+            rings = []
+            for one in layers:
+                step = sense * (one.LayerThickness or 0.0) * s
+                r0, r1 = sorted((radius - way * at, radius - way * (at + step)))
+                if r1 - r0 > 1e-6 and r0 >= 0.0:
+                    rings.append((_cut_key(one.Material, known) if own else _hatch_of(one.Material), r0, r1))
+                at += step
+            if len(rings) >= 2:
+                out[guid] = ((float(centre[0]), float(centre[1])), rings)
+        return out
+
     def layer_strengths(self, guids):
         """(0.334) {GlobalId: [strength or None]} of the elements' layers, as layers() gives them: each one's function
         in its type (IfcMaterialLayer.Priority, catalog.LAYER_FUNCTIONS) as its strength where elements meet — 1 the

@@ -13198,6 +13198,49 @@ class JoinsByMaterial(unittest.TestCase):
     def _count(region):
         return len(getattr(region, "geoms", [region]))
 
+    def test_curved_wall_layers(self):
+        """0.460 — the owner: «a parede curva não tem camadas de reboco. devia ter já que são mesmo tipo»: a curved
+        wall's layers cut in a plan as rings about its centre (plaster | block | plaster, as its type's), a whole
+        circle's too; a fillet's plaster one with its straight walls' (no line where they meet)."""
+        from arqbim.model import drawings
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            arc = bim.add_curved_wall(doc, (0.0, 0.0, 0.0), 3.0, 0.0, math.pi / 2, w20)
+            full = bim.add_curved_wall(doc, (20.0, 0.0, 0.0), 2.0, 0.0, 2 * math.pi, w20)
+            layers = doc.ifc.curved_layers([arc, full])
+            centre, rings = layers[arc]
+            np.testing.assert_allclose(centre, (0.0, 0.0), atol=1e-9)
+            self.assertEqual(len(rings), len(w20.layers))
+            self.assertAlmostEqual(min(r0 for _h, r0, _r1 in rings), 2.9, places=6)
+            self.assertAlmostEqual(max(r1 for _h, _r0, r1 in rings), 3.1, places=6)
+            plan = drawings.plan(doc, doc.active_storey, "P")
+            regions = self._regions(plan)
+            self.assertEqual(set(regions), {"masonry", "gypsum"})                # (its plaster drawn, not only block)
+            plaster = regions["gypsum"]
+            self.assertEqual(self._count(plaster), 4)                            # (two arcs, two whole rings)
+            block_area = math.pi / 4 * ((3.0 + 0.08) ** 2 - (3.0 - 0.08) ** 2) + \
+                math.pi * ((2.0 + 0.08) ** 2 - (2.0 - 0.08) ** 2)                # (the block 16 cm, 2 cm each side)
+            self.assertAlmostEqual(regions["masonry"].area / block_area, 1.0, delta=0.01)
+            self.assertAlmostEqual(plaster.area / (block_area * 0.04 / 0.16), 1.0, delta=0.02)
+        finally:
+            doc.modified = False
+        doc = Document()                                    # a fillet between two walls: their plaster goes on round it
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            a = bim.add_wall(doc, (0.0, 0.0, 0.0), (5.0, 0.0, 0.0), w20)
+            b = bim.add_wall(doc, (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), w20, prev=(a, np.array((1.0, 0.0, 0.0))))
+            bim.fillet_walls(doc, a, (2.0, 0.0), b, (5.0, 2.0), 1.0, w20)
+            regions = self._regions(drawings.plan(doc, doc.active_storey, "P"))
+            from shapely.geometry import Point
+            at = lambda r: Point(4.0 + r * math.cos(-math.pi / 4), 1.0 + r * math.sin(-math.pi / 4))   # noqa: E731
+            self.assertTrue(regions["gypsum"].contains(at(1.09)) and regions["gypsum"].contains(at(0.91)))  # (round it)
+            self.assertTrue(regions["masonry"].contains(at(1.0)) and not regions["masonry"].contains(at(1.09)))
+            self.assertEqual(self._count(regions["gypsum"]), 1)          # (one with the walls': round their free ends)
+            self.assertEqual(self._count(regions["masonry"]), 1)
+        finally:
+            doc.modified = False
+
     def test_corners_and_tees(self):
         from arqbim.model import drawings
         doc = Document()
