@@ -228,6 +228,11 @@ def paint_table(painter, table, centre, dpmm, label=None):
     w, h = table.paper_size()
     x0, y0 = centre[0] - w / 2, centre[1] - h / 2
     widths = table.widths()
+    if getattr(table, "cells", None):                       # (0.478) a table of the project's, as its grid
+        _paint_grid(painter, table, x0, y0, widths, dpmm, TABLE_TEXT / 0.3528)
+        _text(painter, dpmm, x0 - 50.0, y0 + h + 1.5, w + 100.0, LABEL_H - 2, label or table.title, 8, bold=True,
+              align=QtCore.Qt.AlignmentFlag.AlignHCenter)
+        return
     thin = QtGui.QPen(QtGui.QColor("black"), 0.13 * dpmm)
     painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.35 * dpmm))
     painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
@@ -257,6 +262,65 @@ def paint_table(painter, table, centre, dpmm, label=None):
               table.totals, size, bold=True, elide=True)
     _text(painter, dpmm, x0 - 50.0, y0 + h + 1.5, w + 100.0, LABEL_H - 2, label or table.title, 8, bold=True,
           align=QtCore.Qt.AlignmentFlag.AlignHCenter)                  # (under it, as a view's name)
+
+
+def _paint_grid(painter, table, x0, y0, widths, dpmm, size):
+    """(0.478) A table of the project's on a sheet as its grid is (model/table_sheet): each cell's fill and text (bold,
+    italic, aligned — the headings centred on light grey, the numbers to the right), its merged cells; from the
+    headings to the totals ruled thin, as a table always was, the title and note rows free; the cells' own borders over
+    it all (thick ones thicker)."""
+    from ..model.drawings import TABLE_ROW
+    lefts = [x0]
+    for width in widths:
+        lefts.append(lefts[-1] + width)
+    spans = {(g, c): (rows, cols) for g, c, rows, cols in table.spans}
+    covered = {(g + i, c + j) for (g, c), (rows, cols) in spans.items() for i in range(rows) for j in range(cols)
+               if i or j}
+    thin = QtGui.QPen(QtGui.QColor("black"), 0.13 * dpmm)
+    pens = {False: QtGui.QPen(QtGui.QColor("black"), 0.25 * dpmm), True: QtGui.QPen(QtGui.QColor("black"), 0.5 * dpmm)}
+    align = {"left": QtCore.Qt.AlignmentFlag.AlignLeft, "center": QtCore.Qt.AlignmentFlag.AlignHCenter,
+             "right": QtCore.Qt.AlignmentFlag.AlignRight}
+    body = [g for g, line in enumerate(table.cells) if line and line[0]["zone"] in ("H", "D", "S")]
+    borders = []
+    for g, line in enumerate(table.cells):
+        for c, cell in enumerate(line):
+            if (g, c) in covered or c >= len(widths):
+                continue
+            rows, cols = spans.get((g, c), (1, 1))
+            x, y = lefts[c], y0 + g * TABLE_ROW
+            wd, ht = lefts[min(c + cols, len(widths))] - x, rows * TABLE_ROW
+            zone = cell["zone"]
+            fill = cell.get("f") or ("#e6e6e6" if zone == "H" else None)
+            if fill:
+                painter.fillRect(QtCore.QRectF(x * dpmm, y * dpmm, wd * dpmm, ht * dpmm), QtGui.QColor(fill))
+            how = cell.get("a") or ("center" if zone == "H" else "right" if cell.get("num") else "left")
+            _text(painter, dpmm, x + 1.2, y + 0.4, wd - 2.4, ht - 0.8, str(cell["text"]), size,
+                  bold=cell.get("b", zone in ("H", "S")), align=align[how], elide=True, italic=cell.get("i", False))
+            if cell.get("bd"):
+                borders.append((x, y, wd, ht, cell["bd"], bool(cell.get("bw"))))
+    if body:                                                # (the table itself: thin lines, its outline thicker)
+        top, bottom = y0 + body[0] * TABLE_ROW, y0 + (body[-1] + 1) * TABLE_ROW
+        painter.setPen(thin)
+        for g in body[:-1]:
+            yy = (y0 + (g + 1) * TABLE_ROW) * dpmm
+            painter.drawLine(QtCore.QPointF(x0 * dpmm, yy), QtCore.QPointF(lefts[-1] * dpmm, yy))
+        inside = {(g, k) for (g0, c0), (rows, cols) in spans.items() for g in range(g0, g0 + rows)
+                  for k in range(c0 + 1, c0 + cols)}            # (no line through a merged heading or total)
+        for g in body:
+            ya, yb = (y0 + g * TABLE_ROW) * dpmm, (y0 + (g + 1) * TABLE_ROW) * dpmm
+            for k in range(1, len(widths)):
+                if (g, k) not in inside:
+                    painter.drawLine(QtCore.QPointF(lefts[k] * dpmm, ya), QtCore.QPointF(lefts[k] * dpmm, yb))
+        painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.35 * dpmm))
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawRect(QtCore.QRectF(x0 * dpmm, top * dpmm, (lefts[-1] - x0) * dpmm, (bottom - top) * dpmm))
+    for x, y, wd, ht, sides, thick in borders:              # (the cells' own, over it all)
+        painter.setPen(pens[thick])
+        a, b = QtCore.QPointF(x * dpmm, y * dpmm), QtCore.QPointF((x + wd) * dpmm, y * dpmm)
+        d, e = QtCore.QPointF(x * dpmm, (y + ht) * dpmm), QtCore.QPointF((x + wd) * dpmm, (y + ht) * dpmm)
+        for side, (p, q) in (("l", (a, d)), ("t", (a, b)), ("r", (b, e)), ("b", (d, e))):
+            if side in sides:
+                painter.drawLine(p, q)
 
 
 def _grids(painter, grids, to_page, dpmm):
@@ -836,12 +900,13 @@ def _hatch(painter, path, angles, spacing, pen):
 
 
 def _text(painter, dpmm, x, y, w, h, text, size, bold=False, align=QtCore.Qt.AlignmentFlag.AlignLeft,
-          colour="black", elide=False):
+          colour="black", elide=False, italic=False):
     """size in points, on the paper (so it zooms with the sheet on screen). elide: cut short
     with "…" if wider than w."""
     font = QtGui.QFont("Segoe UI")
     font.setPixelSize(max(1, round(size * 0.3528 * dpmm)))
     font.setBold(bold)
+    font.setItalic(italic)
     painter.setFont(font)
     painter.setPen(QtGui.QColor(colour))
     if elide:

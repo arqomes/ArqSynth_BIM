@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.478.0 — 2026-11-08
+
+**Tabelas em células como no Excel — 2.ª fase** (o dono: «A tela, deve ser em células como no excel e ter as
+ferramentas de união de células alinhamento, desenho de bordas, cálculo como no excel… Os elementos da célula devem ser
+inseridas com o botão direito do rato e ou botões no painel lateral»).
+
+- Uma **tabela do projeto** aparece agora como uma **folha do Excel**, branca como o papel:
+  - as colunas têm letras (A, B, C…) e as linhas números;
+  - a primeira linha da tabela leva os cabeçalhos, depois vêm os elementos e a linha dos totais;
+  - por cima há uma **barra de fórmula**: mostra a célula escolhida («E7») e o que está nela. Escreve-se lá um texto, um
+    número ou uma fórmula e carrega-se Enter.
+- **Linhas de título** (por cima da tabela) e **linhas de notas** (por baixo). Escreve-se nelas o que se quiser; um
+  texto pode levar os dados do projeto: {projeto}, {data}, {tabela}, {n} (número de elementos).
+- **Fórmulas como no Excel**, com vírgula decimal e «;» entre argumentos: `=SOMA(D:D)`, `=D7*1,23`,
+  `=ARRED(MÉDIA(E3:E9);2)`, `=SE(D7>20;"grande";"pequeno")`. Funções: SOMA, MÉDIA, MÍNIMO, MÁXIMO, CONTAR,
+  CONTAR.VAL, ARRED, ABS, SE (os nomes em inglês também servem). **D:D** quer dizer «todos os elementos da coluna D»,
+  sejam quantos forem.
+- As fórmulas **continuam certas** quando o modelo muda: com uma parede a mais, a soma passa a contá-la. Também
+  continuam certas quando se põem linhas por cima ou se muda a ordem das colunas (cada célula acompanha o seu
+  campo). Os erros aparecem como no Excel: #REF!, #VALOR!, #DIV/0!, #NOME?, #CIRC!.
+- Ferramentas na **barra de parâmetros**:
+  - **Unir** (une e centra; noutro clique separa);
+  - **N** (negrito) e **I** (itálico);
+  - **Alinhar** (à esquerda, ao centro, à direita);
+  - **Bordas** (todas, contorno, contorno grosso, só em baixo, em cima e em baixo, sem bordas);
+  - **Fundo** (seis cores claras);
+  - **Inserir** (linha acima ou abaixo, linha de título, linha de notas, coluna com um campo, coluna calculada,
+    linha dos totais);
+  - **ƒx** (soma, média, contagem, máximo ou mínimo da coluna, e os dados do projeto).
+- O **botão direito** na tabela tem os mesmos comandos, e ainda Limpar o conteúdo, Apagar a linha e Tirar a coluna.
+  A tecla **Delete** limpa as células de títulos e notas (numa linha de elementos continua a apagar os elementos, como
+  no Revit).
+- No painel **Tabelas**, a nova secção **Inserir na tabela** lista o que se pode pôr: as colunas (os campos que a
+  tabela ainda não mostra), as funções, os dados do projeto e as linhas. Basta um duplo clique.
+- Uma tabela de categoria (as listas «Paredes (3)», «Lajes»…) continua a ser uma lista. O botão **Formatar como no
+  Excel**, na barra, no painel ou no botão direito, faz dela uma tabela do projeto com células.
+- **Exportar para o Excel** leva a grelha como está no ecrã: títulos, notas, células unidas, negrito, cores, bordas e
+  as fórmulas como fórmulas do Excel (`=SUM(D3:D6)`). Assim o Excel volta a fazer as contas. O JSON para o KazaFix Cost
+  mantém o mesmo formato.
+- **Na folha**, a tabela aparece como a grelha: título, cores, células unidas, notas e bordas.
+- Cada mudança nas células é um passo de anular (Ctrl+Z). A largura das colunas, alargada à mão, fica guardada com a
+  tabela.
+
 ## 0.477.0 — 2026-11-08
 
 **Tabelas na tela, geridas no painel lateral — 1.ª fase** (o dono: «A aba de tabelas também deve ser gerenciada pelo

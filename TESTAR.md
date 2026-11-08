@@ -644,6 +644,48 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.478 — Tabelas em células como no Excel
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.478.0**. Faça Ctrl+N e desenhe três paredes
+   (ferramenta **Parede**), por exemplo com 5, 3 e 8 m.
+2. Na barra lateral (os ícones à esquerda), clique em **Quantidades**. No painel **Tabelas**, clique em **Paredes (3)**:
+   abre a lista das paredes na tela.
+3. Na barra de parâmetros, clique em **Formatar como no Excel**. A tabela fica branca, com as colunas A, B, C… e as
+   linhas numeradas:
+   - a linha 1 tem os cabeçalhos, depois vêm as paredes e a linha «Total: 3»;
+   - por cima da grelha aparece a barra de fórmula (a caixa da célula, «ƒx» e o que está nela);
+   - em «Tabelas do projeto», na árvore, aparece «Paredes».
+4. No painel, em baixo, na secção **Inserir na tabela**, faça duplo clique em **Linhas ▸ Linha de título (por cima da
+   tabela)**. Aparece uma linha 1 vazia.
+5. Clique na célula **A1**. Na barra de fórmula escreva `Mapa de paredes — {projeto}` e carregue Enter. A célula
+   mostra «Mapa de paredes — » seguido do nome do projeto.
+6. Escolha as células de A1 até à última coluna da linha 1: clique em A1 e, com Shift carregado, clique na última
+   célula dessa linha. Na barra de parâmetros clique em:
+   - **Unir**: o título fica numa só célula, ao centro;
+   - **N**: fica a negrito;
+   - **Fundo ▸ Amarelo claro**.
+7. Escolha da linha dos cabeçalhos até à linha dos totais, todas as colunas (clique na primeira e Shift+clique na
+   última). Clique em **Bordas ▸ Contorno grosso**: aparece um contorno preto à volta da tabela.
+8. Faça duplo clique no cabeçalho «Comprimento», escreva `Comp. (m)` e carregue Enter: o cabeçalho muda.
+9. Botão direito em qualquer célula ▸ **Inserir ▸ Linha de notas (por baixo da tabela)**: aparece uma linha vazia por
+   baixo dos totais.
+10. Clique na célula dessa linha nova por baixo de «Comp. (m)». Na barra de parâmetros clique em **ƒx ▸ Soma da
+    coluna**: aparece **16** (5 + 3 + 8), e a barra de fórmula mostra `=SOMA(D:D)`.
+11. Clique na célula ao lado, à direita, e escreva na barra de fórmula `=D7*1,23` (use a letra e o número da célula da
+    soma, como no Excel) e carregue Enter: aparece **19,68**.
+12. Vá à vista 3D (aba **3D**), desenhe mais uma parede de 2 m e volte à aba «Tabela — Paredes»: a soma passa a **18**
+    e a fórmula ao lado a **22,14**.
+13. Clique numa célula da coluna «Volume» e faça botão direito ▸ **Tirar a coluna «Volume»**: a coluna sai e a soma
+    continua por baixo dos comprimentos. No painel, em **Colunas (campos)**, aparece «Volume»: faça duplo clique nele
+    e a coluna volta.
+14. Carregue em Ctrl+Z: a coluna Volume sai outra vez. Ctrl+Y: volta.
+15. Clique na célula com 22,14 e carregue na tecla **Delete**: a célula fica vazia e nenhuma parede é apagada.
+16. Clique em **Exportar…**, escolha **Livro do Excel** e grave. Abra o ficheiro no Excel:
+    - o título está unido, a negrito e amarelo;
+    - a soma é uma fórmula do Excel (`=SUM(…)`);
+    - mude um comprimento no Excel e a soma muda.
+17. Clique em **Pôr numa folha ▸ Nova folha**: a tabela aparece na folha com o título amarelo, as notas e o contorno.
+
 ## 0.477 — Tabelas na tela, geridas no painel lateral
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.477.0**. Faça Ctrl+N e desenhe três paredes

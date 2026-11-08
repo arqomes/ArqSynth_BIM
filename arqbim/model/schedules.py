@@ -285,6 +285,7 @@ class ScheduleDef:
     descending: bool = False
     group: str = ""
     uid: str = field(default_factory=lambda: uuid.uuid4().hex)
+    grid: dict = field(default_factory=dict)        # (0.478) its cells as a spreadsheet's (model/table_sheet.Layout)
 
 
 def formula_key(k):
@@ -400,9 +401,14 @@ def available(category):
 
 
 def def_to_dict(defn):
-    return {"name": defn.name, "category": defn.category, "fields": list(defn.fields),
-            "formulas": [list(f) for f in defn.formulas], "filters": [list(f) for f in defn.filters],
-            "sort": defn.sort, "descending": bool(defn.descending), "group": defn.group, "uid": defn.uid}
+    from . import table_sheet
+    out = {"name": defn.name, "category": defn.category, "fields": list(defn.fields),
+           "formulas": [list(f) for f in defn.formulas], "filters": [list(f) for f in defn.filters],
+           "sort": defn.sort, "descending": bool(defn.descending), "group": defn.group, "uid": defn.uid}
+    grid = table_sheet.layout_to_dict(table_sheet.layout_from_dict(getattr(defn, "grid", None) or {}))
+    if grid:
+        out["grid"] = grid                              # (0.478; none: as before, the file read by older versions)
+    return out
 
 
 def def_from_dict(data):
@@ -417,9 +423,81 @@ def def_from_dict(data):
                            str(data.get("sort") or ""), bool(data.get("descending")), str(data.get("group") or ""))
         if data.get("uid"):
             defn.uid = str(data["uid"])
+        if data.get("grid"):
+            from . import table_sheet
+            defn.grid = table_sheet.layout_to_dict(table_sheet.layout_from_dict(data["grid"]))
         return defn
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def layout_of(defn):
+    """(0.478) A table of the project's own as a spreadsheet (model/table_sheet.Layout)."""
+    from . import table_sheet
+    return table_sheet.layout_from_dict(getattr(defn, "grid", None) or {})
+
+
+def with_layout(defn, layout):
+    """(0.478) A copy of a table of the project's own with these cells."""
+    from . import table_sheet
+    data = def_to_dict(defn)
+    data["grid"] = table_sheet.layout_to_dict(layout)
+    out = def_from_dict(data)
+    out.grid = table_sheet.layout_to_dict(layout)
+    return out
+
+
+def project_tokens(doc):
+    """(0.478) The project's data a table's text may hold: {projeto} (its IfcProject's name, else its file's) and
+    {data} (today)."""
+    import datetime
+    name = ""
+    try:
+        projects = doc.ifc.file.by_type("IfcProject")
+        name = (projects[0].Name or "") if projects else ""
+    except (AttributeError, RuntimeError):
+        name = ""
+    path = getattr(doc, "path", None)
+    name = name or (os.path.splitext(os.path.basename(path))[0] if path else "")
+    return {"projeto": name, "data": datetime.date.today().strftime("%d/%m/%Y")}
+
+
+def grid_of(doc, defn, label_of, decimal=",", total_label=None, tokens=None):
+    """(0.478) A table of the project's own as its grid is shown (model/table_sheet.build): (grid, geometry, its
+    columns' keys, its elements' lines, its layout). label_of(column key) -> its heading; total_label(n) -> the totals'
+    row's first cell («Total: 3»), when that column is not summed; tokens: the project's data its texts may hold
+    ({"projeto": …, "data": …}; {tabela} and {n} put in here)."""
+    from . import table_sheet
+    columns, lines = apply(defn, rows(doc, defn.category))
+    if defn.group:
+        lines, columns = grouped(defn, lines)
+    columns = list(columns)
+
+    def heading(c):
+        if c.startswith("formula:"):
+            k = int(c.split(":")[1])
+            return defn.formulas[k][0] if k < len(defn.formulas) else c
+        return label_of(c)
+    data = [[line.get(c) for c in columns] for line in lines]
+    texts = [[text_of(c, line.get(c), decimal) for c in columns] for line in lines]
+    totals, totals_texts = [], []
+    for k, c in enumerate(columns):
+        values = [line[c] for line in lines if isinstance(line.get(c), (int, float)) and not isinstance(line[c], bool)]
+        if (c in SUMMED or c.startswith("formula:") or c == "count") and values:
+            totals.append(sum(values))
+            totals_texts.append(text_of(c, sum(values), decimal))
+        elif k == 0 and total_label is not None:
+            totals.append(total_label(len(lines)))
+            totals_texts.append(total_label(len(lines)))
+        else:
+            totals.append(None)
+            totals_texts.append("")
+    layout = layout_of(defn)
+    count = sum(line.get("count") or 0 for line in lines) if defn.group else len(lines)
+    tokens = dict(tokens or {}, tabela=defn.name, n=count)
+    grid, geom = table_sheet.build(layout, columns, [heading(c) for c in columns], data, totals, texts, totals_texts,
+                                   decimal, tokens)
+    return grid, geom, columns, lines, layout
 
 
 class SetScheduleDefs:
@@ -636,13 +714,89 @@ def write_json(path, header, table, title=None, columns=None, project=None, deci
         json.dump(data, f, ensure_ascii=False, indent=1)
 
 
-def write_table(path, header, table, decimal=",", title=None, columns=None, project=None):
+def write_grid_xlsx(path, grid, geom, layout, columns, decimal=",", title=None, author="ArqSynth BIM"):
+    """(0.478) A table of the project's to an Excel workbook as its grid is shown (model/table_sheet): its title and
+    note rows, its headings (bold, on a light fill, with a filter, kept on top when it scrolls), its elements (numbers
+    as numbers, with their decimals), its totals; its cells' bold, italic, alignment, fill and borders, its merged
+    cells; its formulas as Excel formulas (SOMA -> SUM, «;» -> «,», «D:D» -> the elements' rows), so that Excel works
+    them out again when a value is changed there — one it would not take (#REF!), its value. ImportError: openpyxl
+    missing."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from . import table_sheet
+    book = Workbook()
+    sheet = book.active
+    sheet.title = (re.sub(r"[\[\]:*?/\\]+", "-", str(title or "")).strip() or "Tabela")[:31]
+    book.properties.creator = author
+    book.properties.title = str(title or "")
+    sides = {False: Side(style="thin", color="000000"), True: Side(style="medium", color="000000")}
+    for g, line in enumerate(grid):
+        for c, cell in enumerate(line):
+            target = sheet.cell(row=g + 1, column=c + 1)
+            formula = table_sheet.to_excel(cell.raw, geom) if cell.raw.startswith("=") and not cell.error else None
+            number = isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool)
+            if formula is not None:
+                target.value = formula
+                if number and abs(cell.value - round(cell.value)) > 1e-9:
+                    target.number_format = "0.00"
+            elif cell.zone in ("D", "S") and number:
+                target.value = round(float(cell.value), XLSX_DECIMALS) if isinstance(cell.value, float) else cell.value
+                key = columns[c] if c < len(columns) else ""
+                places = 3 if key == "volume" else 0 if key in COUNTS or key == "count" else 2
+                target.number_format = "0." + "0" * places if places else "0"
+            else:
+                value, places = xlsx_value(cell.text, decimal)
+                target.value = value
+                if isinstance(value, float) and places:
+                    target.number_format = "0." + "0" * places
+            fmt = cell.fmt
+            bold, italic = fmt.get("b", cell.zone in ("H", "S")), fmt.get("i", False)
+            if bold or italic:
+                target.font = Font(bold=bold, italic=italic)
+            how = fmt.get("a") or ("center" if cell.zone == "H" else None)
+            if how:
+                target.alignment = Alignment(horizontal=how, vertical="center")
+            fill = fmt.get("f") or ("#" + XLSX_HEAD if cell.zone == "H" else None)
+            if fill:
+                target.fill = PatternFill("solid", fgColor=fill.lstrip("#").upper())
+            if fmt.get("bd"):
+                line_ = sides[bool(fmt.get("bw"))]
+                target.border = Border(**{name: line_ if s in fmt["bd"] else Side()
+                                          for s, name in zip("ltrb", ("left", "top", "right", "bottom"))})
+    for g, c, rows, cols in table_sheet.merges_in_grid(layout, geom):
+        sheet.merge_cells(start_row=g + 1, start_column=c + 1, end_row=g + rows, end_column=c + cols)
+    head = geom.top + 1                                          # (the headings' row, counted from 1)
+    sheet.freeze_panes = "A{}".format(head + 1)
+    if geom.n and geom.width:
+        sheet.auto_filter.ref = "A{}:{}{}".format(head, get_column_letter(geom.width), head + geom.n)
+    spanned = {(g + i, c + j) for g, c, rows, cols in table_sheet.merges_in_grid(layout, geom)
+               for i in range(rows) for j in range(cols)}
+    for c, key in enumerate(columns):
+        if key in layout.widths:
+            width = layout.widths[key] / 7.0                     # (px: about 7 a character)
+        else:
+            texts = [grid[g][c].text for g in range(len(grid)) if (g, c) not in spanned]
+            width = max([len(x) for x in texts] + [0]) + 2
+        sheet.column_dimensions[get_column_letter(c + 1)].width = min(max(XLSX_WIDTH[0], width), XLSX_WIDTH[1])
+    book.save(path)
+
+
+def write_table(path, header, table, decimal=",", title=None, columns=None, project=None, grid=None):
     """(0.370) A table to `path` by its extension: an Excel workbook (.xlsx, write_xlsx), (0.477) JSON for other
-    programs (.json, write_json), else a CSV (write_csv)."""
+    programs (.json, write_json), else a CSV (write_csv). (0.478) grid: a table of the project's cells as shown —
+    (grid, geometry, layout, columns' keys): the workbook and the CSV as the grid is (its title and note rows, its
+    formats, formulas), the JSON its elements' rows as ever."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".xlsx":
-        write_xlsx(path, header, table, decimal, title)
+        if grid is not None:
+            write_grid_xlsx(path, grid[0], grid[1], grid[2], grid[3], decimal, title)
+        else:
+            write_xlsx(path, header, table, decimal, title)
     elif ext == ".json":
         write_json(path, header, table, title, columns, project, decimal)
+    elif grid is not None:
+        rows_ = [[cell.text for cell in line] for line in grid[0]]
+        write_csv(path, rows_[0] if rows_ else header, rows_[1:], decimal)
     else:
         write_csv(path, header, table, decimal)

@@ -237,8 +237,11 @@ projeto. Os tamanhos são relativos: P (um ou dois dias de trabalho meu), M (alg
    1. ~~O painel lateral «Tabelas» com a árvore de todas; cada tabela numa aba na tela; os comandos na barra de
       parâmetros; Propriedades como no Revit (Campos disponíveis ↔ tabelados, Filtro, Classificar/Agrupar); exportar
       JSON para o KazaFix Cost~~ (0.477.0).
-   2. Células como no Excel: unir células, alinhamento, bordas, fórmulas (=SOMA(C2:C9)…), linhas e células livres
-      (títulos, notas); inserir campos e fórmulas numa célula com o botão direito ou pelo painel.
+   2. ~~Células como no Excel: unir células, alinhamento, bordas, fórmulas (=SOMA(C2:C9)…), linhas e células livres
+      (títulos, notas); inserir campos e fórmulas numa célula com o botão direito ou pelo painel~~ (0.478.0: também
+      a cor de fundo, negrito e itálico, os dados do projeto num texto, a grelha exportada para o Excel com as fórmulas
+      e posta na folha). Restos: copiar e colar células (Ctrl+C / Ctrl+V); mais funções (SE.ERRO, CONTAR.SE, SOMA.SE…);
+      tamanho e cor da letra por célula (na fase 3).
    3. Formatação e Aparência como no Revit: nome de cada coluna, unidades e casas decimais por campo, totais por campo,
       cabeçalhos e rodapés de grupo, totais gerais, «cada instância», grelha e letra.
    4. Mais tabelas: lista de vistas, lista de folhas, mapa de vãos (portas e janelas juntas), materiais (quantidades

@@ -849,6 +849,7 @@ def bim_flow():
     title_block_editor_flow()         # (0.473)
     room_program_manager_flow()       # (0.475)
     tables_panel_flow()               # (0.477)
+    table_cells_flow()                # (0.478)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -10462,6 +10463,166 @@ def tables_panel_flow():
               side, opened, bar, made, seen, duplicated, deleted, exported, closed, cols))
 
 
+def table_cells_flow():
+    """0.478 (the owner: «A tela, deve ser em células como no excel e ter as ferramentas de união de células alinhamento,
+    desenho de bordas, cálculo como no excel… Os elementos da célula devem ser inseridas com o botão direito do rato e ou
+    botões no painel lateral»): three walls (5, 3 and 8 m); the «Paredes» list opened from the side panel; «Formatar
+    como no Excel»: a table of the project's, as a spreadsheet (lettered columns, a formula bar, Unir/N/I/Bordas… on
+    the parameters' bar); a title row (side panel ▸ Linhas), «Mapa de paredes — {projeto}» written in it through the
+    formula bar, merged over the table's width (centred), bold, light yellow; an outline round the headings to the
+    totals; a heading renamed in its cell; a note row, «Soma da coluna» in it under the lengths (=SOMA(D:D): 16) and
+    «=D7*1,23» beside it (19,68); a fourth wall: 18 and 22,14 — the formulas still right; the volume's column taken away
+    and put back (the formula follows its field); Ctrl+Z; Delete clears a note; the right button's menu; exported to
+    Excel (merged title, bold, yellow, =SUM(D3:D6)); put on a sheet as its grid. Captured: 478_tabela_celulas.png,
+    478_tabela_na_folha.png."""
+    import tempfile
+    import openpyxl
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    from arqbim.model import drawings as drawings_model
+    from arqbim.model import schedules as schedules_model
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0, 0, 0), (5, 0, 0)), ((0, 2, 0), (3, 2, 0)), ((0, 4, 0), (8, 4, 0))):
+        B.add_wall(doc, np.array(a, float), np.array(b, float), spec)
+    pump(200)
+    win.set_module("quantities")
+    pump(400)
+    tp, sp = win.tables_panel, win.schedules_panel
+    tp._open(tp.item_for("walls"))
+    pump(400)
+    listed = win.table_shown() and not sp.cell_bar.isVisible() and tp.make_button.isVisible()
+    tp.make_button.click()                               # Formatar como no Excel
+    pump(500)
+    own = sp._own()
+    made = own is not None and win.views.current() == ("table", "def:" + own.uid) and sp.cell_bar.isVisible() and \
+        sp.table.horizontalHeaderItem(0).text() == "A" and sp.table.columnCount() == 8 and \
+        len(sp.data_rows()) == 3 and tp.parts.isVisible() and "Funções (na célula)" in tp.insert_text()
+    bar_texts = [a.text() for a in win.context_bar.actions() if a.text()]
+    bar = all(x in bar_texts for x in ("Unir", "N", "I", "Bordas", "Fundo", "Inserir", "ƒx"))
+
+    def side(kind, key_):                                # (a double click in «Inserir na tabela»)
+        for k in range(tp.parts.topLevelItemCount()):
+            top = tp.parts.topLevelItem(k)
+            for j in range(top.childCount()):
+                if top.child(j).data(0, Qt.ItemDataRole.UserRole) == (kind, key_):
+                    tp._insert(top.child(j))
+                    pump(400)
+                    return True
+        return False
+
+    def put(g, c, text):                                 # (written in the formula bar, Enter)
+        sp.table.setCurrentCell(g, c)
+        sp.formula.setText(text)
+        sp.formula.returnPressed.emit()
+        pump(400)
+
+    def layout():
+        return schedules_model.layout_of(sp._own())
+
+    titled = side("row", "title") and layout().top == 1
+    put(0, 0, "Mapa de paredes — {projeto}")
+    sp.table.clearSelection()
+    sp.table.setCurrentCell(0, 0)
+    sp.table.setRangeSelected(QtWidgets.QTableWidgetSelectionRange(0, 0, 0, 7), True)
+    sp.act_merge.trigger()
+    pump(400)
+    sp.act_bold.trigger()
+    pump(300)
+    sp.fill("#fff2cc")
+    pump(300)
+    cell = layout().cells.get("T:0:name", {})
+    title = layout().merges == [["T", 0, "name", 1, 8]] and sp.table.columnSpan(0, 0) == 8 and cell.get("b") is True and \
+        cell.get("f") == "#fff2cc" and cell.get("a") == "center" and sp.table.item(0, 0).text().startswith("Mapa de")
+    sp.table.clearSelection()
+    sp.table.setCurrentCell(1, 0)
+    sp.table.setRangeSelected(QtWidgets.QTableWidgetSelectionRange(1, 0, 5, 7), True)    # (headings to totals)
+    sp.borders("outer")
+    pump(300)
+    outlined = "t" in layout().cells.get("H:0:name", {}).get("bd", "") and \
+        "b" in layout().cells.get("S:0:volume", {}).get("bd", "")
+    sp.table.item(1, 3).setText("Comp. (m)")            # (a heading typed in its cell)
+    pump(400)
+    renamed = sp.table.item(1, 3).text() == "Comp. (m)"
+    noted = side("row", "note") and layout().bottom == 1          # (T1, H2, D3-5, S6, N7)
+    sp.table.setCurrentCell(6, 3)
+    sum_ok = side("function", "sum") and sp.table.item(6, 3).text() == "16" and sp.formula.text() == "=SOMA(D:D)"
+    put(6, 4, "=D7*1,23")
+    priced = sp.table.item(6, 4).text() == "19,68"
+    shot("478_tabela_celulas.png")
+    B.add_wall(doc, np.array((0.0, 6.0, 0.0)), np.array((2.0, 6.0, 0.0)), spec)          # (a fourth wall)
+    pump(500)
+    more = len(sp.data_rows()) == 4 and sp.table.item(7, 3).text() == "18" and sp.table.item(7, 4).text() == "22,14"
+    sp.table.setCurrentCell(3, 7)                        # (the volume's column taken away and put back)
+    sp.remove_column()
+    pump(400)
+    gone = "volume" not in sp._own().fields and "volume" in sp.free_fields() and "Volume" in tp.insert_text()
+    sp.table.setCurrentCell(3, 2)
+    side("field", "volume")
+    back = sp._own().fields.index("volume") == 3 and sp.table.item(7, 4).text() == "18" and \
+        sp.table.item(7, 5).text() == "22,14"                   # (the length's column moved to E: its sum with it)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    undone = "volume" not in sp._own().fields
+    key(Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    pump(500)
+    sp.table.clearSelection()
+    sp.table.setCurrentCell(7, 5)
+    sp.table.setFocus()
+    win._delete()                                        # (Delete on a note: cleared, no wall deleted)
+    pump(400)
+    cleared = sp.table.item(7, 5).text() == "" and len([o for o in objects() if o.ifc_class == "IfcWall"]) == 4
+    sp.table.scrollToTop()                               # (the title in view: the right button on it)
+    pump(150)
+    sp._menu(sp.table.visualItemRect(sp.table.item(0, 0)).center())
+    pump(200)
+    menu = getattr(sp, "_last_menu", None)
+    menu_texts = [a.text() for a in menu.actions()] if menu is not None else []
+    right = "Separar células" in menu_texts and "Inserir" in menu_texts and "Bordas" in menu_texts
+    if menu is not None:
+        menu.close()
+    path = os.path.join(tempfile.mkdtemp(), "mapa.xlsx")
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, "Livro do Excel (*.xlsx)"))
+    ref = "def:" + sp._own().uid
+    win.export_table(ref)
+    pump(400)
+    sheet = openpyxl.load_workbook(path).active if os.path.exists(path) else None
+    excel = sheet is not None and "A1:H1" in [str(r) for r in sheet.merged_cells.ranges] and \
+        str(sheet["A1"].value).startswith("Mapa de paredes") and sheet["A1"].font.b and \
+        str(sheet["A1"].fill.fgColor.rgb).upper().endswith("FFF2CC") and \
+        str(sheet["E8"].value) == "=SUM(E3:E6)" and sheet["E3"].value in (5, 5.0)
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "schedule", ref)
+    pump(800)
+    drawing = drawings_model.schedule_drawing(doc, ref, "x")
+    on_sheet = len(doc.sheets) == before + 1 and drawing is not None and drawing.cells is not None and \
+        (0, 0, 1, 8) in drawing.spans
+    if on_sheet and not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        sheet_ = doc.sheets[-1]
+        pages = win._sheet_pages([sheet_])
+        image = QtGui.QImage(840, 594, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("white"))
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pdf_out.paint_sheet(painter, 2.0, sheet_.size(), pages[0][2], pages[0][1], template=sheet_.template)
+        painter.end()
+        image.save(os.path.join(OUT, "478_tabela_na_folha.png"))
+    for _k in range(sum(1 for k in win.views.keys if k[0] in ("table", "sheet"))):
+        win.views.close_current()
+        pump(150)
+    win.set_module("project")
+    win.open_view("3d", None)
+    pump(300)
+    check("tabela_celulas_como_excel", listed and made and bar and titled and title and outlined and renamed and noted
+          and sum_ok and priced and more and gone and back and undone and cleared and right and excel and on_sheet,
+          "lista={} feita={} barra={} titulo={} {} contorno={} cabecalho={} notas={} soma={} preco={} mais={} "
+          "tirada={} reposta={} desfeito={} limpa={} menu={} excel={} folha={} | {} | {}".format(
+              listed, made, bar, titled, title, outlined, renamed, noted, sum_ok, priced, more, gone, back, undone,
+              cleared, right, excel, on_sheet, menu_texts[:12], layout().cells.get("T:0:name")))
+
+
 def room_program_manager_flow():
     """0.475 (the owner: «A aba ambiente quero que funcione no painel lateral… o painel vai ser um gestor de programa
     de necessidade»): a house split by a wall with a door in it, its plan; Ambientes on the module bar: the programme's
@@ -11053,10 +11214,11 @@ def own_schedules_flow():
     panel.new_def.click()
     pump(400)
     own = (panel.category.currentData() or "").startswith("def:")
-    rows = panel.table.rowCount()
+    data = panel.data_rows()                     # (0.478: a grid — the headings in its first row, the totals after)
+    rows = len(data)
     text = panel.text()
-    first = panel.table.item(0, list(panel._columns).index("length")).text() if rows else ""
-    formula = panel.table.item(0, list(panel._columns).index("formula:0")).text() if rows else ""
+    first = panel.table.item(data[0], list(panel._columns).index("length")).text() if rows else ""
+    formula = panel.table.item(data[0], list(panel._columns).index("formula:0")).text() if rows else ""
     shot("121_tabela_propria.png")
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(400)

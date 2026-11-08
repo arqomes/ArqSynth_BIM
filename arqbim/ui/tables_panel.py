@@ -71,10 +71,40 @@ class TablesPanel(QtWidgets.QDockWidget):
             b.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
             grid.addWidget(b, k // 2, k % 2)
         column.addLayout(grid)
+        # (0.478, the owner: «Os elementos da célula devem ser inseridas com o botão direito do rato e ou botões no
+        # painel lateral») what can be put in the table shown: its columns (fields), functions and the project's data
+        # in the cell chosen, title and note rows — a double click, or Inserir
+        self.on_insert = None            # (kind, key): "field" | "function" | "token" | "row"
+        self.on_make_own = None          # (): Formatar como no Excel (a category's list)
+        self.insert_title = QtWidgets.QLabel(t("tables.insert"))
+        self.insert_title.setObjectName("tables_insert_title")
+        column.addWidget(self.insert_title)
+        self.insert_hint = QtWidgets.QLabel(t("tables.insert_none"))
+        self.insert_hint.setWordWrap(True)
+        column.addWidget(self.insert_hint)
+        self.parts = QtWidgets.QTreeWidget()
+        self.parts.setHeaderHidden(True)
+        self.parts.setMinimumWidth(140)
+        self.parts.itemDoubleClicked.connect(lambda item, _c: self._insert(item))
+        self.parts.currentItemChanged.connect(lambda _a, _b: self._insert_buttons())
+        column.addWidget(self.parts, 1)
+        self.insert_button = QtWidgets.QPushButton(t("tables.insert_button"))
+        self.insert_button.clicked.connect(lambda: self._insert(self.parts.currentItem()))
+        self.make_button = QtWidgets.QPushButton(t("grid.make_own"))
+        self.make_button.setToolTip(t("grid.make_own_tip"))
+        self.make_button.clicked.connect(lambda: self._call(self.on_make_own))
+        for b in (self.insert_button, self.make_button):
+            b.setMinimumWidth(40)
+            b.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.insert_button)
+        row.addWidget(self.make_button)
+        column.addLayout(row)
         self.setWidget(page)
         self.tree.currentItemChanged.connect(lambda _a, _b: self._buttons())
         self.restyle()
         self._buttons()
+        self.show_insert(None)
 
     @staticmethod
     def _call(fn, *args):
@@ -83,6 +113,60 @@ class TablesPanel(QtWidgets.QDockWidget):
 
     def restyle(self):
         self.hint.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        self.insert_hint.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        self.insert_title.setStyleSheet("QLabel#tables_insert_title { font-weight: 600; color: %s; padding-top: 6px; }"
+                                        % theme.C["text"])
+
+    # ------------------------------------------------------------ (0.478) Inserir na tabela
+
+    def show_insert(self, state, fields=()):
+        """What can be put in the table shown: state "own" (a table of the project's: fields [(key, name)] it does not
+        show yet, functions, the project's data, rows), "list" (a category's: Formatar como no Excel), None (none
+        shown)."""
+        from .schedules import FUNCTIONS
+        from ..model import table_sheet
+        self.parts.clear()
+        own = state == "own"
+        self.parts.setVisible(own)
+        self.insert_button.setVisible(own)
+        self.make_button.setVisible(state == "list")
+        self.insert_hint.setText(t("tables.insert_hint" if own else "tables.insert_none"))
+        if not own:
+            return
+
+        def group(name, parts):
+            top = QtWidgets.QTreeWidgetItem([t("tables.insert_group." + name)])
+            top.setData(0, REF, None)
+            top.setFlags(top.flags() & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
+            self.parts.addTopLevelItem(top)
+            for text, kind, key in parts:
+                leaf = QtWidgets.QTreeWidgetItem([text])
+                leaf.setData(0, REF, (kind, key))
+                top.addChild(leaf)
+            top.setExpanded(name != "columns" or len(parts) < 8)
+        group("columns", [(name, "field", key) for key, name in fields])
+        group("functions", [(t("grid.fn." + fn), "function", fn) for fn, _name in FUNCTIONS])
+        group("data", [(t("grid.data." + k), "token", k) for k in table_sheet.TOKENS])
+        group("rows", [(t("grid.title_row"), "row", "title"), (t("grid.note_row"), "row", "note")])
+        self._insert_buttons()
+
+    def _insert_buttons(self):
+        item = self.parts.currentItem()
+        self.insert_button.setEnabled(item is not None and item.data(0, REF) is not None)
+
+    def _insert(self, item):
+        found = item.data(0, REF) if item is not None else None
+        if found and self.on_insert is not None:
+            self.on_insert(*found)
+
+    def insert_text(self):
+        """(tests) The parts as lines: a group, then its parts indented."""
+        lines = []
+        for k in range(self.parts.topLevelItemCount()):
+            top = self.parts.topLevelItem(k)
+            lines.append(top.text(0))
+            lines += ["  " + top.child(j).text(0) for j in range(top.childCount())]
+        return "\n".join(lines)
 
     # ------------------------------------------------------------ the tree
 

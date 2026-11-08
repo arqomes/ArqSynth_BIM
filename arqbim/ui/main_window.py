@@ -387,8 +387,9 @@ class MainWindow(QtWidgets.QMainWindow):
         sp = self.schedules_panel
         sp.on_edit, sp.on_frame = self._on_property_edit, self._frame_from_tree
         sp.on_select = lambda ids: self._select_from_tree(self._circuit_points(ids))      # (a circuit: its points)
-        sp.on_defs = lambda defs: self.doc.execute(schedules_model.SetScheduleDefs(   # (0.131) its own schedules
-            self.doc.schedule_defs, defs, t("cmd.schedules")))
+        sp.on_defs = lambda defs, label=None: self.doc.execute(schedules_model.SetScheduleDefs(   # (0.131) its own
+            self.doc.schedule_defs, defs, label or t("cmd.schedules")))                 # (0.478: its cells' too)
+        sp.on_message = lambda text, warning=True: self.message(text, warning=warning)   # (0.478)
         sp.on_put = lambda index, kind, ref: self.sheet_action("put", index, kind, ref)   # (0.132) on a sheet
         sp.on_shown, sp.on_export = lambda: self._refresh_schedules(), self._export_schedule
         sp.on_ref = self._table_ref_shown                                              # (0.477)
@@ -1864,6 +1865,8 @@ class MainWindow(QtWidgets.QMainWindow):
         tp.on_open, tp.on_new, tp.on_properties = self.open_table, self.new_table, self.table_properties
         tp.on_duplicate, tp.on_delete, tp.on_export = self.duplicate_table, self.delete_table, self.export_table
         tp.on_put = lambda ref: self.sheet_action("put", None, "schedule", ref)
+        tp.on_insert = lambda kind, key: self.schedules_panel.insert(kind, key) if self.table_shown() else None
+        tp.on_make_own = lambda: self.schedules_panel.make_own() if self.table_shown() else None      # (0.478)
         tp.visibilityChanged.connect(lambda shown: self._refresh_tables_panel() if shown else None)
         self.presentation_panel = presentation_panel.dock(self, self.program_panel)    # (0.363, hidden until asked)
         pp = self.presentation_panel
@@ -3651,11 +3654,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.refresh_context_bar()
             if hasattr(self, "tables_panel"):
                 self.tables_panel.mark(key[1])
+                self._tables_insert()
             return
         if self.table_shown():
             self.schedules_panel.hide()
             self.canvas.show()
             self.refresh_context_bar()
+            self._tables_insert()                      # (0.478: nothing to insert in)
         if kind == "sheet":
             sheet = next((s for s in self.doc.sheets if s.uid == key[1]), None)
             if sheet is not None:
@@ -3869,6 +3874,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.refresh_context_bar()
         if hasattr(self, "tables_panel"):
             self.tables_panel.mark(ref)
+            self._tables_insert()
 
     def new_table(self, category="walls"):
         """Nova tabela… (as Revit's New Schedule): a table of the project's own of that category — its Properties
@@ -3917,6 +3923,17 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_tables_panel(self):
         if hasattr(self, "tables_panel") and self.tables_panel.isVisible() and not self.doc.loading:
             self.tables_panel.show_document(self.doc, self.schedules_panel.ref() if self.table_shown() else None)
+            self._tables_insert()
+
+    def _tables_insert(self):
+        """(0.478) The side panel's «Inserir na tabela» for the table in view: a table of the project's — the fields it
+        does not show, functions, the project's data, rows; a category's list — «Formatar como no Excel»."""
+        if not hasattr(self, "tables_panel"):
+            return
+        sp = self.schedules_panel
+        state = None if not self.table_shown() else ("own" if sp._own() is not None else "list")
+        fields = [(k, t("sched.col." + k)) for k in sp.free_fields()] if state == "own" else ()
+        self.tables_panel.show_insert(state, fields)
 
     def _delete(self):
         """Delete: on a sheet, the view picked there comes off the sheet (nothing of the model is
@@ -3928,6 +3945,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.sheet_window.take_off(self.sheet_window.canvas.selected)
             elif self.sheet_window.picked_import is not None:                 # (0.472) a drawing from outside
                 self.sheet_window.take_off_import(self.sheet_window.picked_import)
+            return
+        if self.table_shown() and self.schedules_panel.clear_cells():          # (0.478) a title's, a note's… cleared
             return
         if self.pick_request is not None:         # (0.325) Delete while a command waits: only its own (Apagar)
             if self.pick_request.title == self._delete_title():
@@ -8857,10 +8876,11 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.export_sheets(sheets, fmt, name=name)
 
-    def _export_schedule(self, header, table, path=None, columns=None):
+    def _export_schedule(self, header, table, path=None, columns=None, grid=None):
         """Schedules ▸ Export: the table as shown — (0.370) an Excel workbook, its numbers as numbers, or a CSV for
         Excel (';' and decimal comma in Portuguese); (0.477) or JSON for other programs (KazaFix Cost: its columns'
-        keys and units). Returns its path, or None."""
+        keys and units); (0.478) a table of the project's with its grid (grid: its cells as shown — titles, notes,
+        merges, formats, formulas as Excel's). Returns its path, or None."""
         sp = getattr(self, "schedules_panel", None)
         title = sp.title_of(sp.ref()) if sp is not None and sp.ref() else ""
         if path is None:
@@ -8868,7 +8888,7 @@ class MainWindow(QtWidgets.QMainWindow):
             path = self._table_path(t("sched.export"), "{} - {}.xlsx".format(base, title) if title else base + ".xlsx")
             if path is None:
                 return None
-        if not self._write_table(path, header, table, title, columns):
+        if not self._write_table(path, header, table, title, columns, grid):
             return None
         self.message(t("info.schedule_exported", f=os.path.basename(path)))
         return path
@@ -8884,13 +8904,14 @@ class MainWindow(QtWidgets.QMainWindow):
             path += ".csv" if "csv" in chosen else ".json" if "json" in chosen else ".xlsx"
         return path
 
-    def _write_table(self, path, header, table, title=None, columns=None):
+    def _write_table(self, path, header, table, title=None, columns=None, grid=None):
         """(0.370) A table to `path`, an Excel workbook, a CSV or (0.477) JSON by its extension
-        (model/schedules.write_table). False (and said why) when it could not be written."""
+        (model/schedules.write_table); (0.478) grid: a table of the project's cells. False (and said why) when it could
+        not be written."""
         project = os.path.splitext(os.path.basename(self.doc.path))[0] if self.doc.path else ""
         try:
             schedules_model.write_table(path, header, table, decimal=decimal_sep(), title=title, columns=columns,
-                                        project=project)
+                                        project=project, grid=grid)
         except ImportError:
             self.message(t("err.xlsx_missing"), warning=True)
             return False

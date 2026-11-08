@@ -136,15 +136,24 @@ class TableDrawing:
     header: list
     rows: list
     totals: str = ""
+    cells: list = None          # (0.478) a table of the project's as its grid: rows of {"text", "zone", "b", "i", "a",
+    spans: list = ()            # "f", "bd", "bw", "num"}; its merged blocks (row, col, rows, cols)
 
     def widths(self):
-        """Each column's width in mm: its longest text, and a little room."""
+        """Each column's width in mm: its longest text, and a little room ((0.478) a merged cell's left out)."""
+        if self.cells:
+            spanned = {(g + i, c + j) for g, c, rows, cols in self.spans for i in range(rows) for j in range(cols)}
+            cols = max((len(line) for line in self.cells), default=0)
+            return [max([len(str(line[c]["text"])) for g, line in enumerate(self.cells)
+                         if c < len(line) and (g, c) not in spanned] + [2]) * TABLE_CHAR + 3.0 for c in range(cols)]
         cols = len(self.header)
         return [max([len(str(self.header[c]))] + [len(str(r[c])) for r in self.rows if c < len(r)]) * TABLE_CHAR + 3.0
                 for c in range(cols)]
 
     def paper_size(self):
         """(w, h) mm: its columns, its heading row and its rows (and its totals' row)."""
+        if self.cells:
+            return max(sum(self.widths()), 40.0), TABLE_ROW * len(self.cells)
         return (max(sum(self.widths()), 40.0),
                 TABLE_ROW * (len(self.rows) + 1 + (1 if self.totals else 0)))
 
@@ -161,6 +170,22 @@ def schedule_drawing(doc, ref, title):
     if found is None:
         return None
     own_title, header, rows, totals = found
+    own = next((d for d in getattr(doc, "schedule_defs", ()) if "def:" + d.uid == ref), None)
+    if own is not None and getattr(own, "grid", None):                  # (0.478) as its grid is shown
+        grid, geom, columns, _lines, layout = schedules_model.grid_of(
+            doc, own, lambda c: t("sched.col." + c), decimal_sep(), lambda n: t("grid.total_n", n=n),
+            schedules_model.project_tokens(doc))
+        cells = []
+        for line in grid:
+            row = []
+            for c, cell in enumerate(line):
+                number = isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool)
+                row.append(dict(cell.fmt, text=cell.text, zone=cell.zone,
+                                num=number or (cell.zone in ("D", "S") and bool(cell.text) and
+                                               columns[c] in schedules_model.NUMBERS)))
+            cells.append(row)
+        from . import table_sheet
+        return TableDrawing(own_title or title, header, rows, totals, cells, table_sheet.merges_in_grid(layout, geom))
     return TableDrawing(own_title or title, header, rows, totals)
 
 
