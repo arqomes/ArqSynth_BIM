@@ -65,9 +65,9 @@ def shape(ann, origin, u, v):
     if ann.kind == "line":
         return [(p[:2], False)] if np.linalg.norm(p[1] - p[0]) >= MIN_SIZE else []
     if ann.kind == "polyline":
-        return [(p, False)]
+        return [(bulged(p, bulges_of(ann), False), False)]
     if ann.kind == "region":
-        return [(p, True)] if len(p) >= 3 else []
+        return [(bulged(p, bulges_of(ann), True), True)] if len(p) >= 3 else []
     if ann.kind == "rectangle":
         (x0, y0), (x1, y1) = p[0], p[1]
         if abs(x1 - x0) < MIN_SIZE or abs(y1 - y0) < MIN_SIZE:
@@ -85,6 +85,112 @@ def shape(ann, origin, u, v):
         centre, r, start, sweep = found
         return [(np.array(arcs.arc_points(centre, r, start, sweep)), False)]
     return []
+
+
+def bulges_of(ann):
+    """(0.455) A polyline's / region's sides' bulges — side k from point k to the next: 0 straight, else an arc, DXF's
+    bulge (tan of a quarter of its angle, positive turning counter-clockwise on the view's paper). Kept in `extra`,
+    unchanged when it is moved or turned; [0…] when there are none (or no longer one per side)."""
+    n = len(ann.points)
+    sides = n if ann.kind == "region" else n - 1
+    kept = list(ann.extra.get("bulges") or []) if isinstance(ann.extra, dict) else []
+    return [float(b) for b in kept] if len(kept) == max(sides, 0) else [0.0] * max(sides, 0)
+
+
+def bulged(p, bulges, closed):
+    """(0.455) The points (N, 2) with the sides that are arcs (their bulges) in pieces."""
+    p = np.asarray(p, dtype=float)
+    if not any(abs(b) > 1e-12 for b in bulges):
+        return p
+    out = []
+    n = len(p)
+    for k in range(n if closed else n - 1):
+        a, b = p[k], p[(k + 1) % n]
+        out.append(a)
+        bulge = bulges[k] if k < len(bulges) else 0.0
+        chord = float(np.linalg.norm(b - a))
+        if abs(bulge) < 1e-12 or chord < 1e-12:
+            continue
+        right = np.array(((b - a)[1], -(b - a)[0])) / chord
+        through = (a + b) / 2 + right * (bulge * chord / 2)          # (its middle, the sagitta off the chord)
+        found = arcs.arc_through(a, b, through)
+        if found is None:
+            continue
+        centre, r, start, sweep = found
+        out += [np.asarray(q, dtype=float) for q in arcs.arc_points(centre, r, start, sweep)[1:-1]]
+    if not closed:
+        out.append(p[-1])
+    return np.array(out, dtype=float)
+
+
+def corner_fillet(ann, side_a, keep_a, side_b, keep_b, radius, origin, u, v):
+    """(0.455, the owner: «isso também deve ser colocado na região, máscara etc») Revit's «Fillet Arc» on a drawing:
+    the corner between the sides side_a and side_b (next to each other, both straight) of a region, a mask, a
+    polyline — or a rectangle, made a region with no hatch — rounded by an arc of `radius` tangent to both (each kept
+    on the side of its keep_* point, 2D). (kind, points (3D), bulges) — ValueError("not_corner" | "parallel" |
+    "too_big")."""
+    from ..core.fillet import fillet
+    kind, pts3 = ann.kind, [np.asarray(q, dtype=float) for q in ann.points]
+    if kind == "rectangle":                              # (its four corners, as a region's)
+        (x0, y0), (x1, y1) = to2(pts3[:2], origin, u, v)
+        o, uu, vv = (np.asarray(x, dtype=float) for x in (origin, u, v))
+        pts3 = [o + uu * x + vv * y for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+        kind = "region"
+        bulges = [0.0] * 4
+    elif kind in ("region", "polyline"):
+        bulges = bulges_of(ann)
+    else:
+        raise ValueError("not_corner")
+    n = len(pts3)
+    closed = kind == "region"
+    if side_a == side_b:
+        raise ValueError("not_corner")
+    if (side_a + 1) % n == side_b:                       # (a's end is b's start: the corner between them)
+        first, second, corner = side_a, side_b, side_b
+    elif (side_b + 1) % n == side_a:
+        first, second, corner = side_b, side_a, side_a
+        keep_a, keep_b = keep_b, keep_a
+    else:
+        raise ValueError("not_corner")
+    if not closed and corner == 0:
+        raise ValueError("not_corner")
+    if bulges[first] or bulges[second]:
+        raise ValueError("not_corner")                   # (a side already an arc there)
+    p = to2(pts3, origin, u, v)
+    f = fillet((p[first], p[corner]), keep_a, (p[(second + 1) % n], p[corner]), keep_b, radius=float(radius))
+    if f is None:
+        raise ValueError("parallel")
+    reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+    if any(reach > room - 1e-6 for room in f.room):
+        raise ValueError("too_big")
+    o, uu, vv = (np.asarray(x, dtype=float) for x in (origin, u, v))
+    to3 = lambda q: o + uu * float(q[0]) + vv * float(q[1])     # noqa: E731
+    new_pts = pts3[:corner] + [to3(f.tangents[0]), to3(f.tangents[1])] + pts3[corner + 1:]
+    new_bulges = bulges[:corner] + [math.tan(f.sweep / 4.0)] + bulges[corner:]
+    return kind, new_pts, new_bulges
+
+
+def lines_fillet(ann_a, keep_a, ann_b, keep_b, radius, origin, u, v):
+    """(0.455) The fillet arc between two lines drawn in a view: each trimmed / stretched to where the arc touches it
+    (kept on the side of its keep_* point, 2D), and the arc an arc of its own ([start, end, a point on it], 3D).
+    (points of a, points of b, the arc's points) — ValueError("parallel" | "too_big")."""
+    from ..core.fillet import fillet
+    pa, pb = to2(ann_a.points[:2], origin, u, v), to2(ann_b.points[:2], origin, u, v)
+    f = fillet((pa[0], pa[1]), keep_a, (pb[0], pb[1]), keep_b, radius=float(radius))
+    if f is None:
+        raise ValueError("parallel")
+    reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+    if any(reach > room - 1e-6 for room in f.room):
+        raise ValueError("too_big")
+    o, uu, vv = (np.asarray(x, dtype=float) for x in (origin, u, v))
+    to3 = lambda q: o + uu * float(q[0]) + vv * float(q[1])     # noqa: E731
+    out = []
+    for ann, end, tangent in ((ann_a, f.ends[0], f.tangents[0]), (ann_b, f.ends[1], f.tangents[1])):
+        pts = [np.asarray(q, dtype=float) for q in ann.points[:2]]
+        pts[1 if end == "end" else 0] = to3(tangent)
+        out.append(pts)
+    middle = arcs.point_at(f.centre, f.radius, f.start + f.sweep / 2)
+    return out[0], out[1], [to3(f.tangents[0]), to3(f.tangents[1]), to3(middle)]
 
 
 def level_fills(ann, origin, u, v):

@@ -46,12 +46,16 @@ class DraftTool(_PointTool):
         self.width = 0.0             # …and its pen (mm; 0: the project's pen for what is drawn)
         self._points = []            # clicked so far
         self._end = None             # the point under the mouse
+        self._fillet = []            # (0.455) the sides picked for a fillet: [(annotation, side, the point 2D)]
+        self._fillet_now = None      # …and the fillet under the mouse
 
     @property
     def accepts_typing(self):
         """A text's words; a line's length, a circle's radius, a rectangle's sides."""
         if self.shape == "text":
             return len(self._points) == 1
+        if self.shape == "fillet":                           # (0.455) the fillet's radius
+            return len(self._fillet) >= 2
         return self.shape in ("line", "circle", "rectangle") and len(self._points) == 1
 
     @property
@@ -63,6 +67,7 @@ class DraftTool(_PointTool):
         # (0.450) as icons on the bar, as Revit's «Draw» panel — a mask beside the region (a region filled white)
         shapes = [k for k in notes2d.KINDS]
         shapes.insert(shapes.index("region") + 1, "mask")
+        shapes.insert(shapes.index("arc") + 1, "fillet")       # (0.455) Revit's «Fillet Arc» on what is drawn
         shown = "mask" if self.shape == "region" and self.hatch == "mask" else self.shape
         opts = [Option("shape", t("ctx.draft_shape"), "choice", shown, tuple((k, t("draft." + k)) for k in shapes))]
         if self.shape == "region" and self.hatch != "mask":
@@ -84,6 +89,9 @@ class DraftTool(_PointTool):
         if key == "shape" and value == "mask":           # (0.450) a masking region: a region filled white
             self.set_shape("region")
             self.hatch = "mask"
+            return
+        if key == "shape" and value == "fillet":         # (0.455) two sides picked, the arc between them
+            self.set_shape("fillet")
             return
         if key == "shape" and value in notes2d.KINDS:
             if value == "region" and self.hatch == "mask":
@@ -107,7 +115,8 @@ class DraftTool(_PointTool):
 
     def tab(self):
         kinds = notes2d.KINDS
-        self.set_shape(kinds[(kinds.index(self.shape) + 1) % len(kinds)])
+        here = kinds.index(self.shape) if self.shape in kinds else kinds.index("arc")
+        self.set_shape(kinds[(here + 1) % len(kinds)])
         self.host.message(t("info.draft_shape", k=t("draft." + self.shape)))
         return True
 
@@ -115,6 +124,8 @@ class DraftTool(_PointTool):
         if self.viewport.current_view() is None:
             return t("hint.draft_view")
         n = len(self._points)
+        if self.shape == "fillet":                          # (0.455)
+            return t("hint.draft.fillet_" + str(min(len(self._fillet), 2)))
         if self.shape == "text":
             return t("hint.draft.text_2") if n else t("hint.draft.text")
         if n == 0:
@@ -164,7 +175,138 @@ class DraftTool(_PointTool):
         return notes2d.Annotation(self.viewport.current_view(), self.shape, list(points), hatch=self.hatch,
                                   size=self.size, extra=extra)
 
+    # ------------------------------------------------------------ (0.455) Revit's «Fillet Arc» on what is drawn
+
+    @staticmethod
+    def _corners2(ann, origin, u, v):
+        """The points whose sides can be picked (2D): a rectangle's four corners, else its points."""
+        p = notes2d.to2(ann.points, origin, u, v)
+        if ann.kind == "rectangle" and len(p) >= 2:
+            (x0, y0), (x1, y1) = p[0], p[1]
+            return np.array(((x0, y0), (x1, y0), (x1, y1), (x0, y1)))
+        return p
+
+    def _side_at(self, x, y):
+        """(the annotation, its side k, the point 2D) of what is drawn under the mouse — a line, a polyline's,
+        a region's, a mask's or a rectangle's side — or None."""
+        ann = self.viewport.annotation_at(x, y)
+        plane = self.viewport.view_plane()
+        if ann is None or plane is None or ann.kind not in ("line", "polyline", "region", "rectangle"):
+            return None
+        origin, u, v, n = plane
+        ray_o, ray_d = self.viewport.ray(x, y)
+        p = ray_plane(ray_o, ray_d, origin, n)
+        if p is None:
+            p = ray_plane(ray_o, ray_d, origin, -n)
+        if p is None:
+            return None
+        q = notes2d.to2([p], origin, u, v)[0]
+        pts = self._corners2(ann, origin, u, v)
+        closed = ann.kind in ("region", "rectangle")
+        best = None
+        for k in range(len(pts) if closed else len(pts) - 1):
+            a, b = pts[k], pts[(k + 1) % len(pts)]
+            d = b - a
+            s = float(np.clip((q - a) @ d / max(float(d @ d), 1e-12), 0.0, 1.0))
+            gap = float(np.linalg.norm(a + d * s - q))
+            if best is None or gap < best[0]:
+                best = (gap, k)
+        return None if best is None else (ann, best[1], q)
+
+    def _side_ends(self, pick):
+        ann, k, _q = pick
+        origin, u, v, _n = self.viewport.view_plane()
+        pts = self._corners2(ann, origin, u, v)
+        return pts[k], pts[(k + 1) % len(pts)]
+
+    def _fillet_move(self, x, y):
+        from ..core.fillet import arc_points, fillet
+        if len(self._fillet) < 2:
+            found = self._side_at(x, y)
+            self.viewport.clear_overlays()
+            origin, u, v, _n = self.viewport.view_plane()
+            if found is not None:
+                a, b = self._side_ends(found)
+                self.viewport.show_lines([origin + u * a[0] + v * a[1], origin + u * b[0] + v * b[1]],
+                                         [PREVIEW, PREVIEW])
+            return
+        origin, u, v, n = self.viewport.view_plane()
+        ray_o, ray_d = self.viewport.ray(x, y)
+        p = ray_plane(ray_o, ray_d, origin, n)
+        if p is None:
+            p = ray_plane(ray_o, ray_d, origin, -n)
+        if p is None:
+            return
+        mouse = notes2d.to2([p], origin, u, v)[0]
+        (pa, pb) = self._fillet[:2]
+        f = fillet(self._side_ends(pa), pa[2], self._side_ends(pb), pb[2], through=mouse)
+        self._fillet_now = f
+        if f is None:
+            self.viewport.clear_overlays()
+            return
+        pts = [origin + u * q[0] + v * q[1] for q in arc_points(f)]
+        self.viewport.show_lines([q for a, b in zip(pts, pts[1:]) for q in (a, b)],
+                                 [PREVIEW] * (2 * (len(pts) - 1)))
+        self.viewport.show_tip(t("tip.fillet_radius", r=_fmt(f.radius)), pts[len(pts) // 2])
+        self.host.set_vcb(_fmt(f.radius))
+
+    def _fillet_down(self, x, y, radius=None):
+        if len(self._fillet) < 2:
+            found = self._side_at(x, y)
+            if found is None:
+                self.host.message(t("tip.fillet_drawn", n=len(self._fillet) + 1), warning=True)
+                return
+            if self._fillet and self._fillet[0][0] is found[0] and self._fillet[0][1] == found[1]:
+                return
+            self._fillet.append(found)
+            self.host.set_hint(self.hint())
+            return
+        if radius is None:
+            if self._fillet_now is None:
+                self.host.message(t("err.fillet_none"), warning=True)
+                return
+            radius = self._fillet_now.radius
+        self._make_fillet(radius)
+
+    def _make_fillet(self, radius):
+        from ..model.document import JoinedCommand
+        from ..i18n import refusal
+        (a, ka, qa), (b, kb, qb) = self._fillet[:2]
+        origin, u, v, _n = self.viewport.view_plane()
+        label = t("cmd.fillet")
+        try:
+            if a is b:                                       # a corner of one drawing
+                kind, pts, bulges = notes2d.corner_fillet(a, ka, qa, kb, qb, radius, origin, u, v)
+                extra = dict(a.extra, bulges=bulges)
+                if kind == a.kind:
+                    step = notes2d.EditAnnotation(a, label, points=pts, extra=extra)
+                else:                                        # (a rectangle: a region with no hatch now)
+                    new = notes2d.Annotation(a.view, kind, pts, hatch="none", extra=extra)
+                    step = JoinedCommand([notes2d.RemoveAnnotations([a], label), notes2d.AddAnnotation(new, label)],
+                                         label)
+            elif a.kind == "line" and b.kind == "line":      # two lines: trimmed, an arc of its own between them
+                pa, pb, arc = notes2d.lines_fillet(a, qa, b, qb, radius, origin, u, v)
+                step = JoinedCommand([notes2d.EditAnnotation(a, label, points=pa),
+                                      notes2d.EditAnnotation(b, label, points=pb),
+                                      notes2d.AddAnnotation(notes2d.Annotation(a.view, "arc", arc,
+                                                                               extra=dict(a.extra)), label)], label)
+            else:
+                raise ValueError("not_corner")
+        except ValueError as exc:
+            self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            self._fillet, self._fillet_now = [], None
+            self.host.set_hint(self.hint())
+            return
+        self.doc.execute(step)
+        self.host.message(t("info.fillet_drawn", r=_fmt(radius)))
+        self._fillet, self._fillet_now = [], None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+
     def pointer_move(self, x, y, modifiers):
+        if self.shape == "fillet":
+            self._fillet_move(x, y)
+            return
         p, snap = self._pick(x, y)
         if p is None:
             return
@@ -200,6 +342,9 @@ class DraftTool(_PointTool):
         if self.viewport.current_view() is None:
             self.host.message(t("hint.draft_view"))
             return
+        if self.shape == "fillet":                           # (0.455)
+            self._fillet_down(x, y)
+            return
         if self._near_first(x, y):
             self._finish(closed=True)
             return
@@ -227,6 +372,11 @@ class DraftTool(_PointTool):
             self._finish(closed=self.shape == "region")
 
     def typed(self, text):
+        if self.shape == "fillet":                           # (0.455) the fillet's radius typed
+            values = parse_lengths(text, 1)
+            if len(self._fillet) >= 2 and values is not None and values[0] is not None and values[0] > 0:
+                self._make_fillet(values[0])
+            return
         if self.shape == "text":
             if self._points and text.strip():
                 self._make(self._points[:1], text=text.strip())
@@ -282,6 +432,7 @@ class DraftTool(_PointTool):
         self._points = []
         self._end = None
         self._element = None
+        self._fillet, self._fillet_now = [], None
         self.viewport.clear_overlays()
         self.host.set_vcb("")
         self.host.set_hint(self.hint())

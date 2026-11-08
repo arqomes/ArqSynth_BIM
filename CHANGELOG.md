@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.455.0 — 2026-11-07
+
+**Arco de concordância como no Revit, em linhas, polígonos e no Desenho 2D** (o dono: «o arco não é um arco, mas um
+monte de segmentos, não dá pra selecionar o raio inteiro para ajustar o raio como no revit. tentei fazer isso no
+polígono, mas não funcionou, isso também deve ser colocado na região, máscara etc»).
+
+- **Linha ▸ Arco de concordância**: o arco entre as duas linhas é agora um arco verdadeiro (como o da ferramenta
+  Arco): um clique escolhe-o inteiro e mostra o **raio como cota temporária** — clique no valor, escreva outro raio e
+  Enter. As duas linhas são aparadas ou esticadas e o arco **continua tangente** a elas. O mesmo pelo campo «Raio»
+  das Propriedades.
+- **Polígonos** (uma face desenhada com a Linha, um retângulo): clique em dois lados que fazem um canto — o canto
+  fica arredondado, a face inteira.
+- **Desenho 2D ▸ Arco de concordância** (ícone novo, ao lado do Arco): o canto de uma **região**, **máscara**,
+  **polilinha** ou **retângulo** fica em arco verdadeiro (guardado como arco: acompanha quando se move ou roda, e sai
+  em arco no papel, SVG e DXF); entre **duas linhas** nasce um arco 2D próprio.
+- Testado na janela real, clique a clique, em todos os recursos novos (paredes: raio, cadeia, afastamento, os três
+  arcos, concordância, escolher linhas, ângulos; linhas; polígono; alinhar; máscara): 21 de 21 passos certos
+  (`tests/gui_desenho_revit.py`).
+- Limite: no polígono e na região o raio ainda não se muda depois (Ctrl+Z e de novo).
+
 ## 0.454.0 — 2026-11-07
 
 **Os arcos da parede como os do Revit.** Dois ícones novos em Parede ▸ Forma (o «Arco» que já havia é o

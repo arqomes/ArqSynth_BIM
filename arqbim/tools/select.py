@@ -40,6 +40,7 @@ the button comes up: a copy; Esc: nothing moved; one undo step. From empty space
 slabs, floors and the terrain are taken in a plan by their edge only (inside them a drag is a box). The selection bar's
 «Arrastar elementos» switches it off."""
 
+import math
 import time
 from dataclasses import dataclass
 
@@ -393,6 +394,22 @@ def selection_dims(doc, ids, faces=False):
     return []
 
 
+def arc_radius_dims(obj):
+    """(0.455, Revit's) An arc picked alone: its radius as a temporary dimension, from its centre to its middle — a
+    click on the value and the radius typed changes it (a fillet's: still tangent to its lines)."""
+    c = obj.curve or {}
+    if c.get("kind") != "arc" or c.get("pie"):
+        return []
+    centre = transform_point(obj.matrix, np.asarray(c["centre"], dtype=float))
+    normal = obj.matrix[:3, :3] @ np.asarray(c["normal"], dtype=float)
+    normal = normal / max(float(np.linalg.norm(normal)), 1e-12)
+    start = transform_point(obj.matrix, np.asarray(c["start"], dtype=float))
+    middle = centre + core_curves._rotate(start - centre, normal, math.radians(float(c["angle"]) / 2))
+    if float(np.linalg.norm(middle - centre)) < 1e-6:
+        return []
+    return [temp_dims.TempDim(centre, middle, normal, key=("arc_radius", obj.id), offset_px=0.0)]
+
+
 def _wall_dims(doc, guid, faces=False):
     """A wall's length, on the face away from its nearest neighbour, and (0.361) its relations to the walls round it
     (temp_dims.wall_relations): across to the nearest parallel wall on each side, and beyond each free end to the
@@ -447,6 +464,11 @@ def apply_dim(doc, dim, value):
     elif kind == "line":                                  # its end moves along it; the lines joined there follow
         _, i, j = dim.key[1:]
         line_edit.set_length(doc, target, i, j, value)
+    elif kind == "arc_radius":                            # (0.455) an arc's radius, as Revit's: a fillet's still
+        if not line_edit.fillet_radius(doc, target, value):          # tangent to its lines; another about its centre
+            obj = doc.get(target)
+            scale = float(np.linalg.norm(obj.matrix[:3, 0]))
+            curve_edit.reshape(doc, target, core_curves.arc_with(obj.curve, radius=value / scale))
     elif kind == "grid_offset":                           # the axis selected moves across, its neighbour stays
         axis = doc.grids[target]
         away = (np.asarray(dim.a) - np.asarray(dim.b))[:2] / dim.value          # from the neighbour to it
@@ -580,8 +602,8 @@ class SelectTool(Tool):
         if found is not None:                              # (0.373) a curve alone: its own grips, its tangents' lines
             ends, middles, arrows, what, adds = found      # (0.411: and a «+» halfway along each span)
             self._curve_grips = (obj.id, what, len(ends), len(middles))
-            self._grip_segments, self._dims = [], []
-            self.viewport.show_temp_dims([])
+            self._grip_segments, self._dims = [], arc_radius_dims(obj)
+            self.viewport.show_temp_dims(self._dims, active=self._active)
             self.viewport.show_grips(ends, middles, adds, arrows)
             return
         self._dims = selection_dims(self.doc, self.viewport.selection,

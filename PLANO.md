@@ -1388,6 +1388,14 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
    ficam ligados — mover uma não arrasta a outra.)
 5. **Polígonos e elipses**: polígono inscrito e circunscrito (paredes, linhas, lajes, regiões) e elipse / elipse
    parcial (linhas, regiões, desenho 2D).
+6. ~~**Concordância como no Revit em tudo o que se desenha**~~ (0.455.0, o dono: «o arco não é um arco, mas um monte
+   de segmentos… tentei no polígono… também na região, máscara»): nas linhas um arco verdadeiro, escolhido inteiro, o
+   raio na cota temporária e nas Propriedades (as linhas seguem, tangentes); no canto de um polígono; no Desenho 2D
+   (região, máscara, polilinha, retângulo: o lado guardado como arco — «bulge»; duas linhas: um arco 2D). Teste na
+   janela real: `tests/gui_desenho_revit.py`. Por fazer: mudar depois o raio no polígono e na região.
+7. **Laje, Piso, Teto e Região com as mesmas opções** (o dono, 2026-11-07: «Sim, põe»): polígono inscrito /
+   circunscrito, elipse, Escolher linhas (o contorno das linhas clicadas), Afastamento e Raio dos cantos — os
+   contornos como `core/outline_loops` (arcos e Bézier), as lajes e coberturas de piso / teto feitas já com eles.
 
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.

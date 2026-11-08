@@ -6439,6 +6439,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 line_edit.set_angle(doc, *guid, value)
             elif action == "line_point":
                 line_edit.set_point(doc, *guid, value)
+            elif action == "arc_radius" and line_edit.fillet_radius(doc, guid, value):
+                # (0.455) a fillet's arc, as Revit's: still tangent to its two lines (they are trimmed / stretched)
+                self.message(t("info.fillet_lines", r=format_length(value, decimal_sep())))
             elif action in ("arc_radius", "arc_angle", "arc_segments"):     # (0.373) an arc: made again from its data
                 obj = doc.get(guid)
                 scale = float(np.linalg.norm(obj.matrix[:3, 0]))

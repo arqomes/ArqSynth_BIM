@@ -2949,6 +2949,7 @@ _STRINGS = {
     "ctx.offset": ("Afastamento", "Offset"),
     # (0.452) Revit's «Fillet Arc»
     "cmd.fillet": ("Arco de concordância", "Fillet arc"),
+    "cmd.fillet_radius": ("Raio da concordância", "Fillet radius"),
     "wallshape.fillet": ("Arco de concordância (entre 2 paredes)", "Fillet arc (between 2 walls)"),
     "hint.wall.fillet_0": ("Arco de concordância — {type}: clique na 1.ª parede (do lado que fica).",
                            "Fillet arc — {type}: click the 1st wall (on the side that stays)."),
@@ -2958,22 +2959,28 @@ _STRINGS = {
                            "recomeça.", "Fillet arc: move the mouse for the radius and click, or type the radius and "
                            "Enter. Esc starts again."),
     "tip.fillet_pick": ("Escolha a {n}.ª parede", "Pick wall {n}"),
-    "tip.fillet_line": ("Escolha a {n}.ª linha", "Pick line {n}"),
+    "tip.fillet_line": ("Escolha a {n}.ª linha (ou lado de um polígono)", "Pick line {n} (or a polygon's side)"),
     # (0.453) Revit's «Chain» and «Radius» on the options bar
     "ctx.chain": ("Cadeia", "Chain"),
     "ctx.corner_radius": ("Raio dos cantos", "Corner radius"),
     "info.corner_not_rounded": ("(o canto não foi arredondado: o raio de {r} é grande demais para estes troços)",
                                 "(the corner was not rounded: the {r} radius is too big for these pieces)"),
     "draw.fillet": ("Arco de concordância (entre 2 linhas)", "Fillet arc (between 2 lines)"),
-    "hint.line.fillet_0": ("Arco de concordância: clique na 1.ª linha (do lado que fica).",
-                           "Fillet arc: click the 1st line (on the side that stays)."),
-    "hint.line.fillet_1": ("Arco de concordância: clique na 2.ª linha (do lado que fica).",
-                           "Fillet arc: click the 2nd line (on the side that stays)."),
+    "hint.line.fillet_0": ("Arco de concordância: clique na 1.ª linha (do lado que fica) — ou num lado de um polígono.",
+                           "Fillet arc: click the 1st line (on the side that stays) — or a polygon's side."),
+    "hint.line.fillet_1": ("Arco de concordância: clique na 2.ª linha (do lado que fica) — num polígono, o lado que "
+                           "faz o canto com o primeiro.",
+                           "Fillet arc: click the 2nd line (on the side that stays) — on a polygon, the side making "
+                           "the corner with the first."),
     "hint.line.fillet_2": ("Arco de concordância: mova o rato para o raio e clique, ou escreva o raio e Enter. Esc "
                            "recomeça.", "Fillet arc: move the mouse for the radius and click, or type the radius and "
                            "Enter. Esc starts again."),
-    "info.fillet_lines": ("Arco de concordância de raio {r}; as duas linhas foram aparadas até ele. Ctrl+Z desfaz.",
-                          "A fillet arc of radius {r}; the two lines were trimmed to it. Ctrl+Z undoes."),
+    "info.fillet_lines": ("Arco de concordância de raio {r}; as duas linhas foram aparadas até ele. Para mudar o raio: "
+                          "Selecionar, clique no arco e no valor do raio. Ctrl+Z desfaz.",
+                          "A fillet arc of radius {r}; the two lines were trimmed to it. To change its radius: Select, "
+                          "click the arc, then the radius' value. Ctrl+Z undoes."),
+    "info.fillet_polygon": ("Canto do polígono arredondado com raio {r}. Ctrl+Z desfaz.",
+                            "The polygon's corner rounded with radius {r}. Ctrl+Z undoes."),
     "tip.fillet_radius": ("Raio {r}", "Radius {r}"),
     "err.fillet_none": ("Não há arco aqui: as paredes são paralelas, ou o raio é grande demais.",
                         "No arc here: the walls are parallel, or the radius is too big."),
@@ -2981,6 +2988,10 @@ _STRINGS = {
                     "Ctrl+Z desfaz.", "A fillet arc of radius {r} between the two walls ({type}); they were trimmed "
                     "to it. Ctrl+Z undoes."),
     "refuse.too_big": ("o raio é grande demais para estes troços", "the radius is too big for these pieces"),
+    "refuse.not_corner": ("escolha dois lados que fazem um canto do mesmo polígono (ou duas linhas)",
+                          "pick two sides making a corner of the same polygon (or two lines)"),
+    "refuse.not_level": ("o polígono não está deitado (a concordância desenha-se na planta)",
+                         "the polygon does not lie level (the fillet is drawn in plan)"),
     "hint.wall.wand": ("Varinha mágica: arraste uma janela sobre as duas linhas de uma parede de um desenho (DWG/DXF "
                        "ligado ou linhas de esboço): a parede fica entre elas, com a espessura medida.",
                        "Magic wand: drag a window over a wall's two lines in a drawing (a linked DWG/DXF or sketch "
@@ -4315,6 +4326,21 @@ _STRINGS = {
     # (0.450) Revit's masking region; the drawing tools side by side on the contextual bar, as Revit's «Draw» panel
     "drafthatch.mask": ("Máscara (branca, esconde o que está por baixo)", "Mask (white, hides what is under it)"),
     "draft.mask": ("Máscara (esconde o que está por baixo)", "Masking region (hides what is under it)"),
+    "draft.fillet": ("Arco de concordância (canto de região, máscara, polilinha, retângulo, ou 2 linhas)",
+                     "Fillet arc (a region's, mask's, polyline's, rectangle's corner, or 2 lines)"),
+    "hint.draft.fillet_0": ("Arco de concordância: clique num lado de uma região, máscara, polilinha ou retângulo — "
+                            "ou numa linha (do lado que fica).",
+                            "Fillet arc: click a side of a region, mask, polyline or rectangle — or a line (on the "
+                            "side that stays)."),
+    "hint.draft.fillet_1": ("Arco de concordância: clique no lado que faz o canto com o primeiro — ou na 2.ª linha.",
+                            "Fillet arc: click the side making the corner with the first — or the 2nd line."),
+    "hint.draft.fillet_2": ("Arco de concordância: mova o rato para o raio e clique, ou escreva o raio e Enter. Esc "
+                            "recomeça.", "Fillet arc: move the mouse for the radius and click, or type the radius and "
+                            "Enter. Esc starts again."),
+    "tip.fillet_drawn": ("Escolha o {n}.º lado (ou linha) do desenho", "Pick the drawing's side (or line) {n}"),
+    "info.fillet_drawn": ("Canto arredondado com raio {r} (um arco verdadeiro: acompanha quando se move ou roda). "
+                          "Ctrl+Z desfaz.", "Corner rounded with radius {r} (a true arc: it follows when moved or "
+                          "turned). Ctrl+Z undoes."),
     "ctx.draw": ("Desenhar", "Draw"),
     "draw.line": ("Linha", "Line"),
     "draw.line_arc": ("Linha com arcos (Tab)", "Line with arcs (Tab)"),

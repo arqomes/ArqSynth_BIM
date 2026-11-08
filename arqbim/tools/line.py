@@ -106,9 +106,12 @@ class LineTool(Tool):
         if snap is None or snap.obj_id is None:
             return None
         obj = self.doc.get(snap.obj_id)
+        point = np.asarray(snap.point, dtype=float)
+        if obj is not None and not obj.is_bim and obj.mesh.faces:     # (0.455) a polygon's side (a sketch's face)
+            found = line_edit.face_edge_at(obj, point)
+            return None if found is None else ((snap.obj_id, *found[0]), point, found[1])
         if not line_edit.is_lines(obj) or obj.curve:
             return None
-        point = np.asarray(snap.point, dtype=float)
         best = None
         for i, j, a, b in line_edit.segments(obj):
             d = b - a
@@ -154,6 +157,10 @@ class LineTool(Tool):
                 return
             if self._fillet and self._fillet[0][0] == found[0]:
                 return
+            face = lambda pick: bool(self.doc.get(pick[0][0]).mesh.faces)           # noqa: E731
+            if self._fillet and face(self._fillet[0]) != face(found):  # (0.455: two lines, or two sides of a polygon)
+                self.host.message(t("err.edit_refused", e=refusal(line_edit.LineRefused("not_corner"))), warning=True)
+                return
             self._fillet.append(found)
             self.host.set_hint(self.hint())
             return
@@ -163,12 +170,16 @@ class LineTool(Tool):
             return
         (seg_a, keep_a, _ea), (seg_b, keep_b, _eb) = self._fillet[:2]
         r = radius if radius is not None else self._fillet_now.radius
+        polygon = self.doc.get(seg_a[0]) is not None and bool(self.doc.get(seg_a[0]).mesh.faces)
         try:
-            line_edit.fillet_lines(self.doc, seg_a, keep_a, seg_b, keep_b, r, t("cmd.fillet"))
+            if polygon:                                      # (0.455) a polygon's corner: the face rounded there
+                line_edit.fillet_face(self.doc, seg_a, keep_a, seg_b, keep_b, r, t("cmd.fillet"))
+            else:
+                line_edit.fillet_lines(self.doc, seg_a, keep_a, seg_b, keep_b, r, t("cmd.fillet"))
         except line_edit.LineRefused as exc:
             self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
             return
-        self.host.message(t("info.fillet_lines", r=_fmt(r)))
+        self.host.message(t("info.fillet_polygon" if polygon else "info.fillet_lines", r=_fmt(r)))
         self._fillet, self._fillet_now = [], None
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())

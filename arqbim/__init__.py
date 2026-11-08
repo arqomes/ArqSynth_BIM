@@ -8,4 +8,4 @@
     ui/      Qt main window, toolbar, status bar, properties panel
 """
 
-__version__ = "0.454.0"
+__version__ = "0.455.0"

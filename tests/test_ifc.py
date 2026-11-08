@@ -12461,7 +12461,10 @@ class DrawingAsRevit(unittest.TestCase):
 
     def test_fillet_lines(self):
         """0.452 — the fillet arc between two loose lines of one chain (an L): each trimmed to its tangent point (the
-        corner they shared split), the arc drawn between them in the chain's sketch; one undo step."""
+        corner they shared split); one undo step. 0.455 (the owner: «o arco não é um arco, mas um monte de segmentos,
+        não dá pra selecionar o raio inteiro para ajustar o raio como no revit»): the arc an arc of its own, picked
+        whole; its radius changed — the two lines trimmed / stretched, the arc still tangent to both."""
+        from arqbim.core import curves
         from arqbim.core.mesh import PolyMesh
         from arqbim.model import line_edit
         doc = Document()
@@ -12471,20 +12474,134 @@ class DrawingAsRevit(unittest.TestCase):
             doc.execute(AddObject(chain))
             first = (chain.id, *line_edit.segment_at(doc, chain.id, (0, 0, 0), (4, 0, 0)))
             second = (chain.id, *line_edit.segment_at(doc, chain.id, (4, 0, 0), (4, 3, 0)))
-            line_edit.fillet_lines(doc, first, (2.0, 0.0, 0.0), second, (4.0, 2.0, 0.0), 1.0)
+            _f, arc_id = line_edit.fillet_lines(doc, first, (2.0, 0.0, 0.0), second, (4.0, 2.0, 0.0), 1.0)
             segs = [(np.round(a, 6), np.round(b, 6)) for _i, _j, a, b in line_edit.segments(doc.get(chain.id))]
             ends = {tuple(p) for s in segs for p in s}
+            self.assertEqual(len(segs), 2)                                     # (the lines: still two)
             self.assertIn((3.0, 0.0, 0.0), ends)                               # (trimmed back 1 m)
             self.assertIn((4.0, 1.0, 0.0), ends)
-            self.assertNotIn((4.0, 0.0, 0.0), {tuple(p) for s in segs[:2] for p in s})   # (the corner no longer used)
-            self.assertGreater(len(segs), 4)                                   # (+ the arc's pieces)
-            arc = [p for s in segs[2:] for p in s]
-            self.assertTrue(all(abs(float(np.linalg.norm(np.asarray(p)[:2] - (3.0, 1.0))) - 1.0) < 1e-6
-                                for p in arc))                                 # (all on the circle round (3, 1))
-            doc.undo()
-            self.assertEqual(len(doc.get(chain.id).mesh.lines), 2)            # (one step)
+            self.assertNotIn((4.0, 0.0, 0.0), ends)                            # (the corner no longer used)
+            arc = doc.get(arc_id)                                              # the arc: one, an arc's data
+            self.assertEqual(arc.curve["kind"], "arc")
+            self.assertAlmostEqual(curves.arc_radius(arc.curve), 1.0, places=9)
+            np.testing.assert_allclose(arc.curve["centre"][:2], (3.0, 1.0), atol=1e-9)
+            pts = [np.asarray(p) for p in arc.mesh.verts]
+            np.testing.assert_allclose(pts[0][:2], (3.0, 0.0), atol=1e-9)
+            np.testing.assert_allclose(pts[-1][:2], (4.0, 1.0), atol=1e-9)
+            self.assertIsNotNone(line_edit.tangent_lines(doc, arc_id))         # (a fillet's: a line along each end)
+            self.assertTrue(line_edit.fillet_radius(doc, arc_id, 0.5))         # its radius: 0,5 — still tangent
+            arc = doc.get(arc_id)
+            self.assertAlmostEqual(curves.arc_radius(arc.curve), 0.5, places=9)
+            np.testing.assert_allclose(arc.curve["centre"][:2], (3.5, 0.5), atol=1e-9)
+            ends = {tuple(np.round(p, 6)) for s in line_edit.segments(doc.get(chain.id)) for p in s[2:]}
+            self.assertEqual(ends, {(0.0, 0.0, 0.0), (3.5, 0.0, 0.0), (4.0, 0.5, 0.0), (4.0, 3.0, 0.0)})
+            with self.assertRaises(line_edit.LineRefused):                     # (past the lines' far ends)
+                line_edit.fillet_radius(doc, arc_id, 5.0)
+            doc.undo()                                                         # (the radius: one step)
+            self.assertAlmostEqual(curves.arc_radius(doc.get(arc_id).curve), 1.0, places=9)
+            doc.undo()                                                         # (the fillet: one step)
+            self.assertIsNone(doc.get(arc_id))
+            self.assertEqual(len(doc.get(chain.id).mesh.lines), 2)
         finally:
             doc.modified = False
+
+    def test_fillet_polygon_and_radius_dimension(self):
+        """0.455 — the owner: «tentei fazer isso no polígono, mas não funcionou»: a polygon's corner (a sketch's face)
+        rounded, the face whole, going round either way; two sides that make no corner refused. An arc picked alone
+        (Revit's): its radius as a temporary dimension; typed over — a fillet's still tangent to its lines."""
+        from arqbim.core import curves
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model import line_edit
+        from arqbim.tools.select import apply_dim, arc_radius_dims
+        doc = Document()
+        try:
+            for corners in ([(0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0), (0.0, 3.0, 0.0)],
+                            [(0.0, 3.0, 0.0), (4.0, 3.0, 0.0), (4.0, 0.0, 0.0), (0.0, 0.0, 0.0)]):   # (both ways)
+                face = SketchObject("f", I4, PolyMesh(corners, [[0, 1, 2, 3]]))
+                doc.execute(AddObject(face))
+                obj = doc.get(face.id)
+                first = (face.id, *line_edit.face_edge_at(obj, (2.0, 0.0, 0.0))[0])
+                second = (face.id, *line_edit.face_edge_at(obj, (4.0, 1.5, 0.0))[0])
+                line_edit.fillet_face(doc, first, (2.0, 0.0, 0.0), second, (4.0, 1.5, 0.0), 1.0)
+                obj = doc.get(face.id)
+                self.assertEqual(len(obj.mesh.faces), 1)
+                ring = [tuple(np.round(obj.mesh.verts[k][:2], 6) + 0.0) for k in obj.mesh.faces[0]]
+                self.assertIn((3.0, 0.0), ring)
+                self.assertIn((4.0, 1.0), ring)
+                self.assertNotIn((4.0, 0.0), ring)
+                self.assertAlmostEqual(obj.mesh.face_area(0), 12.0 - (1.0 - math.pi / 4), places=2)
+                from shapely.geometry import Polygon
+                self.assertTrue(Polygon(ring).is_valid)                       # (in order: no crossing)
+                with self.assertRaises(line_edit.LineRefused):                # (opposite sides: no corner)
+                    third = (face.id, *line_edit.face_edge_at(obj, (2.0, 3.0, 0.0))[0])
+                    first = (face.id, *line_edit.face_edge_at(obj, (1.0, 0.0, 0.0))[0])
+                    line_edit.fillet_face(doc, first, (1.0, 0.0, 0.0), third, (2.0, 3.0, 0.0), 0.5)
+                doc.undo()
+                self.assertEqual(len(doc.get(face.id).mesh.faces[0]), 4)       # (one step)
+                doc.undo()
+            chain = SketchObject("l", I4, PolyMesh([(0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0)],
+                                                   lines=[(0, 1), (1, 2)]))
+            doc.execute(AddObject(chain))
+            first = (chain.id, *line_edit.segment_at(doc, chain.id, (0, 0, 0), (4, 0, 0)))
+            second = (chain.id, *line_edit.segment_at(doc, chain.id, (4, 0, 0), (4, 3, 0)))
+            _f, arc_id = line_edit.fillet_lines(doc, first, (2.0, 0.0, 0.0), second, (4.0, 2.0, 0.0), 1.0)
+            dims = arc_radius_dims(doc.get(arc_id))
+            self.assertEqual(len(dims), 1)
+            self.assertAlmostEqual(dims[0].value, 1.0, places=9)
+            apply_dim(doc, dims[0], 0.5)
+            self.assertAlmostEqual(curves.arc_radius(doc.get(arc_id).curve), 0.5, places=9)
+            ends = {tuple(np.round(p, 6)) for s in line_edit.segments(doc.get(chain.id)) for p in s[2:]}
+            self.assertIn((3.5, 0.0, 0.0), ends)                                # (the lines followed: tangent)
+            free = SketchObject("a", I4, PolyMesh([(10.0, 0.0, 0.0)], lines=[]),
+                                curve=curves.arc_curve((10.0, 0.0, 0.0), (0, 0, 1), (12.0, 0.0, 0.0), 90.0))
+            from arqbim.model import curve_edit
+            doc.execute(AddObject(curve_edit.remade(free, free.curve)))
+            dims = arc_radius_dims(doc.get(free.id))
+            apply_dim(doc, dims[0], 3.0)                                          # (an arc alone: about its centre)
+            self.assertAlmostEqual(curves.arc_radius(doc.get(free.id).curve), 3.0, places=9)
+        finally:
+            doc.modified = False
+
+    def test_fillet_drawn_in_a_view(self):
+        """0.455 — the owner: «isso também deve ser colocado na região, máscara etc»: a region's (a mask's) corner
+        rounded — a true arc, kept as the side's bulge: drawn as an arc, the same when moved or turned —; a
+        rectangle's corner (a region with no hatch now); a polyline's; two sides that make no corner, a polyline's
+        open end refused; two lines: trimmed, an arc of their own between them."""
+        from arqbim.model import annotations as notes2d
+        o, u, v = np.zeros(3), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+        view = ("plan", "s")
+        pts = lambda *ps: [np.array(p, dtype=float) for p in ps]                      # noqa: E731
+        region = notes2d.Annotation(view, "region", pts((0, 0, 0), (4, 0, 0), (4, 3, 0), (0, 3, 0)), hatch="mask")
+        kind, new, bulges = notes2d.corner_fillet(region, 0, (2.0, 0.0), 1, (4.0, 1.5), 1.0, o, u, v)
+        self.assertEqual((kind, len(new)), ("region", 5))
+        self.assertAlmostEqual(bulges[1], math.tan(math.pi / 8), places=9)             # (a quarter turn)
+        np.testing.assert_allclose([p[:2] for p in new[1:3]], [(3.0, 0.0), (4.0, 1.0)], atol=1e-9)
+        region.points, region.extra = new, {"bulges": bulges}
+        quarter = 12.0 - (1.0 - math.pi / 4)
+        self.assertAlmostEqual(notes2d.area(region, o, u, v), quarter, places=2)
+        ring = notes2d.shape(region, o, u, v)[0][0]
+        on_arc = [q for q in ring if q[0] > 3.0 + 1e-9 and q[1] < 1.0 - 1e-9]
+        self.assertTrue(on_arc and all(abs(float(np.linalg.norm(q - (3.0, 1.0))) - 1.0) < 1e-6 for q in on_arc))
+        moved = notes2d.moved_copy(region, (10.0, 5.0, 0.0))                           # (moved: the same arc)
+        self.assertAlmostEqual(notes2d.area(moved, o, u, v), quarter, places=2)
+        region.points = notes2d.rotated_points(region.points, np.zeros(3), np.array((0, 0, 1.0)), 30.0)
+        self.assertAlmostEqual(notes2d.area(region, o, u, v), quarter, places=2)       # (turned: the same)
+        self.assertEqual(notes2d.from_dict(notes2d.to_dict(region), np.zeros(3)).extra["bulges"], bulges)
+        with self.assertRaises(ValueError):                                            # (opposite sides)
+            notes2d.corner_fillet(region, 0, (2.0, 0.0), 2, (2.0, 3.0), 0.5, o, u, v)
+        rect = notes2d.Annotation(view, "rectangle", pts((0, 0, 0), (4, 3, 0)))
+        kind, new, bulges = notes2d.corner_fillet(rect, 1, (4.0, 1.5), 2, (2.0, 3.0), 0.5, o, u, v)
+        self.assertEqual((kind, len(new), len(bulges)), ("region", 5, 5))
+        poly = notes2d.Annotation(view, "polyline", pts((0, 0, 0), (4, 0, 0), (4, 3, 0)))
+        kind, new, bulges = notes2d.corner_fillet(poly, 0, (2.0, 0.0), 1, (4.0, 1.5), 1.0, o, u, v)
+        self.assertEqual((kind, len(new), len(bulges)), ("polyline", 4, 3))
+        a = notes2d.Annotation(view, "line", pts((0, 0, 0), (4, 0, 0)))
+        b = notes2d.Annotation(view, "line", pts((5, -1, 0), (5, 4, 0)))
+        pa, pb, arc = notes2d.lines_fillet(a, (2.0, 0.0), b, (5.0, 2.0), 1.0, o, u, v)
+        np.testing.assert_allclose([p[:2] for p in pa], [(0.0, 0.0), (4.0, 0.0)], atol=1e-9)
+        np.testing.assert_allclose([p[:2] for p in pb], [(5.0, 1.0), (5.0, 4.0)], atol=1e-9)
+        drawn = notes2d.shape(notes2d.Annotation(view, "arc", arc), o, u, v)[0][0]      # (an arc of its own)
+        self.assertTrue(all(abs(float(np.linalg.norm(q - (4.0, 1.0))) - 1.0) < 1e-6 for q in drawn))
 
     def test_chain_and_radius(self):
         """0.453 — Revit's «Chain» and «Radius» on the Wall's and the Line's bars: with a radius, the chain's corner
