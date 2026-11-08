@@ -200,3 +200,83 @@ def line_pieces(a, b, style, scale=1.0):
         e = min(ENDS * scale, length / 2)
         return [(a, a + d * e), (b - d * e, b)], None
     return [(a, b)], DASHES.get(kind)
+
+
+# ------------------------------------------------------------ (0.462) a level, as its style draws it
+
+LEVEL_GAP = 1.0             # mm on paper: between the line and its words, and the words and the mark
+
+
+@dataclass
+class LevelParts:
+    """A level drawn (in a section's / an elevation's plane: x along it, z up — metres): its line's pieces and dashes,
+    its marks' outlines (pairs), their filled parts (polygons), their circles (centre, radius — a CAD circle) and its
+    words [(point, text, align, height in mm)] — align "bottom-right", "top-right", "bottom-left" or "top-left": the
+    text's corner at the point."""
+    pieces: list
+    dashes: tuple
+    outline: list
+    filled: list
+    circles: list
+    texts: list
+
+
+def _arc(c, r, a0, a1, n=8):
+    return [c + r * np.array((math.cos(a), math.sin(a))) for a in np.linspace(a0, a1, n + 1)]
+
+
+def level_parts(z, x0, x1, name, style, mm, decimal=",", model=None):
+    """(0.462, the owner: «A REPRESENTAÇÃO, OU APARÊNCIA ESSES ELEMENTOS DEVER SER CONFIGURADOS NESSA ABA. A LINHA E A
+    EXTREMIDADE») A level at height z across a drawing from x0 to x1 — its line LEVEL_OVER past it on each side —, as
+    its style says: the line (dash-dot, dashed, continuous, at its ends only), at the end(s) it says (right, left,
+    both) its mark — a triangle on the line, Revit's quartered circle, a square, none — and its words beside the mark,
+    towards the drawing: the level and the name in one line, «NAME | level», the name over the line and the level
+    under it (Revit's), or the level over and the name under. mm: metres per mm on paper. A LevelParts. (0.464) model:
+    the drawing's own span (x0, x1) — with the style's «over» off, the line stops short of it (only its sides drawn)."""
+    a = np.array((float(x0) - LEVEL_OVER * mm, float(z)))
+    b = np.array((float(x1) + LEVEL_OVER * mm, float(z)))
+    pieces, dashes = line_pieces(a, b, style, mm)
+    if model is not None and not style.get("over", True):         # (0.464) not over the drawing: its sides only
+        m0, m1 = float(model[0]) - LEVEL_GAP * mm, float(model[1]) + LEVEL_GAP * mm
+        kept = []
+        for p, q in pieces:
+            lo, hi = sorted((float(p[0]), float(q[0])))
+            for s0, s1 in ((lo, min(hi, m0)), (max(lo, m1), hi)):
+                if s1 - s0 > 1e-9:
+                    kept.append((np.array((s0, float(z))), np.array((s1, float(z)))))
+        pieces = kept
+    out = LevelParts(pieces, dashes, [], [], [], [])
+    s = float(style.get("size", 1.8)) * mm
+    gap = LEVEL_GAP * mm
+    mark = style.get("mark", "triangle")
+    height = float(style.get("text", 2.2))
+    level = level_text(z, decimal)
+    label = style.get("label", "level_name")
+    for d in {"left": (-1.0,), "both": (-1.0, 1.0)}.get(style.get("ends"), (1.0,)):
+        e = b if d > 0 else a
+        inner = e[0] - d * gap                                    # (the words: from the line's end inwards)
+        if mark == "triangle":                                    # (its tip on the line, its base over it)
+            out.filled.append([e.copy(), e + np.array((-s, 1.4 * s)), e + np.array((s, 1.4 * s))])
+            inner = e[0] - d * (s + gap)
+        elif mark == "target":                                    # (Revit's: a circle quartered, two quarters full)
+            c = e + np.array((d * s, 0.0))
+            ring = _arc(c, s, 0.0, 2 * math.pi, 32)
+            out.outline += list(zip(ring, ring[1:]))
+            out.outline += [(c - (s, 0.0), c + (s, 0.0)), (c - (0.0, s), c + (0.0, s))]
+            out.circles.append((c, s))
+            out.filled.append([c] + _arc(c, s, 0.0, math.pi / 2))
+            out.filled.append([c] + _arc(c, s, math.pi, 1.5 * math.pi))
+        elif mark == "square":                                    # (a square on the line's end)
+            q = 0.8 * s
+            out.filled.append([e + (0.0, -q), e + (d * 2 * q, -q), e + (d * 2 * q, q), e + (0.0, q)])
+        side = "right" if d > 0 else "left"
+        over, under = np.array((inner, z + gap)), np.array((inner, z - gap))
+        if label == "name_over":
+            out.texts += [(over, name, "bottom-" + side, height), (under, level, "top-" + side, height)]
+        elif label == "level_over":
+            out.texts += [(over, level, "bottom-" + side, height), (under, name, "top-" + side, height)]
+        elif label == "name_level":
+            out.texts.append((over, "{} | {}".format(name, level), "bottom-" + side, height))
+        else:
+            out.texts.append((over, "{}  {}".format(level, name), "bottom-" + side, height))
+    return out

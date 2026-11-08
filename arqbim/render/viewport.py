@@ -399,6 +399,8 @@ class Viewport:
         self._ann_objects, self._ann_owner, self._ann_texts = [], [], []
         self._ann_segments = np.zeros((0, 2, 3))
         self._mark_objects, self._mark_heads = [], []   # the view's symbols (0.121): sections, elevations, levels
+        self._level_geom = None   # (0.464) the levels drawn: ("line" | "ring", [(z, …)], heads) — picked, dragged
+        self.view_key3d = None    # (0.464) the 3D view shown (its key: its own properties — its levels' ring)
         self._above_objects, self._above_shapes = [], []   # a plan's pipes and ducts above its cut (0.135)
         self._nav = None          # ("orbit" | "pan", last_xy) while the middle button is down
         self.on_host_face = None    # (sketch) -> does it lie on a wall's / slab's face? (set by the window)
@@ -2880,8 +2882,14 @@ class Viewport:
         for wobj in self._mark_objects:
             self.scene.remove(wobj)
         self._mark_objects, self._mark_heads = [], []
+        self._level_geom = None                            # (0.464) the levels drawn: where, to pick and drag them
         plane, view = self.view_plane(), self.current_view()
-        if plane is None or self.doc.loading:
+        if self.doc.loading:
+            return
+        if plane is None:                                  # (0.462) in 3D: the storeys' levels round the building
+            self._levels_3d()
+            for wobj in self._mark_objects:
+                self.scene.add(wobj)
             return
         origin, u, v, _n = plane
         try:
@@ -2937,24 +2945,17 @@ class Viewport:
                 lo, hi = np.min([b[0] for b in boxes], axis=0), np.max([b[1] for b in boxes], axis=0)
                 corners = [np.array((x, y, 0.0)) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])]
                 along = [float((c - origin) @ u) for c in corners]
-                x0, x1 = min(along) - marks_model.LEVEL_OVER * mm, max(along) + marks_model.LEVEL_OVER * mm
-                level = styles["level"]
-                for z, name in marks_model.level_marks(self.doc):
-                    a3, b3 = origin + u * x0 + v * z, origin + u * x1 + v * z
-                    line((x0, z), (x1, z), "level")
-                    s = level["size"] * mm
-                    if level["mark"] == "triangle":
-                        solid.append([b3, b3 - u * s + v * s * 1.4, b3 + u * s + v * s * 1.4])
-                    elif level["mark"] == "target":          # (a circle quartered, two quarters black)
-                        pts = [b3 + (u * math.cos(j * math.pi / 8) + v * math.sin(j * math.pi / 8)) * s
-                               for j in range(17)]
-                        lines.extend(p for a, b in zip(pts, pts[1:]) for p in (a, b))
-                        lines.extend((b3 - u * s, b3 + u * s, b3 - v * s, b3 + v * s))
-                        solid.append([b3, b3 + u * s, b3 + v * s])
-                        solid.append([b3, b3 - u * s, b3 - v * s])
-                    texts.append((b3 + u * 2.5 * mm + v * 2.0 * mm,
-                                  "{}  {}".format(marks_model.level_text(z, decimal_sep()), name), "bottom-left",
-                                  level["text"]))
+                level = styles["level"]                    # (0.462: as the Storeys panel sets it — model/symbols)
+                over = marks_model.LEVEL_OVER * mm
+                ends = self.doc.view_settings(view).levels if view is not None else None
+                # (0.464) its lines' ends: dragged by hand in this view (its own), else past the model
+                x0, x1 = (ends[0], ends[1]) if ends and len(ends) == 2 else (min(along) - over, max(along) + over)
+                marks = marks_model.level_marks(self.doc)
+                parts = [marks_model.level_parts(z, x0 + over, x1 - over, name, level, mm, decimal_sep(),
+                                                 model=(min(along), max(along))) for z, name in marks]
+                self._level_objects(parts, to3, level, overlay)
+                self._level_geom = ("line", [(z, to3((x0, z)), to3((x1, z))) for z, _name in marks],
+                                    [[to3(q) for q in self._level_head(p)] for p in parts])
         for detail in getattr(self.doc, "details", ()):        # (its detail views' callouts, 0.133)
             if tuple(detail.parent) != tuple(view):
                 continue
@@ -2993,6 +2994,121 @@ class Viewport:
             self._clip(*[w.material for w in self._mark_objects])
         for wobj in self._mark_objects:
             self.scene.add(wobj)
+
+    def _level_objects(self, parts, to3, style, material_options, extra=()):
+        """(0.462) Levels drawn (model/symbols.LevelParts, in a plane: to3 its points in the model) into the view's
+        symbols — their lines dashed as their style says, their marks filled, their words —, in their style's colour
+        (or the symbols' ink). extra: more of their line, in 3D (a level's ring round the building, in 3D)."""
+        colour = style.get("colour") or MARK_COLOR
+        segs = {None: [], "dashdot": [], "dashed": []}
+        for p in parts:
+            key = None if not p.dashes else "dashed" if p.dashes == marks_model.DASHES["dashed"] else "dashdot"
+            segs[key] += [to3(q) for a, b in p.pieces for q in (a, b)]
+            segs[None] += [to3(q) for a, b in p.outline for q in (a, b)]
+        for a, b, dashes in extra:
+            key = None if not dashes else "dashed" if dashes == marks_model.DASHES["dashed"] else "dashdot"
+            segs[key] += [a, b]
+        patterns = {None: {}, "dashdot": {"dash_pattern": (10, 3, 2, 3)}, "dashed": {"dash_pattern": (6, 3)}}
+        for key, pts in segs.items():
+            if pts:
+                self._mark_objects.append(gfx.Line(gfx.Geometry(positions=_f32(pts)), _mat(
+                    gfx.LineSegmentMaterial, thickness=1.2, color=colour, aa=True, **patterns[key], **material_options)))
+        tris = [[to3(poly[0]), to3(poly[k]), to3(poly[k + 1])] for p in parts for poly in p.filled
+                for k in range(1, len(poly) - 1)]
+        if tris:
+            self._mark_objects.append(gfx.Mesh(
+                gfx.Geometry(positions=_f32([q for tri in tris for q in tri]),
+                             indices=np.arange(3 * len(tris), dtype=np.uint32).reshape(-1, 3)),
+                _mat(gfx.MeshBasicMaterial, color=colour, side="both", **material_options)))
+        for p in parts:
+            for at, text, align, size in p.texts:
+                label = gfx.Text(text=text, font_size=max(10.0, 12.0 * size / 4.8), screen_space=True, anchor=align,
+                                 material=_mat(gfx.TextMaterial, color=colour, outline_color="#ffffff",
+                                               outline_thickness=0.3, **material_options))
+                label.local.position = tuple(float(c) for c in to3(at))
+                self._mark_objects.append(label)
+
+    @staticmethod
+    def _level_head(parts):
+        """(0.464) Where a level's mark and words are (on its plane): a click near one picks the level."""
+        return [np.mean(np.asarray(poly, dtype=float), axis=0) for poly in parts.filled] + \
+            [c for c, _r in parts.circles] + [at for at, _t, _a, _h in parts.texts]
+
+    def level_at(self, x, y, radius_px=6, heads_only=False):
+        """(0.464) The level drawn under the cursor — near its line (a section's, an elevation's), a side of its ring
+        (3D), or its mark or words (heads_only: only those — over the model): its index (the storeys' levels, lowest
+        first) — or None."""
+        geom = getattr(self, "_level_geom", None)
+        if geom is None:
+            return None
+        kind, lines, heads = geom
+        best = None
+
+        def near(d, k):
+            nonlocal best
+            if d <= radius_px and (best is None or d < best[0]):
+                best = (d, k)
+        for k, item in enumerate([] if heads_only else lines):
+            pts = [item[1], item[2]] if kind == "line" else list(item[1])
+            segs = [(pts[0], pts[1])] if kind == "line" else list(zip(pts, pts[1:] + pts[:1]))
+            for a, b in segs:
+                pa, pb = (np.array(self.project(p), dtype=float) for p in (a, b))
+                d = pb - pa
+                s = float(np.clip(((x, y) - pa) @ d / max(float(d @ d), 1e-12), 0.0, 1.0))
+                near(float(np.hypot(*(pa + d * s - (x, y)))), k)
+        for k, points in enumerate(heads):
+            for p in points:
+                near(float(np.hypot(*(np.array(self.project(p), dtype=float) - (x, y)))) - radius_px, k)
+        return best[1] if best is not None else None
+
+    def level_grips(self, k):
+        """(0.464) The grips of level k as drawn: a section's / an elevation's line's two ends; in 3D its ring's four
+        corners — world points."""
+        geom = getattr(self, "_level_geom", None)
+        if geom is None or not 0 <= k < len(geom[1]):
+            return []
+        item = geom[1][k]
+        return [item[1], item[2]] if geom[0] == "line" else list(item[1])
+
+    def _levels_3d(self):
+        """(0.462, the owner: «DEVE SER CRIADO AUTOMATICAMENTE A REPRESENTAÇÃO DOS NÍVEIS NO 3D, VISTAS E CORTES») In 3D,
+        each storey's level as Revit shows it: a ring round the building at its height, its line as the level's style
+        says, its mark and words on the front side (towards −Y) — hidden behind the building as it is (not over it)."""
+        style = styles_model.symbol(getattr(self.doc, "graphic_style", None), "level")
+        if not style.get("in_3d", True):
+            return
+        boxes = [o.mesh.bounds() for o in self.doc.objects.values() if o.is_bim and o.mesh.bounds() is not None]
+        levels = marks_model.level_marks(self.doc)
+        if not boxes or not levels:
+            return
+        lo, hi = np.min([b[0] for b in boxes], axis=0), np.max([b[1] for b in boxes], axis=0)
+        mm = 0.1                                           # (as on a 1:100 drawing)
+        over = marks_model.LEVEL_OVER * mm
+        # (0.464) the ring dragged by hand in this 3D view (its own), else round the model
+        ring_of = None
+        if self.view_key3d is not None:
+            try:
+                ring_of = self.doc.view_settings(self.view_key3d).levels
+            except Exception:
+                ring_of = None
+        if ring_of and len(ring_of) == 4:
+            x0, front, x1, back = (float(c) for c in ring_of)
+        else:
+            x0, front, x1, back = float(lo[0]) - over, float(lo[1]) - over, float(hi[0]) + over, float(hi[1]) + over
+        origin, u, v = np.array((0.0, front, 0.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 0.0, 1.0))
+
+        def to3(q):
+            return origin + u * float(q[0]) + v * float(q[1])
+
+        parts, extra, rings = [], [], []
+        dashes = marks_model.line_pieces((0.0, 0.0), (1.0, 0.0), style, mm)[1]
+        for z, name in levels:
+            parts.append(marks_model.level_parts(z, x0 + over, x1 - over, name, style, mm, decimal_sep()))
+            ring = [np.array(p) for p in ((x1, front, z), (x1, back, z), (x0, back, z), (x0, front, z))]
+            extra += [(a, b, dashes) for a, b in zip(ring, ring[1:])]
+            rings.append((z, ring))
+        self._level_objects(parts, to3, style, {}, extra)
+        self._level_geom = ("ring", rings, [[to3(q) for q in self._level_head(p)] for p in parts])
 
     def _show_services_above(self):
         """In a plan (0.135), the pipes and ducts of the storey above its cut — clipped away with the rest — drawn

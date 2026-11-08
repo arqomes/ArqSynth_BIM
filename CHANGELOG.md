@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.464.0 — 2026-11-08
+
+**Níveis ajustáveis em cada vista, e a linha só dos lados** (o dono: «os símbolos dos níveis precisam ser ajustável no
+3D na vista e corte para não cobrirem o corte ou ficar sobre o modelo… também um utilizador pode não querer que as
+linhas fiquem em cima do desenho, incluir essa opção»).
+
+- **Cortes e alçados**: com Selecionar, um clique na linha de um nível (fora do edifício) ou no seu símbolo ou texto
+  escolhe os níveis, com uma pega em cada ponta. Arraste uma ponta, ou clique nela e depois onde a quer: as linhas de
+  todos os níveis dessa vista passam a acabar aí, alinhadas como no Revit, e os símbolos vão com elas, para fora do
+  corte e do modelo.
+- **3D**: o mesmo com o anel dos níveis. Escolhido, tem uma pega em cada canto; arrastar um canto alarga ou estreita o
+  anel e leva a extremidade e o texto para onde não tapam o modelo.
+- Cada vista guarda o seu ajuste (fica no projeto), e as folhas, o PDF e o DXF desenham os níveis assim. Ctrl+Z
+  desfaz.
+- **Linha por cima do desenho** (painel Pavimentos ▸ Aparência dos níveis): desligada, a linha do nível pára antes do
+  edifício e fica só dos lados, com a extremidade e o texto. A pré-visualização mostra um edifício para se ver a
+  diferença.
+
+## 0.463.0 — 2026-11-08
+
+**Pavimentos iguais no fluxo de trabalho** (o dono: «Se quiser selecionar um grupo de nível e igualar, tudo que se faz
+num nível igualado é replicado nos outros níveis, seja modelação, modificação, documentação»).
+
+- **Escolher e igualar**: na lista do painel Pavimentos escolha vários pavimentos (Ctrl ou Shift); o botão passa a
+  **Igualar (n)** e iguala-os de uma vez. Os elementos do pavimento ativo (ou do mais baixo dos escolhidos) são
+  copiados para os outros, e se esses já tinham elementos, ficam com eles e o aviso diz quais. Um pavimento que já é
+  igual a outros tem de ser separado primeiro. Com um só escolhido, «Iguais…» abre a janela de antes.
+- **Documentação replicada**: as **cotas** e os **desenhos 2D** (linhas, textos, regiões, máscaras…) feitos na planta
+  de um pavimento igual aparecem nas plantas de todos os iguais. São os mesmos, por isso mudados ou apagados num, mudam
+  ou desaparecem em todos. As cotas automáticas (exteriores, interiores) refeitas num deles substituem as de todos.
+- A modelação e as modificações já se replicavam (desde a 0.90): paredes, lajes, pilares, portas e janelas…
+- **Separar**: cada pavimento fica com uma cópia própria das cotas e desenhos 2D, e as cotas ficam presas às paredes do
+  seu próprio pavimento.
+- No rodapé, ao lado do pavimento ativo: «igual a Piso 2, Piso 3…».
+
+## 0.462.0 — 2026-11-08
+
+**Aparência dos níveis no painel Pavimentos, e os níveis no 3D** (o dono: «TAMBÉM DEVE SER CRIADO AUTOMATICAMENTE A
+REPRESENTAÇÃO DOS NÍVEIS NO 3D, VISTAS E CORTES. A REPRESENTAÇÃO, OU APARÊNCIA ESSES ELEMENTOS DEVER SER CONFIGURADOS
+NESSA ABA. A LINHA E A EXTREMIDADE»).
+
+- O painel **Pavimentos** tem uma secção nova, **Aparência dos níveis**, com uma pré-visualização que muda logo:
+  - **Linha**: traço-ponto, tracejada, contínua ou só nas pontas;
+  - **Cor**: a do desenho, preto, azul, vermelho, verde, cinzento, ou outra à escolha;
+  - **Extremidade**: círculo em quartos (como o Revit), quadrado, triângulo ou nenhuma (só o texto);
+  - **Pontas**: à direita, à esquerda ou nas duas;
+  - **Texto**: cota e nome; «NOME | cota»; nome por cima e cota por baixo (Revit); cota por cima e nome por baixo;
+  - **Mostrar os níveis no 3D**.
+  O texto fica junto da extremidade, virado para o desenho. Cada mudança desfaz-se com Ctrl+Z.
+- Os níveis aparecem sozinhos, com esta aparência, nos **alçados e cortes** (ecrã, folhas, PDF, DXF) e agora também
+  no **3D**: cada nível é um anel à volta do edifício à sua cota, com a extremidade e o texto na frente, escondido atrás
+  do edifício como no Revit.
+- O diálogo **Anotar ▸ Símbolos…** tem as mesmas opções novas do nível.
+
 ## 0.461.0 — 2026-11-08
 
 **Navegador do Projeto com abas de filtro no rodapé** (o dono: «no rodapé, vamos colocar outras abas de filtro, Geral…

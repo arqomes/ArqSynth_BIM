@@ -19,7 +19,7 @@ FIELDS = {                                  # each kind's fields, in order
     "section": ("head", "arrow", "size", "text", "line", "pen"),
     "elevation": ("head", "arrow", "size", "text", "pen"),
     "detail": ("head", "size", "text", "line", "pen"),
-    "level": ("mark", "size", "text", "line", "pen"),
+    "level": ("mark", "ends", "label", "size", "text", "line", "pen"),        # (0.462: at which end, its words)
 }
 
 
@@ -90,31 +90,54 @@ class SymbolPreview(QtWidgets.QWidget):
             p.drawLine(QtCore.QPointF(box.right(), box.top()), QtCore.QPointF(centre[0] - r * 0.7, centre[1] + r * 0.7))
             head(centre, None, "D1")
         else:
-            a, b = np.array((w * 0.08, h * 0.6)), np.array((w * 0.62, h * 0.6))
-            p.setPen(pen(s["pen"], marks_model.DASHES.get(s["line"])))
-            for q0, q1 in marks_model.line_pieces(a, b, s, k)[0]:
-                p.drawLine(QtCore.QPointF(*q0), QtCore.QPointF(*q1))
-            size = s["size"] * k
-            p.setPen(pen(s["pen"]))
-            p.setBrush(ink)
-            if s["mark"] == "triangle":
-                p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(*b), QtCore.QPointF(b[0] - size, b[1] - size * 1.4),
-                                               QtCore.QPointF(b[0] + size, b[1] - size * 1.4)]))
-            elif s["mark"] == "target":
-                rect = QtCore.QRectF(b[0] - size, b[1] - size, 2 * size, 2 * size)
-                p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-                p.drawEllipse(rect)
-                p.setBrush(ink)
-                p.drawPie(rect, 0, 90 * 16)
-                p.drawPie(rect, 180 * 16, 90 * 16)
-            p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            font = p.font()
-            font.setPixelSize(max(6, int(s["text"] * k * 0.75)))
-            p.setFont(font)
-            p.setPen(ink)
-            p.drawText(QtCore.QPointF(b[0] + 2.5 * k, b[1] - 2.0 * k), "+3{}00  {}".format(decimal_sep(),
-                                                                                         t("symbols.storey")))
+            draw_level(p, s, w, h, k)
         p.end()
+
+
+def draw_level(p, s, w, h, k=None):
+    """(0.462) A level as its style draws it (model/symbols.level_parts), across a w × h preview at k px per mm on
+    paper: its line, its mark(s), its words — in its colour (the paper's black when it has none)."""
+    k = k or min(w, h) / 40.0
+    ink = QtGui.QColor(s.get("colour") or "#000000")
+    over = marks_model.LEVEL_OVER                  # (the line from margin to w − margin: its marks beyond, inside)
+    margin = (2.0 * float(s.get("size", 1.8)) + 2.0) * k
+    x0, x1 = margin / k + over, (w - margin) / k - over
+    house = (x0 + (x1 - x0) * 0.32, x0 + (x1 - x0) * 0.68)         # (0.464) a building drawn faintly under it
+    parts = marks_model.level_parts(3.0, x0, x1, t("symbols.storey"), s, 1.0, decimal_sep(), model=house)
+    base = h * 0.55
+    p.fillRect(QtCore.QRectF(house[0] * k, base - h * 0.35, (house[1] - house[0]) * k, h * 0.35 + h * 0.3),
+               QtGui.QColor("#e4e4e4"))
+
+    def at(q):
+        return QtCore.QPointF(float(q[0]) * k, base - (float(q[1]) - 3.0) * k)
+
+    def pen(mm, dashes=None):
+        q = QtGui.QPen(ink, max(mm * k, 1.0))
+        if dashes:
+            q.setDashPattern([d * k / max(q.widthF(), 1e-6) for d in dashes])
+        return q
+    p.setPen(pen(s["pen"], parts.dashes))
+    for q0, q1 in parts.pieces:
+        p.drawLine(at(q0), at(q1))
+    p.setPen(pen(s["pen"]))
+    for q0, q1 in parts.outline:
+        p.drawLine(at(q0), at(q1))
+    p.setBrush(ink)
+    for poly in parts.filled:
+        p.drawPolygon(QtGui.QPolygonF([at(q) for q in poly]))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    font = p.font()
+    font.setBold(False)
+    p.setPen(ink)
+    for q, text, align, size in parts.texts:
+        font.setPixelSize(max(9, int(size * k * 0.75)))
+        p.setFont(font)
+        vertical, side = align.split("-")
+        point = at(q)
+        box = QtCore.QRectF(point.x() - w if side == "right" else point.x(),
+                            point.y() - size * k * 1.4 if vertical == "bottom" else point.y(), w, size * k * 1.4)
+        p.drawText(box, (QtCore.Qt.AlignmentFlag.AlignRight if side == "right" else QtCore.Qt.AlignmentFlag.AlignLeft)
+                   | QtCore.Qt.AlignmentFlag.AlignVCenter, text)
 
 
 class SymbolStylesDialog(QtWidgets.QDialog):

@@ -533,6 +533,68 @@ def curved_wall_radius():
           "{} {} {}".format(c, w, win.last_message))
 
 
+def level_ends():
+    """(0.464, the owner: «os símbolos dos níveis precisam ser ajustável no 3D na vista e corte para não cobrirem o corte
+    ou ficar sobre o modelo») In the South elevation, a click on a level's line off the building picks the levels —
+    a grip at each end; its right end clicked and put 3 m further: every level's line ends there (the view's own). In
+    3D, a corner of the levels' ring taken out the same way."""
+    doc = fresh((4.0, 3.0, 0.0), 10.0)
+    win.new_storey()
+    pump(200)
+    for g, _n, z in doc.storeys():
+        bim.add_wall_loop(doc, [np.array(p, float) + (0, 0, z) for p in ((0, 0, 0), (8, 0, 0), (8, 5, 0), (0, 5, 0))],
+                          win.tools["wall"].spec)
+    pump(300)
+    win.set_tool("select")
+    win.open_view("elevation", "S")
+    pump(1200)
+    sel = win.tools["select"]
+    geom = vp._level_geom
+    if geom is None or geom[0] != "line":
+        check("nivel_no_alcado", False, "sem níveis desenhados: {}".format(geom))
+        return
+    z, a, b = geom[1][1]
+    click_at(b + (a - b) * 0.04)                          # (on its line, off the building)
+    pump(300)
+    grips = vp.level_grips(sel._level) if sel._level is not None else []
+    check("nivel_escolhido", sel._level == 1 and len(grips) == 2, "{} {}".format(sel._level, win.last_message))
+    if len(grips) != 2:
+        return
+    click_at(grips[1])                                    # (its end taken…)
+    pump(200)
+    u = (b - a) / np.linalg.norm(b - a)
+    click_at(grips[1] + u * 3.0)                          # (…and put 3 m further)
+    pump(600)
+    shot("nivel_pontas")
+    ends = doc.view_settings(("elevation", "S")).levels
+    origin, uu, _v, _n = vp.view_plane()
+    want = float((grips[1] - origin) @ uu) + 3.0
+    check("nivel_pontas_arrastadas", ends is not None and same(ends[1], want, 0.05),
+          "{} quer {:.2f} {}".format(ends, want, win.last_message))
+    win._show_3d()
+    pump(1200)
+    geom = vp._level_geom
+    if geom is None or geom[0] != "ring":
+        check("nivel_no_3d", False, "sem anel: {}".format(geom))
+        return
+    z, ring = geom[1][0]
+    front_right = ring[0]
+    click_at(ring[0] + (ring[3] - ring[0]) * 0.05)        # (its ring's front side, off the building)
+    pump(300)
+    grips = vp.level_grips(sel._level) if sel._level is not None else []
+    check("nivel_escolhido_3d", len(grips) == 4, "{} {}".format(sel._level, win.last_message))
+    if len(grips) != 4:
+        return
+    click_at(grips[0])
+    pump(200)
+    click_at(grips[0] + np.array((2.0, -2.0, 0.0)))
+    pump(600)
+    shot("nivel_anel_3d")
+    ring_of = doc.view_settings(win._live_3d()).levels
+    check("nivel_anel_3d_arrastado", ring_of is not None and same(ring_of[2], front_right[0] + 2.0, 0.1)
+          and same(ring_of[1], front_right[1] - 2.0, 0.1), "{} {}".format(ring_of, win.last_message))
+
+
 def click_dim(dim):
     """A click on a temporary dimension's value (as the owner: the value, then a number typed)."""
     at = next(a for d, a, _t in vp.temp_dims if d is dim)
@@ -781,7 +843,7 @@ for name, fn in (("laje_formas", slab_shapes), ("piso_teto", coverings), ("regia
                  ("parede_snaps", wall_snaps), ("parede_poligono", wall_polygon), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
                  ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask),
                  ("linha_formas", line_shapes), ("poligono_lados", polygon_sides), ("parede_no_arco", wall_on_arc),
-                 ("parede_curva_raio", curved_wall_radius)):
+                 ("parede_curva_raio", curved_wall_radius), ("nivel_pontas", level_ends)):
     run(name, fn)
 win.doc.modified = False
 print("RESUMO: {} de {} passaram".format(sum(ok for _n, ok in results), len(results)))

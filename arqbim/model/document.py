@@ -908,6 +908,13 @@ class Document:
             labels[key] = (float(offset[0]), float(offset[1]))
         return self.set_view_props(view, labels=labels or None)
 
+    def set_level_ends(self, view, ends):
+        """(0.464, the owner: «os símbolos dos níveis precisam ser ajustável no 3D na vista e corte para não cobrirem o
+        corte ou ficar sobre o modelo») Where a view's levels' lines end, dragged by hand — a section's / an
+        elevation's (x0, x1) along its paper, a 3D view's ring (x0, y0, x1, y1) in plan; None: back to the model's.
+        The view's own property, one undo step; False if unchanged."""
+        return self.set_view_props(view, levels=[float(c) for c in ends] if ends else None)
+
     def view_style(self, key):
         """(0.315) The view style of a key (a built-in's name, a project style's uid); not known: the usual."""
         return view_styles_model.find(self.view_styles, key)
@@ -967,10 +974,26 @@ class Document:
         kept, not picked)."""
         if view is None:
             return []
-        out = [d for d in self.dimensions if d.view == tuple(view)]
+        twins = self.twin_views(view)                       # (0.463: a typical storey's plan: its equals' too)
+        out = [d for d in self.dimensions if d.view in twins]
         if view[0] == "plan" and self.grid_settings.get("dims") and self.grids:
             out += self.grid_dimensions(tuple(view))
         return out
+
+    def twin_views(self, view):
+        """(0.463, the owner: «tudo que se faz num nível igualado é replicado nos outros níveis, seja modelação,
+        modificação, documentação») A view and its twins: a typical storey's plan has its equal storeys' plans as twins
+        — the dimensions and the drawing made in one are in all (the same ones: changed or deleted in one, in all),
+        as its elements are (ifc/typical.py) —; any other view only itself."""
+        view = tuple(view)
+        if view[0] != "plan" or self.loading:
+            return {view}
+        try:
+            model = self.ifc.typical_of(view[1])
+            members = self.ifc.typical_sets().get(model, ()) if model else ()
+        except Exception:                                   # (an IFC still being read, a preview's)
+            return {view}
+        return {("plan", s) for s in members} | {view}
 
     def grid_dimensions(self, view):
         """The grid's dimensions in a plan (dims_model.Dimension, tag "grid"), the same objects until the grid
@@ -986,8 +1009,11 @@ class Document:
         return found[1]
 
     def annotations_of(self, view):
-        """The lines, regions and texts drawn in a view (0.120)."""
-        return [] if view is None else [a for a in self.annotations if a.view == tuple(view)]
+        """The lines, regions and texts drawn in a view (0.120) — (0.463) a typical storey's plan: its equals' too."""
+        if view is None:
+            return []
+        twins = self.twin_views(view)
+        return [a for a in self.annotations if a.view in twins]
 
     def schedules_changed(self):
         """(called by the command of the project's own schedules, 0.131)"""

@@ -229,10 +229,10 @@ class InteriorDimsTool(_AutoDims):
             old = []
         elif self._every():
             prefix = "int:{}:".format(self.mode)
-            old = [d for d in self.doc.dimensions if d.view == view and ((d.tag or "").startswith(prefix)
+            old = [d for d in self.doc.dimensions if d.view in self.doc.twin_views(view) and ((d.tag or "").startswith(prefix)
                                                                          or (d.tag or "").startswith("room:"))]
         else:
-            old = [d for d in self.doc.dimensions if d.view == view and d.tag in tags]
+            old = [d for d in self.doc.dimensions if d.view in self.doc.twin_views(view) and d.tag in tags]
         self.doc.execute(dims_model.ReplaceDimensions(old, dims, t("cmd.dim_interior")))
         self._shown = None
         self.viewport.clear_overlays()
@@ -320,9 +320,9 @@ class ExteriorDimsTool(_AutoDims):
             return
         tags = {d.tag for d in dims}
         if self.which == "near":
-            old = [d for d in self.doc.dimensions if d.view == view and d.tag in tags]
+            old = [d for d in self.doc.dimensions if d.view in self.doc.twin_views(view) and d.tag in tags]
         else:
-            old = [d for d in self.doc.dimensions if d.view == view and (d.tag or "").startswith(("ext:", "facade:"))]
+            old = [d for d in self.doc.dimensions if d.view in self.doc.twin_views(view) and (d.tag or "").startswith(("ext:", "facade:"))]
         fresh = [dims_model.Dimension(**{k: getattr(d, k) for k in d.__dataclass_fields__}) for d in dims]
         self.doc.execute(dims_model.ReplaceDimensions(old, fresh, t("cmd.dim_exterior")))
         self._cache = None

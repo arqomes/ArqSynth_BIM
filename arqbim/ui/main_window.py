@@ -338,6 +338,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sp.on_activate, sp.on_rename, sp.on_level = self.set_active_storey, self._rename_storey, self._move_storey
         sp.on_new, sp.on_delete, sp.on_only_active = self.new_storey, self._delete_storey, self.set_only_active_storey
         sp.on_typical = self.typical_floors
+        sp.on_level_style = self.set_level_style                                # (0.462) the levels' look
         self.tree_panel = project_tree.dock(self, beside=self.storeys_panel, below=self.props)
         self.tree_panel.on_select, self.tree_panel.on_frame = self._select_from_tree, self._frame_from_tree
         self.tree_panel.on_shown = self._refresh_tree
@@ -3852,6 +3853,7 @@ class MainWindow(QtWidgets.QMainWindow):
         3D view's own — and colours a view had set go back to the usual ones when this one has none."""
         settings = self.doc.view_settings(view or self._live_3d())
         plan = view is not None and view[0] == "plan"
+        self.viewport.view_key3d = self._live_3d()          # (0.464: its levels' ring, its own)
         self.viewport.set_view_settings(settings.hidden, settings.cut_height, settings.hidden_phases,
                                         settings.depth if plan else 0.0, settings.crop if plan else None)
         self.viewport.set_element_hatches(settings.elements)            # (0.331: its hatches by element)
@@ -4958,6 +4960,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message(t("info.symbol_styles"))
         return True
 
+    def set_level_style(self, level):
+        """(0.462) The levels' look from the Storeys panel (their line, colour, end, words, seen in 3D): the project's
+        graphic style's level symbol — every section, elevation, sheet, PDF, DXF and the 3D view follow. One undo
+        step."""
+        import copy as _copy
+        current = styles_model.clean(self.doc.graphic_style)
+        new = _copy.deepcopy(current)
+        new["symbols"]["level"] = dict(current["symbols"]["level"], **dict(level))
+        new = styles_model.clean(new)
+        if new == current:
+            return False
+        self.doc.execute(styles_model.SetGraphicStyle(current, new, t("cmd.level_style")))
+        self.viewport.apply_storey_view()                  # (the view's levels drawn again)
+        self._refresh_storeys()
+        self.message(t("info.level_style"))
+        return True
+
     def edit_view_styles(self):
         """View ▸ View styles… (0.315): the program's view styles and the project's — made, named, duplicated,
         changed, deleted; how the faces are seen, their colours, edges, shadows, surface patterns, transparency and
@@ -5119,7 +5138,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.no_walls" if which == "facade" else "info.no_rooms_dims"), warning=True,
                          action=self.tool_actions["wall" if which == "facade" else "room"])
             return
-        old = [d for d in self.doc.dimensions if d.view == ("plan", storey) and (d.tag or "").startswith(prefixes)]
+        old = [d for d in self.doc.dimensions if d.view in self.doc.twin_views(("plan", storey))   # (0.463: its equals')
+               and (d.tag or "").startswith(prefixes)]
         self.doc.execute(dims_model.ReplaceDimensions(old, new, t("cmd.dimension_" + which)))
         if not self.viewport.plan:
             self.set_plan(True)
@@ -8611,16 +8631,35 @@ class MainWindow(QtWidgets.QMainWindow):
         if shown:
             self.viewport.zoom_extents(shown)
 
-    def typical_floors(self):
+    def typical_floors(self, chosen=None):
         """Typical floors (0.90): the active storey made equal to the storeys chosen (its elements copied to
         them; from then on what is drawn, changed or deleted on one is on all) — or, if it already is, no longer
-        (each keeps its elements). One undo step."""
+        (each keeps its elements). One undo step. (0.463) chosen: the storeys picked in the Storeys panel's list —
+        two or more: made equal at once (the active one's elements, or the lowest's, copied to the others; their
+        plans' dimensions and drawing shared from then on)."""
         active = self.doc.active_storey
         if self.doc.ifc.typical_of(active) is not None:
             others = [n for g, n, _z in self.doc.storeys()
                       if g != active and self.doc.ifc.typical_of(g) == self.doc.ifc.typical_of(active)]
             bim.unmake_typical(self.doc, active)
             self.message(t("info.untypical", name=self._storey(active)[0], others=", ".join(others)))
+            return
+        levels = {g: (n, z) for g, n, z in self.doc.storeys()}
+        chosen = [g for g in (chosen or ()) if g in levels]
+        if len(chosen) >= 2:
+            taken = [g for g in chosen if self.doc.ifc.typical_of(g) is not None]
+            if taken:
+                self.message(t("info.typical_taken", name=levels[taken[0]][0]), warning=True)
+                return
+            source = active if active in chosen else min(chosen, key=lambda g: levels[g][1])
+            others = sorted((g for g in chosen if g != source), key=lambda g: levels[g][1])
+            full = [g for g in others if self.doc.ifc._storey_elements(g)]
+            self._stop_drawing()
+            bim.make_typical(self.doc, [source] + others, source, t("typical.default_name"))
+            kept = t("info.typical_kept", names=", ".join(levels[g][0] for g in full), name=levels[source][0]) \
+                if full else ""
+            self.message(t("info.typical_made", name=levels[source][0],
+                           others=", ".join(levels[g][0] for g in others), kept=kept))
             return
         dialog = storeys.TypicalDialog(self, self.doc.storeys(), active)
         self._sel_dialog = dialog                           # (tests)
@@ -8644,10 +8683,16 @@ class MainWindow(QtWidgets.QMainWindow):
             for k, (_model, members) in enumerate(sorted(self.doc.ifc.typical_sets().items(), key=lambda kv: kv[1])):
                 letters.update({s: chr(ord("A") + k % 26) for s in members})
         self.storeys_panel.show_storeys(self.doc.storeys(), self.doc.active_storey, letters)
+        self.storeys_panel.show_level_style(styles_model.symbol(self.doc.graphic_style, "level"))     # (0.462)
         name, z = self._storey(self.doc.active_storey)
         view = (t("storeys.status_plan") if self.viewport.plan
                 else " — " + self._view_name if self.viewport.section is not None else "")
-        self.storey_label.setText(t("storeys.status", name=name, z=storeys.level_text(z)) + view)
+        equal = ""                                       # (0.463) a typical storey: its equals named in the footer
+        if letters.get(self.doc.active_storey):
+            mates = [n for g, n, _z in self.doc.storeys() if g != self.doc.active_storey
+                     and letters.get(g) == letters[self.doc.active_storey]]
+            equal = t("storeys.status_typical", others=", ".join(mates)) if mates else ""
+        self.storey_label.setText(t("storeys.status", name=name, z=storeys.level_text(z)) + equal + view)
 
     def _update_title(self):
         shared = t("share.title_mark") if sharing.central_of(self.doc.path) else ""

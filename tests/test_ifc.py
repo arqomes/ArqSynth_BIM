@@ -4303,6 +4303,47 @@ class TypicalFloors(unittest.TestCase):
         bim.add_wall(doc, np.array((0.0, 2.0, 3.0)), np.array((4.0, 2.0, 3.0)), spec, storey=first)
         self.assertEqual([len(walls(s)) for s in (ground, first, second)], [1, 2, 1])     # on its own now
 
+    def test_typical_documentation(self):
+        """0.463 — the owner: «tudo que se faz num nível igualado é replicado nos outros níveis, seja modelação,
+        modificação, documentação»: a dimension and a text drawn in the plan of one of two equal storeys are in the
+        other's plan (the same ones: moved in one, moved in both); a section's are its own; the storeys separated —
+        each keeps them, the dimension hung on its own wall."""
+        from arqbim.model import annotations as notes2d
+        from arqbim.model import dimensions as dims_model
+        doc = Document()
+        try:
+            first = bim.add_storey(doc, "Piso 1", 3.0)
+            second = bim.add_storey(doc, "Piso 2", 6.0)
+            spec = catalog.BY_KEY["parede_alv_20"]
+            wall = bim.add_wall(doc, np.array((0.0, 0.0, 3.0)), np.array((5.0, 0.0, 3.0)), spec, storey=first)
+            bim.make_typical(doc, [first, second], first, "Piso tipo")
+            self.assertEqual(doc.twin_views(("plan", first)), {("plan", first), ("plan", second)})
+            self.assertEqual(doc.twin_views(("section", "Corte 1")), {("section", "Corte 1")})
+            text = notes2d.Annotation(("plan", first), "text", [np.array((1.0, 1.0, 3.0))], text="Sala")
+            doc.execute(notes2d.AddAnnotation(text, "t"))
+            dim = dims_model.Dimension(("plan", first), np.array((0.0, -0.1, 3.0)), np.array((5.0, -0.1, 3.0)),
+                                       np.array((2.5, -1.0, 3.0)),
+                                       refs=[(wall, np.array((0.0, -0.1, 0.0)), None), None])
+            doc.execute(dims_model.AddDimension(dim, "d"))
+            self.assertEqual(doc.annotations_of(("plan", second)), [text])          # (in the other's plan too)
+            self.assertEqual(doc.dimensions_of(("plan", second)), [dim])
+            self.assertTrue(bim.unmake_typical(doc, first))
+            mine = doc.annotations_of(("plan", second))
+            self.assertEqual(len(mine), 1)                                         # (a copy of its own)
+            self.assertIsNot(mine[0], text)
+            self.assertAlmostEqual(float(mine[0].points[0][2]), 6.0, places=9)
+            self.assertEqual(doc.annotations_of(("plan", first)), [text])
+            copy_dim = doc.dimensions_of(("plan", second))
+            self.assertEqual(len(copy_dim), 1)
+            twin_wall = copy_dim[0].refs[0][0]
+            self.assertNotEqual(twin_wall, wall)                                    # (hung on its own storey's wall)
+            self.assertEqual(doc.ifc.storey_of(twin_wall), second)
+            doc.undo()                                                              # (one step: shared again)
+            self.assertEqual(doc.annotations_of(("plan", second)), [text])
+            self.assertEqual(len(doc.dimensions), 1)
+        finally:
+            doc.modified = False
+
 
 class GridEditing(unittest.TestCase):
     """0.72 (the owner: "edit, select, align" and a generator): axes moved, aligned ends, neighbours, deleted,

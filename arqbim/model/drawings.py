@@ -54,6 +54,7 @@ class Drawing:
     angles: list = field(default_factory=list)
     marks: list = field(default_factory=list)      # a plan's section and elevation marks (symbols.Mark, 0.121)
     levels: list = field(default_factory=list)     # a section's / elevation's level marks: (z, storey name)
+    level_ends: tuple = None                       # (0.464) where their lines end, dragged in its view: (x0, x1)
     north: bool = False                            # a plan: its north arrow
     dim_style: dict = None                         # the project's dimension style (0.124; None: the usual one)
     graphic_style: dict = None                     # its hatches and pens on paper (0.126; None: the usual ones)
@@ -91,8 +92,9 @@ class Drawing:
     # clockwise) — its thick line; None: the union of `cut` (a drawing made otherwise)
     outline: list = None
 
-    def bounds(self):
-        """(lowest, highest) corner of everything drawn, or None (a detail view's: its rectangle)."""
+    def bounds(self, with_levels=True):
+        """(lowest, highest) corner of everything drawn, or None (a detail view's: its rectangle). (0.464) with_levels
+        False: the levels' ends dragged by hand left out (the drawing's own span)."""
         if self.frame is not None:
             x0, y0, x1, y1 = self.frame
             return np.array((x0, y0), dtype=float), np.array((x1, y1), dtype=float)
@@ -100,9 +102,12 @@ class Drawing:
         parts += [pts for a in self.annotations for pts, _closed in a[1]]
         parts += [np.asarray(r, dtype=float) for r in self.above]             # (0.135)
         parts += [a[4].reshape(1, 2) for a in self.annotations if a[0] == "text"]
-        if parts and self.levels:                   # (a level counts for its height; its line's length never)
+        if parts and self.levels:                   # (a level counts for its height; its line's length never…)
             x = float(np.vstack(parts)[0, 0])
             parts += [np.array(((x, z), (x, z))) for z, _name in self.levels]
+            if self.level_ends and with_levels:     # (…but where a hand put its ends, 0.464: its marks on the sheet)
+                z = float(self.levels[0][0])
+                parts.append(np.array(((self.level_ends[0], z), (self.level_ends[1], z))))
         if parts:                                   # (dimensions alone do not make a drawing; marks never count)
             for p1, p2, l1, l2, _text, *_own in self.dims:
                 parts.append(np.array((p1 + (l1 - p1) * 1.15, p2 + (l2 - p2) * 1.15)))
@@ -1102,6 +1107,8 @@ def section(doc, point, normal, title, view=None):
                     look=drawn_look(doc, settings), elements=settings.elements)
     drawing.symbols = opening_signs(doc, objects, n, offset, origin, right, up, drawing._occluders)   # (0.292)
     drawing.levels = marks_model.level_marks(doc)                   # (its storeys' levels, 0.121)
+    if settings.levels and len(settings.levels) == 2:               # (0.464: their ends where a hand put them)
+        drawing.level_ends = tuple(float(c) for c in settings.levels)
     drawing.images = facade_images(doc, n, float(n @ np.asarray(point, dtype=float)), origin, right,
                                    np.array((0.0, 0.0, 1.0)))      # (the photos on its facades, 0.208)
     return _add_dimensions(doc, drawing, view, origin, right, np.array((0.0, 0.0, 1.0)))

@@ -64,14 +64,17 @@ class Settings:
     # (cut foreground, cut background, surface foreground, surface background)}, each (pattern, colour) or None
     # (that one not changed: its category's, its materials'); None: none
     elements: dict = None
+    # (0.464) where its levels' lines end, dragged by hand — a section's / an elevation's: (x0, x1) along its paper; a
+    # 3D view's: the ring round the building (x0, y0, x1, y1) in plan —; None: by the model (always its own)
+    levels: tuple = None
 
 
-STYLES = ("shaded", "hidden", "wire", "xray")         # (0.315: the first of view_styles.BUILTIN; the others there)
+STYLES =("shaded", "hidden", "wire", "xray")         # (0.315: the first of view_styles.BUILTIN; the others there)
 DETAILS = ("coarse", "medium", "fine")
 UNDERLAYS = ("below", "above")
 LOOK_FIELDS = ("style", "edges", "grid", "axonometric", "box", "home", "slopes")
 PLAN_FIELDS = ("depth", "underlay", "crop", "detail")
-NOTE_FIELDS = ("labels",)                # (0.238)
+NOTE_FIELDS = ("labels", "levels")      # (0.238; 0.464: the levels' ends)
 ELEMENT_FIELDS = ("elements",)           # (0.331)
 OWN_FIELDS = ("cut_height", "hidden", "rule", "scale", "phases") + LOOK_FIELDS + PLAN_FIELDS + NOTE_FIELDS + \
     ELEMENT_FIELDS
@@ -88,6 +91,7 @@ def settings_of(template, own=None):
             own.get("home"), bool(own.get("slopes", False)))
     labels = {str(k): (float(v[0]), float(v[1])) for k, v in (own.get("labels") or {}).items()} or None
     elements = element_hatches(own.get("elements"))                   # (0.331)
+    levels = tuple(float(c) for c in own["levels"]) if own.get("levels") else None     # (0.464)
     drawn = own.get("style")
     if template is not None and getattr(template, "style", None):      # (0.315: a template's style is its views')
         drawn = template.style
@@ -97,10 +101,10 @@ def settings_of(template, own=None):
         return Settings(float(own.get("cut_height", CUT_HEIGHT)), frozenset(own.get("hidden", ())),
                         tuple(own["rule"]) if own.get("rule") else None, own.get("scale") or None, None,
                         frozenset(PHASE_FILTERS.get(phases, ())), phases, *look, labels=labels, drawn_style=drawn,
-                        elements=elements)
+                        elements=elements, levels=levels)
     return Settings(template.cut_height, frozenset(template.hidden), tuple(template.rule) if template.rule else None,
                     template.scale, template.name, frozenset(PHASE_FILTERS.get(template.phases, ())),
-                    template.phases, *look, labels=labels, drawn_style=drawn, elements=elements)
+                    template.phases, *look, labels=labels, drawn_style=drawn, elements=elements, levels=levels)
 
 
 def _layer(value):
@@ -177,6 +181,12 @@ def own_from_dict(data):
         elements = element_hatches(data.get("elements"))             # (0.331)
         if elements:
             own["elements"] = elements
+        levels = data.get("levels")                                  # (0.464) the levels' ends dragged
+        if isinstance(levels, (list, tuple)) and len(levels) in (2, 4):
+            values = [float(v) for v in levels]
+            half = len(values) // 2
+            if all(values[k] < values[k + half] for k in range(half)):
+                own["levels"] = values
     except (TypeError, ValueError):
         pass
     return own

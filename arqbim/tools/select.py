@@ -197,6 +197,19 @@ class _SectionMove:
     dragging: bool = True
 
 
+@dataclass
+class _LevelMove:
+    """(0.464) A level's line's end (a section's, an elevation's) or its ring's corner (3D) dragged: all the view's
+    levels follow (aligned, as Revit's)."""
+    kind: str                   # "line" | "ring"
+    corner: int                 # which grip (level_grips' order)
+    grips: list                 # the grips when taken (world)
+    base: np.ndarray
+    press: tuple
+    target: np.ndarray = None
+    dragging: bool = True
+
+
 def section_grips(doc, viewport, name):
     """(0.358) A section chosen in a plan: (its index, its line's ends (world, on the plan's paper), the point of its
     «turn» grip — a diamond a little out from its middle, the way it looks) — or None."""
@@ -538,6 +551,7 @@ class SelectTool(Tool):
         # (0.459) a polygon's side or arc picked alone, as Revit's sketch line: (obj_id, face index, its first two
         # corners' indices — kept by an edit, as the corners' numbers are)
         self._side = None
+        self._level = None           # (0.464) a level chosen in a section, an elevation or 3D (its index): its grips
         host.viewport.selection_listeners.append(lambda _ids: self._refresh_dims(keep=False))
         host.viewport.axes_listeners.append(lambda _axes: self._refresh_dims(keep=False))
         host.viewport.annotation_listeners.append(lambda _anns: self._refresh_dims(keep=False))
@@ -611,6 +625,15 @@ class SelectTool(Tool):
             if not self.viewport.selection and not self.viewport.line_selection and self._show_side():
                 return
             self._drop_side()                              # (something else chosen since: let go)
+        if self._level is not None:                        # (0.464) a level chosen: its ends' grips
+            grips = self.viewport.level_grips(self._level) if not self.viewport.selection else []
+            if grips:
+                self._grip_segments, self._dims = [], []
+                self._cab_grips = self._block_grips = self._wall_ends = self._door_flips = self._curve_grips = None
+                self.viewport.show_temp_dims([])
+                self.viewport.show_grips(grips, [])
+                return
+            self._level = None
         lines = self.viewport.line_selection
         if lines and not self.viewport.selection:          # (0.373) lines picked alone: their grips (one: its length)
             self._grip_segments, self._cab_grips, self._block_grips = [], None, None
@@ -1324,8 +1347,86 @@ class SelectTool(Tool):
             self.host.message(t("info.section_ends", l=format_length(float(np.linalg.norm(b - a)), decimal_sep())))
         self._refresh_dims(keep=False)
 
+    # ------------------------------------------------------------ (0.464) a level's ends dragged
+
+    def _level_rect(self, move):
+        """The ends the drag gives: a line's (x0, x1) along the view's paper; a ring's (x0, front, x1, back) in plan
+        — or None (too short)."""
+        target = move.target if move.target is not None else move.base
+        if move.kind == "line":
+            origin, u, _v, _n = self.viewport.view_plane()
+            along = [float((g - origin) @ u) for g in move.grips]
+            along[move.corner] = float((target - origin) @ u)
+            x0, x1 = along
+            return (x0, x1) if x1 - x0 > 0.5 else None
+        ring = [g.copy() for g in move.grips]          # (x1, front), (x1, back), (x0, back), (x0, front)
+        xs = {0: "x1", 1: "x1", 2: "x0", 3: "x0"}[move.corner]
+        ys = {0: "front", 1: "back", 2: "back", 3: "front"}[move.corner]
+        x0, x1 = float(ring[3][0]), float(ring[0][0])
+        front, back = float(ring[0][1]), float(ring[1][1])
+        if xs == "x1":
+            x1 = float(target[0])
+        else:
+            x0 = float(target[0])
+        if ys == "front":
+            front = float(target[1])
+        else:
+            back = float(target[1])
+        return (x0, front, x1, back) if x1 - x0 > 0.5 and back - front > 0.5 else None
+
+    def _level_to(self, x, y):
+        """A level's end where the mouse is: along the line (a section, an elevation), anywhere on the level's plane
+        (its ring's corner, 3D)."""
+        move = self._move
+        ray_o, ray_d = self.viewport.ray(x, y)
+        if move.kind == "line":
+            origin, u, _v, normal = self.viewport.view_plane()
+            p = ray_plane(ray_o, ray_d, origin, normal)
+            if p is None:
+                p = ray_plane(ray_o, ray_d, origin, -normal)
+            if p is None:
+                return
+            move.target = move.base + u * float((p - move.base) @ u)
+        else:
+            p = ray_plane(ray_o, ray_d, move.base, Z_UP)
+            if p is None:
+                p = ray_plane(ray_o, ray_d, move.base, -Z_UP)
+            if p is None:
+                return
+            move.target = np.array((p[0], p[1], move.base[2]))
+        rect = self._level_rect(move)
+        if rect is None:
+            return
+        if move.kind == "line":
+            a, b = (move.target, move.grips[1]) if move.corner == 0 else (move.grips[0], move.target)
+            segs = [a, b]
+            self.host.set_vcb(format_length(float(np.linalg.norm(b - a)), decimal_sep()))
+        else:
+            x0, front, x1, back = rect
+            z = float(move.base[2])
+            ring = [np.array(p) for p in ((x1, front, z), (x1, back, z), (x0, back, z), (x0, front, z))]
+            segs = [q for a, b in zip(ring, ring[1:] + ring[:1]) for q in (a, b)]
+            self.host.set_vcb(format_length(x1 - x0, decimal_sep()))
+        self.viewport.show_lines(segs, [PREVIEW] * len(segs))
+        self.viewport.show_marker(move.target, PREVIEW)
+
+    def _finish_level_move(self):
+        move, self._move = self._move, None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+        self.host.set_vcb("")
+        rect = self._level_rect(move) if move.target is not None else None
+        if rect is not None and np.linalg.norm(move.target - move.base) > 1e-6:
+            view = self.viewport.current_view() if move.kind == "line" else self.viewport.view_key3d
+            if view is not None and self.doc.set_level_ends(view, rect):
+                self.host.message(t("info.level_ends"))
+        self._refresh_dims(keep=False)
+
     def _move_to(self, x, y, modifiers=()):
         """Where the grip goes for the mouse at (x, y): the snaps and alignments from where it was."""
+        if isinstance(self._move, _LevelMove):            # (0.464)
+            self._level_to(x, y)
+            return
         if isinstance(self._move, _SectionMove):
             self._section_to(x, y)
             return
@@ -1384,6 +1485,9 @@ class SelectTool(Tool):
         self.host.set_vcb(format_length(float(np.linalg.norm(move.target - move.base)), decimal_sep()))
 
     def _finish_move(self):
+        if isinstance(self._move, _LevelMove):            # (0.464)
+            self._finish_level_move()
+            return
         if isinstance(self._move, _SectionMove):
             self._finish_section_move()
             return
@@ -1645,6 +1749,8 @@ class SelectTool(Tool):
             return t("hint.temp_dim")
         if self._side is not None and self._picking is None:      # (0.459) a polygon's side or arc picked
             return t("hint.side_chosen")
+        if self._level is not None and self._picking is None:     # (0.464) a level chosen
+            return t("hint.level_chosen")
         if self._picking is None and any(d.kind == "relation" for d in self._dims):     # (0.361) a wall's relations
             return t("hint.wall_dims_faces" if getattr(self.host, "dim_faces", False) else "hint.wall_dims_axes")
         if self._picking is not None:
@@ -1735,6 +1841,12 @@ class SelectTool(Tool):
                     self._move = _SectionMove(index, grip[1], a.copy(), b.copy(), (a, b)[grip[1]].copy(), (x, y))
                     self.viewport.clear_temp_dims()
                     self.host.set_hint(self.hint())
+            elif self._level is not None and grip[0] == "end":       # (0.464) a level's end / its ring's corner
+                grips = self.viewport.level_grips(self._level)
+                if grip[1] < len(grips):
+                    self._move = _LevelMove("line" if len(grips) == 2 else "ring", grip[1], [g.copy() for g in grips],
+                                            grips[grip[1]].copy(), (x, y))
+                    self.host.set_hint(t("hint.level_grip"))
             elif self._cab_grips is not None and grip[0] == "end":    # (0.244) a cabinet's division
                 self._start_division_move(grip, x, y)
             elif self._block_grips is not None:                    # (0.264) a roof block's side or middle
@@ -1873,12 +1985,24 @@ class SelectTool(Tool):
 
     def _click_select(self, x, y, modifiers):
         self._drop_side()                                 # (0.459: a polygon's side picked before, let go)
+        self._level = None                                # (0.464: a level chosen before, let go)
         if self.viewport.selected_dims:
             self.viewport.select_dimensions(set())
         if self.viewport.selected_annotations:
             self.viewport.select_annotations(set())
         axis = self.viewport.grid_axis_at(x, y, bubbles_only=True)     # a grid axis's bubble (0.72)
         obj_id = self._object_at(x, y) if axis is None else None
+        # (0.464) a level — its line off the model, or its mark and words anywhere — in a section, an elevation, 3D
+        level = self.viewport.level_at(x, y, heads_only=obj_id is not None) \
+            if axis is None and not self.viewport.plan and hasattr(self.viewport, "level_at") and not self._asked() \
+            else None
+        if level is not None:
+            self.viewport.set_selection(set())
+            self._level = level
+            self._refresh_dims(keep=False)
+            self.host.message(t("info.level_chosen"))
+            self.host.set_hint(self.hint())
+            return
         if axis is None and obj_id is None:
             axis = self.viewport.grid_axis_at(x, y)                     # its line, where nothing else is
         if axis is not None and "grid" in self.viewport.unselectable:
@@ -2164,6 +2288,7 @@ class SelectTool(Tool):
 
     def _apply_region(self, region, mode, modifiers):
         self._drop_side()                                 # (0.459)
+        self._level = None                                # (0.464)
         ids, axes = self.viewport.region_pick(region, mode)
         ids = self._with_groups(ids)
         if self.viewport.selected_dims:
@@ -2279,6 +2404,9 @@ class SelectTool(Tool):
             self.host.pending_classify = None
             self.host.set_hint(self.hint())
         self._drop_side()                                 # (0.459)
+        if self._level is not None:                       # (0.464)
+            self._level = None
+            self.viewport.show_grips([], [])
         self.viewport.set_selection(set())
         if self.viewport.selected_dims:
             self.viewport.select_dimensions(set())

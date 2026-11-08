@@ -2131,11 +2131,23 @@ _STRINGS = {
     "cmd.column": ("Pilar", "Column"),
     "act.typical": ("Pavimentos iguais (piso tipo)…", "Typical floors…"),
     "storeys.typical": ("Iguais…", "Typical…"),
+    "storeys.typical_n": ("Igualar ({n})", "Make equal ({n})"),
     "storeys.untypical": ("Separar", "Separate"),
-    "storeys.typical_tip": ("Pavimentos iguais (piso tipo): o que se desenha, muda ou apaga num deles faz-se em "
-                            "todos. «=A» marca os pavimentos iguais entre si.",
-                            "Typical floors: what is drawn, changed or deleted on one of them is on all. “=A” marks "
-                            "the storeys equal to each other."),
+    "storeys.typical_tip": ("Pavimentos iguais (piso tipo): o que se modela, muda ou apaga num deles faz-se em todos, "
+                            "e as cotas e os desenhos 2D da planta de um aparecem nas plantas de todos. Escolha vários "
+                            "na lista (Ctrl ou Shift) e «Igualar»; «=A» marca os pavimentos iguais entre si.",
+                            "Typical floors: what is modelled, changed or deleted on one of them is on all, and the "
+                            "dimensions and 2D drawing of one's plan are in all their plans. Pick several in the list "
+                            "(Ctrl or Shift) and «Make equal»; “=A” marks the storeys equal to each other."),
+    "storeys.status_typical": (" · igual a {others}", " · equal to {others}"),
+    "info.typical_taken": ("«{name}» já é igual a outros pavimentos: separe-o primeiro (Separar).",
+                           "“{name}” is already equal to other storeys: separate it first (Separate)."),
+    "info.typical_made": ("«{name}» e {others} são agora iguais: o que modelar, mudar ou apagar num deles faz-se em "
+                          "todos, e as cotas e desenhos 2D da planta aparecem em todas. {kept}Ctrl+Z desfaz.",
+                          "“{name}” and {others} are now equal: what you model, change or delete on one is done on "
+                          "all, and the plan's dimensions and 2D drawing are in all. {kept}Ctrl+Z undoes."),
+    "info.typical_kept": ("{names} já tinham elementos: ficam com eles e com os de «{name}». ",
+                          "{names} already had elements: they keep them and get “{name}”'s. "),
     "typical.title": ("Pavimentos iguais", "Typical floors"),
     "typical.note": ("Escolha os pavimentos que ficam iguais a «{name}». Os elementos de «{name}» são copiados para "
                      "eles; daí em diante, o que se desenhar, mudar ou apagar num deles faz-se em todos.",
@@ -5006,8 +5018,19 @@ _STRINGS = {
     "symbols.line.continuous": ("Contínua", "Continuous"),
     "symbols.line.ends": ("Só nas pontas", "Only at its ends"),
     "symbols.mark.triangle": ("Triângulo", "Triangle"),
-    "symbols.mark.target": ("Círculo em quartos", "Quartered circle"),
-    "symbols.mark.none": ("Nenhuma", "None"),
+    "symbols.mark.target": ("Círculo em quartos (como o Revit)", "Quartered circle (as Revit's)"),
+    "symbols.mark.none": ("Nenhuma (só o texto)", "None (the text only)"),
+    # (0.462) a level's: a square end, at which end(s), its words
+    "symbols.mark.square": ("Quadrado", "Square"),
+    "symbols.field.ends": ("Pontas", "Ends"),
+    "symbols.field.label": ("Texto", "Text"),
+    "symbols.ends.right": ("À direita", "On the right"),
+    "symbols.ends.left": ("À esquerda", "On the left"),
+    "symbols.ends.both": ("Nas duas", "On both"),
+    "symbols.label.level_name": ("Cota e nome, por cima", "Level and name, over the line"),
+    "symbols.label.name_level": ("NOME | cota, por cima", "NAME | level, over the line"),
+    "symbols.label.name_over": ("Nome por cima, cota por baixo", "Name over, level under"),
+    "symbols.label.level_over": ("Cota por cima, nome por baixo", "Level over, name under"),
     "cmd.symbol_styles": ("Símbolos", "Symbols"),
     "info.symbol_styles": ("Símbolos mudados: todas as vistas e folhas seguem-nos. Ctrl+Z desfaz.",
                            "Symbols changed: every view and sheet follows them. Ctrl+Z undoes."),
@@ -5720,6 +5743,45 @@ _STRINGS = {
                             "the Properties panel)."),
     # storeys (levels)
     "storeys.title": ("Pavimentos", "Storeys"),
+    # (0.462) the levels' look, in the panel
+    "storeys.look": ("Aparência dos níveis", "Levels' look"),
+    "storeys.look_tip": ("Como os níveis aparecem nos cortes, alçados, folhas, PDF, DXF e no 3D: a linha, a cor, a "
+                         "extremidade e o texto", "How the levels look in the sections, elevations, sheets, PDF, DXF and "
+                         "in 3D: the line, the colour, the end and the text"),
+    "storeys.look_line": ("Linha", "Line"),
+    "storeys.look_colour": ("Cor", "Colour"),
+    "storeys.look_mark": ("Extremidade", "End"),
+    "storeys.look_ends": ("Pontas", "Ends"),
+    "storeys.look_label": ("Texto", "Text"),
+    "storeys.look_3d": ("Mostrar os níveis no 3D", "Show the levels in 3D"),
+    "storeys.look_over": ("Linha por cima do desenho", "Line over the drawing"),
+    "storeys.look_over_tip": ("Desligada, a linha do nível pára antes do edifício: fica só dos lados, com o símbolo e o "
+                              "texto (nos cortes, alçados, folhas, PDF e DXF)", "Off, the level's line stops short of "
+                              "the building: only its sides, with the symbol and the text (in sections, elevations, "
+                              "sheets, PDF and DXF)"),
+    "storeys.colour.auto": ("Automática (a do desenho)", "Automatic (the drawing's)"),
+    "storeys.colour.black": ("Preto", "Black"),
+    "storeys.colour.blue": ("Azul", "Blue"),
+    "storeys.colour.red": ("Vermelho", "Red"),
+    "storeys.colour.green": ("Verde", "Green"),
+    "storeys.colour.grey": ("Cinzento", "Grey"),
+    "storeys.colour.other": ("Outra…", "Other…"),
+    "cmd.level_style": ("Aparência dos níveis", "Levels' look"),
+    # (0.464) the levels' ends dragged in a view
+    "info.level_chosen": ("Níveis escolhidos: arraste uma pega para encurtar ou alongar as linhas de nível desta vista "
+                          "(todas juntas), afastando os símbolos do modelo. Esc larga-os.",
+                          "Levels picked: drag a grip to shorten or lengthen this view's level lines (all together), "
+                          "moving their symbols off the model. Esc lets them go."),
+    "hint.level_chosen": ("Níveis escolhidos: arraste uma pega (no 3D, um canto do anel) para mudar onde as linhas "
+                          "acabam nesta vista. Esc larga-os.", "Levels picked: drag a grip (in 3D, a corner of the "
+                          "ring) to change where the lines end in this view. Esc lets them go."),
+    "hint.level_grip": ("Leve a ponta do nível para onde quer e solte (ou clique). Esc cancela.",
+                        "Take the level's end where you want and let go (or click). Esc cancels."),
+    "info.level_ends": ("As linhas de nível desta vista acabam agora onde as deixou (os símbolos com elas). Ctrl+Z "
+                        "desfaz.", "This view's level lines now end where you left them (their symbols with them). "
+                        "Ctrl+Z undoes."),
+    "info.level_style": ("Aparência dos níveis mudada: cortes, alçados, folhas e 3D já a seguem. Ctrl+Z desfaz.",
+                         "The levels' look changed: sections, elevations, sheets and 3D follow it. Ctrl+Z undoes."),
     "storeys.name": ("Pavimento", "Storey"),
     "storeys.level": ("Cota", "Level"),
     "storeys.new": ("+ Novo", "+ New"),

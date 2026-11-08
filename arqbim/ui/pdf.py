@@ -681,33 +681,44 @@ def _levels(painter, drawing, to_page, dpmm, pen, gstyle=None):
     style draws them: the line, the mark (a triangle, a quartered circle, none), their sizes."""
     from ..i18n import decimal_sep
     from ..model import graphic_styles
-    from ..model.symbols import LEVEL_OVER, level_text, line_pieces
+    from ..model.symbols import level_parts
     style = graphic_styles.symbol(gstyle, "level")
     lo, hi = drawing.bounds()
+    # (0.462) as the Storeys panel sets it (model/symbols.level_parts) — worked out at 1:1 on the page: the line, the
+    # marks and the words in mm, then each point put on the page
+    p0, p1 = to_page(np.array(((0.0, 0.0), (1.0, 0.0))))
+    mm = 1.0 / max(abs(float(p1[0] - p0[0])) / dpmm, 1e-12)        # (metres in the drawing per mm on the page)
+    ink = QtGui.QColor(style.get("colour") or "#000000")
     line = _dashed_pen(pen, style, dpmm)
-    over = np.array((LEVEL_OVER * dpmm, 0.0))         # (past the drawing, on the paper)
+    line.setColor(ink)
+    thin = pen(style["pen"])
+    thin.setColor(ink)
+    from ..model.symbols import LEVEL_OVER
+    ends = getattr(drawing, "level_ends", None)        # (0.464: dragged in its view: its lines' ends)
+    own = drawing.bounds(with_levels=False) if ends else (lo, hi)              # (the drawing's own span)
+    x0, x1 = (ends[0] + LEVEL_OVER * mm, ends[1] - LEVEL_OVER * mm) if ends else (lo[0], hi[0])
     for z, name in drawing.levels:
-        a, b = to_page(np.array(((lo[0], z), (hi[0], z))))
-        a, b = a - over, b + over
+        parts = level_parts(z, x0, x1, name, style, mm, decimal_sep(), model=(own[0][0], own[1][0]))
+        page = lambda q: to_page(np.array([q]))[0]                   # noqa: E731
         painter.setPen(line)
-        pieces, _dashes = line_pieces(a, b, style, dpmm)
-        painter.drawLines([QtCore.QLineF(p[0], p[1], q[0], q[1]) for p, q in pieces])
-        size = style["size"] * dpmm
-        painter.setPen(pen(style["pen"]))
-        painter.setBrush(QtGui.QColor("black"))
-        if style["mark"] == "triangle":
-            painter.drawPolygon(_polygon([b, b + np.array((-size, -size * 1.4)), b + np.array((size, -size * 1.4))]))
-        elif style["mark"] == "target":
-            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(QtCore.QPointF(float(b[0]), float(b[1])), size, size)
-            painter.setBrush(QtGui.QColor("black"))
-            rect = QtCore.QRectF(float(b[0]) - size, float(b[1]) - size, 2 * size, 2 * size)
-            painter.drawPie(rect, 0, 90 * 16)
-            painter.drawPie(rect, 180 * 16, 90 * 16)
+        painter.drawLines([QtCore.QLineF(*page(a), *page(b)) for a, b in parts.pieces])
+        painter.setPen(thin)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        x, y = float(b[0]) / dpmm, float(b[1]) / dpmm
-        _text(painter, dpmm, x + 2.5, y - 6.0, 60.0, 4.0, "{}  {}".format(level_text(z, decimal_sep()), name),
-              style["text"] / 0.3528)
+        if parts.outline:
+            painter.drawLines([QtCore.QLineF(*page(a), *page(b)) for a, b in parts.outline])
+        painter.setBrush(ink)
+        for poly in parts.filled:
+            painter.drawPolygon(_polygon([page(q) for q in poly]))
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.setPen(ink)
+        for at, text, align, size in parts.texts:
+            x, y = (float(c) / dpmm for c in page(at))
+            vertical, side = align.split("-")
+            left = x - 80.0 if side == "right" else x
+            top = y - size * 1.4 if vertical == "bottom" else y          # (its box over the line, or under it)
+            _text(painter, dpmm, left, top, 80.0, size * 1.4, text, size / 0.3528,
+                  align=QtCore.Qt.AlignmentFlag.AlignRight if side == "right" else QtCore.Qt.AlignmentFlag.AlignLeft,
+                  colour=ink.name())
 
 
 def _north(painter, corner, dpmm, pen):

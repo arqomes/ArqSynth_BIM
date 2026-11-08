@@ -66,8 +66,9 @@ class _Writer:
         self._put((0, "CIRCLE"), (8, layer), (10, float(centre[0])), (20, float(centre[1])), (30, 0.0),
                   (40, float(radius)))
 
-    def text(self, layer, at, height, text, angle=0.0, centred=False, width=1.0, oblique=0.0):
-        """A text from `at` (its baseline's start; centred: its middle there); (0.398) its width factor, its slant."""
+    def text(self, layer, at, height, text, angle=0.0, centred=False, width=1.0, oblique=0.0, right=False):
+        """A text from `at` (its baseline's start; centred: its middle there; (0.462) right: its baseline's end there);
+        (0.398) its width factor, its slant."""
         if not text:
             return
         self._grow(at)
@@ -79,6 +80,8 @@ class _Writer:
             pairs.append((51, float(oblique)))
         if centred:                                       # (72 = 1: centred; 73 = 2: middle — at the 11 point)
             pairs += [(72, 1), (73, 2), (11, float(at[0])), (21, float(at[1])), (31, 0.0)]
+        elif right:                                       # (72 = 2: right, on its baseline — at the 11 point)
+            pairs += [(72, 2), (11, float(at[0])), (21, float(at[1])), (31, 0.0)]
         self._put(*pairs)
 
     def solid(self, layer, points):
@@ -189,13 +192,27 @@ def _marks(w, drawing, mm, gstyle=None):
         if box is not None:
             lo, hi = box
             level = styles["level"]
-            for z, name in levels:
-                a = np.array((lo[0] - marks_model.LEVEL_OVER * mm, z))
-                b = np.array((hi[0] + marks_model.LEVEL_OVER * mm, z))
-                for p, q in marks_model.line_pieces(a, b, level, mm)[0]:
+            ends = getattr(drawing, "level_ends", None)          # (0.464: dragged in its view)
+            over = marks_model.LEVEL_OVER * mm
+            x0, x1 = (ends[0] + over, ends[1] - over) if ends else (lo[0], hi[0])
+            own = drawing.bounds(with_levels=False) if ends else (lo, hi)        # (the drawing's own span)
+            for z, name in levels:                     # (0.462: as the Storeys panel sets it — model/symbols)
+                parts = marks_model.level_parts(z, x0, x1, name, level, mm, model=(own[0][0], own[1][0]))
+                for p, q in parts.pieces:
                     w.line("MARCAS", p, q)
-                w.text("MARCAS", b + np.array((2.5, 1.0)) * mm, level["text"] * mm,
-                       "{}  {}".format(marks_model.level_text(z), name))
+                for c, r in parts.circles:             # (a CAD circle, not its sides)
+                    w.circle("MARCAS", c, r)
+                for p, q in parts.outline:             # (the circles' sides left out: drawn as circles)
+                    if not any(float(np.linalg.norm(q - p)) < r and abs(float(np.linalg.norm(p - c)) - r) < 1e-9 * max(r, 1)
+                               + 1e-9 for c, r in parts.circles):
+                        w.line("MARCAS", p, q)
+                for poly in parts.filled:
+                    for k in range(1, len(poly) - 1):
+                        w.solid("MARCAS", (poly[0], poly[k], poly[k + 1]))
+                for at, text, align, size in parts.texts:
+                    vertical, side = align.split("-")
+                    base = at + np.array((0.0, 0.0 if vertical == "bottom" else -size * mm))
+                    w.text("MARCAS", base, size * mm, text, right=side == "right")
 
 
 def write(path, drawing, scale=100):

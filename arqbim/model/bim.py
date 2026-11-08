@@ -4517,8 +4517,65 @@ def unmake_typical(doc, storey):
     model = doc.ifc.typical_of(storey)
     if model is None:
         return False
-    doc.execute(IfcCommand(t("cmd.untypical"), lambda ifc: ifc.unmake_typical(model)))
+    # (0.463) the dimensions and the drawing its plans shared: each storey keeps them, a copy each (the walls they are
+    # hung on: the storey's own, the same place in plan, when they are its group's copies)
+    from . import annotations as notes2d
+    from . import dimensions as dims_model
+    from .document import JoinedCommand
+    members = doc.ifc.typical_sets().get(model, [])
+    levels = {g: z for g, _n, z in doc.storeys()}
+    anns, dims = [], []
+    for source in members:
+        for target in members:
+            if target == source:
+                continue
+            dz = levels.get(target, 0.0) - levels.get(source, 0.0)
+            for a in [a for a in doc.annotations if a.view == ("plan", source)]:
+                c = copy.deepcopy(a)
+                c.view = ("plan", target)
+                c.points = [np.asarray(p, dtype=float) + (0.0, 0.0, dz) for p in a.points]
+                anns.append(c)
+            for d in [d for d in doc.dimensions if d.view == ("plan", source)]:
+                c = copy.deepcopy(d)
+                c.view = ("plan", target)
+                c.refs = [_counterpart_ref(doc, ref, target) for ref in (getattr(d, "refs", None) or ())]
+                c.at_ref = _counterpart_ref(doc, d.at_ref, target)
+                c.vertex_ref = _counterpart_ref(doc, d.vertex_ref, target)
+                for name in ("a", "b", "at", "vertex"):
+                    p = getattr(d, name, None)
+                    if p is not None:
+                        setattr(c, name, np.asarray(p, dtype=float) + (0.0, 0.0, dz))
+                dims.append(c)
+    label = t("cmd.untypical")
+    steps = [IfcCommand(label, lambda ifc: ifc.unmake_typical(model))]
+    if anns:
+        steps.append(notes2d.AddAnnotations(anns, label))
+    if dims:
+        steps.append(dims_model.ReplaceDimensions([], dims, label))
+    doc.execute(JoinedCommand(steps, label) if len(steps) > 1 else steps[0])
     return True
+
+
+def _counterpart_ref(doc, ref, storey):
+    """(0.463) A dimension's end hung on an element of a typical floor: hung on that element's copy on `storey` (the
+    same role in its group there), else as it was."""
+    if not ref:
+        return ref
+    try:
+        guid = ref[0]
+        group = doc.ifc.group_of(guid)
+        role = doc.ifc.role_of(guid) if group is not None else None
+        if role is None:
+            return ref
+        model = doc.ifc.typical_of(storey)
+        for g in doc.ifc.group_copies(model) if model else ():
+            if doc.ifc._params(g).get("Pavimento") == storey:
+                twin = next((m for m in doc.ifc.group_members(g) if doc.ifc.role_of(m) == role), None)
+                if twin is not None:
+                    return (twin, *tuple(ref)[1:])
+    except Exception:
+        return ref
+    return ref
 
 
 def repeat_on_storeys(doc, obj_ids, storey_guids):

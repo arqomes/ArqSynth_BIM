@@ -34,13 +34,19 @@ DEFAULTS = {
         "section": {"head": "circle", "size": 4.0, "arrow": "filled", "text": 4.8, "line": "dashdot", "pen": 0.30},
         "elevation": {"head": "circle", "size": 4.0, "arrow": "filled", "text": 4.8, "pen": 0.30},
         "detail": {"head": "circle", "size": 3.2, "line": "dashed", "text": 3.8, "pen": 0.25},
-        "level": {"mark": "triangle", "size": 1.8, "line": "dashdot", "text": 2.2, "pen": 0.18},
+        # (0.462) a level's too: at which end(s) its mark, its words, its colour ("": the drawing's ink), seen in 3D
+        "level": {"mark": "triangle", "size": 1.8, "line": "dashdot", "text": 2.2, "pen": 0.18, "ends": "right",
+                  "label": "level_name", "colour": "", "in_3d": True,
+                  "over": True},                       # (0.464) its line across the drawing (off: its sides only)
     },
 }
 # (0.360) what each part of a symbol may be
 SYMBOL_KINDS = ("section", "elevation", "detail", "level")
 SYMBOL_CHOICES = {"head": ("circle", "square", "none"), "arrow": ("filled", "open", "none"),
-                  "line": ("dashdot", "dashed", "continuous", "ends"), "mark": ("triangle", "target", "none")}
+                  "line": ("dashdot", "dashed", "continuous", "ends"),
+                  "mark": ("triangle", "target", "square", "none"),                     # (0.462: the square)
+                  "ends": ("right", "left", "both"),                                    # (0.462)
+                  "label": ("level_name", "name_level", "name_over", "level_over")}
 SYMBOL_SIZES = {"size": (1.0, 12.0), "text": (1.0, 12.0), "pen": (0.05, 1.0)}
 
 
@@ -96,6 +102,10 @@ def clean(style):
         for name in mine:
             if name in SYMBOL_CHOICES and given.get(name) in SYMBOL_CHOICES[name]:
                 mine[name] = given[name]
+            elif name == "colour" and name in given:              # (0.462: "" the drawing's ink)
+                mine[name] = _colour(given[name], "")
+            elif isinstance(mine[name], bool) and name in given:  # (0.462: seen in 3D)
+                mine[name] = bool(given[name])
             elif name in SYMBOL_SIZES and name in given:
                 low, high = SYMBOL_SIZES[name]
                 try:

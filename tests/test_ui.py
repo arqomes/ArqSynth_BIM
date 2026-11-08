@@ -496,6 +496,126 @@ class DrawPanel(unittest.TestCase):
             doc.modified = False
 
 
+class LevelLook(unittest.TestCase):
+    """0.462 — the owner: «A REPRESENTAÇÃO, OU APARÊNCIA ESSES ELEMENTOS DEVER SER CONFIGURADOS NESSA ABA. A LINHA E A
+    EXTREMIDADE»: a level drawn as its style says (Revit's quartered circle with the name over the line and the level
+    under it, a square, none — at the right, the left or both ends, its words towards the drawing); the Storeys panel
+    showing and sending its look; kept in the project's graphic style."""
+
+    def test_level_parts(self):
+        from arqbim.model import graphic_styles as gs
+        from arqbim.model import symbols
+        style = dict(gs.symbol(None, "level"), mark="target", label="name_over", ends="both")
+        parts = symbols.level_parts(3.0, 0.0, 10.0, "Piso 1", style, 0.1)
+        over = symbols.LEVEL_OVER * 0.1
+        self.assertEqual([tuple(np.round(p, 6)) for p in parts.pieces[0]], [(-over, 3.0), (10.0 + over, 3.0)])
+        self.assertEqual(len(parts.circles), 2)                                # (a head at each end)
+        self.assertEqual(len(parts.filled), 4)                                 # (two quarters each)
+        right = [(t_, a) for p, t_, a, _h in parts.texts if p[0] > 5]
+        self.assertEqual(right, [("Piso 1", "bottom-right"), ("+3,00", "top-right")])
+        left = [(t_, a) for p, t_, a, _h in parts.texts if p[0] < 5]
+        self.assertEqual(left, [("Piso 1", "bottom-left"), ("+3,00", "top-left")])
+        np.testing.assert_allclose(parts.circles[1][0], (10.0 + over + 0.18, 3.0), atol=1e-9)   # (beyond its end)
+        square = symbols.level_parts(0.0, 0.0, 10.0, "Térreo", dict(style, mark="square", ends="right",
+                                                                    label="name_level"), 0.1)
+        self.assertEqual((len(square.filled), len(square.circles)), (1, 0))
+        self.assertEqual(square.texts[0][1], "Térreo | ±0,00")
+        bare = symbols.level_parts(6.0, 0.0, 10.0, "Piso 2", dict(style, mark="none", ends="left",
+                                                                  label="level_over"), 0.1)
+        self.assertEqual((bare.filled, bare.outline, [t_ for _p, t_, _a, _h in bare.texts]), ([], [], ["+6,00", "Piso 2"]))
+        # (0.464, the owner: «um utilizador pode não querer que as linhas ficam em cima do desenho») its sides only
+        apart = symbols.level_parts(3.0, 0.0, 10.0, "Piso 1", dict(style, over=False), 0.1, model=(0.0, 10.0))
+        self.assertEqual(len(apart.pieces), 2)
+        self.assertTrue(all(max(p[0], q[0]) <= 0.0 or min(p[0], q[0]) >= 10.0 for p, q in apart.pieces))
+        self.assertEqual(len(symbols.level_parts(3.0, 0.0, 10.0, "Piso 1", style, 0.1, model=(0.0, 10.0)).pieces), 1)
+        clean = gs.clean({"symbols": {"level": {"mark": "square", "colour": "#3a6fb5", "in_3d": False, "ends": "x"}}})
+        level = clean["symbols"]["level"]
+        self.assertEqual((level["mark"], level["colour"], level["in_3d"], level["ends"]), ("square", "#3a6fb5", False,
+                                                                                         "right"))
+        self.assertEqual(gs.clean({"symbols": {"level": {"colour": "blue?"}}})["symbols"]["level"]["colour"], "")
+
+    def test_storeys_panel_look(self):
+        from arqbim.model import graphic_styles as gs
+        from arqbim.ui import storeys
+        panel = storeys.StoreysPanel(None)
+        try:
+            sent = []
+            panel.on_level_style = sent.append
+            panel.show_level_style(dict(gs.symbol(None, "level"), mark="target", colour="#d23c3c"))
+            self.assertEqual((panel.look_mark.currentData(), panel.look_colour.currentData()), ("target", "#d23c3c"))
+            pump()
+            self.assertEqual(sent, [])                                         # (shown: nothing sent back)
+            panel.look_ends.setCurrentIndex(panel.look_ends.findData("both"))
+            panel.look_3d.setChecked(False)
+            for _ in range(3):
+                pump()
+            self.assertTrue(sent)
+            self.assertEqual((sent[-1]["ends"], sent[-1]["in_3d"], sent[-1]["mark"], sent[-1]["colour"]),
+                             ("both", False, "target", "#d23c3c"))
+            panel.show_level_style(dict(gs.symbol(None, "level"), colour="#123456"))      # (a colour of its own)
+            self.assertEqual(panel.look_colour.currentData(), "#123456")
+            image = panel.look_preview.grab()
+            self.assertGreater(image.width(), 0)
+        finally:
+            panel.deleteLater()
+
+
+class LevelEnds(unittest.TestCase):
+    """0.464 — the owner: «os símbolos dos níveis precisam ser ajustável no 3D na vista e corte para não cobrirem o
+    corte ou ficar sobre o modelo»: a view's levels' ends kept as its own (a section's two, a 3D view's ring), read
+    back from the file; the drawing on paper follows them."""
+
+    def test_level_ends_kept(self):
+        from arqbim.model import view_templates as vt
+        doc = Document()
+        try:
+            view = ("elevation", "S")
+            self.assertIsNone(doc.view_settings(view).levels)
+            self.assertTrue(doc.set_level_ends(view, (-3.0, 14.5)))
+            self.assertEqual(doc.view_settings(view).levels, (-3.0, 14.5))
+            self.assertFalse(doc.set_level_ends(view, (-3.0, 14.5)))            # (the same: nothing)
+            self.assertTrue(doc.set_level_ends(("3d",), (-1.0, -2.0, 9.0, 7.0)))
+            self.assertEqual(doc.view_settings(("3d",)).levels, (-1.0, -2.0, 9.0, 7.0))
+            own = vt.own_from_dict(vt.own_to_dict(doc.view_props[view]))      # (as the file keeps it)
+            self.assertEqual(own["levels"], [-3.0, 14.5])
+            self.assertNotIn("levels", vt.own_from_dict({"levels": [5.0, 1.0]}))   # (ends the wrong way: left out)
+            doc.undo()
+            self.assertIsNone(doc.view_settings(("3d",)).levels)
+            self.assertTrue(doc.set_level_ends(view, None))                    # (back to the model's)
+            self.assertIsNone(doc.view_settings(view).levels)
+        finally:
+            doc.modified = False
+
+
+class TypicalPicking(unittest.TestCase):
+    """0.463 — the owner: «Se quiser selecionar um grupo de nível e igualar»: several storeys picked in the Storeys
+    panel's list (kept as the list is made again) — «Igualar (n)» sends them; on a typical storey «Separar»."""
+
+    def test_pick_and_make_equal(self):
+        from arqbim.ui import storeys
+        panel = storeys.StoreysPanel(None)
+        try:
+            levels = [("G", "Térreo", 0.0), ("A", "Piso 1", 3.0), ("B", "Piso 2", 6.0)]
+            panel.show_storeys(levels, "A")
+            self.assertEqual(panel.btn_typical.text(), "Iguais…")
+            sent = []
+            panel.on_typical = sent.append
+            for i in range(panel.table.topLevelItemCount()):
+                item = panel.table.topLevelItem(i)
+                item.setSelected(item.data(0, storeys.GUID) in ("A", "B"))
+            self.assertEqual(panel.btn_typical.text(), "Igualar (2)")
+            panel.show_storeys(levels, "B")                                  # (made again: still picked)
+            self.assertEqual(panel.btn_typical.text(), "Igualar (2)")
+            panel.btn_typical.click()
+            for _ in range(3):
+                pump()
+            self.assertEqual(sent, [["A", "B"]])
+            panel.show_storeys(levels, "A", {"A": "A", "B": "A"})
+            self.assertEqual(panel.btn_typical.text(), "Separar")
+        finally:
+            panel.deleteLater()
+
+
 class BrowserTabs(unittest.TestCase):
     """0.461 — the owner: «no rodapé, vamos colocar outras abas de filtro, Geral… Vistas… Biblioteca… Projeto»: the
     Project Browser's own tabs at its foot — what its tree shows: all of it, the views, the library, the model —; a
