@@ -102,6 +102,7 @@ class Piece:
         self.face_color = face_color
         self.edge_color = edge_color
         self.source = mesh                      # the mesh it was made from
+        self.textures = []                      # (0.469) model/material_textures.groups: its textured faces
 
     @property
     def triangles(self):
@@ -171,6 +172,7 @@ def plain_pieces(meshes, face_colors, edge_color):
         p.positions, p.normals, p.owner, p.edges = pos_of[k], nrm_of[k], face_of[k], end_of[k]
         p.face_color = face_colors[k] if face_colors[k] is not None else p.own
         p.edge_color = edge_color
+        p.textures = []
         out.append(p)
     return out
 
@@ -226,6 +228,12 @@ class Batch:
         self.triangles = 0            # kept up to date by set_piece / drop_piece
         self._added = []              # pieces new since the last rebuild (only these: see _append)
         self._reshaped = False        # a piece replaced or removed since the last rebuild
+        # (0.469) its pieces' textured faces: one mesh a material (texture_material(key) -> its gfx material, or
+        # None), over the faces; those of the elements in tex_hidden left out (selected, coloured by a rule)
+        self.texture_meshes = {}
+        self.texture_material = None
+        self.tex_hidden = set()
+        self.tex_dirty = False
 
     def set_piece(self, obj_id, piece):
         old = self.pieces.get(obj_id)
@@ -245,11 +253,44 @@ class Batch:
             self.dirty = True
 
     def _drop_gpu(self):
-        for wobj in (self.mesh, self.lines, self.poche, self.patterns):
+        for wobj in (self.mesh, self.lines, self.poche, self.patterns, *self.texture_meshes.values()):
             if wobj is not None:
                 self.root.remove(wobj)
         self.mesh = self.lines = self.poche = self.patterns = None
+        self.texture_meshes = {}
         self.used = {}
+
+    def _sync_textures(self):
+        """(0.469) Its pieces' textured faces, one mesh a material — a hair over the faces, drawn after them and not
+        picked (a click picks the element under them)."""
+        self.tex_dirty = False
+        groups = {}
+        for obj_id, p in self.pieces.items():
+            if p.textures and obj_id not in self.tex_hidden:
+                for key, positions, normals, uv in p.textures:
+                    groups.setdefault(key, []).append((positions, normals, uv))
+        for key in [k for k in self.texture_meshes if k not in groups]:
+            self.root.remove(self.texture_meshes.pop(key))
+        for key, parts in groups.items():
+            material = self.texture_material(key) if self.texture_material is not None else None
+            mesh = self.texture_meshes.get(key)
+            if material is None:
+                if mesh is not None:
+                    self.root.remove(self.texture_meshes.pop(key))
+                continue
+            positions = np.concatenate([a for a, _n, _u in parts])
+            geometry = gfx.Geometry(positions=positions, normals=np.concatenate([n for _a, n, _u in parts]),
+                                    texcoords=np.concatenate([u for _a, _n, u in parts]),
+                                    indices=np.arange(len(positions), dtype=np.uint32).reshape(-1, 3))
+            if mesh is None:
+                mesh = gfx.Mesh(geometry, material)
+                self.root.add(mesh)
+                self.texture_meshes[key] = mesh
+            else:
+                mesh.geometry, mesh.material = geometry, material
+            mesh.visible = self.visible
+            mesh.receive_shadow = self.shadows
+            mesh.cast_shadow = False
 
     def _sync_poche(self):
         """The poché object shares the mesh's buffers; shown in plans only."""
@@ -270,6 +311,9 @@ class Batch:
 
     def rebuild(self):
         """Concatenate the pieces into one mesh and one line object."""
+        if not self.dirty:                      # (0.469: only its textured faces to show again)
+            self._sync_textures()
+            return
         self.dirty = False
         added, reshaped = self._added, self._reshaped
         self._added, self._reshaped = [], False
@@ -303,18 +347,22 @@ class Batch:
                  "colors": [(p.pattern_colors, len(p.pattern)) for p in pieces if len(p.pattern)]} if n else None
         if self.pattern_material is not None:
             self.patterns = self._update(self.patterns, drawn, n, gfx.Line, self.pattern_material, "patterns")
+        if self.texture_meshes or any(p.textures for p in pieces):
+            self._sync_textures()
 
     def _sync_shadows(self):
         if self.mesh is not None:
             self.mesh.cast_shadow = self.mesh.receive_shadow = self.shadows
+        for mesh in self.texture_meshes.values():
+            mesh.receive_shadow = self.shadows
 
     def _append(self, added):
         """Only pieces were added since the last rebuild (a file coming in as its shapes are made):
         write them after the others, in the same buffers, if these have room. False: they have
         not (or there are none yet) — the whole batch is made again."""
         pieces = [self.pieces[i] for i in added]
-        if self.patterns is not None or any(len(p.pattern) for p in pieces):
-            return False                                          # (0.315: with surface patterns, made again)
+        if self.patterns is not None or any(len(p.pattern) for p in pieces) or any(p.textures for p in pieces):
+            return False                            # (0.315: with surface patterns — 0.469: or textures — made again)
         nv, ne = sum(len(p.positions) for p in pieces), sum(len(p.edges) for p in pieces)
         v0, e0 = self.used.get("mesh", 0), self.used.get("lines", 0)
         for wobj, n0, n in ((self.mesh, v0, nv), (self.lines, e0, ne)):
@@ -439,6 +487,17 @@ class Batch:
             self.poche.visible = on and self.show_poche
         if self.patterns is not None:
             self.patterns.visible = on and self.show_patterns
+        for mesh in self.texture_meshes.values():
+            mesh.visible = on
+
+    def hide_textures(self, obj_id, hidden):
+        """(0.469) An element's textured faces left out (selected: its highlight seen; coloured by a rule) or not."""
+        if hidden == (obj_id in self.tex_hidden):
+            return
+        (self.tex_hidden.add if hidden else self.tex_hidden.discard)(obj_id)
+        piece = self.pieces.get(obj_id)
+        if piece is not None and piece.textures:
+            self.tex_dirty = True
 
     def set_look(self, face_material, edges, patterns=True):
         """The 3D view's visual style: the faces' material, the edges drawn or not — (0.315) and the surface
@@ -489,6 +548,32 @@ class BatchedElements:
         self.earth_material = gfx.MeshBasicMaterial(color=canvas.ink(EARTH_POCHE), side="back", pick_write=True)
         self.cutting = False
         self.poche_lift = (0.0, 0.0, POCHE_LIFT)
+        # (0.469) the textured faces' materials, one a material key: made by texture_factory(key) (the viewport's:
+        # its pictures read), kept until forget_textures(); cut as the faces are
+        self.texture_factory = None
+        self.texture_materials = {}
+        self._planes = ()
+
+    def texture_material(self, key):
+        if key not in self.texture_materials:
+            material = self.texture_factory(key) if self.texture_factory is not None else None
+            if material is not None:
+                material.clipping_planes = list(self._planes)
+                material.side = "front" if self.cutting else "both"
+            self.texture_materials[key] = material
+        return self.texture_materials[key]
+
+    def forget_textures(self):
+        """(0.469) The materials changed: their textured faces' materials made again (at the next rebuild)."""
+        self.texture_materials = {}
+        for batch in self.batches:
+            if batch.texture_meshes:
+                batch.tex_dirty = True
+
+    def hide_textures(self, obj_id, hidden):
+        batch = self.where.get(obj_id)
+        if batch is not None:
+            batch.hide_textures(obj_id, hidden)
 
     def set_canvas(self, turned):
         """(0.341) The colours of its own materials in the canvas in use (render/canvas): the poché; the hidden-line
@@ -505,10 +590,12 @@ class BatchedElements:
         lift: where the poché is moved, a hair towards the viewer."""
         self.cutting = bool(on)
         self.poche_lift = tuple(lift)
-        for material in (*self.face_materials.values(), *self.clear_materials.values()):
+        self._planes = tuple(planes)
+        textures = [m for m in self.texture_materials.values() if m is not None]
+        for material in (*self.face_materials.values(), *self.clear_materials.values(), *textures):
             material.side = "front" if self.cutting else "both"
         for material in (*self.face_materials.values(), *self.clear_materials.values(), self.line_material,
-                         self.poche_material, self.earth_material, self.pattern_material):
+                         self.poche_material, self.earth_material, self.pattern_material, *textures):
             material.clipping_planes = list(planes)
         for batch in self.batches:
             batch.poche_lift = self.poche_lift
@@ -567,6 +654,7 @@ class BatchedElements:
                 batch = Batch(key, self.root, self.clear_materials[self.style] if clear else self.face_material,
                               self.line_material, self.earth_material if ground else self.poche_material,
                               self.pattern_material)
+                batch.texture_material = self.texture_material                     # (0.469)
                 batch.show_poche, batch.poche_lift, batch.show_edges = self.cutting, self.poche_lift, self.edges
                 batch.show_patterns, batch.shadows = self.patterns, self.shadows
                 self.batches.append(batch)
@@ -584,7 +672,7 @@ class BatchedElements:
         stops for long: each image also sends to the graphics card only the batches made for it (reopening the big
         building: one stop of 1,1 s, now a dozen images of ~0,1 s). A few changed (an edit): all now, as before.
         True if some are left."""
-        dirty = [b for b in self.batches if b.dirty]
+        dirty = [b for b in self.batches if b.dirty or b.tex_dirty]
         start = time.perf_counter()
         for k, batch in enumerate(dirty):
             if budget is not None and k and len(dirty) > FEW_BATCHES and time.perf_counter() - start > budget:
@@ -596,7 +684,7 @@ class BatchedElements:
 
     def pending(self):
         """(0.328) Batches still to be made again (see flush's budget)."""
-        return any(b.dirty for b in self.batches)
+        return any(b.dirty or b.tex_dirty for b in self.batches)
 
     def recolor(self, obj_id, face_color, edge_color):
         batch = self.where.get(obj_id)

@@ -1522,6 +1522,12 @@ _STRINGS = {
     "vstyle.patterns_on": ("Azulejos, tijolos, pedra… nas faces", "Tiles, bricks, stone… on the faces"),
     "vstyle.transparency": ("Transparência", "Transparency"),
     "vstyle.transparency_on": ("Vidro e materiais transparentes", "Glass and see-through materials"),
+    "vstyle.textures": ("Texturas", "Textures"),                                       # (0.469)
+    "vstyle.textures_on": ("Texturas dos materiais", "The materials' textures"),
+    "tip.vstyle.textures": ("As imagens do aspeto realista dos materiais (painel Materiais ▸ Editar ▸ Realista) nas "
+                            "faces — com faces sombreadas nas cores dos materiais.", "The pictures of the materials' "
+                            "realistic look (Materials panel ▸ Edit ▸ Realistic) on the faces — with shaded faces in "
+                            "the materials' colours."),
     "vstyle.cut": ("Corte (desenhos)", "Cut (drawings)"),
     "vstyle.cut.material": ("Padrões de cada material", "Each material's patterns"),
     "vstyle.cut.category": ("Trama da categoria (estilo gráfico)", "The category's (graphic style)"),
@@ -1940,6 +1946,10 @@ _STRINGS = {
     "tree.scope.views": ("Vistas", "Views"),
     "tree.scope.library": ("Biblioteca", "Library"),
     "tree.scope.project": ("Projeto", "Model"),
+    "tree.scope.sheets": ("Folhas", "Sheets"),                                         # (0.470)
+    "tip.tree.scope.sheets": ("Só as folhas e as vistas postas em cada uma — o último passo: imprimir e exportar "
+                              "(clique direito)", "Only the sheets and the views on each — the last step: print and "
+                              "export (right click)"),
     "tip.tree.scope.all": ("Tudo: as vistas, a biblioteca e o modelo, numa só árvore",
                            "All: the views, the library and the model, in one tree"),
     "tip.tree.scope.views": ("Só as vistas: plantas, cortes, alçados, vistas 3D, eixos e folhas",

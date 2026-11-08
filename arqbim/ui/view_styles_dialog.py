@@ -204,6 +204,10 @@ class ViewStylesDialog(QtWidgets.QDialog):
         self.transparency = QtWidgets.QCheckBox(t("vstyle.transparency_on"))
         self.transparency.toggled.connect(lambda on: self._set(transparency=bool(on)))
         form.addRow(t("vstyle.transparency"), self.transparency)
+        self.textures = QtWidgets.QCheckBox(t("vstyle.textures_on"))       # (0.469) the materials' pictures
+        self.textures.setToolTip(t("tip.vstyle.textures"))
+        self.textures.toggled.connect(lambda on: self._set(textures=bool(on)))
+        form.addRow(t("vstyle.textures"), self.textures)
         self.cut = self._combo(styles_model.CUTS, "vstyle.cut.", "cut")
         form.addRow(t("vstyle.cut"), self.cut)
         # (0.318) its hatches by category, over the materials'
@@ -303,6 +307,7 @@ class ViewStylesDialog(QtWidgets.QDialog):
         self.altitude.setValue(style.sun_altitude)
         self.patterns.setChecked(style.patterns)
         self.transparency.setChecked(style.transparency)
+        self.textures.setChecked(style.textures)
         self._fill_categories(style)
         self._loading = False
         self.form.setEnabled(not style.builtin)

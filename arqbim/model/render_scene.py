@@ -46,6 +46,10 @@ class RenderScene:
     lighting: str = "sun_lights"                 # LIGHTINGS
     exposure: float = 0.0       # EV, over the automatic one
     clean: bool = True          # its grain filtered out (render/path_tracer.clean)
+    # (0.470) the groups of a material's own realistic look (their finish "look:" + its key): {group: its look
+    # (look_dict)} and {group: its pictures' coordinates (T, 3, 2)} when it has pictures
+    looks: dict = field(default_factory=dict)
+    uvs: dict = field(default_factory=dict)
 
     @property
     def triangles(self):
@@ -57,9 +61,11 @@ class RenderScene:
                 "height": float(self.height), "sun": list(map(float, self.sun)),
                 "ground": list(map(float, self.ground)) if self.ground is not None else None,
                 "lights": [float(lum) for lum, _t in self.lights], "lighting": self.lighting,
-                "exposure": float(self.exposure), "clean": bool(self.clean)}
+                "exposure": float(self.exposure), "clean": bool(self.clean),
+                "looks": {str(k): v for k, v in self.looks.items()}}                   # (0.470)
         arrays = {"t{}".format(k): np.asarray(t, dtype=np.float32) for k, (_f, _c, t) in enumerate(self.groups)}
         arrays.update({"l{}".format(k): np.asarray(t, dtype=np.float32) for k, (_l, t) in enumerate(self.lights)})
+        arrays.update({"u{}".format(k): np.asarray(uv, dtype=np.float32) for k, uv in self.uvs.items()})
         np.savez_compressed(path, meta=np.array(json.dumps(meta)), **arrays)
 
     @staticmethod
@@ -68,10 +74,12 @@ class RenderScene:
         meta = json.loads(str(data["meta"]))
         groups = [(f, tuple(c), data["t{}".format(k)]) for k, (f, c) in enumerate(meta["groups"])]
         lights = [(lum, data["l{}".format(k)]) for k, lum in enumerate(meta.get("lights", ()))]
+        looks = {int(k): v for k, v in (meta.get("looks") or {}).items()}
+        uvs = {k: data["u{}".format(k)] for k in looks if "u{}".format(k) in data.files}
         return RenderScene(groups, tuple(meta["eye"]), tuple(meta["target"]), tuple(meta["up"]), meta["fov"],
                            meta["height"], tuple(meta["sun"]), tuple(meta["ground"]) if meta["ground"] else None,
                            lights, meta.get("lighting", "sun_lights"), float(meta.get("exposure", 0.0)),
-                           bool(meta.get("clean", True)))
+                           bool(meta.get("clean", True)), looks, uvs)
 
 
 def finish_of(category, alpha, own=""):
@@ -92,6 +100,35 @@ def look_of(spec):
         return spec.look
     alpha = 1.0 - float(getattr(spec, "transparency", 0.0) or 0.0)
     return pbr.from_finish(finish_of(getattr(spec, "category", ""), alpha, getattr(spec, "finish", "") or ""))
+
+
+def own_look(key):
+    """(0.470) A material's own realistic look (chosen in the Materials panel), or None (its finish's)."""
+    from ..ifc import catalog
+    spec = catalog.MATERIALS.get(key) if key else None
+    return getattr(spec, "look", None)
+
+
+def look_dict(look, beside=None):
+    """(0.470) A realistic look as the render's process takes it: its values, its colours as sRGB 0–1 (tint_rgb: None
+    for the face's own), its pictures {slot: [file found, turned over]} — those not found left out (beside: the
+    project's folder, where a moved one is looked for)."""
+    from dataclasses import asdict
+    from ..core import pbr
+    out = {k: v for k, v in asdict(look).items() if k not in ("maps", "tint", "emission_colour")}
+
+    def rgb(text):
+        text = str(text or "")
+        return [int(text[k:k + 2], 16) / 255.0 for k in (1, 3, 5)] if len(text) == 7 else None
+    out["tint_rgb"] = rgb(look.tint)
+    out["emission_rgb"] = rgb(look.emission_colour) or [1.0, 1.0, 1.0]
+    maps = {}
+    for slot, path, inverted in look.maps:
+        found = pbr.find(path, beside)
+        if found:
+            maps[slot] = [found, bool(inverted)]
+    out["maps"] = maps
+    return out
 
 
 def light_flux(ifc, obj):
@@ -149,9 +186,12 @@ def gather(doc, objects, lights=None):
                     shining.setdefault(nits, []).append(lit)
                 else:
                     keep[:] = True
+            # (0.470) the faces of a material with a realistic look of its own: apart, by material ("look:" + key)
+            keys = seen.materials if seen.materials is not None else none
+            looked = {k for k in set(keys) if k and own_look(k) is not None}
             codes = {}
-            index = np.array([codes.setdefault((finish_of(c, a, o), tuple(r)), len(codes))
-                              for c, a, r, o in zip(cats, alpha, rgb, own)])
+            index = np.array([codes.setdefault((("look:" + m) if m in looked else finish_of(c, a, o), tuple(r)),
+                                               len(codes)) for c, a, r, o, m in zip(cats, alpha, rgb, own, keys)])
             for key, n in codes.items():
                 found.setdefault(key, []).append(corners[(index == n) & keep])
         else:
@@ -183,10 +223,25 @@ def scene_of(doc, objects, camera, sun, lighting="sun_lights", exposure=0.0, cle
         groups.append(("matte", GROUND_RGB, _square((lo + hi) / 2.0, ground[0], ground[1])))
     sun = np.asarray(sun, dtype=float)
     sun = sun / max(float(np.linalg.norm(sun)), 1e-9)
+    # (0.470) the materials' own realistic looks: their values and pictures, their faces' pictures' coordinates
+    from ..core import pbr
+    import os
+    beside = os.path.dirname(doc.path) if getattr(doc, "path", None) else None
+    looks, uvs = {}, {}
+    for k, (finish, _rgb, triangles) in enumerate(groups):
+        look = own_look(finish[5:]) if finish.startswith("look:") else None
+        if look is None:
+            continue
+        looks[k] = look_dict(look, beside)
+        if looks[k]["maps"]:
+            t = np.asarray(triangles, dtype=float).reshape(-1, 3, 3)
+            normals = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+            uvs[k] = pbr.uv(t.reshape(-1, 3), np.repeat(normals, 3, axis=0), look).reshape(-1, 3, 2) \
+                .astype(np.float32)
     return RenderScene(groups, tuple(map(float, camera["eye"])), tuple(map(float, camera["target"])),
                        tuple(map(float, camera.get("up", (0.0, 0.0, 1.0)))), float(camera.get("fov", 45.0)),
                        float(camera.get("height", 0.0)), tuple(map(float, sun)), ground, lights,
-                       lighting if lighting in LIGHTINGS else "sun_lights", float(exposure), bool(clean))
+                       lighting if lighting in LIGHTINGS else "sun_lights", float(exposure), bool(clean), looks, uvs)
 
 
 def _square(centre, z, half):

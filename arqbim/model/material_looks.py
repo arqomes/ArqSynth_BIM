@@ -222,7 +222,11 @@ def look(ifc, obj, base_rgb, colours=True, patterns=True, clear=True, lift=0.0, 
         for key in set(paint_keys) - {""}:
             spec = catalog.MATERIALS.get(key)
             if spec is not None:
-                rgb[paint_keys == key] = spec.color
+                where = paint_keys == key
+                rgb[where] = spec.color
+                # (0.469) …and it is the faces' material: its textures, its look in the render
+                keys[where], categories[where] = key, spec.category
+                finishes[where] = getattr(spec, "finish", "") or ""
     return Look(corners, normals, faces, rgb, alpha, laid, split, see_through, categories, finishes, keys,
                 painted=paint_keys is not None and bool(np.any(paint_keys != "")))
 

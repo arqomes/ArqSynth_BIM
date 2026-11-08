@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.469.0 — 2026-11-08
+
+**As texturas e o aspeto realista dos materiais no 3D (estilo Realista) e no render** (continuação do pedido do dono:
+«colocar suporte a textura, e todos os controlos de um material realista… inspirar no D5 Render»).
+
+- No estilo **Realista**, as faces de um material com texturas mostram a imagem, iluminada:
+  - assentam como no SketchUp e no Revit: numa parede ao longo dela e para cima, num piso em planta;
+  - com o tamanho em metros, a rotação e o deslocamento do painel Materiais;
+  - com o mapa normal (relevo à luz), a rugosidade, o metálico, a oclusão e a emissão;
+  - recebem as sombras do sol.
+- Um clique continua a escolher o elemento por baixo da textura. O elemento selecionado (ou colorido por uma regra
+  gráfica) perde a textura enquanto o está, para se ver o realce.
+- Nos outros estilos (Sombreado, Linhas ocultas…) e nas plantas e cortes não há texturas.
+- **Estilos de vista**: há a opção nova «Texturas dos materiais» (ligada no Realista), para os estilos do projeto.
+- **Render realista** (Render ▸ Render realista, Mitsuba): um material com aspeto realista próprio usa os controlos
+  todos do painel Materiais:
+  - tipo: padrão, vidro (fino; fosco quando rugoso), água (com refração), luz e tecido;
+  - rugosidade, metálico, reflexão, verniz e brilho de tecido;
+  - as texturas: cor base (com a oclusão), mapa normal ou de altura (relevo), rugosidade, metálico, opacidade e
+    emissão;
+  - um material de luz ilumina a cena com a sua cor e intensidade (cd/m²).
+- Os materiais sem aspeto próprio continuam a sair pelo acabamento, como antes.
+
 ## 0.468.0 — 2026-11-08
 
 **Painel Materiais na coluna, como a Biblioteca, com Selecionar e Editar** (o dono: «A aba materiais eu quero que fique

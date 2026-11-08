@@ -147,19 +147,124 @@ def tone(hdr, exposure=0.0, least=0.0):
     return (np.clip(srgb, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
 
 
-def write_ply(path, triangles):
-    """Flat triangles (T, 3, 3) as a binary PLY (each its own three corners)."""
+def write_ply(path, triangles, uv=None):
+    """Flat triangles (T, 3, 3) as a binary PLY (each its own three corners) — (0.470) with their pictures'
+    coordinates (T, 3, 2), when given."""
     tri = np.asarray(triangles, dtype="<f4").reshape(-1, 3, 3)
     n = len(tri)
     faces = np.zeros(n, dtype=[("count", "u1"), ("index", "<i4", (3,))])
     faces["count"] = 3
     faces["index"] = np.arange(n * 3, dtype="<i4").reshape(-1, 3)
+    texcoords = "" if uv is None else "property float u\nproperty float v\n"
     head = ("ply\nformat binary_little_endian 1.0\nelement vertex {}\nproperty float x\nproperty float y\n"
-            "property float z\nelement face {}\nproperty list uchar int vertex_indices\nend_header\n").format(n * 3, n)
+            "property float z\n{}element face {}\nproperty list uchar int vertex_indices\nend_header\n").format(
+        n * 3, texcoords, n)
     with open(path, "wb") as fh:
         fh.write(head.encode("ascii"))
-        fh.write(tri.reshape(-1, 3).tobytes())
+        if uv is None:
+            fh.write(tri.reshape(-1, 3).tobytes())
+        else:
+            fh.write(np.column_stack((tri.reshape(-1, 3), np.asarray(uv, dtype="<f4").reshape(-1, 2)))
+                     .astype("<f4").tobytes())
         fh.write(faces.tobytes())
+
+
+def _picture(mi, path, inverted=False):
+    """(0.470) A picture file as an (H, W, 3) array 0–1 as stored (sRGB for a colour), its top row first — None when
+    it cannot be read."""
+    try:
+        bitmap = mi.Bitmap(path)
+    except Exception:                      # (Mitsuba says why in many kinds: a picture it cannot read)
+        return None
+    data = np.array(bitmap, dtype=np.float32)
+    if data.ndim == 2:
+        data = data[:, :, None]
+    if bitmap.component_format() in (mi.Struct.Type.UInt8,):
+        data = data / 255.0
+    elif bitmap.component_format() in (mi.Struct.Type.UInt16,):
+        data = data / 65535.0
+    data = data[:, :, :3] if data.shape[2] >= 3 else np.repeat(data[:, :, :1], 3, axis=2)
+    return 1.0 - data if inverted else data
+
+
+def _texture(mi, data):
+    """A picture's values (H, W, C), its top row first, as Mitsuba's bitmap — taken as they are, repeated; turned
+    upside down: a face's pictures' coordinates go up (render_scene: core/pbr.uv), Mitsuba's rows down."""
+    return {"type": "bitmap", "data": mi.TensorXf(np.ascontiguousarray(np.flipud(data), dtype=np.float32)),
+            "raw": True, "filter_type": "bilinear", "wrap_mode": "repeat"}
+
+
+def look_material(mi, look, rgb):
+    """(0.470) Mitsuba's material of a realistic look (core/pbr's, as render_scene keeps it: its pictures' files found)
+    in a colour (sRGB 0–1), as D5 Render's: principled — its base colour (its picture times its own colour, its
+    occlusion in it), roughness and metallic (their pictures, 50 % as they are), reflection, clear coat, sheen —; a
+    glass (thin, or frosted when rough) or water (refracting); its relief (normal map, else its height map's); its
+    opacity (a mask). Returns (bsdf, emitter or None: a light one shines)."""
+    maps = look.get("maps") or {}
+
+    def got(slot):
+        found = maps.get(slot)
+        return _picture(mi, found[0], found[1]) if found else None
+    base = got("base")
+    tint = linear(look.get("tint_rgb") or ((1.0, 1.0, 1.0) if base is not None else rgb))
+    if base is not None:
+        colour = linear(base) * tint
+        ao = got("ao")
+        if ao is not None and ao.shape == base.shape:
+            strength = float(look.get("ao", 1.0))
+            colour = colour * (1.0 - strength * (1.0 - ao.mean(axis=2, keepdims=True)))
+        base_colour = _texture(mi, np.clip(colour, 0.0, 1.0))
+    else:
+        base_colour = {"type": "rgb", "value": [float(v) for v in tint]}
+    kind = look.get("kind", "standard")
+    roughness = float(look.get("roughness", 0.6))
+    if kind == "glass":
+        if roughness < 0.3:
+            shade = [float(v) for v in 0.5 + 0.5 * tint]                       # (a pale tint of its colour)
+            bsdf = {"type": "thindielectric", "specular_transmittance": {"type": "rgb", "value": shade}}
+        else:
+            bsdf = {"type": "principled", "base_color": base_colour, "roughness": roughness, "spec_trans": 0.9}
+    elif kind == "water":
+        shade = [float(v) for v in 0.35 + 0.65 * tint]
+        bsdf = {"type": "dielectric", "int_ior": float(look.get("ior", 1.333)), "ext_ior": 1.0,
+                "specular_transmittance": {"type": "rgb", "value": shade}}
+    else:
+        bsdf = {"type": "principled", "base_color": base_colour, "roughness": roughness,
+                "metallic": float(look.get("metallic", 0.0)), "specular": float(look.get("specular", 0.5)),
+                "clearcoat": float(look.get("clearcoat", 0.0)), "sheen": float(look.get("sheen", 0.0))}
+        for slot in ("roughness", "metallic"):
+            picture = got(slot)
+            if picture is not None:
+                value = picture.mean(axis=2, keepdims=True) * (float(look.get(slot, 0.5)) / 0.5)
+                bsdf[slot] = _texture(mi, np.clip(value, 0.0, 1.0))
+    normal = got("normal")
+    if normal is None and maps.get("height"):                  # (its height map's relief, as a normal map)
+        height = got("height")
+        if height is not None:
+            h = height.mean(axis=2)
+            step = float(look.get("width", 1.0)) / max(h.shape[1], 1)
+            gy, gx = np.gradient(h * float(look.get("height", 0.01)) * 4.0 / max(step, 1e-9))
+            n = np.stack((-gx, gy, np.ones_like(h)), axis=-1)
+            normal = n / np.linalg.norm(n, axis=-1, keepdims=True) * 0.5 + 0.5
+    elif normal is not None:
+        n = normal * 2.0 - 1.0
+        n[:, :, :2] *= float(look.get("normal", 1.0))
+        n /= np.maximum(np.linalg.norm(n, axis=-1, keepdims=True), 1e-9)
+        normal = n * 0.5 + 0.5
+    if normal is not None:
+        bsdf = {"type": "normalmap", "normalmap": _texture(mi, normal), "bsdf": bsdf}
+    opacity = got("opacity")
+    if opacity is not None:
+        bsdf = {"type": "mask", "opacity": _texture(mi, opacity.mean(axis=2, keepdims=True)), "bsdf": bsdf}
+    emitter = None
+    nits = float(look.get("emission", 0.0))
+    if kind == "emissive" or nits > 0.0:
+        glow = linear(look.get("emission_rgb") or (1.0, 1.0, 1.0)) * max(nits, 1.0) / NITS
+        picture = got("emission")
+        radiance = _texture(mi, linear(picture) * glow) if picture is not None else \
+            {"type": "rgb", "value": [float(v) for v in glow]}
+        emitter = {"type": "area", "radiance": radiance}
+    return bsdf, emitter
 
 
 def material(finish, rgb):
@@ -205,13 +310,19 @@ def mitsuba_scene(mi, scene, width, height, folder):
                       "radiance": {"type": "rgb", "value": [v * NIGHT_SKY / NITS for v in NIGHT_RGB]}}
     else:
         out["sky"] = {"type": "sunsky", "sun_direction": [float(v) for v in scene.sun]}
+    looks, uvs = getattr(scene, "looks", None) or {}, getattr(scene, "uvs", None) or {}
     for k, (finish, rgb, triangles) in enumerate(scene.groups):
         if not len(triangles):
             continue
         path = os.path.join(folder, "g{}.ply".format(k))
-        write_ply(path, triangles)
-        out["g{}".format(k)] = {"type": "ply", "filename": path, "face_normals": True,
-                                "bsdf": material(finish, rgb)}
+        look = looks.get(k)                                # (0.470) a material's own realistic look, its pictures
+        write_ply(path, triangles, uvs.get(k) if look is not None else None)
+        shape = {"type": "ply", "filename": path, "face_normals": True, "bsdf": material(finish, rgb)}
+        if look is not None:
+            shape["bsdf"], emitter = look_material(mi, look, rgb)
+            if emitter is not None:
+                shape["emitter"] = emitter
+        out["g{}".format(k)] = shape
     on = dark or scene.lighting == "sun_lights"
     power = sum(nits * _area(t) for nits, t in scene.lights) or 1.0
     for k, (nits, triangles) in enumerate(scene.lights):

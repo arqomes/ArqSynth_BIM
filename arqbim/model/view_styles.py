@@ -39,6 +39,9 @@ class ViewStyle:
     # (0.318) hatches by category, over the materials', as Revit's visibility / graphics overrides: ((IFC class,
     # cut foreground, cut background, surface foreground, surface background), …) — each (pattern, colour) or None
     categories: tuple = ()
+    # (0.469) the materials' textures on the faces (their realistic look's pictures: core/pbr) — with shaded faces in
+    # the materials' colours
+    textures: bool = False
 
     @property
     def builtin(self):
@@ -64,7 +67,7 @@ BUILTIN = {                       # (0.317: the materials' surface patterns seen
     "consistent": ViewStyle("consistent", faces="consistent", colours="material", patterns=True, transparency=True,
                             uid="consistent"),
     "realistic": ViewStyle("realistic", colours="material", patterns=True, transparency=True, shadows=True,
-                           edge_width=1.0, uid="realistic"),
+                           edge_width=1.0, uid="realistic", textures=True),          # (0.469: with the textures)
 }
 DEFAULT = "shaded"
 
@@ -126,7 +129,7 @@ def from_dict(data):
                      bool(data.get("edges", True)), min(max(width, 0.5), 6.0), bool(data.get("shadows", False)),
                      bool(data.get("patterns", False)), bool(data.get("transparency", False)),
                      data.get("cut") if data.get("cut") in CUTS else "material", uid, azimuth, altitude,
-                     tuple(categories))
+                     tuple(categories), bool(data.get("textures", False)))
 
 
 def _layer(value):

@@ -201,6 +201,9 @@ EXTENSION_COLOR = (0.45, 0.45, 0.45, 1.0)
 ACQUIRED_COLOR = (0.35, 0.35, 0.35, 1.0)
 GUIDE_COLOR = "#5a5a5a"
 EDGE_LIFT = 0.002                  # m; keeps edge lines visible on top of their faces
+TEXTURE_SIZE = 2048                # (0.469) px: a material's picture at most this wide on the graphics card…
+TEXTURE_QUEUE = 2700               # …its textured faces drawn after the faces (pygfx's «auto»: 2600), not picked:
+#                                    a click picks the faces under them
 SHEET_LIFT = 0.001                 # m; flat sketches lying on a face are drawn just above it
 OVERLAY_QUEUE = 4000
 MIDDLE = 3
@@ -499,6 +502,9 @@ class Viewport:
         self.objects = gfx.Group()
         self.scene.add(self.objects)
         self.bim = BatchedElements(self.objects)     # IFC elements: a few batches, not one object each
+        self.bim.texture_factory = self._texture_material                # (0.469) the materials' pictures
+        self._texturing = False     # (0.469) the view style shows the materials' textures (the Realistic one)
+        self._textures = {}         # (0.469) (path, mtime, colour space) -> its gfx.Texture
         self._ready = {}            # obj_id -> Piece made in advance (opening a file, see prepare_pieces)
         self._model_turned = (False, False)    # (0.341) shown: (the model's greys turned over, its edges light)
         self._after_draw = []       # called once after the next image (see after_next_draw)
@@ -2341,9 +2347,13 @@ class Viewport:
                     if obj.id in self._views:
                         self.show_object(obj.id, obj.mesh)
         dressing = (vs.colours, vs.patterns, vs.transparency)
-        if dressing != self._dressing or vs.categories != self._overrides:    # (0.315: colours, patterns, glass…)
-            self._dressing = dressing
+        # (0.469) the materials' textures: a style that asks for them, its faces shaded in the materials' colours
+        texturing = bool(getattr(vs, "textures", False)) and vs.faces == "shaded" and vs.colours == "material" and \
+            not cutting
+        if dressing != self._dressing or vs.categories != self._overrides or texturing != self._texturing:
+            self._dressing = dressing                                         # (0.315: colours, patterns, glass…)
             self._overrides = vs.categories                                   # (0.318: …its hatches by category)
+            self._texturing = texturing
             self._redress()
         self._set_shadows(vs.shadows and not cutting and vs.faces in ("shaded", "consistent"))
         if not cutting:
@@ -2471,10 +2481,90 @@ class Viewport:
             if self.cutting():
                 self._apply_look()
 
+    def _no_textures(self, obj_id):
+        """(0.469) An element shown without its textures: selected (its highlight seen), coloured by a graphic rule."""
+        return obj_id in self.selection or obj_id in self.colours
+
+    def _picture_texture(self, path, inverted=False, colorspace="srgb"):
+        """(0.469) A picture file as a texture (made at most TEXTURE_SIZE px wide; kept), or None."""
+        if not path:
+            return None
+        try:
+            key = (path, os.path.getmtime(path), bool(inverted), colorspace)
+        except OSError:
+            return None
+        if key not in self._textures:
+            from PySide6 import QtCore, QtGui
+            image = QtGui.QImage(path)
+            if image.isNull():
+                self._textures[key] = None
+                return None
+            if max(image.width(), image.height()) > TEXTURE_SIZE:
+                image = image.scaled(TEXTURE_SIZE, TEXTURE_SIZE, QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                     QtCore.Qt.TransformationMode.SmoothTransformation)
+            image = image.convertToFormat(QtGui.QImage.Format.Format_RGBA8888)
+            if inverted:
+                image.invertPixels()
+            w, h, line = image.width(), image.height(), image.bytesPerLine()
+            raw = np.frombuffer(bytes(image.constBits()), dtype=np.uint8)[:line * h].reshape(h, line)
+            data = np.ascontiguousarray(np.flipud(raw[:, :w * 4].reshape(h, w, 4)))    # (v up: the picture's top)
+            self._textures[key] = gfx.Texture(data, dim=2, colorspace=colorspace, generate_mipmaps=True)
+        return self._textures[key]
+
+    def _texture_material(self, key):
+        """(0.469) The material of a material's textured faces (model/material_textures), as D5's lit in the Realistic
+        style: physically based, its pictures — base colour (times its own colour), normal map, roughness and metallic
+        (their values scaling them: 50 % as the picture), occlusion, emission —, drawn after the faces and not picked.
+        None when it has no picture that can be read."""
+        from ..core import pbr
+        from ..ifc import catalog
+        from ..model import material_textures
+        look = material_textures.textured(key)
+        spec = catalog.MATERIALS.get(key)
+        if look is None or spec is None:
+            return None
+        beside = os.path.dirname(self.doc.path) if getattr(self.doc, "path", None) else None
+
+        def picture(slot, colorspace="physical"):
+            found = look.map(slot)
+            texture = self._picture_texture(pbr.find(found[0], beside), found[1], colorspace) if found else None
+            return gfx.TextureMap(texture, filter="linear", mipmap_filter="linear", wrap="repeat") \
+                if texture is not None else None
+        maps = {slot: picture(slot, "srgb" if slot in ("base", "emission") else "physical") for slot in pbr.SLOTS}
+        if not any(maps.values()):
+            return None
+        from ..ifc.material_graphics import hex_of
+        colour = look.tint or ("#ffffff" if maps["base"] is not None else hex_of(spec.color))
+        rough = min(look.roughness / pbr.AS_PICTURE, 1.0) if maps["roughness"] is not None else look.roughness
+        metal = min(look.metallic / pbr.AS_PICTURE, 1.0) if maps["metallic"] is not None else look.metallic
+        clear = 1.0 - float(spec.transparency or 0.0)
+        material = gfx.MeshStandardMaterial(color=colour, roughness=rough, metalness=metal, side="both",
+                                            pick_write=False, render_queue=TEXTURE_QUEUE if clear >= 0.999 else 3000,
+                                            opacity=clear, alpha_mode="blend" if clear < 0.999 else "solid")
+        if maps["base"] is not None:
+            material.map = maps["base"]
+        if maps["normal"] is not None:
+            material.normal_map = maps["normal"]
+            material.normal_scale = (look.normal, look.normal)
+        if maps["roughness"] is not None:
+            material.roughness_map = maps["roughness"]
+        if maps["metallic"] is not None:
+            material.metalness_map = maps["metallic"]
+        if maps["ao"] is not None:
+            material.ao_map = maps["ao"]
+            material.ao_map_intensity = look.ao
+        if look.kind == "emissive" or look.emission > 0.0:
+            material.emissive = look.emission_colour
+            material.emissive_intensity = min(max(look.emission, 1.0) / 1000.0, 3.0)
+            if maps["emission"] is not None:
+                material.emissive_map = maps["emission"]
+        return material
+
     def materials_changed(self):
         """(0.315) The project's materials changed (their colours, patterns, transparency): the elements dressed by
         them are made again."""
         self._dressed.clear()
+        self.bim.forget_textures()                      # (0.469: their pictures read again)
         if self._dressing != ("category", False, False) or self._overrides or self.element_hatches:
             self._redress()
             self.redraw()
@@ -3480,6 +3570,7 @@ class Viewport:
             obj = self.doc.get(obj_id)
             if obj is not None and obj.is_bim and obj_id in self.bim:
                 self.bim.recolor(obj_id, *self._bim_colors(obj))
+                self.bim.hide_textures(obj_id, self._no_textures(obj_id))  # (0.469: the rule's colour seen)
         # (in a plan or section, the cut in those colours too — 0.315: or in its materials')
         self.bim.set_poche_colours(bool(self.colours) or self._dressing[0] == "material")
         self.redraw()
@@ -3549,7 +3640,8 @@ class Viewport:
         from ..ifc import catalog
         mesh = obj.mesh
         kept = self._dressed.get(obj.id)
-        key = (self._dressing, override, self._model_dark(), painted)  # (0.341: its patterns' colours turned over)
+        key = (self._dressing, override, self._model_dark(), painted,   # (0.341: its patterns' colours turned over)
+               self._texturing)                                         # (0.469: its textured faces)
         if kept is not None and kept[0] is mesh and kept[1] == catalog.GENERATION and kept[2] == key:
             return kept[3]
         if colours == "category" and not clear and override is None and not painted and \
@@ -3618,7 +3710,7 @@ class Viewport:
         seen = material_looks.look(getattr(self.doc, "ifc", None), obj, base, colours == "material",
                                    patterns or override is not None, clear, lift=EDGE_LIFT * 0.6, surface=override)
         if not len(seen.corners):
-            return None, None, False, None
+            return None, None, False, None, []
         face = None
         if colours == "material" or seen.see_through or seen.painted:
             face = np.column_stack((physical(np.clip(seen.rgb, 0.0, 1.0)), seen.alpha)).astype(np.float32)
@@ -3630,7 +3722,11 @@ class Viewport:
                        np.concatenate([np.tile(np.append(_physical_in(c, dark)[:3], 1.0), (len(s) * 2, 1))
                                        for s, c in seen.patterns]))
         split = (seen.corners, seen.faces, seen.normals) if seen.split else None
-        return face, pattern, seen.see_through, split
+        textures = []
+        if self._texturing and seen.materials is not None:            # (0.469: its faces with pictures)
+            from ..model import material_textures
+            textures = material_textures.groups(seen.corners, seen.normals, seen.materials)
+        return face, pattern, seen.see_through, split, textures
 
     def _update_seams(self, changed, removed):
         """(0.320) The seams of the elements that changed or went and of those round them (model/seen_joins.py) —
@@ -3788,7 +3884,9 @@ class Viewport:
                 piece = Piece(mesh, obj.matrix, face, edge, ground=obj.ifc_class == TERRAIN_CLASS,
                               pattern=dressed[1] if dressed is not None else None, split=split, seams=seams,
                               turned=self._model_dark())
+                piece.textures = dressed[4] if dressed is not None and len(dressed) > 4 else []     # (0.469)
             self.bim.put(obj_id, piece, self._batch_key(obj))
+            self.bim.hide_textures(obj_id, self._no_textures(obj_id))
             self._meshes[obj_id] = (mesh, obj.matrix)
             self.redraw()
             return
@@ -3946,6 +4044,7 @@ class Viewport:
             return
         if obj.is_bim and obj_id in self.bim:
             self.bim.recolor(obj_id, *self._bim_colors(obj))   # selection: colours changed in place
+            self.bim.hide_textures(obj_id, self._no_textures(obj_id))      # (0.469: its highlight over them)
             self.redraw()
         else:
             self.show_object(obj_id, obj.mesh)
