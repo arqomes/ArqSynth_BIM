@@ -673,13 +673,36 @@ class ComponentLibrary(unittest.TestCase):
                 json.dump({"name": "Teste", "items": [{"id": "1", "name": "Mesa web", "file": "Mobiliário/Mesa.ifc"}]},
                           fh)
             panel.web_address.setText(QtCore.QUrl.fromLocalFile(catalogue).toString())
+            panel.web_source.setCurrentIndex(panel.web_source.findData("url"))     # (another catalogue: an address)
             panel.set_source("web")
             for _ in range(200):
                 pump()
                 if panel.list.count():
                     break
-            self.assertEqual([(k, t_.split("\n")[0]) for k, _r, t_ in panel.items()], [("web", "Mesa web")])
+            self.assertEqual([(k, t_) for k, _r, t_ in panel.items()], [("web", "Mesa web")])     # (free: no price)
             panel.deleteLater()
+            # (0.467) Poly Haven's free models: its list and a model's files read (as its API gives them)
+            rows = lib.polyhaven_rows(json.dumps({
+                "office_chair": {"name": "Office Chair", "authors": {"Rico Cilliers": "All"},
+                                 "category": "furniture/seating",
+                                 "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/office_chair.png?"
+                                                  "width=256&height=256&format=webp&v=1"},
+                "Armchair_01": {"name": "Armchair 01", "authors": {"Someone": "All"}, "categories": ["furniture"]}}))
+            self.assertEqual([r["name"] for r in rows], ["Armchair 01", "Office Chair"])
+            chair = rows[1]
+            self.assertEqual((chair["licence"], chair["price"], chair["category"], chair["provider"]),
+                             ("CC0", 0.0, "furniture", "polyhaven"))
+            self.assertIn("format=png", chair["thumbnail"])
+            self.assertEqual(library_panel.price_text(chair), "Grátis")
+            main, files = lib.polyhaven_files(json.dumps({"gltf": {
+                "2k": {"gltf": {"url": "https://x/office_chair_2k.gltf", "include": {}}},
+                "1k": {"gltf": {"url": "https://x/office_chair_1k.gltf",
+                                "include": {"office_chair.bin": {"url": "https://x/office_chair.bin"},
+                                            "textures/office_chair_diff_1k.jpg": {"url": "https://x/d.jpg"}}}}}}))
+            self.assertEqual((main, len(files)), ("office_chair_1k.gltf", 3))      # (the lightest)
+            self.assertIsNone(lib.polyhaven_files(json.dumps({"blend": {}})))
+            self.assertEqual(lib.safe_relative("../../etc/passwd"), os.path.join("etc", "passwd"))   # (kept inside)
+            self.assertTrue(lib.user_agent().startswith("ArqSynth-BIM/"))
         finally:
             doc.modified = other.modified = False
             QtCore.QSettings("ArqSynth", "ArqSynth BIM").remove("biblioteca")

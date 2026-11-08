@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.467.0 — 2026-11-08
+
+**Biblioteca ▸ Web ligada a uma coleção gratuita: os modelos da Poly Haven** (o dono: «Sim, liga uma»).
+
+- Na aba **Web** da Biblioteca há agora uma escolha de **coleção**: **Poly Haven** (a primeira, já ligada), a loja
+  ArqSynth (para os criadores, mais tarde) ou um catálogo por endereço.
+- A Poly Haven (polyhaven.com) dá mais de 500 modelos 3D em domínio público (licença **CC0**: usar em qualquer
+  projeto, também comercial, sem pedir licença). Mobiliário, plantas, iluminação, decoração, objetos de cozinha…
+- A lista mostra as **miniaturas** da própria Poly Haven e tem uma escolha de **categoria** e a pesquisa por nome. A
+  lista fica guardada um dia e as miniaturas também, para não as descarregar de novo.
+- **Um clique** num modelo descarrega-o (em 1k, leve) para a biblioteca local (pasta Web ▸ Poly Haven), traz-o para o
+  projeto como componente e ativa logo a colocação. Um modelo já descarregado não se descarrega de novo.
+- O componente fica com a **cor média da textura** de cada material, em vez de cinzento escuro.
+- Clique direito num modelo: «Ver a página» abre a página dele no site.
+- Créditos por baixo da lista, como a Poly Haven pede.
+
 ## 0.466.0 — 2026-11-08
 
 **Biblioteca de componentes com miniaturas, como no SketchUp** (o dono: «A próxima aba que vamos trabalhar é a aba

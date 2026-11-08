@@ -13,6 +13,7 @@ The window does what is asked (on_place, on_bring, on_save, on_select); the mini
 (ui/component_thumbs.py), kept on disk."""
 
 import os
+import shutil
 
 from PySide6 import QtCore, QtGui, QtNetwork, QtWidgets
 
@@ -21,6 +22,9 @@ from ..model import component_library as lib
 from . import component_thumbs
 
 SOURCES = ("project", "local", "web")
+WEB_SOURCES = ("polyhaven", "arqsynth", "url")      # (0.467) Poly Haven's free models, the ArqSynth store, an address
+LIST_HOURS = 24                                     # (0.467) Poly Haven's list read again after this long
+PICTURES_AT_ONCE = 6                                # (0.467) miniatures fetched at the same time
 VIEWS = {"small": 56, "medium": 88, "large": 128, "list": 36}
 KIND = QtCore.Qt.ItemDataRole.UserRole          # ("project", guid) | ("folder", path) | ("file", path) | ("web", row)
 SETTINGS = ("ArqSynth", "ArqSynth BIM")
@@ -100,14 +104,30 @@ class LibraryPanel(QtWidgets.QDockWidget):
         h.addWidget(self.path_label, 1)
         h.addWidget(self.folder_button)
         col.addWidget(self.where)
-        # (web) what the store will be, the catalogue's address
+        # (web) which catalogue — Poly Haven's free models (0.467), the ArqSynth store (to come), another address —, its
+        # categories, where the models come from (as Poly Haven asks), the address
         self.web_box = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(self.web_box)
         v.setContentsMargins(0, 0, 0, 0)
+        h = QtWidgets.QHBoxLayout()
+        self.web_source = QtWidgets.QComboBox()
+        for key in WEB_SOURCES:
+            self.web_source.addItem(t("libp.web." + key), key)
+        self.web_source.currentIndexChanged.connect(lambda _i: self._web_source_changed())
+        self.web_category = QtWidgets.QComboBox()
+        self.web_category.setToolTip(t("libp.web_category"))
+        self.web_category.currentIndexChanged.connect(lambda _i: self._filter())
+        h.addWidget(self.web_source, 1)
+        h.addWidget(self.web_category, 1)
+        v.addLayout(h)
         self.web_note = QtWidgets.QLabel(t("libp.web_soon"))
         self.web_note.setWordWrap(True)
+        self.web_note.setOpenExternalLinks(True)
+        self.web_note.setTextFormat(QtCore.Qt.TextFormat.RichText)
         v.addWidget(self.web_note)
-        h = QtWidgets.QHBoxLayout()
+        self.web_address_row = QtWidgets.QWidget()
+        h = QtWidgets.QHBoxLayout(self.web_address_row)
+        h.setContentsMargins(0, 0, 0, 0)
         self.web_address = QtWidgets.QLineEdit()
         self.web_address.setPlaceholderText(t("libp.web_address"))
         self.web_address.returnPressed.connect(self.load_catalogue)
@@ -115,7 +135,7 @@ class LibraryPanel(QtWidgets.QDockWidget):
         self.web_connect.clicked.connect(self.load_catalogue)
         h.addWidget(self.web_address, 1)
         h.addWidget(self.web_connect)
-        v.addLayout(h)
+        v.addWidget(self.web_address_row)
         col.addWidget(self.web_box)
         # the miniatures
         self.list = QtWidgets.QListWidget()
@@ -164,6 +184,11 @@ class LibraryPanel(QtWidgets.QDockWidget):
         self.folder = s.value("biblioteca/pasta", "") or lib.default_folder()
         self.here = self.folder
         self.web_address.setText(s.value(lib.CATALOGUE_KEY, "") or "")
+        web = s.value("biblioteca/web_fonte", "polyhaven")
+        self.web_source.blockSignals(True)
+        self.web_source.setCurrentIndex(max(0, self.web_source.findData(web)))
+        self.web_source.blockSignals(False)
+        self._pictures_waiting, self._pictures_running = [], 0
         self._queue = []
         self._generation = 0
         self._stale = True
@@ -241,10 +266,14 @@ class LibraryPanel(QtWidgets.QDockWidget):
         self._queue = []
         self.list.clear()
         self.info.setText("")
+        self._pictures_waiting = []
         self.where.setVisible(self.source == "local")
         self.web_box.setVisible(self.source == "web")
         self.btn_save.setVisible(self.source == "project")
-        self.search.setVisible(self.source != "web" or bool(self.web_address.text().strip()))
+        web = self.web_source.currentData()
+        self.web_address_row.setVisible(web == "url")
+        self.web_category.setVisible(web == "polyhaven")
+        self.search.setVisible(self.source != "web" or web != "arqsynth")
         if self.source == "project":
             self._fill_project()
         elif self.source == "local":
@@ -308,17 +337,33 @@ class LibraryPanel(QtWidgets.QDockWidget):
         if not folders and not items:
             self.info.setText(t("libp.local_none", folder=self.here))
 
+    def _web_source_changed(self):
+        _settings().setValue("biblioteca/web_fonte", self.web_source.currentData())
+        self.refresh()
+
     def _fill_web(self):
-        if not self.web_address.text().strip():
+        web = self.web_source.currentData()
+        if web == "arqsynth":
             self.web_note.setText(t("libp.web_soon"))
-            return
-        self.load_catalogue()
+        elif web == "polyhaven":
+            self.load_polyhaven()
+        elif not self.web_address.text().strip():
+            self.web_note.setText(t("libp.web_address_hint"))
+        else:
+            self.load_catalogue()
 
     def _filter(self):
         text = self.search.text().strip().lower()
+        category = self.web_category.currentData() if self.source == "web" and self.web_category.isVisibleTo(self) \
+            else None
         for k in range(self.list.count()):
             item = self.list.item(k)
-            item.setHidden(bool(text) and text not in item.text().lower())
+            kind = item.data(KIND)
+            row = kind[1] if kind and kind[0] == "web" else {}
+            hidden = (bool(text) and text not in item.text().lower()
+                      and text not in str(row.get("category", "")).lower()) or \
+                (bool(category) and row.get("category") != category)
+            item.setHidden(hidden)
 
     def items(self):
         """What is listed (tests): [(kind, reference, text)]."""
@@ -419,6 +464,8 @@ class LibraryPanel(QtWidgets.QDockWidget):
             menu.addAction(t("libp.open" if kind[0] == "folder" else "libp.place"), lambda: self._use(item))
         elif kind is not None and kind[0] == "web":
             menu.addAction(t("libp.get"), lambda: self._use(item))
+            if kind[1].get("page"):                       # (0.467: its page, where it comes from)
+                menu.addAction(t("libp.page"), lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl(kind[1]["page"])))
         if self.source == "local":
             menu.addSeparator()
             menu.addAction(t("libp.folder"), self.choose_folder)
@@ -433,61 +480,144 @@ class LibraryPanel(QtWidgets.QDockWidget):
             self._net = QtNetwork.QNetworkAccessManager(self)
         return self._net
 
+    @staticmethod
+    def _request(url):
+        """A request saying which program asks (Poly Haven's API wants it), following redirects."""
+        request = QtNetwork.QNetworkRequest(url)
+        request.setRawHeader(b"User-Agent", lib.user_agent().encode("ascii"))
+        request.setAttribute(QtNetwork.QNetworkRequest.Attribute.RedirectPolicyAttribute,
+                             QtNetwork.QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy)
+        return request
+
+    def _get(self, url, done):
+        """`done(bytes or None, error text)` once the address is read (None: it failed)."""
+        reply = self._network().get(self._request(url))
+
+        def finished(r=reply):
+            ok = r.error() == QtNetwork.QNetworkReply.NetworkError.NoError
+            data, error = (bytes(r.readAll()) if ok else None), r.errorString()
+            r.deleteLater()
+            done(data, error)
+        reply.finished.connect(finished)
+
     def load_catalogue(self):
         """The catalogue at the address given read (its components listed with their miniatures, author, price)."""
         address = self.web_address.text().strip()
         _settings().setValue(lib.CATALOGUE_KEY, address)
         if not address:
-            self.web_note.setText(t("libp.web_soon"))
+            self.web_note.setText(t("libp.web_address_hint"))
             return
         self.web_note.setText(t("libp.web_reading"))
         url = QtCore.QUrl.fromUserInput(address)
-        reply = self._network().get(QtNetwork.QNetworkRequest(url))
         generation = self._generation
-        reply.finished.connect(lambda r=reply, u=url, g=generation: self._catalogue_read(r, u, g))
 
-    def _catalogue_read(self, reply, base, generation):
-        data = bytes(reply.readAll()).decode("utf-8", "replace")
-        failed = reply.error() != QtNetwork.QNetworkReply.NetworkError.NoError
-        reply.deleteLater()
-        if generation != self._generation or self.source != "web":
-            return
+        def done(data, error):
+            if generation != self._generation or self.source != "web":
+                return
+            try:
+                if data is None:
+                    raise ValueError(error)
+                name, rows = lib.read_catalogue(data.decode("utf-8", "replace"))
+            except (ValueError, TypeError) as exc:
+                self.web_note.setText(t("libp.web_failed", e=exc))
+                return
+            self.web_note.setText(t("libp.web_read", name=name or url.host() or url.toString(), n=len(rows)))
+            self._show_rows(rows, url)
+        self._get(url, done)
+
+    def load_polyhaven(self):
+        """(0.467) Poly Haven's free models listed (its list kept a day on this computer), with its credit."""
+        self.web_note.setText(t("libp.polyhaven_credit") + " " + t("libp.web_reading"))
+        kept = os.path.join(component_thumbs.cache_dir(), "polyhaven_models.json")
+        generation = self._generation
+
+        def show(text):
+            try:
+                rows = lib.polyhaven_rows(text)
+            except (ValueError, TypeError) as exc:
+                self.web_note.setText(t("libp.polyhaven_credit") + " " + t("libp.web_failed", e=exc))
+                return False
+            self.web_note.setText(t("libp.polyhaven_credit") + " " + t("libp.polyhaven_read", n=len(rows)))
+            self._show_rows(rows, QtCore.QUrl(lib.POLYHAVEN_SITE))
+            return True
         try:
-            if failed:
-                raise ValueError(reply.errorString())
-            name, rows = lib.read_catalogue(data)
-        except (ValueError, TypeError) as exc:
-            self.web_note.setText(t("libp.web_failed", e=exc))
-            return
-        self.web_note.setText(t("libp.web_read", name=name or base.host() or base.toString(), n=len(rows)))
+            fresh = os.path.exists(kept) and (QtCore.QDateTime.currentSecsSinceEpoch() - os.path.getmtime(kept)) \
+                < LIST_HOURS * 3600
+            if fresh:
+                with open(kept, encoding="utf-8") as fh:
+                    if show(fh.read()):
+                        return
+        except OSError:
+            pass
+
+        def done(data, error):
+            if generation != self._generation or self.source != "web":
+                return
+            if data is None:
+                self.web_note.setText(t("libp.polyhaven_credit") + " " + t("libp.web_failed", e=error))
+                return
+            text = data.decode("utf-8", "replace")
+            if show(text):
+                try:
+                    with open(kept, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                except OSError:
+                    pass
+        self._get(QtCore.QUrl(lib.POLYHAVEN_API + "/assets?type=models"), done)
+
+    def _show_rows(self, rows, base):
+        """A catalogue's components listed, their miniatures fetched a few at a time (kept on this computer)."""
         self._base = base
-        for row in rows:
-            item = self._item("{}\n{}".format(row["name"], price_text(row)), ("web", row),
+        categories = sorted({r.get("category") for r in rows if r.get("category")}, key=str.lower)
+        self.web_category.blockSignals(True)
+        self.web_category.clear()
+        self.web_category.addItem(t("libp.web_all"), "")
+        for c in categories:
+            self.web_category.addItem(c.capitalize(), c)
+        self.web_category.blockSignals(False)
+        for row in rows:                                   # (a price under its name only when it has one)
+            text = "{}\n{}".format(row["name"], price_text(row)) if row.get("price") else row["name"]
+            item = self._item(text, ("web", row),
                               t("libp.web_info", name=row["name"], author=row.get("author") or "—",
                                 licence=row.get("licence") or "—", price=price_text(row)))
             if row.get("thumbnail"):
-                self._get_picture(item, base.resolved(QtCore.QUrl(row["thumbnail"])))
+                self._pictures_waiting.append((self._generation, item, base.resolved(QtCore.QUrl(row["thumbnail"]))))
         self._filter()
+        self._next_pictures()
 
-    def _get_picture(self, item, url):
-        reply = self._network().get(QtNetwork.QNetworkRequest(url))
-        generation = self._generation
-
-        def done(r=reply):
-            data = bytes(r.readAll())
-            r.deleteLater()
+    def _next_pictures(self):
+        """The next miniatures fetched — PICTURES_AT_ONCE at a time; one kept on this computer: from there."""
+        while self._pictures_waiting and self._pictures_running < PICTURES_AT_ONCE:
+            generation, item, url = self._pictures_waiting.pop(0)
             if generation != self._generation:
-                return
-            pm = QtGui.QPixmap()
-            if pm.loadFromData(data):
+                continue
+            import hashlib
+            kept = os.path.join(component_thumbs.cache_dir(),
+                                "web_" + hashlib.sha1(url.toString().encode("utf-8")).hexdigest() + ".png")
+            pm = QtGui.QPixmap(kept) if os.path.exists(kept) else QtGui.QPixmap()
+            if not pm.isNull():
                 item.setIcon(QtGui.QIcon(pm))
-        reply.finished.connect(done)
+                continue
+            self._pictures_running += 1
+
+            def done(data, _error, item=item, kept=kept, generation=generation):
+                self._pictures_running -= 1
+                if data is not None and generation == self._generation:
+                    picture = QtGui.QPixmap()
+                    if picture.loadFromData(data):
+                        picture.save(kept, "PNG")
+                        item.setIcon(QtGui.QIcon(picture))
+                self._next_pictures()
+            self._get(url, done)
 
     def get_web(self, row):
         """A web component: free — fetched into the local library («Web» folder) and brought in; for sale — the store's
-        purchase (not open yet)."""
+        purchase (not open yet). (0.467) A Poly Haven model: its glTF with its binary and textures, in its own folder."""
         if row.get("price"):
             self.info.setText(t("libp.web_buy_soon", name=row["name"], price=price_text(row)))
+            return
+        if row.get("provider") == "polyhaven":
+            self._get_polyhaven(row)
             return
         url = getattr(self, "_base", QtCore.QUrl()).resolved(QtCore.QUrl(row["file"]))
         ext = os.path.splitext(url.path())[1].lower() or ".ifc"
@@ -512,6 +642,63 @@ class LibraryPanel(QtWidgets.QDockWidget):
             if self.on_bring is not None:
                 self.on_bring(path)
         reply.finished.connect(done)
+
+    def _get_polyhaven(self, row):
+        """(0.467) A Poly Haven model fetched — its glTF at its lightest resolution, with what it needs — into the local
+        library (Web ▸ Poly Haven ▸ its name), then brought into the project and placed. Fetched before: from there."""
+        folder = os.path.join(self.folder, "Web", "Poly Haven", lib.file_name(row["name"]))
+        found = [n for n in os.listdir(folder) if n.lower().endswith(".gltf")] if os.path.isdir(folder) else []
+        if found:
+            if self.on_bring is not None:
+                self.on_bring(os.path.join(folder, found[0]))
+            return
+        self.info.setText(t("libp.web_getting", name=row["name"]))
+
+        def listed(data, error):
+            try:
+                if data is None:
+                    raise ValueError(error)
+                files = lib.polyhaven_files(data.decode("utf-8", "replace"))
+                if files is None:
+                    raise ValueError(t("libp.polyhaven_no_gltf"))
+            except (ValueError, TypeError) as exc:
+                self.info.setText(t("libp.web_failed", e=exc))
+                return
+            main, parts = files
+            work = folder + ".parcial"                     # (whole, or not at all: a half-fetched one is not kept)
+            shutil.rmtree(work, ignore_errors=True)
+            os.makedirs(work, exist_ok=True)
+            state = {"left": len(parts), "failed": None}
+
+            named = lib.file_name(row["name"]) + ".gltf"   # (the component named as the catalogue names it)
+
+            def one(rel):
+                path = os.path.join(work, named if rel == main else lib.safe_relative(rel))
+
+                def saved(content, err):
+                    state["left"] -= 1
+                    if content is None:
+                        state["failed"] = err
+                    else:
+                        os.makedirs(os.path.dirname(path), exist_ok=True)
+                        with open(path, "wb") as fh:
+                            fh.write(content)
+                    self.info.setText(t("libp.web_getting_n", name=row["name"], n=len(parts) - state["left"],
+                                        total=len(parts)))
+                    if state["left"]:
+                        return
+                    if state["failed"] is not None:
+                        shutil.rmtree(work, ignore_errors=True)
+                        self.info.setText(t("libp.web_failed", e=state["failed"]))
+                        return
+                    shutil.rmtree(folder, ignore_errors=True)
+                    os.replace(work, folder)
+                    if self.on_bring is not None:
+                        self.on_bring(os.path.join(folder, named))
+                return saved
+            for rel, address in parts:
+                self._get(QtCore.QUrl(address), one(rel))
+        self._get(QtCore.QUrl("{}/files/{}".format(lib.POLYHAVEN_API, row["id"])), listed)
 
 
 def dock(parent):

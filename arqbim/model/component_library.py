@@ -139,6 +139,64 @@ CATALOGUE_KEY = "biblioteca/catalogo"      # (QSettings) the web catalogue's add
 CATALOGUE_FIELDS = ("id", "name", "author", "licence", "price", "currency", "thumbnail", "file", "size", "category")
 
 
+# (0.467, the owner: «Sim, liga uma» — a free collection from the web, now) Poly Haven's models: free for any use, the
+# models themselves in the public domain (CC0); its API asks that the user be told they come from Poly Haven and that
+# each request say which program makes it (its User-Agent)
+POLYHAVEN_API = "https://api.polyhaven.com"
+POLYHAVEN_SITE = "https://polyhaven.com"
+RESOLUTIONS = ("1k", "2k", "4k", "8k")                  # (the lightest first: a component, not a render)
+
+
+def user_agent():
+    from .. import __version__
+    return "ArqSynth-BIM/{}".format(__version__)
+
+
+def polyhaven_rows(text):
+    """Poly Haven's models (its /assets?type=models, JSON) as the catalogue's rows: id, name, author(s), licence CC0,
+    free, its miniature (PNG), its category — by name."""
+    data = json.loads(text)
+    rows = []
+    for key, asset in (data.items() if isinstance(data, dict) else ()):
+        if not isinstance(asset, dict):
+            continue
+        thumb = str(asset.get("thumbnail_url") or "")
+        thumb = thumb.replace("format=webp", "format=png") if thumb else \
+            "https://cdn.polyhaven.com/asset_img/thumbs/{}.png?width=256&height=256".format(key)
+        category = asset.get("category") or ", ".join(asset.get("categories") or ())
+        rows.append({"id": key, "name": asset.get("name") or key, "author": ", ".join(asset.get("authors") or ()),
+                     "licence": "CC0", "price": 0.0, "currency": "", "thumbnail": thumb, "file": "polyhaven:" + key,
+                     "size": None, "category": str(category).split("/")[0] if category else "",
+                     "provider": "polyhaven", "page": "{}/a/{}".format(POLYHAVEN_SITE, key)})
+    return sorted(rows, key=lambda r: r["name"].lower())
+
+
+def polyhaven_files(text, prefer=RESOLUTIONS):
+    """A Poly Haven model's files (its /files/{id}, JSON): (the glTF's file name, [(path relative to it, address)] —
+    the glTF, its binary, its textures) at the lightest resolution it has — or None (no glTF)."""
+    data = json.loads(text)
+    gltf = data.get("gltf") if isinstance(data, dict) else None
+    if not isinstance(gltf, dict):
+        return None
+    for res in tuple(prefer) + tuple(k for k in gltf if k not in prefer):
+        entry = (gltf.get(res) or {}).get("gltf")
+        if not isinstance(entry, dict) or not entry.get("url"):
+            continue
+        main = os.path.basename(str(entry["url"]).split("?")[0])
+        files = [(main, str(entry["url"]))]
+        for rel, inc in (entry.get("include") or {}).items():
+            if isinstance(inc, dict) and inc.get("url"):
+                files.append((str(rel), str(inc["url"])))
+        return main, files
+    return None
+
+
+def safe_relative(rel):
+    """A path given by a catalogue kept inside the folder it is put in (no «..», no drive, no leading slash)."""
+    parts = [p for p in re.split(r"[\\/]+", str(rel)) if p not in ("", ".", "..")]
+    return os.path.join(*[file_name(p) for p in parts]) if parts else "ficheiro"
+
+
 def read_catalogue(text):
     """A web catalogue (JSON: {"name", "items": [{id, name, author, licence, price, currency, thumbnail (address),
     file (address of its IFC / GLB…), size, category}]}) — (its name, [dict]) with the items it understands (an id, a

@@ -1879,6 +1879,22 @@ _STRINGS = {
                       "their components, shown here with their miniature, author, licence and price. You can already "
                       "connect a catalogue by its address."),
     "libp.web_address": ("Endereço de um catálogo de componentes", "A component catalogue's address"),
+    # (0.467) Poly Haven's free models
+    "libp.web.polyhaven": ("Poly Haven — gratuitos (CC0)", "Poly Haven — free (CC0)"),
+    "libp.web.arqsynth": ("Loja ArqSynth — em breve", "ArqSynth store — coming"),
+    "libp.web.url": ("Outro catálogo (endereço)…", "Another catalogue (address)…"),
+    "libp.web_category": ("Categoria", "Category"),
+    "libp.web_all": ("Todas as categorias", "All categories"),
+    "libp.web_address_hint": ("Escreva o endereço de um catálogo de componentes e carregue em «Ligar».",
+                              "Type a component catalogue's address and press «Connect»."),
+    "libp.polyhaven_credit": ("Modelos de <a href=\"https://polyhaven.com\">Poly Haven</a> — gratuitos, de domínio "
+                              "público (CC0).", "Models from <a href=\"https://polyhaven.com\">Poly Haven</a> — free, "
+                              "in the public domain (CC0)."),
+    "libp.polyhaven_read": ("{n} modelos. Um clique descarrega o modelo para a sua biblioteca e coloca-o.",
+                            "{n} models. One click fetches the model into your library and places it."),
+    "libp.polyhaven_no_gltf": ("o modelo não tem ficheiro glTF", "the model has no glTF file"),
+    "libp.web_getting_n": ("A obter «{name}»… {n} de {total} ficheiros", "Getting “{name}”… {n} of {total} files"),
+    "libp.page": ("Ver a página do modelo na Poly Haven", "See the model's page on Poly Haven"),
     "libp.web_connect": ("Ligar", "Connect"),
     "libp.web_reading": ("A ler o catálogo…", "Reading the catalogue…"),
     "libp.web_read": ("Catálogo «{name}»: {n} componentes.", "Catalogue “{name}”: {n} components."),

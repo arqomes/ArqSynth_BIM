@@ -210,6 +210,45 @@ def _srgb(linear):
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * c ** (1.0 / 2.4) - 0.055)
 
 
+def _texture_colours(path):
+    """(0.467) A glTF's materials painted by a picture (its base colour texture, a file beside it): {material name:
+    the picture's average colour (sRGB 0–1) times the material's factor} — what a component of one colour a piece can
+    keep of it. {} when there is none (or no way to read pictures)."""
+    import json
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        from PySide6 import QtCore, QtGui
+    except (OSError, ValueError, ImportError):
+        return {}
+    images, textures = data.get("images") or [], data.get("textures") or []
+    out = {}
+    for material in data.get("materials") or ():
+        pbr = material.get("pbrMetallicRoughness") or {}
+        texture = (pbr.get("baseColorTexture") or {}).get("index")
+        if texture is None or not 0 <= texture < len(textures):
+            continue
+        source = textures[texture].get("source")
+        uri = images[source].get("uri") if source is not None and 0 <= source < len(images) else None
+        if not uri or uri.startswith("data:"):
+            continue
+        from urllib.parse import unquote
+        picture = QtGui.QImage(os.path.join(os.path.dirname(path), unquote(uri)))
+        if picture.isNull():
+            continue
+        small = picture.scaled(32, 32, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                               QtCore.Qt.TransformationMode.SmoothTransformation)
+        small = small.convertToFormat(QtGui.QImage.Format.Format_RGB888)
+        pixels = np.frombuffer(bytes(small.constBits()), dtype=np.uint8)[:32 * 32 * 3]
+        if small.bytesPerLine() != 32 * 3:                     # (rows padded: read them one by one)
+            raw = np.frombuffer(bytes(small.constBits()), dtype=np.uint8)
+            pixels = np.concatenate([raw[r * small.bytesPerLine():r * small.bytesPerLine() + 96] for r in range(32)])
+        rgb = pixels.reshape(-1, 3).mean(axis=0) / 255.0
+        factor = pbr.get("baseColorFactor") or (1.0, 1.0, 1.0, 1.0)
+        out[material.get("name") or ""] = np.clip(rgb * _srgb(np.asarray(factor[:3], dtype=float)), 0.0, 1.0)
+    return out
+
+
 def _read_trimesh(path, name, kind):
     import trimesh
     try:
@@ -218,13 +257,17 @@ def _read_trimesh(path, name, kind):
         raise ValueError(str(exc)) from exc
     gltf = kind in ("glb", "gltf")
     model = Model3D(name, unit="m", up="z" if kind == "stl" else "y", known=gltf)
+    pictured = _texture_colours(path) if kind == "gltf" else {}
     for mesh in scene.dump():
         corners = np.asarray(mesh.triangles, dtype=float)
         if not len(corners):
             continue
         visual = mesh.visual
         material = getattr(visual, "material", None)
-        if material is not None:
+        if material is not None and pictured.get(getattr(material, "name", "") or "") is not None:
+            # (0.467) a material painted by a picture (a Poly Haven model's): the picture's own colour, on average
+            model.add(material.name, pictured[material.name], 1.0, corners)
+        elif material is not None:
             factor = getattr(material, "baseColorFactor", None)
             if factor is not None and getattr(material, "baseColorTexture", None) is None:
                 rgba = np.asarray(factor, dtype=float) / 255.0
