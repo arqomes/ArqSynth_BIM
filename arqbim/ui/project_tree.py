@@ -28,6 +28,10 @@ CATEGORIES = ("IfcWall", "IfcCurtainWall", "IfcColumn", "IfcBeam", "IfcFooting",
               "IfcPipeSegment", "IfcPipeFitting", "IfcDuctSegment", "IfcDuctFitting", "IfcAirTerminal",
               "IfcUnitaryEquipment", "IfcOutlet", "IfcSwitchingDevice", "IfcElectricDistributionBoard",
               "IfcJunctionBox", "IfcCableCarrierSegment", "IfcCableCarrierFitting", "IfcBuildingElementProxy")          # their order in a storey; others follow by name
+# (0.461) the tabs at the panel's foot: what the tree shows — all of it, the views, the library, the model (its spatial
+# tree and the sketches) — each the tree's top-level groups whose key starts so
+SCOPES = ("all", "views", "library", "project")
+SCOPE_ROOTS = {"views": ("views",), "library": ("library",), "project": ("spatial", "cat")}
 
 
 def category_label(ifc_class):
@@ -75,6 +79,27 @@ class ProjectTree(QtWidgets.QDockWidget):
         column.setSpacing(4)
         column.addWidget(self.search)
         column.addWidget(self.tree, 1)
+        # (0.461, the owner: «no rodapé, vamos colocar outras abas de filtro… Vistas… Biblioteca… Projeto») what the
+        # tree shows: all of it, the views only, the library only, the model only
+        self.scope = "all"
+        self.scope_bar = QtWidgets.QTabBar()
+        self.scope_bar.setObjectName("tree_scopes")
+        self.scope_bar.setShape(QtWidgets.QTabBar.Shape.RoundedSouth)
+        self.scope_bar.setExpanding(True)
+        self.scope_bar.setDocumentMode(True)
+        self.scope_bar.setDrawBase(False)
+        self.scope_bar.setUsesScrollButtons(False)        # (all four in view: a narrow panel shortens their words)
+        self.scope_bar.setElideMode(QtCore.Qt.TextElideMode.ElideRight)
+        self.scope_bar.setStyleSheet("QTabBar::tab { padding: 4px 6px; min-width: 0px; }")
+        for k, name in enumerate(SCOPES):
+            self.scope_bar.addTab(t("tree.scope." + name))
+            self.scope_bar.setTabToolTip(k, t("tip.tree.scope." + name))
+        saved = QtCore.QSettings("ArqSynth", "ArqSynth BIM").value("navegador/filtro", "all")
+        if saved in SCOPES:                           # (the tab chosen last time)
+            self.scope = saved
+            self.scope_bar.setCurrentIndex(SCOPES.index(saved))
+        self.scope_bar.currentChanged.connect(lambda k: self.set_scope(SCOPES[k]))
+        column.addWidget(self.scope_bar)
         self.setWidget(box)
 
         # callbacks set by the main window
@@ -318,8 +343,7 @@ class ProjectTree(QtWidgets.QDockWidget):
         for key, item in list(self._items.items()):    # (opening a category adds its elements)
             if (key[0] in folds and key not in self._closed) or key in opened:
                 item.setExpanded(True)
-        if self.search.text().strip():                 # (0.184) still searching: the new list too
-            self.filter()
+        self.filter()                                  # (0.184: still searching — 0.461: the tab chosen — the new list too)
         self._building = False
 
     def _fill(self, item):
@@ -391,7 +415,34 @@ class ProjectTree(QtWidgets.QDockWidget):
             return own or shown
 
         for k in range(self.tree.topLevelItemCount()):
-            walk(self.tree.topLevelItem(k))
+            item = self.tree.topLevelItem(k)
+            if self.in_scope(item.data(0, KEY)):
+                walk(item)
+            else:
+                item.setHidden(True)                  # (0.461: another tab's)
+
+    def in_scope(self, key):
+        """(0.461) Is a top-level group of the tree (its key) in the tab chosen at the panel's foot?"""
+        roots = SCOPE_ROOTS.get(self.scope)
+        return roots is None or (key is not None and key[0] in roots)
+
+    def set_scope(self, scope):
+        """(0.461) The tab at the panel's foot: what the tree shows — "all", "views", "library" or "project" (the
+        model: its spatial tree and the sketches); the one chosen kept for the next session."""
+        if scope not in SCOPES:
+            return
+        self.scope = scope
+        k = SCOPES.index(scope)
+        if self.scope_bar.currentIndex() != k:
+            self.scope_bar.blockSignals(True)
+            self.scope_bar.setCurrentIndex(k)
+            self.scope_bar.blockSignals(False)
+        self.filter()
+        for key in ([("views",)] if scope == "views" else [("library",)] if scope == "library" else []):
+            item = self._items.get(key)
+            if item is not None:
+                item.setExpanded(True)
+        QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("navegador/filtro", scope)
 
     def focus(self, key):
         """(0.184) The group of `key` opened, shown at the top and chosen: ("views", "sheets") the sheets,
@@ -399,6 +450,8 @@ class ProjectTree(QtWidgets.QDockWidget):
         item = self._items.get(key)
         if item is None:
             return False
+        if not self.in_scope(key):                    # (0.461: its tab chosen — the library's, the views')
+            self.set_scope(next((s for s, roots in SCOPE_ROOTS.items() if key[0] in roots), "all"))
         parent = item
         while parent is not None:
             parent.setExpanded(True)
@@ -577,12 +630,10 @@ class ProjectTree(QtWidgets.QDockWidget):
 
 
 def dock(parent, beside, below=None):
-    """The panel as a tab next to `beside` (the Storeys panel), which stays in front; the
-    tabs get more height than before (a tree needs it), the rest goes to `below` (Properties)."""
+    """The panel beside `beside` (the Storeys panel) — (0.461) not as a tab with it: the window puts the left panels in
+    view one at a time (MainWindow._build_modules); a tab group made here left its tabs' bar behind, over the view."""
     panel = ProjectTree(parent)
     parent.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, panel)
-    parent.tabifyDockWidget(beside, panel)
-    beside.raise_()
     if below is not None:
         parent.resizeDocks([beside, below], [380, 450], QtCore.Qt.Orientation.Vertical)
     return panel

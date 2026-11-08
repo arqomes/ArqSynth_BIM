@@ -1854,6 +1854,20 @@ _STRINGS = {
                         "No section yet: draw one with the Section tool (Annotate ▸ Views ▸ Section)."),
     "tree.title": ("Navegador do Projeto", "Project Browser"),
     "tree.search": ("Pesquisar…", "Search…"),
+    # (0.461) the tabs at the Project Browser's foot: what its tree shows
+    "tree.scope.all": ("Tudo", "All"),
+    "tree.scope.views": ("Vistas", "Views"),
+    "tree.scope.library": ("Biblioteca", "Library"),
+    "tree.scope.project": ("Projeto", "Model"),
+    "tip.tree.scope.all": ("Tudo: as vistas, a biblioteca e o modelo, numa só árvore",
+                           "All: the views, the library and the model, in one tree"),
+    "tip.tree.scope.views": ("Só as vistas: plantas, cortes, alçados, vistas 3D, eixos e folhas",
+                             "Views only: plans, sections, elevations, 3D views, grid axes and sheets"),
+    "tip.tree.scope.library": ("Só a biblioteca: os componentes e os grupos do ficheiro, prontos a usar no projeto",
+                               "Library only: the file's components and groups, ready to use in the project"),
+    "tip.tree.scope.project": ("Só o que está no modelo: terreno, edifício, pavimentos e os elementos de cada um, "
+                               "e os esboços", "Only what is in the model: site, building, storeys and the elements "
+                               "of each, and the sketches"),
     # the compact bar's modules (0.184, the interface's panel 4)
     "mod.title": ("Módulos", "Modules"),
     "mod.project": ("Navegador do Projeto", "Project Browser"),

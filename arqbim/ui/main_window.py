@@ -1784,12 +1784,14 @@ class MainWindow(QtWidgets.QMainWindow):
         view folds the left panels away; another brings them back."""
         left = QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
         self.left_panels = [self.tree_panel, self.storeys_panel, self.rules_panel]
+        # (0.461, the owner: «remover essas abas atuais») one left panel in view at a time — no tabs at their foot
+        # (those are the navigator's own now: what its tree shows); the module bar chooses — and a panel brought up
+        # (raise_) shows alone
         for p in self.left_panels:
             self.removeDockWidget(p)
             self.addDockWidget(left, p)
-            p.show()
-        self.tabifyDockWidget(self.tree_panel, self.storeys_panel)
-        self.tabifyDockWidget(self.storeys_panel, self.rules_panel)
+            p.setVisible(p is self.tree_panel)
+            p.raise_ = lambda p=p: self._left_up(p)
         self.program_panel = room_program_panel.dock(self, self.rules_panel)    # (0.357, hidden until asked for)
         self.program_panel.on_import = lambda: self.import_room_program()
         self.program_panel.on_clear = lambda: self.clear_room_program()
@@ -1860,6 +1862,21 @@ class MainWindow(QtWidgets.QMainWindow):
         return ("QLabel { background: %s; color: %s; padding: 2px 6px; font-weight: 600; }"
                 % (theme.C["input"], theme.C["text"]))
 
+    def _left_up(self, panel):
+        """(0.461) A left panel in view alone (the others hidden: no tabs at their foot), the module bar following."""
+        for p in self.left_panels:
+            if p is not panel and p.isVisible():
+                p.hide()
+        if not panel.isVisible():
+            panel.show()
+        QtWidgets.QDockWidget.raise_(panel)
+        name = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules"}.get(
+            next((a for a in ("tree_panel", "storeys_panel", "rules_panel") if getattr(self, a, None) is panel), ""))
+        if name and getattr(self, "module_actions", None) and \
+                not (name == "project" and self.module in ("library", "sheets")):
+            self.module = name
+            self.module_actions[name].setChecked(True)
+
     def set_module(self, name):
         """(0.184) A module of the compact bar: its panel up in panel 5 — or, the module in view clicked again,
         the left panels folded away."""
@@ -1873,10 +1890,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.module_actions[name].setChecked(False)
                 self.module = None
                 return
-            for p in self.left_panels:
-                if not p.isVisible():
-                    p.show()
-            panel.raise_()
+            self._left_up(panel)
             if name == "library":
                 self.tree_panel.focus(("library",))
             elif name == "sheets":

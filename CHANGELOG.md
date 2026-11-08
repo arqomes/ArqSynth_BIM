@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.461.0 — 2026-11-08
+
+**Navegador do Projeto com abas de filtro no rodapé** (o dono: «no rodapé, vamos colocar outras abas de filtro, Geral…
+Vistas… Biblioteca… Projeto… remover essas abas atuais e substitua por esse»).
+
+- No rodapé do Navegador, quatro abas escolhem o que a árvore mostra:
+  - **Tudo**: tudo, como até agora;
+  - **Vistas**: só as vistas (plantas, cortes, alçados, vistas 3D, eixos, folhas);
+  - **Biblioteca**: só os componentes e grupos do ficheiro;
+  - **Projeto**: só o que está no modelo (terreno, edifício, pavimentos e os seus elementos, esboços).
+  A pesquisa procura dentro da aba escolhida, e a aba fica escolhida para a sessão seguinte.
+- Saíram as abas antigas do rodapé (Navegador do Projeto · Pavimentos · Regras gráficas). Os **Pavimentos** e as
+  **Regras gráficas** abrem-se pelos seus ícones na barra lateral, um painel de cada vez no mesmo lugar. Os ícones
+  Biblioteca e Folhas abrem o Navegador já na aba Biblioteca ou Vistas.
+
 ## 0.460.0 — 2026-11-08
 
 **A parede curva com as camadas do seu tipo na planta** (o dono: «a parede curva não tem camadas de reboco. devia ter

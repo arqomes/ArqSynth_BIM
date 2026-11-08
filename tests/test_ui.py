@@ -496,6 +496,52 @@ class DrawPanel(unittest.TestCase):
             doc.modified = False
 
 
+class BrowserTabs(unittest.TestCase):
+    """0.461 — the owner: «no rodapé, vamos colocar outras abas de filtro, Geral… Vistas… Biblioteca… Projeto»: the
+    Project Browser's own tabs at its foot — what its tree shows: all of it, the views, the library, the model —; a
+    group focused from the module bar brings its tab up; the search within the tab."""
+
+    def test_scopes(self):
+        from arqbim.ui import project_tree
+        panel = project_tree.ProjectTree(None)
+        try:
+            spatial = ("P", "IfcProject", "Projeto", None,
+                       [("B", "IfcBuilding", "Edifício", None, [("S", "IfcBuildingStorey", "Térreo", 0.0, [])])])
+            panel.show_project(spatial, [(1, "Parede 1", "IfcWall", "S"), (2, "Esboço 1", None, None)],
+                               {"plans": [("S", "Térreo", 0.0)]}, {"components": [("T", "Porta P1", 2, True)],
+                                                                    "groups": []})
+            tabs = [panel.scope_bar.tabText(k) for k in range(panel.scope_bar.count())]
+            self.assertEqual(tabs, ["Tudo", "Vistas", "Biblioteca", "Projeto"])
+            self.assertEqual(panel.scope_bar.shape(), QtWidgets.QTabBar.Shape.RoundedSouth)    # (at its foot)
+
+            def shown():
+                tree = panel.tree
+                return [tree.topLevelItem(k).data(0, project_tree.KEY)[0] for k in range(tree.topLevelItemCount())
+                        if not tree.topLevelItem(k).isHidden()]
+            panel.set_scope("all")
+            self.assertEqual(shown(), ["views", "library", "spatial", "cat"])
+            panel.scope_bar.setCurrentIndex(1)                                   # (a click on «Vistas»)
+            self.assertEqual((panel.scope, shown()), ("views", ["views"]))
+            panel.set_scope("library")
+            self.assertEqual(shown(), ["library"])
+            panel.set_scope("project")
+            self.assertEqual(shown(), ["spatial", "cat"])
+            panel.search.setText("Parede")                                       # (the search: within the tab)
+            self.assertEqual(shown(), ["spatial"])
+            panel.search.setText("")
+            self.assertTrue(panel.focus(("library",)))                           # (the module bar's Library)
+            self.assertEqual((panel.scope, panel.scope_bar.currentIndex(), shown()), ("library", 2, ["library"]))
+            panel.show_project(spatial, [(1, "Parede 1", "IfcWall", "S")], {"plans": [("S", "Térreo", 0.0)]},
+                               {"components": [], "groups": []})
+            self.assertEqual(shown(), ["library"])                               # (rebuilt: the tab kept)
+            again = project_tree.ProjectTree(None)                               # (the next session: the same tab)
+            self.assertEqual((again.scope, again.scope_bar.currentIndex()), ("library", 2))
+            again.set_scope("all")
+            again.deleteLater()
+        finally:
+            panel.deleteLater()
+
+
 class HatchesOnScreen(unittest.TestCase):
     """0.317 — a plan's cut for the screen as on paper (model/cut_hatches.py): a wall's block with its own background
     (pink) and lines, its plaster in its category's grey, a column in its category's dark fill; each element apart (its

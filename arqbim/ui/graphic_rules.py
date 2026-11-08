@@ -116,9 +116,8 @@ class RulesPanel(QtWidgets.QDockWidget):
 
 
 def dock(parent, beside):
-    """The panel as a tab next to `beside` (the Storeys panel), which stays in front."""
+    """The panel next to `beside` (the Storeys panel) — (0.461) not as a tab with it: the window puts the left panels in
+    view one at a time (MainWindow._build_modules)."""
     panel = RulesPanel(parent)
     parent.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, panel)
-    parent.tabifyDockWidget(beside, panel)
-    beside.raise_()
     return panel
