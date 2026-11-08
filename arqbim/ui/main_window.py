@@ -3666,13 +3666,15 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.sheet_window is not None:
                 self.sheet_window.hide()
             self.schedules_panel.hide()                # (0.477: a table's page)
-            self.start_page.refresh()
-            self.start_page.show()
+            # (0.476) the side panels aside first: the page shown beside them asked for its width and theirs at once
+            # (1 258 + 610 px) — the window grew past the screen, to 2 039 px, and never shrank back
             self._step_docks_aside(True)
+            self.start_page.refresh()
+            self._start_scroll.show()
             self._tick_plan(False)
             return
         if self.start_shown():
-            self.start_page.hide()
+            self._start_scroll.hide()
             self._step_docks_aside(False)
             self.canvas.show()                     # (a sheet's branch below hides it again)
         if kind == "table":                        # (0.477) a table, in place of the canvas as a sheet
@@ -3746,8 +3748,17 @@ class MainWindow(QtWidgets.QMainWindow):
         page.on_help = lambda tab: self.show_help(tab)
         page.on_show = self.show_command            # (0.406) «Mostrar onde está» of the tutorial read on the page
         page.on_message = self.message
-        page.hide()
-        self._central_layout.addWidget(page, 1)
+        # (0.476) in a scroll area, as a web page: its five columns ask for 1 258 px; laid in the window itself, that
+        # width (and with the side panels coming back, more) made the window grow past the screen and stay so —
+        # narrower than the page, it scrolls instead
+        scroll = QtWidgets.QScrollArea(self.centralWidget())
+        scroll.setObjectName("start_scroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setWidget(page)
+        scroll.hide()
+        self._central_layout.addWidget(scroll, 1)
+        self._start_scroll = scroll
         return page
 
     def show_start_page(self):
@@ -3756,7 +3767,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return self.start_page
 
     def start_shown(self):
-        return self.start_page is not None and not self.start_page.isHidden()
+        return self.start_page is not None and not self._start_scroll.isHidden()
 
     def _step_docks_aside(self, aside):
         """The side panels hidden while the start page is in front (all its columns in the window), shown again

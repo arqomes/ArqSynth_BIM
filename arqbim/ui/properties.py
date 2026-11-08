@@ -34,6 +34,7 @@ _INTERNAL_PSETS = {"ArqSynth_Parametros", "ArqBIM_Parametros"}     # (the progra
 
 
 MAX_LINE_ROWS = 12          # a line of more segments lists the first ones
+TYPE_CHARS = 20             # (0.476) the type's list on top this many letters wide, whatever the types' names
 
 
 def _len(m):
@@ -324,6 +325,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         """(0.313) The type's list on top, under the name — as Revit's Type Selector —, its miniature beside it."""
         self._drop_type_combo()
         self.type_combo = combo
+        # (0.476) as wide as a few words — a long type's name whole in the open list only: «A3 horizontal · Completo»
+        # asked for 290 px and widened the column of the Properties for good (the 3D view narrower)
+        if not isinstance(combo, type_thumbs.TypeCombo):        # (the miniatures' list does so already, 0.313)
+            combo.setSizeAdjustPolicy(QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(TYPE_CHARS)
+            combo.view().setMinimumWidth(combo.view().sizeHintForColumn(0) + 24)
         self.header_texts.insertWidget(2, combo)        # (under the name and its line; over «Editar tipo…»)
         if picture is not None:
             self.header_icon.setPixmap(picture.pixmap(36, 36))

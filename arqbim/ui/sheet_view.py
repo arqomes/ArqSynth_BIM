@@ -42,7 +42,9 @@ class SheetCanvas(QtWidgets.QWidget):
         self._grab = None             # (0.472) a drawing from outside grabbed: (its uid, mouse mm, its centre)
         self._moving = None           # …and where it is while dragged: (uid, centre)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-        self.setMinimumSize(640, 460)
+        # (0.476: it draws the sheet to fit — 640 × 460 here, with the Schedules panel open under it, made the window
+        # grow past the screen's height and stay so)
+        self.setMinimumSize(320, 200)
 
     def fit(self):
         """(pixels per mm, x, y of the paper's corner): the whole sheet with a margin — (0.470) nearer by the zoom,

@@ -87,13 +87,23 @@ class StoreysPanel(QtWidgets.QDockWidget):
         self.btn_live.setMinimumWidth(30)
         buttons.addWidget(self.btn_live)
         buttons.addStretch(1)
+        for b in (self.btn_new, self.btn_delete, self.btn_typical):     # (0.476) as narrow as their words: at the
+            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 16)   # style's 80 px each the column grew
         layout.addLayout(buttons)
         self.only_active = QtWidgets.QCheckBox(t("storeys.only_active"))     # (0.465: «No 3D, …»)
         self.only_active.setToolTip(t("tip.only_active"))
         layout.addWidget(self.only_active)
         layout.addWidget(self._look_box())                 # (0.462) the levels' look
         layout.addStretch(1)
-        self.setWidget(body)
+        # (0.476) the panel scrolls on a low window: the levels' look under the list asked for 674 px of the window's
+        # height, and with the Schedules open under the view the window grew taller for good
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(body)
+        scroll.setMinimumWidth(body.minimumSizeHint().width() + scroll.verticalScrollBar().sizeHint().width())
+        self.setWidget(scroll)
 
         # callbacks set by the main window
         self.on_activate = None      # (guid)
@@ -137,6 +147,9 @@ class StoreysPanel(QtWidgets.QDockWidget):
         box.setToolTip(t("storeys.look_tip"))
         form = QtWidgets.QFormLayout(box)
         form.setContentsMargins(6, 6, 6, 6)
+        # (0.476) a label over its pictures when they do not fit beside it: side by side the group asked for 369 px and
+        # widened the left column of panels for good (the 3D view 107 px narrower)
+        form.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.WrapLongRows)
         self.look_preview = LevelPreview()
         form.addRow(self.look_preview)
 

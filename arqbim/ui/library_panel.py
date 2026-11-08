@@ -119,7 +119,11 @@ class LibraryPanel(QtWidgets.QDockWidget):
         self.web_category.currentIndexChanged.connect(lambda _i: self._filter())
         h.addWidget(self.web_source, 1)
         h.addWidget(self.web_category, 1)
-        v.addLayout(h)
+        for box in (self.web_source, self.web_category):    # (0.476) a few words wide, the long names in the open
+            box.setSizeAdjustPolicy(QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            box.setMinimumContentsLength(8)                  # list only: side by side at their whole names they
+        v.addLayout(h)                                       # widened the left column of panels for good
+        self.web_source.view().setMinimumWidth(self.web_source.view().sizeHintForColumn(0) + 24)
         self.web_note = QtWidgets.QLabel(t("libp.web_soon"))
         self.web_note.setWordWrap(True)
         self.web_note.setOpenExternalLinks(True)

@@ -785,6 +785,31 @@ Trabalho). A cópia de `C:\BIM-bateria` é a de outra sessão de trabalho e não
    `unidade`, e as linhas com os números.
 7. Carregue em Ctrl+T: a aba da tabela fecha-se. Outra vez Ctrl+T: abre a última tabela vista.
 
+## 0.476 — A janela já não cresce sozinha
+
+1. Feche o ArqSynth BIM e abra-o outra vez (a 0.476 foi gravada depois da 0.480: o título diz a versão mais recente).
+   Faça Ctrl+N.
+2. Se a janela estiver maximizada, clique no botão **Restaurar** (os dois quadrados, no canto de cima à direita).
+   Arraste a borda direita da janela para a esquerda até ela ocupar cerca de dois terços do ecrã.
+3. **Página inicial**: clique em **Início ▸ Página inicial**.
+   - A janela fica do mesmo tamanho. Se for estreita demais para as cinco colunas, aparece uma barra de deslocamento
+     em baixo da página (antes, a janela alargava para lá do ecrã).
+   - Clique na aba **3D** (por cima da vista): os painéis laterais voltam e a janela continua do mesmo tamanho.
+4. **Painel Tabelas**: desenhe quatro paredes (ferramenta **Parede**; na barra de parâmetros escolha a forma
+   **Retângulo**; dois cliques). Clique em **Quantidades** (barra estreita da esquerda): a árvore das tabelas abre na
+   coluna da esquerda; a janela não alarga e a vista 3D não fica mais estreita.
+5. **Painéis da coluna da esquerda** (com a janela ainda a dois terços do ecrã): repare na largura da vista 3D.
+   - Na barra estreita da esquerda clique em **Pavimentos**. No grupo **Aparência**, se as filas de desenhos não
+     couberem ao lado do nome, passam para baixo dele, em duas linhas. A vista 3D não fica mais estreita.
+   - Clique em **Materiais** (barra da esquerda): os botões **Novo**, **Duplicar**, **Apagar** cabem numa linha e a
+     vista 3D não encolhe.
+   - Clique em **Biblioteca** (barra da esquerda) e, no painel, em **Web**: as duas listas cabem lado a lado; ao abrir
+     uma lista vê o nome inteiro.
+6. **Propriedades de uma folha**: no **Navegador do Projeto**, aba **Folhas**, faça duplo clique numa folha. Nas
+   Propriedades, a lista do tipo de folha é mais curta; ao abri-la vê «A3 horizontal · Completo» inteiro. O painel
+   das Propriedades não alarga.
+7. Volte a maximizar a janela (duplo clique na barra do título).
+
 ## 0.475 — Ambientes: o programa de necessidades no painel lateral
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.475.0**. Faça Ctrl+N.

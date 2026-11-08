@@ -43,6 +43,7 @@ ALIGN = {"left": QtCore.Qt.AlignmentFlag.AlignLeft, "center": QtCore.Qt.Alignmen
          "right": QtCore.Qt.AlignmentFlag.AlignRight}
 FUNCTIONS = (("sum", "SOMA"), ("avg", "MÉDIA"), ("count", "CONTAR.VAL"), ("max", "MÁXIMO"), ("min", "MÍNIMO"))
 CLEAR_AND_SELECT = QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect
+CATEGORY_CHARS = 18                  # (0.476) the category's box this many letters wide, whatever its names
 
 
 def _number(column, value):
@@ -110,6 +111,10 @@ class SchedulesPanel(QtWidgets.QWidget):
         self.category = QtWidgets.QComboBox()
         for key in schedules.ORDER:
             self.category.addItem(t("sched.cat." + key), key)
+        # (0.476) the box as wide as a few words — its long names in the open list only; with the totals on one line
+        # the bar asked for 1 398 px and the window grew past the screen (it never shrank back)
+        self.category.setSizeAdjustPolicy(QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.category.setMinimumContentsLength(CATEGORY_CHARS)
         self.grouped = QtWidgets.QCheckBox(t("sched.by_type"))
         self.export = QtWidgets.QPushButton(t("sched.export"))
         self.new_def = QtWidgets.QPushButton(t("sched.new"))          # (0.131) the project's own schedules
@@ -120,7 +125,7 @@ class SchedulesPanel(QtWidgets.QWidget):
         self.put.setMenu(self.put_menu)
         self.put_menu.aboutToShow.connect(self._fill_put_menu)
         self.totals = QtWidgets.QLabel()
-        self.totals.setWordWrap(True)
+        self.totals.setWordWrap(True)        # (0.476: on two lines when long, not wider)
         for w in (self.category, self.grouped, self.new_def, self.edit_def, self.delete_def, self.put, self.export):
             bar.addWidget(w)
             w.hide()                 # (0.477: the table is chosen in the side panel, its commands on the bar above)
@@ -384,6 +389,7 @@ class SchedulesPanel(QtWidgets.QWidget):
             self.category.setItemText(k, "{} ({})".format(t("sched.cat." + cat), counts[cat]))
         for k, d in enumerate(defs):
             self.category.setItemText(len(schedules.ORDER) + k, t("sched.own", name=d.name))
+        self.category.view().setMinimumWidth(self.category.view().sizeHintForColumn(0) + 24)   # (the open list whole)
         self.category.blockSignals(False)
 
     def _own(self):

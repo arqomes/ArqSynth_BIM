@@ -51,9 +51,46 @@ def pump(ms=150):
         time.sleep(0.005)
 
 
+# (0.476) The window never grows by itself. A panel or a page asking for more room than the window had made it grow —
+# past the screen, for good (1280 → 2 039 px) —, and the mouse flows after it clicked other places than they meant. The
+# sizes the tests give it are kept; the first check after which it is larger is said at the end («janela_nao_cresce»).
+_win_resize = win.resize
+_size_set = [(1280, 740)]
+_grew = []
+
+
+def _resize(*args):
+    _win_resize(*args)
+    size = args[0] if len(args) == 1 else QtCore.QSize(*args)
+    _size_set[0] = (size.width(), size.height())
+
+
+win.resize = _resize
+
+
+def _watch_size(name):
+    if _grew or (win.width() <= _size_set[0][0] + 2 and win.height() <= _size_set[0][1] + 2):
+        return
+    least = win.minimumSizeHint()
+    if win.isMaximized() and least.width() <= _size_set[0][0] and least.height() <= _size_set[0][1]:
+        # maximized from outside (someone at the computer, while the tests run) — not by a panel asking for room:
+        # put back, said, not counted
+        print("  (janela maximizada de fora depois de «{}»: reposta em {}×{})".format(name, *_size_set[0]), flush=True)
+        win.showNormal()
+        _win_resize(*_size_set[0])
+        pump(300)
+        return
+    widest = sorted(((w.minimumSizeHint().width(), w.minimumSizeHint().height(), w.objectName() or type(w).__name__)
+                     for w in win.findChildren(QtWidgets.QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly)
+                     if w.isVisible() and not w.isWindow()), reverse=True)[:3]       # (the panels, the bars, the view)
+    _grew.append("depois de «{}»: {}×{} (era {}×{}; mínimo {} px; {})".format(
+        name, win.width(), win.height(), *_size_set[0], win.minimumSizeHint().width(), widest))
+
+
 def check(name, ok, detail=""):
     results.append({"test": name, "ok": bool(ok), "detail": str(detail)})
     print("PASS" if ok else "FAIL", name, detail, flush=True)
+    _watch_size(name)
 
 
 def qp(x, y):
@@ -888,6 +925,7 @@ def bim_flow():
     notes_flow()
     phases_flow()
     team_flow()
+    panels_fit_flow()                 # (0.476)
     complete_house_flow()             # (0.394: the «Casa do Farol», all the program's parts in one house)
     start_page_flow()                 # (0.387: last — it starts a new project, the flows before use the house)
 
@@ -1702,6 +1740,80 @@ def views_flow():
     pump(100)
 
 
+LEFT_COLUMN = 270       # px: the left column of panels as the window makes it (MainWindow: resizeDocks tree_panel 270)
+
+
+def panels_fit_flow():
+    """0.476 — the panels fit their columns, in the 1280 × 740 window (as the owner's laptop): each one shown —
+    Materials (Selecionar and Editar), Storeys, the Library (each of its sources), the room programme (0.475), the
+    tables' tree (0.477), a sheet's Properties, the start page — none wider than its column, the window not grown, and
+    back in the 3D view with the usual panels the view as wide as before. (A panel wider than its column widened it
+    for good — the 3D view from 614 to 425 px, the mouse flows after it clicking other places —; the start page, the
+    Schedules of the foot and a sheet made the window itself grow past the screen.)"""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.resize(1280, 740)
+    win.open_view("3d", None)
+
+    def browser_up():                                 # (the Project browser in view — its module clicked again folds
+        if not win.tree_panel.isVisible():            # the left column away)
+            win.set_module("project")
+        pump(400)
+
+    browser_up()
+    # (the left column as the window makes it, 270 px — a flow before may have left it narrower on purpose, 0.475)
+    win.resizeDocks([win.tree_panel], [LEFT_COLUMN], Qt.Orientation.Horizontal)
+    pump(300)
+    left, right, wide, size = LEFT_COLUMN, win.props.width(), canvas.width(), (win.width(), win.height())
+    too_wide = []
+
+    def look(name, dock):
+        pump(300)
+        column = left if win.dockWidgetArea(dock) == Qt.DockWidgetArea.LeftDockWidgetArea else right
+        if dock.minimumSizeHint().width() > column:
+            too_wide.append((name, dock.minimumSizeHint().width(), column))
+
+    win.edit_materials()
+    look("materiais", win.materials_panel)
+    win.materials_panel.editor.tabs.setCurrentIndex(1)
+    look("materiais_editar", win.materials_panel)
+    win.materials_panel.editor.tabs.setCurrentIndex(0)
+    win.module_actions["storeys"].trigger()
+    look("pavimentos", win.storeys_panel)
+    library = win.library_panel
+    was = library.source
+    library.show()
+    library.raise_()
+    for source in library.source_buttons:
+        library.set_source(source)
+        look("biblioteca_" + source, library)
+    library.set_source(was)
+    library.hide()
+    bim_actions.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0),
+                                                           (0.0, 6.0, 0.0))], catalog.BY_KEY["parede_alv_20"])
+    pump(200)
+    win.module_actions["rooms"].trigger()                            # (0.475: the programme's manager)
+    look("programa", win.program_panel)
+    win.module_actions["quantities"].trigger()                       # (0.477: the tables' tree)
+    look("tabelas", win.tables_panel)
+    doc.make_sheets([("Planta", [("plan", doc.active_storey)])])
+    pump(200)
+    win.views.open(("sheet", doc.sheets[0].uid))
+    look("propriedades_da_folha", win.props)
+    win.show_start_page()
+    pump(300)
+    win.open_view("3d", None)
+    browser_up()
+    after, now = canvas.width(), (win.width(), win.height())
+    win.resize(1280, 740)
+    pump(200)
+    doc.modified = False
+    check("paineis_cabem_nas_colunas", not too_wide and now == size and after >= wide - 2,
+          "largos={} janela={}→{} vista_3d={}→{} px".format(too_wide, size, now, wide, after))
+
+
 def start_page_flow():
     """0.387 (the owner: «vamos criar a página inicial onde à esquerda ficam as opções de abrir novo, carregar arquivo
     raiz ou arquivo de base, depois tutoriais, depois documentos recentes; no lado direito duas colunas, Discussões no
@@ -2232,7 +2344,8 @@ def plan_flow():
     pump(300)
     z_top = vp.box[1][2] if vp.box is not None else None
     frame = bim_actions.wall_frame(doc, walls[0])     # in the middle of the wall's thickness, under the cut
-    dark = pixel(frame.to_world((frame.x0 + frame.length * 0.05, (frame.y0 + frame.y1) / 2, (z_top or 1.5) - 0.02)))
+    # (0.476: the darkest few pixels round it, as 0.319's checks — one pixel fell between a hatched cut's lines)
+    dark = darkest(frame.to_world((frame.x0 + frame.length * 0.05, (frame.y0 + frame.y1) / 2, (z_top or 1.5) - 0.02)))
     check("caixa_de_corte_f6_e_arrastar", on and z_top is not None and abs(z_top - 1.5) < 0.05
           and batch.poche.visible and max(dark) < 110,
           "ligada={} topo={} poché={} cor={}".format(on, z_top, batch.poche.visible, dark))
@@ -19893,6 +20006,7 @@ def room_program_flow():
     path = os.path.join(folder, "programa.csv")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("Ambiente;Área;Quantidade;Tipo\nQuarto;12,5;1;interior\nSala comum;14;1;\nTerraço;6;1;exterior\n")
+    wide_before = canvas.width()            # (0.476: its totals' line widened the left column for good — 614 → 425 px)
     n = win.import_room_program(path)
     pump(300)
     panel = win.program_panel
@@ -19931,10 +20045,13 @@ def room_program_flow():
     import shutil
     shutil.rmtree(folder, ignore_errors=True)
     panel.hide()
+    pump(200)
+    narrow = canvas.width() >= wide_before - 2
     win.set_plan(False)
-    check("programa_necessidades", on_ribbon and listed and made and renamed and undone,
-          "fita={} lista={} feito={} renomeado={} desfeito={} salas={}".format(
-              on_ribbon, listed, made, renamed, undone, [(r["name"], r["external"]) for r in doc.ifc.spaces()]))
+    check("programa_necessidades", on_ribbon and listed and made and renamed and undone and narrow,
+          "fita={} lista={} feito={} renomeado={} desfeito={} salas={} largura_3d={}→{}".format(
+              on_ribbon, listed, made, renamed, undone, [(r["name"], r["external"]) for r in doc.ifc.spaces()],
+              wide_before, canvas.width()))
 
 
 def section_edit_flow():
@@ -21877,11 +21994,14 @@ def beginner_flow():
     pump(300)
     move(near((3.25, 1.1, 0)), 3)                 # over the thin rectangle, no click
     pump(200)
+    pp_tool = win.tool
+    hover_seen = (pp_tool.name, getattr(pp_tool, "_hover_xy", None), vp.pick(*mouse) is not None)
     type_text("2,8")
     key(Qt.Key.Key_Return)
     pump(300)
     vol = volume(doc.get(rect.id)) if rect else 0
-    check("pushpull_so_digitando", abs(vol - 4.5 * 0.2 * 2.8) < 1e-9, "volume={:.4f}".format(vol))
+    check("pushpull_so_digitando", abs(vol - 4.5 * 0.2 * 2.8) < 1e-9, "volume={:.4f} (ferramenta, rato, face)={} "
+          "msg={!r}".format(vol, hover_seen, win.last_message[:70]))
 
     vp.set_selection(set())
     win.classify_actions["parede_alv_20"].trigger()   # nothing selected: pick mode
@@ -22880,6 +23000,7 @@ try:
             globals()[name.strip()]()
     else:
         run()
+    check("janela_nao_cresce", not _grew, _grew[0] if _grew else "{}×{}".format(win.width(), win.height()))
 except Exception:
     check("excecao", False, traceback.format_exc())
 

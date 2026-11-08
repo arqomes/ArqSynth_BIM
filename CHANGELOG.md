@@ -139,6 +139,42 @@ painel lateral, mas a tabela deve ser gerada na tela e não no rodapé… seria 
   - mais tabelas (vistas, folhas, mapa de vãos, materiais, áreas);
   - as tabelas no modelo base.
 
+## 0.476.0 — 2026-11-08
+
+**A janela já não cresce sozinha.** As três falhas que sobravam da bateria de testes (as cotas de relação, a
+fachada na parede curva e o leitor de tutoriais da página inicial) tinham a mesma origem: alguns painéis pediam mais
+espaço do que a janela tinha. O programa alargava então a janela — para lá do ecrã, até 2 039 px — ou uma coluna de
+painéis, e nunca as devolvia ao tamanho de antes. A vista 3D ficava mais estreita e os cliques caíam noutros sítios.
+
+Corrigido no programa:
+
+- **Página inicial**: as suas cinco colunas pedem 1 258 px. Agora está numa área com deslocamento, como uma página web:
+  numa janela mais estreita aparece uma barra de deslocamento, em vez de a janela crescer. Ao abri-la, os painéis
+  laterais saem primeiro.
+- **Tabelas**: o painel antigo do rodapé (antes da 0.477) pedia 1 398 px — a lista das categorias tem agora uma largura
+  fixa (os nomes longos na lista aberta). Na 0.477 as tabelas passaram para abas, e o painel novo das Tabelas, na coluna
+  da esquerda, entra no teste «os painéis cabem nas colunas» (abaixo).
+- **Painel Programa de necessidades** (o da 0.474): a linha dos totais alargava a coluna da esquerda de 270 para 459 px
+  para sempre, e a vista 3D ficava com 425 px. O painel novo da 0.475 já cabe; o teste confirma-o.
+- **Folhas**: o desenho da folha ajusta-se a qualquer tamanho; deixou de exigir 640 × 460 px.
+- **Painéis da coluna da esquerda** (a coluna tem 270 px numa janela de 1280):
+  - **Pavimentos** pedia 377 px. No grupo «Aparência», cada fila de desenhos passa à linha seguinte quando não cabe
+    ao lado do nome (e o nome vai para cima dela); os botões «+ Novo», «Apagar» e «Iguais…» ficam do tamanho das
+    palavras; numa janela baixa o painel desliza na vertical (pedia 674 px de altura).
+  - **Materiais** pedia 286 px: os botões «Novo», «Duplicar», «Apagar» ficam do tamanho das palavras.
+  - **Biblioteca ▸ Web** pedia 300 px: as duas listas (catálogo e categoria) ficam estreitas; os nomes inteiros veem-se
+    na lista aberta.
+- **Propriedades de uma folha** pediam 348 px: a lista do tipo de folha («A3 horizontal · Completo») fica estreita, o
+  nome inteiro na lista aberta.
+
+Nos testes: duas verificações novas. «A janela não cresce» diz depois de que passo a janela ficou maior do que o
+teste a pôs. «Os painéis cabem nas colunas» abre um a um os painéis acima, numa janela de 1280 × 740, e confirma que
+nenhum alarga a sua coluna, que a janela não cresce e que a vista 3D volta à mesma largura. O teste do Programa de
+necessidades também confirma a largura da vista 3D. A cor do corte na caixa de corte lê-se nos píxeis mais escuros à
+volta do ponto (um só píxel podia cair entre as linhas do tracejado).
+
+A bateria completa da janela passa toda, já com as versões 0.475 a 0.480: nenhuma falha (antes: 6 falhas na 0.474).
+
 ## 0.475.0 — 2026-11-08
 
 **Ambientes: o programa de necessidades no painel lateral** (o dono: «A aba ambiente quero que funcione no painel

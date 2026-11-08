@@ -481,7 +481,8 @@ class MaterialEditor(QtWidgets.QWidget):
         self.remove = QtWidgets.QPushButton(t("types.delete"))
         for b in (self.new, self.duplicate, self.remove):
             row.addWidget(b)
-        row.addStretch(1)
+            b.setMinimumWidth(b.fontMetrics().horizontalAdvance(b.text()) + 16)   # (0.476: at the style's 80 px each,
+        row.addStretch(1)                                                        # the left column of panels grew)
         self.view_button = QtWidgets.QToolButton()
         self.view_button.setText("▦")
         self.view_button.setToolTip(t("libp.view"))

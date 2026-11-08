@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.478.0
+# Guia das ferramentas — ArqSynth BIM 0.480.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.478.0.
+ArqSynth BIM 0.480.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -154,7 +154,7 @@ Criar, abrir e gerir projetos; importar e exportar.
 #### Página inicial
 
 - **O que faz:** A página inicial: começar um projeto, os tutoriais, os documentos recentes, as discussões e os apoiadores.
-- **Passos de teste (TESTAR.md):** 0.406 «Tutoriais na própria página inicial»; 0.403 «A página inicial na primeira aba, com a casa»; 0.388 «Página inicial: recentes à esquerda, com vistas»; 0.387 «A página inicial»
+- **Passos de teste (TESTAR.md):** 0.476 «A janela já não cresce sozinha»; 0.406 «Tutoriais na própria página inicial»; 0.403 «A página inicial na primeira aba, com a casa»; 0.388 «Página inicial: recentes à esquerda, com vistas»; 0.387 «A página inicial»
 
 #### Novo a partir de arquivo base…
 
@@ -773,7 +773,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Janela 120×120 (peitoril 1,00): passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** F: para a outra face da parede · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»; 0.330 «Botões e janelas em português de Portugal»
+- **Passos de teste (TESTAR.md):** 0.476 «A janela já não cresce sozinha»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»
 
 #### Abertura na parede
 
@@ -1658,7 +1658,7 @@ Imagens e apresentação (Gaussian splat).
 
 #### Cenas da apresentação
 
-- **O que faz:** O painel Apresentação: as cenas que vão para o ArqSynth Presentation (a vista geral, as vistas 3D com nome, as plantas, os cortes), pela ordem da apresentação — a de entrada, as que ficam de fora, a transição, o efeito, a legenda e o tempo de cada uma, e as miniaturas.
+- **O que faz:** Abre a interface do ArqSynth Presentation (o ícone da barra da esquerda): as cenas que vão para o Presentation, pela ordem da apresentação, com a câmara, as camadas, a transição, o efeito, o sol e a legenda de cada uma, e a exportação.
 - **Passos de teste (TESTAR.md):** 0.368 «Panoramas 360° para o Presentation»; 0.366 «Os ambientes e o Passeio Virtual»; 0.364 «Os movimentos de câmara»; 0.363 «O painel Apresentação: as cenas preparadas aqui»
 
 - **Para o ArqSynth Presentation…** — o mesmo de Início ▸ Exportar.
@@ -1809,4 +1809,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*244 comandos descritos, gerados do ArqSynth BIM 0.478.0.*
+*244 comandos descritos, gerados do ArqSynth BIM 0.480.0.*

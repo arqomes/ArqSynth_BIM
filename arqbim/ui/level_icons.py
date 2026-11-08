@@ -156,9 +156,74 @@ def colour_icon(value):
     return QtGui.QIcon(pm)
 
 
+class _Flow(QtWidgets.QLayout):
+    """(0.476) Side by side, on to the next line where the room ends — as words in a paragraph. In one row (5 × 50 px)
+    beside its label, a setting's pictures asked for 369 px and widened the left column of panels for good (the 3D view
+    narrower); now its least width is one picture's."""
+
+    def __init__(self, parent=None, gap=2):
+        super().__init__(parent)
+        self._items, self._gap = [], gap
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def insertWidget(self, index, widget):
+        self.addChildWidget(widget)
+        self._items.insert(index, QtWidgets.QWidgetItem(widget))
+        self.invalidate()
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, k):
+        return self._items[k] if 0 <= k < len(self._items) else None
+
+    def takeAt(self, k):
+        return self._items.pop(k) if 0 <= k < len(self._items) else None
+
+    def expandingDirections(self):
+        return QtCore.Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._place(QtCore.QRect(0, 0, width, 0), False)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._place(rect, True)
+
+    def sizeHint(self):                                  # (all in one line, as before)
+        hints = [i.sizeHint() for i in self._items]
+        return QtCore.QSize(sum(h.width() for h in hints) + self._gap * max(len(hints) - 1, 0),
+                            max((h.height() for h in hints), default=0))
+
+    def minimumSize(self):
+        size = QtCore.QSize(0, 0)
+        for i in self._items:
+            size = size.expandedTo(i.minimumSize())
+        return size
+
+    def _place(self, rect, put):
+        """The items laid in `rect` from its top left, a new line where the next does not fit: their height."""
+        x, y, line = rect.x(), rect.y(), 0
+        for i in self._items:
+            hint = i.sizeHint()
+            if x > rect.x() and x + hint.width() > rect.x() + rect.width():
+                x, y, line = rect.x(), y + line + self._gap, 0
+            if put:
+                i.setGeometry(QtCore.QRect(QtCore.QPoint(x, y), hint))
+            x += hint.width() + self._gap
+            line = max(line, hint.height())
+        return y + line - rect.y()
+
+
 class IconChoice(QtWidgets.QWidget):
     """A row of pictures, one of them chosen — a list's ways (addItem, insertItem, findData, currentData,
-    setCurrentIndex, currentIndexChanged)."""
+    setCurrentIndex, currentIndexChanged). (0.476) On two lines when the panel is narrow."""
 
     currentIndexChanged = QtCore.Signal(int)
 
@@ -168,11 +233,8 @@ class IconChoice(QtWidgets.QWidget):
         self._values, self._buttons = [], []
         self._current = -1
         self._ink = _ink().name()                       # (the theme's ink they were drawn with)
-        self._row = QtWidgets.QHBoxLayout(self)
-        self._row.setContentsMargins(0, 0, 0, 0)
-        self._row.setSpacing(2)
-        self._row.addStretch(1)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Fixed)
+        self._row = _Flow(self)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
 
     def _button(self, text, value):
         b = QtWidgets.QToolButton()
