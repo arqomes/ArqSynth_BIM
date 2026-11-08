@@ -33,11 +33,14 @@ from ..core import pbr
 from ..i18n import decimal_sep, lang, t
 from ..ifc import catalog
 from ..ifc.model import HATCH_WORDS
+from ..model import component_library as lib
 from ..model import graphic_styles as styles_model
+from ..model import material_web
 from ..model import project_types
 from ..model import render_scene
 from . import material_thumbs
 from . import pattern_paint
+from . import web_fetch
 from .pattern_picker import PatternButton
 from . import theme
 
@@ -48,7 +51,10 @@ SHAPES = material_thumbs.SHAPES
 PICTURE = 170                          # px: the material's picture on the Edit tab
 AT_ONCE = 8                            # pictures drawn a tick
 SETTINGS = ("ArqSynth", "ArqSynth BIM")
-KEY = QtCore.Qt.ItemDataRole.UserRole
+KEY = QtCore.Qt.ItemDataRole.UserRole            # a material's key — (0.471) a web one's ("web", its id)
+WEB_ROW = QtCore.Qt.ItemDataRole.UserRole + 1    # (0.471) a web one's row (model/material_web.rows)
+SOURCES = ("project", "web")                     # (0.471) the project's materials; Poly Haven's free textures
+POLYHAVEN_LIST = "polyhaven_textures.json"
 # (0.468) the realistic controls each kind shows (as D5's: a glass no metal, a light its emission…)
 SHOWN = {"standard": {"base", "roughness", "metallic", "specular", "clearcoat", "normal", "height", "ao", "opacity"},
          "glass": {"base", "roughness", "ior", "normal"},
@@ -411,6 +417,11 @@ class MaterialEditor(QtWidgets.QWidget):
         self.shape = self.shape if self.shape in SHAPES else "cube"
         self.preview_shape = s.value("materiais/forma_editar", "sphere")
         self.preview_shape = self.preview_shape if self.preview_shape in SHAPES else "sphere"
+        self.source = s.value("materiais/fonte", "project")             # (0.471)
+        self.source = self.source if self.source in SOURCES else "project"
+        self.fetcher = web_fetch.Fetcher(self)
+        self._web_rows = None          # Poly Haven's textures as read (None: not yet)
+        self._web_busy = False
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(4, 4, 4, 4)
         outer.setSpacing(4)
@@ -436,6 +447,23 @@ class MaterialEditor(QtWidgets.QWidget):
         col = QtWidgets.QVBoxLayout(page)
         col.setContentsMargins(0, 4, 0, 0)
         col.setSpacing(4)
+        # (0.471, the owner: «Sim, liga») where from: the project's, or the web's — Poly Haven's free textures
+        sources = QtWidgets.QHBoxLayout()
+        sources.setSpacing(2)
+        self.source_buttons = {}
+        group = QtWidgets.QButtonGroup(self)
+        for s in SOURCES:
+            b = QtWidgets.QToolButton()
+            b.setText(t("matp.source." + s))
+            b.setToolTip(t("tip.matp.source." + s))
+            b.setCheckable(True)
+            b.setChecked(s == self.source)
+            b.clicked.connect(lambda _on=False, s=s: self.set_source(s))
+            group.addButton(b)
+            sources.addWidget(b)
+            self.source_buttons[s] = b
+        sources.addStretch(1)
+        col.addLayout(sources)
         row = QtWidgets.QHBoxLayout()
         row.setSpacing(2)
         self.new = QtWidgets.QPushButton(t("mat.new"))
@@ -475,6 +503,22 @@ class MaterialEditor(QtWidgets.QWidget):
         self.search.setPlaceholderText(t("mat.search"))
         self.search.setClearButtonEnabled(True)
         col.addWidget(self.family)
+        # (0.471) the web's: its categories, where the textures come from (as Poly Haven asks)
+        self.web_box = QtWidgets.QWidget()
+        web = QtWidgets.QVBoxLayout(self.web_box)
+        web.setContentsMargins(0, 0, 0, 0)
+        self.web_category = QtWidgets.QComboBox()
+        self.web_category.addItem(t("libp.web_all"), "")
+        for name in material_web.FILTERS:
+            self.web_category.addItem(t("matp.ph." + name), name)
+        self.web_category.currentIndexChanged.connect(lambda _i: self._fill_list(force=False))
+        self.web_note = QtWidgets.QLabel(t("matp.web_credit"))
+        self.web_note.setWordWrap(True)
+        self.web_note.setOpenExternalLinks(True)
+        self.web_note.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        web.addWidget(self.web_category)
+        web.addWidget(self.web_note)
+        col.addWidget(self.web_box)
         col.addWidget(self.search)
         self.list = QtWidgets.QListWidget()
         self.list.setObjectName("materials_grid")
@@ -493,7 +537,10 @@ class MaterialEditor(QtWidgets.QWidget):
         self.search.textChanged.connect(lambda _t: self._fill_list(self._chosen_key(), force=False))
         self.list.currentItemChanged.connect(self._current_changed)
         self.list.itemClicked.connect(self._clicked)
-        self.list.itemDoubleClicked.connect(lambda _item: self.tabs.setCurrentIndex(1))
+        self.list.itemDoubleClicked.connect(lambda item: self.tabs.setCurrentIndex(1)
+                                            if not isinstance(item.data(KEY), tuple) else None)
+        self.list.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._menu)
         self.new.clicked.connect(self.new_material)
         self.duplicate.clicked.connect(self.duplicate_material)
         self.remove.clicked.connect(self.delete_material)
@@ -854,11 +901,16 @@ class MaterialEditor(QtWidgets.QWidget):
         """(0.468) The Paint bucket on or off: «Sem pintura» listed first, or not."""
         if bool(on) != self.painting:
             self.painting = bool(on)
-            self._fill_list(self._chosen_key(), force=False)
+            if self.source != "web":                  # (0.471: the web's list stays as it is, where it was)
+                self._fill_list(self._chosen_key(), force=False)
 
     def _fill_list(self, select=None, force=True):
         """The list as filtered; `select` chosen in it — force: shown even if the filter hides it (one asked for, one
-        just saved), the filter undone. Each its picture, drawn a few at a time."""
+        just saved), the filter undone. Each its picture, drawn a few at a time. (0.471) The web's: its textures."""
+        self._source_shown()
+        if self.source == "web":
+            self._fill_web()
+            return
         blocker = QtCore.QSignalBlocker(self.list)
         self.list.clear()
         if force and select in catalog.MATERIALS and not self._shown(catalog.MATERIALS[select]):
@@ -933,7 +985,9 @@ class MaterialEditor(QtWidgets.QWidget):
 
     def materials_changed(self):
         """(0.468) The project's materials changed (saved, undone, another project): the list again, the one chosen
-        kept — and its form, unless it is being changed."""
+        kept — and its form, unless it is being changed. (0.471) The web's list stays as it is."""
+        if self.source == "web":
+            return
         self._fill_list(self._chosen_key(), force=False)
 
     def mark(self, key):
@@ -973,9 +1027,175 @@ class MaterialEditor(QtWidgets.QWidget):
         return True
 
     def _clicked(self, item):
-        """(0.468) One click: the Paint bucket takes it (SketchUp's)."""
-        if item is not None and self.on_pick is not None:
+        """(0.468) One click: the Paint bucket takes it (SketchUp's) — (0.471) a web texture fetched first, made a
+        material of the project."""
+        if item is None:
+            return
+        if isinstance(item.data(KEY), tuple):
+            self.get_web(item.data(WEB_ROW))
+        elif self.on_pick is not None:
             self.on_pick(item.data(KEY))
+
+    def _menu(self, pos):
+        item = self.list.itemAt(pos)
+        if item is None:
+            return
+        menu = QtWidgets.QMenu(self)
+        if isinstance(item.data(KEY), tuple):
+            row = item.data(WEB_ROW)
+            menu.addAction(t("matp.web_get"), lambda: self.get_web(row))
+            menu.addAction(t("libp.page"), lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl(row["page"])))
+        else:
+            key = item.data(KEY)
+            if key and self.on_pick is not None:
+                menu.addAction(t("matp.paint"), lambda: self.on_pick(key))
+            if key:
+                menu.addAction(t("matp.tab.edit"), lambda: self.tabs.setCurrentIndex(1))
+        if not menu.isEmpty():
+            from . import menus
+            menu.exec(menus.menu_point(menu, self.list.viewport().mapToGlobal(pos)))
+
+    # ------------------------------------------------------------ (0.471) the web: Poly Haven's free textures
+
+    def set_source(self, source):
+        if source not in SOURCES:
+            return
+        self.source = source
+        self.source_buttons[source].setChecked(True)
+        _settings().setValue("materiais/fonte", source)
+        self._fill_list(force=False)
+
+    def _source_shown(self):
+        web = self.source == "web"
+        self.family.setVisible(not web)
+        self.web_box.setVisible(web)
+        for b in (self.new, self.duplicate, self.remove):
+            b.setVisible(not web)
+        self.hint.setText(t("matp.web_hint" if web else "matp.hint"))
+
+    def _fill_web(self):
+        """Poly Haven's textures listed (read once a day), by category and searched, their miniatures fetched."""
+        self.fetcher.drop_pictures()
+        self._generation += 1
+        self._queue = []
+        self.list.clear()
+        if self._web_rows is None:
+            self._load_web()
+            return
+        category = self.web_category.currentData()
+        words = self.search.text().strip().lower().split()
+        list_mode = self.view == "list"
+        align = QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter if list_mode else \
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignTop
+        blank = self._blank()
+        for row in self._web_rows:
+            text = (row["name"] + " " + " ".join(row["categories"])).lower()
+            if (category and category not in row["categories"]) or not all(w in text for w in words):
+                continue
+            item = QtWidgets.QListWidgetItem(blank, row["name"])
+            item.setData(KEY, ("web", row["id"]))
+            item.setData(WEB_ROW, row)
+            w, h = row["dims"]
+            item.setToolTip(t("matp.web_tip", name=row["name"], authors=row["authors"] or "—",
+                              size="{:g} × {:g} m".format(round(w, 2), round(h, 2)).replace(".", decimal_sep())))
+            item.setTextAlignment(align)
+            self.list.addItem(item)
+            self.fetcher.picture(row["thumbnail"], lambda pm, item=item: item.setIcon(QtGui.QIcon(pm)))
+        self._show(None)
+
+    def _load_web(self):
+        self.web_note.setText(t("matp.web_credit") + " " + t("libp.web_reading"))
+
+        def done(text, error):
+            if text is None:
+                self.web_note.setText(t("matp.web_credit") + " " + t("libp.web_failed", e=error))
+                return
+            try:
+                self._web_rows = material_web.rows(text)
+            except (ValueError, TypeError) as exc:
+                self.web_note.setText(t("matp.web_credit") + " " + t("libp.web_failed", e=exc))
+                return
+            self.web_note.setText(t("matp.web_credit") + " " + t("matp.web_read", n=len(self._web_rows)))
+            if self.source == "web":
+                self._fill_web()
+        self.fetcher.kept_list(lib.POLYHAVEN_API + "/assets?type=textures", POLYHAVEN_LIST, done)
+
+    def web_folder(self, row):
+        """Where a texture's pictures are kept: the textures' folder ▸ Poly Haven ▸ its name."""
+        return os.path.join(pbr.folder(), "Poly Haven", lib.file_name(row["name"]))
+
+    def get_web(self, row):
+        """A Poly Haven texture: its pictures fetched (once: kept in the textures' folder), a material of the project
+        made of them — named as Poly Haven names it —, and the Paint bucket takes it. Made before: that one."""
+        if row is None or self._web_busy:
+            return
+        made = next((m for m in catalog.MATERIALS.values()
+                     if row["name"] in (m.name_pt, m.name_en) and m.look is not None and m.look.textured), None)
+        if made is not None:
+            self._picked_web(made.key, row)
+            return
+        folder = self.web_folder(row)
+        if os.path.isfile(os.path.join(folder, "base.jpg")):
+            self._make_web(row, folder)
+            return
+        self._web_busy = True
+        self.web_note.setText(t("matp.web_getting", name=row["name"]))
+
+        def listed(data, error):
+            try:
+                if data is None:
+                    raise ValueError(error)
+                found = material_web.files(data.decode("utf-8", "replace"))
+                if "base" not in found:
+                    raise ValueError(t("matp.web_no_colour"))
+            except (ValueError, TypeError) as exc:
+                self._web_busy = False
+                self.web_note.setText(t("libp.web_failed", e=exc))
+                return
+            if not material_web.is_metal(row):
+                found.pop("arm", None)                   # (only a metal's metallic is read from it)
+
+            def step(n, total):
+                self.web_note.setText(t("libp.web_getting_n", name=row["name"], n=n, total=total))
+
+            def fetched(error):
+                self._web_busy = False
+                if error is not None:
+                    self.web_note.setText(t("libp.web_failed", e=error))
+                    return
+                self._make_web(row, folder)
+            self.fetcher.files(folder, [(slot + ".jpg", url) for slot, url in found.items()], fetched, step)
+        self.fetcher.get("{}/files/{}".format(lib.POLYHAVEN_API, row["id"]), listed)
+
+    def _make_web(self, row, folder):
+        """The project's material of a texture's pictures in `folder` (its metallic from a metal's «arm»)."""
+        paths = {slot: os.path.join(folder, slot + ".jpg") for slot in ("base", "normal", "roughness", "ao")
+                 if os.path.isfile(os.path.join(folder, slot + ".jpg"))}
+        arm = os.path.join(folder, "arm.jpg")
+        metal = os.path.join(folder, "metallic.png")
+        if material_web.is_metal(row) and os.path.isfile(arm) and not os.path.isfile(metal):
+            image = QtGui.QImage(arm).convertToFormat(QtGui.QImage.Format.Format_RGB888)
+            if not image.isNull():
+                w, h, line = image.width(), image.height(), image.bytesPerLine()
+                import numpy as np
+                raw = np.frombuffer(bytes(image.constBits()), dtype=np.uint8)[:line * h].reshape(h, line)
+                blue = np.ascontiguousarray(raw[:, :w * 3].reshape(h, w, 3)[:, :, 2])
+                QtGui.QImage(blue.data, w, h, w, QtGui.QImage.Format.Format_Grayscale8).copy().save(metal)
+        if os.path.isfile(metal):
+            paths["metallic"] = metal
+        colour = QtGui.QImage(paths["base"]).scaled(1, 1, QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                                                    QtCore.Qt.TransformationMode.SmoothTransformation).pixelColor(0, 0)
+        names = {_name(m) for m in catalog.MATERIALS.values()}
+        name = row["name"] if row["name"] not in names else "{} (Poly Haven)".format(row["name"])
+        spec = material_web.material(row, paths, (colour.redF(), colour.greenF(), colour.blueF()), name)
+        key = self.on_save(spec, None) if self.on_save is not None else None
+        if key is not None:
+            self._picked_web(key, row)
+
+    def _picked_web(self, key, row):
+        self.web_note.setText(t("matp.web_made", name=row["name"]))
+        if self.on_pick is not None:
+            self.on_pick(key)
 
     # ------------------------------------------------------------ the form
 

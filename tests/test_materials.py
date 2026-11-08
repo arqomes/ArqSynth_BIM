@@ -112,6 +112,94 @@ class Textured(unittest.TestCase):
         self.assertFalse(vs.from_dict({"name": "Antigo"}).textures)
 
 
+class WebTextures(unittest.TestCase):
+    """0.471 — the owner: «Sim, liga» (Poly Haven's free textures in the Materials panel): its list and files read;
+    the material made of a texture — its category, its pictures, its real size, a metal's metallic —; the panel's Web
+    tab (offline: the list given, the pictures already in their folder): one click makes the material and gives it to
+    the Paint bucket."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp(prefix="arqsynth_tex_web_")
+        self._folder = pbr.folder
+        pbr.folder = lambda: self.folder
+
+    def tearDown(self):
+        pbr.folder = self._folder
+
+    def test_rows_files_material(self):
+        import json
+        from arqbim.model import material_web
+        text = json.dumps({
+            "red_brick_03": {"name": "Red Brick 03", "categories": ["outdoor", "wall", "brick"],
+                             "authors": {"Rob Tuytel": "All"}, "dimensions": [2000, 1000]},
+            "blue_metal_plate": {"name": "Blue Metal Plate", "categories": ["metal", "collection: x"],
+                                 "authors": {"A": "All"}, "dimensions": [1000, 1000]},
+            "bad": "não é um"})
+        rows = material_web.rows(text)
+        self.assertEqual([r["name"] for r in rows], ["Blue Metal Plate", "Red Brick 03"])
+        brick = rows[1]
+        self.assertEqual((brick["dims"], brick["authors"]), ((2.0, 1.0), "Rob Tuytel"))
+        self.assertTrue(brick["thumbnail"].startswith("https://cdn.polyhaven.com/") and "red_brick_03" in
+                        brick["thumbnail"])
+        self.assertEqual(rows[0]["categories"], ["metal"])                     # (its collections left out)
+        self.assertEqual((material_web.category_of(brick), material_web.category_of(rows[0])), ("brick", "steel"))
+        files = material_web.files(json.dumps({
+            "Diffuse": {"1k": {"jpg": {"url": "https://x/d_1k.jpg"}}, "2k": {"jpg": {"url": "https://x/d_2k.jpg"}}},
+            "nor_gl": {"2k": {"jpg": {"url": "https://x/n_2k.jpg"}}},
+            "nor_dx": {"1k": {"jpg": {"url": "https://x/dx.jpg"}}},
+            "arm": {"1k": {"jpg": {"url": "https://x/arm.jpg"}}}, "blend": {"1k": {"blend": {"url": "b"}}}}))
+        self.assertEqual(files, {"base": "https://x/d_1k.jpg", "normal": "https://x/n_2k.jpg", "arm": "https://x/arm.jpg"})
+        spec = material_web.material(brick, {"base": "/b.jpg", "roughness": "/r.jpg"}, (0.6, 0.3, 0.2), "Red Brick 03")
+        self.assertEqual((spec.key, spec.name_pt, spec.category), ("m:new", "Red Brick 03", "brick"))
+        self.assertEqual((spec.look.width, spec.look.height_m, spec.look.roughness), (2.0, 1.0, pbr.AS_PICTURE))
+        self.assertEqual(spec.look.map("base"), ("/b.jpg", False))
+        metal = material_web.material(rows[0], {"base": "/b.jpg", "metallic": "/m.png"}, (0.5, 0.5, 0.6), "Blue")
+        self.assertEqual((metal.look.metallic, metal.finish), (pbr.AS_PICTURE, "metal"))
+
+    def test_panel(self):
+        from arqbim.model.document import Document
+        from arqbim.ui.material_editor import MaterialEditor
+        doc = Document()
+        try:
+            d = MaterialEditor(None, doc)
+            saved, picked = [], []
+
+            def save(spec, old):
+                saved.append(spec)
+                catalog.MATERIALS["m:" + spec.name_pt] = dataclasses.replace(spec, key="m:" + spec.name_pt)
+                return "m:" + spec.name_pt
+            d.on_save, d.on_pick = save, picked.append
+            row = {"id": "red_brick_03", "name": "Tijolo Teste", "categories": ["brick", "wall"], "dims": (1.0, 0.5),
+                   "authors": "Rob", "thumbnail": "", "page": "https://polyhaven.com/a/red_brick_03"}
+            d._web_rows = [row]
+            d.set_source("web")
+            self.assertEqual([d.list.item(k).text() for k in range(d.list.count())], ["Tijolo Teste"])
+            self.assertTrue(d.web_box.isVisibleTo(d) and not d.family.isVisibleTo(d))
+            d.web_category.setCurrentIndex(d.web_category.findData("wood"))
+            self.assertEqual(d.list.count(), 0)                                 # (by category)
+            d.web_category.setCurrentIndex(0)
+            folder = d.web_folder(row)                                         # (fetched before: in its folder)
+            os.makedirs(folder)
+            picture(folder, "base.jpg", "#b04020", "#b04020")
+            picture(folder, "normal.jpg", "#8080ff", "#8080ff")
+            d.list.itemClicked.emit(d.list.item(0))
+            self.assertEqual(len(saved), 1)
+            spec = saved[0]
+            self.assertEqual((spec.name_pt, spec.category, spec.look.width, spec.look.height_m),
+                             ("Tijolo Teste", "brick", 1.0, 0.5))
+            self.assertEqual(sorted(s for s, _p, _i in spec.look.maps), ["base", "normal"])
+            self.assertGreater(spec.color[0], spec.color[2])                   # (its colour: the picture's)
+            self.assertEqual(picked, ["m:Tijolo Teste"])
+            d.list.itemClicked.emit(d.list.item(0))                            # (made before: that one again)
+            self.assertEqual((len(saved), picked[-1]), (1, "m:Tijolo Teste"))
+            d.set_source("project")
+            self.assertIn("Tijolo Teste", [d.list.item(k).text() for k in range(d.list.count())])
+            d.deleteLater()
+        finally:
+            catalog.MATERIALS.pop("m:Tijolo Teste", None)
+            doc.modified = False
+
+
 class RenderLook(unittest.TestCase):
     """0.470 — a material's own realistic look in the realistic render: kept in the scene (its values, its pictures
     found, its faces' pictures' coordinates), read back; rendered by Mitsuba — a wall with a picture red on top, blue

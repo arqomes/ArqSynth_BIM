@@ -2046,6 +2046,47 @@ _STRINGS = {
     "matp.hint": ("Um clique num material pinta com ele (balde de tinta). Duplo clique: editar.",
                   "One click on a material paints with it (Paint bucket). Double click: edit."),
     "tip.matp.new": ("Um material novo, para editar na aba Editar.", "A new material, to edit on the Edit tab."),
+    # (0.471) the Materials panel's web: Poly Haven's free textures
+    "matp.source.project": ("No projeto", "In the project"),
+    "matp.source.web": ("Web", "Web"),
+    "tip.matp.source.project": ("Os materiais do projeto (os do programa e os seus).",
+                                "The project's materials (the program's and your own)."),
+    "tip.matp.source.web": ("Texturas gratuitas da Poly Haven (domínio público, CC0): um clique traz a textura como "
+                            "material do projeto, com cor, relevo, rugosidade e oclusão, no tamanho real.",
+                            "Poly Haven's free textures (public domain, CC0): one click brings the texture in as a "
+                            "project material, with colour, relief, roughness and occlusion, at its real size."),
+    "matp.web_credit": ("Texturas de <a href=\"https://polyhaven.com/textures\">Poly Haven</a> — gratuitas, de domínio "
+                        "público (CC0).", "Textures from <a href=\"https://polyhaven.com/textures\">Poly Haven</a> — "
+                        "free, in the public domain (CC0)."),
+    "matp.web_read": ("{n} texturas.", "{n} textures."),
+    "matp.web_hint": ("Um clique numa textura descarrega-a (só da primeira vez), cria o material no projeto e ativa o "
+                      "balde de tinta. Clique direito: ver a página.", "One click on a texture fetches it (only the "
+                      "first time), makes the project's material and turns the Paint bucket on. Right click: see its "
+                      "page."),
+    "matp.web_tip": ("{name}\nAutor: {authors}\nTamanho real: {size}", "{name}\nAuthor: {authors}\nReal size: {size}"),
+    "matp.web_get": ("Trazer para o projeto", "Bring into the project"),
+    "matp.web_getting": ("A obter «{name}»…", "Getting “{name}”…"),
+    "matp.web_no_colour": ("a textura não tem imagem de cor", "the texture has no colour picture"),
+    "matp.web_made": ("«{name}» é um material do projeto: clique numa face para a pintar (Editar: ver e mudar).",
+                      "“{name}” is a project material: click a face to paint it (Edit: see and change it)."),
+    "matp.paint": ("Pintar com este material", "Paint with this material"),
+    "matp.ph.brick": ("Tijolo", "Brick"),
+    "matp.ph.wood": ("Madeira", "Wood"),
+    "matp.ph.concrete": ("Betão", "Concrete"),
+    "matp.ph.plaster": ("Reboco", "Plaster"),
+    "matp.ph.tiles": ("Azulejo e mosaico", "Tiles"),
+    "matp.ph.rock": ("Pedra", "Rock"),
+    "matp.ph.metal": ("Metal", "Metal"),
+    "matp.ph.fabric": ("Tecido", "Fabric"),
+    "matp.ph.floor": ("Pavimentos", "Floors"),
+    "matp.ph.wall": ("Paredes", "Walls"),
+    "matp.ph.roofing": ("Coberturas", "Roofing"),
+    "matp.ph.terrain": ("Terreno", "Terrain"),
+    "matp.ph.asphalt": ("Asfalto", "Asphalt"),
+    "matp.ph.cobblestone": ("Calçada", "Cobblestone"),
+    "matp.ph.sand": ("Areia", "Sand"),
+    "matp.ph.gravel": ("Gravilha", "Gravel"),
+    "matp.ph.leather": ("Couro", "Leather"),
     "tip.matp.duplicate": ("Uma cópia do material escolhido, com os seus gráficos e texturas.",
                            "A copy of the chosen material, with its graphics and textures."),
     "tip.matp.no_paint": ("Tira a pintura (fica o material do elemento).",

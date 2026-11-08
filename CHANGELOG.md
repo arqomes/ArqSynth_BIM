@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.471.0 — 2026-11-08
+
+**Materiais ▸ Web: as texturas gratuitas da Poly Haven** (o dono: «Sim, liga»).
+
+- O painel **Materiais**, em Selecionar, tem agora duas fontes no topo: **No projeto** e **Web**.
+- **Web** lista as 869 texturas da Poly Haven (polyhaven.com), em domínio público (licença **CC0**: usar em qualquer
+  projeto, também comercial). Mostra as miniaturas da própria Poly Haven, uma escolha de categoria (tijolo, madeira,
+  betão, reboco, azulejo, pedra, metal, tecido, pavimentos, coberturas…) e a pesquisa por nome. A lista fica guardada
+  um dia, e as miniaturas também.
+- **Um clique** numa textura:
+  - descarrega as imagens em 1k (cor, mapa normal, rugosidade e oclusão; nos metais também o metálico), só da
+    primeira vez, para Documentos/ArqSynth/Texturas/Poly Haven;
+  - cria um material do projeto com o nome da textura, a categoria certa (tijolo corta-se como alvenaria, madeira
+    como madeira…) e a cor média da imagem;
+  - põe a textura no tamanho real (a Poly Haven diz quantos metros a imagem cobre);
+  - ativa o balde de tinta com esse material: basta clicar nas faces.
+- Uma textura já trazida não se descarrega de novo. O material fica em «No projeto» e abre-se em Editar como os
+  outros.
+- Clique direito numa textura: trazer para o projeto, ou ver a página dela na Poly Haven.
+- Créditos por baixo da escolha de categoria, como a Poly Haven pede.
+
 ## 0.470.0 — 2026-11-08
 
 **Folhas: aba própria no navegador, propriedades na coluna, «Editar tipo…» como no Revit, A4 e zoom** (o dono:
