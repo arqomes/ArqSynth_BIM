@@ -297,6 +297,21 @@ def wall_pick():
     bar_icon("shape", "line")
 
 
+def wall_polygon():
+    """(0.457) A hexagon of walls: its centre clicked, its radius typed."""
+    doc = fresh((0.0, 0.0, 0.0), 6.0)
+    win.set_tool("wall")
+    bar_icon("shape", "poly_in")
+    click_at((0, 0, 0))
+    move_to((2, 0.2, 0))
+    type_value("3")
+    shot("parede_poligono")
+    w = walls(doc)
+    check("parede_poligono_inscrito", len(w) == 6 and all(same(float(np.linalg.norm(e[:2])), 3.0) for _g, _s, e in w),
+          [r3(e) for _g, _s, e in w])
+    bar_icon("shape", "line")
+
+
 def wall_snaps():
     doc = fresh((2.0, 2.0, 0.0))
     win.set_tool("wall")
@@ -573,7 +588,7 @@ def region_outlines():
 for name, fn in (("laje_formas", slab_shapes), ("piso_teto", coverings), ("regiao_formas", region_outlines),
                  ("parede_raio", wall_radius), ("parede_cadeia", wall_chain_off), ("parede_afastamento", wall_offset),
                  ("parede_arcos", wall_arcs), ("parede_concordancia", wall_fillet), ("parede_escolher", wall_pick),
-                 ("parede_snaps", wall_snaps), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
+                 ("parede_snaps", wall_snaps), ("parede_poligono", wall_polygon), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
                  ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask)):
     run(name, fn)
 win.doc.modified = False

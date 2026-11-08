@@ -5605,6 +5605,12 @@ _STRINGS = {
     # curved walls (0.103)
     "wallshape.arc": ("Arco (início, fim, raio)", "Arc (start, end, radius)"),
     "wallshape.arc_center": ("Arco por centro e pontas", "Center-ends arc"),
+    "wallshape.poly_in": ("Polígono inscrito", "Inscribed polygon"),
+    "wallshape.poly_out": ("Polígono circunscrito", "Circumscribed polygon"),
+    "hint.wall.loop_ref": ("({type}, desenhada {ref}; Tab muda.)", "({type}, drawn {ref}; Tab changes it.)"),
+    "info.wall_polygon": ("{n} paredes em polígono regular ({type}, desenhadas {ref}), ligadas nos cantos. Ctrl+Z "
+                          "desfaz.", "{n} walls in a regular polygon ({type}, drawn {ref}), joined at the corners. "
+                          "Ctrl+Z undoes."),
     "wallshape.arc_tangent": ("Arco tangente na ponta", "Tangent end arc"),
     "hint.wall.centre_0": ("Arco por centro e pontas — {type}, desenhada {ref}: clique no centro do arco.",
                            "Center-ends arc — {type}, drawn {ref}: click the arc's centre."),

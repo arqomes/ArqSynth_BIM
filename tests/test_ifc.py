@@ -10445,39 +10445,50 @@ class GltfExport(unittest.TestCase):
                                places=3)
         new.modified = False
 
+    # (0.457) The Rhino file with a block is written in a process of its own, with rhino3dm alone: its
+    # InstanceDefinitions.Add corrupts memory now and then (a crash, «Segmentation fault») once IfcOpenShell or Qt are
+    # loaded in the same process — rhino3dm's, not the program's (which only reads blocks: mesh_import).
+    BLOCKS_3DM = r'''
+import math, sys
+import rhino3dm as rh
+f = rh.File3dm()
+f.Settings.ModelUnitSystem = rh.UnitSystem.Millimeters
+mat = rh.Material()
+mat.Name = "Madeira"
+mat.DiffuseColor = (150, 100, 50, 255)
+mi = f.Materials.Add(mat)
+box = rh.Mesh()
+for p in ((0, 0, 0), (1000, 0, 0), (1000, 500, 0), (0, 500, 0), (0, 0, 800), (1000, 0, 800),
+          (1000, 500, 800), (0, 500, 800)):
+    box.Vertices.Add(*p)
+for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
+    box.Faces.AddFace(*q)
+attr = rh.ObjectAttributes()
+attr.MaterialIndex = mi
+attr.MaterialSource = rh.ObjectMaterialSource.MaterialFromObject
+index = f.InstanceDefinitions.Add("Caixa", "", "", "", rh.Point3d(0, 0, 0), (box,), (attr,))
+idef = f.InstanceDefinitions.FindIndex(index)
+f.Objects.AddInstanceObject(rh.InstanceReference(idef.Id, rh.Transform.Identity()))
+turn = rh.Transform.Multiply(rh.Transform.Translation(2000, 0, 0),
+                             rh.Transform.Rotation(math.pi / 2, rh.Vector3d(0, 0, 1), rh.Point3d(0, 0, 0)))
+f.Objects.AddInstanceObject(rh.InstanceReference(idef.Id, turn))
+f.Objects.AddExtrusion(rh.Extrusion.Create(rh.Circle(100.0).ToNurbsCurve(), 300.0, True))
+sys.exit(0 if f.Write(sys.argv[1], 7) else 1)
+'''
+
     def test_import_3dm_blocks(self):
         """0.351: a Rhino file in millimetres with a block placed twice (a box of a material, one moved 2 m and turned)
         and a surface saved without its mesh: the two copies read where they are, in metres, in the material's colour,
         the surface counted as left out."""
-        import rhino3dm as rh
+        import subprocess
+        import sys
         from arqbim.model import mesh_import
-        f = rh.File3dm()
-        f.Settings.ModelUnitSystem = rh.UnitSystem.Millimeters
-        mat = rh.Material()
-        mat.Name = "Madeira"
-        mat.DiffuseColor = (150, 100, 50, 255)
-        mi = f.Materials.Add(mat)
-        box = rh.Mesh()
-        for p in ((0, 0, 0), (1000, 0, 0), (1000, 500, 0), (0, 500, 0), (0, 0, 800), (1000, 0, 800),
-                  (1000, 500, 800), (0, 500, 800)):
-            box.Vertices.Add(*p)
-        for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
-            box.Faces.AddFace(*q)
-        attr = rh.ObjectAttributes()
-        attr.MaterialIndex = mi
-        attr.MaterialSource = rh.ObjectMaterialSource.MaterialFromObject
-        index = f.InstanceDefinitions.Add("Caixa", "", "", "", rh.Point3d(0, 0, 0), (box,), (attr,))
-        idef = f.InstanceDefinitions.FindIndex(index)
-        f.Objects.AddInstanceObject(rh.InstanceReference(idef.Id, rh.Transform.Identity()))
-        turn = rh.Transform.Multiply(rh.Transform.Translation(2000, 0, 0),
-                                     rh.Transform.Rotation(np.pi / 2, rh.Vector3d(0, 0, 1), rh.Point3d(0, 0, 0)))
-        f.Objects.AddInstanceObject(rh.InstanceReference(idef.Id, turn))
-        f.Objects.AddExtrusion(rh.Extrusion.Create(rh.Circle(100.0).ToNurbsCurve(), 300.0, True))
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "blocos.3dm")
-            self.assertTrue(f.Write(path, 7))
+            made = subprocess.run([sys.executable, "-c", self.BLOCKS_3DM, path], capture_output=True, text=True,
+                                  timeout=120)
+            self.assertEqual(made.returncode, 0, made.stderr[-2000:])
             model = mesh_import.read(path)
-        self.assertIsNotNone(idef)
         self.assertEqual(model.skipped, 1)
         parts = model.parts_m()
         self.assertEqual(len(parts), 1)
@@ -12720,6 +12731,35 @@ class DrawingAsRevit(unittest.TestCase):
             self.assertAlmostEqual(radius, 2.0, places=6)
             self.assertAlmostEqual(abs(math.degrees(sweep)), 90.0, places=4)
             self.assertEqual(tool._arc, [])                                            # (done: the tool again)
+        finally:
+            doc.modified = False
+
+    def test_wall_polygons(self):
+        """0.457 — Revit's «Inscribed / Circumscribed Polygon» on the Wall's bar: a hexagon of walls about its centre,
+        a corner where clicked (inscribed); an octagon round a circle of 2 m (circumscribed, its radius typed)."""
+        from types import SimpleNamespace
+        from arqbim.tools.bim_draw import WallTool
+        doc = Document()
+        try:
+            vp = SimpleNamespace(clear_overlays=lambda: None, show_tip=lambda *a: None, plan=True,
+                                 tracking=SimpleNamespace(clear=lambda: None))
+            tool = WallTool(self._host(doc, vp))
+            tool.set_option("shape", "poly_in")
+            self.assertEqual(tool.options()[-1].key, "sides")
+            tool._corner = np.zeros(3)
+            tool._polygon_finish(np.array((3.0, 0.0, 0.0)))
+            axes = bim.wall_axes(doc)
+            self.assertEqual(len(axes), 6)
+            self.assertTrue(all(abs(float(np.linalg.norm(e[:2])) - 3.0) < 1e-6 for _g, s, e, _t in axes))
+            tool.set_option("shape", "poly_out")
+            tool.set_option("sides", 8)
+            tool._corner = np.array((20.0, 0.0, 0.0))
+            tool._end = np.array((25.0, 0.0, 0.0))
+            tool._shape_typed("2")
+            axes = bim.wall_axes(doc)[6:]
+            self.assertEqual(len(axes), 8)
+            middles = [float(np.linalg.norm(((s + e) / 2)[:2] - (20.0, 0.0))) for _g, s, e, _t in axes]
+            np.testing.assert_allclose(middles, [2.0] * 8, atol=1e-6)                # (its sides touch the circle)
         finally:
             doc.modified = False
 

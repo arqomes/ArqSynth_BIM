@@ -436,7 +436,8 @@ class DrawPanel(unittest.TestCase):
             row = bar.fields["shape"][0]
             self.assertTrue(row.property("icons"))
             buttons = {b.objectName(): b for b in row.findChildren(QtWidgets.QToolButton)}
-            self.assertEqual(len(buttons), 10)             # line, rectangle, 3 arcs, circle, fillet, pick, face, wand
+            self.assertEqual(len(buttons), 12)             # line, rectangle, 2 polygons, 3 arcs, circle, fillet, pick,
+            #                                                face, wand
             self.assertTrue(buttons["ctx_shape_line"].isChecked())
             self.assertFalse(buttons["ctx_shape_line"].icon().isNull())
             buttons["ctx_shape_pick"].click()

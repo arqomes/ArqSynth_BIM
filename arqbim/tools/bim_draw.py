@@ -34,8 +34,9 @@ CLOSE_PX = 14
 AXIS_END_PX = 12
 MIN_LENGTH = 0.05
 PARALLEL_REACH = 20.0   # (0.447) m: the walls this near the one being drawn are looked at for its parallel neighbours
-WALL_SHAPES = ("line", "rect", "arc", "arc_center", "arc_tangent", "circle", "fillet", "pick", "face",
-               "wand")                                  # (0.102, 0.103) the Wall tool: point by point, a
+WALL_SHAPES = ("line", "rect", "poly_in", "poly_out", "arc", "arc_center", "arc_tangent", "circle", "fillet", "pick",
+               "face", "wand")                          # (0.102, 0.103) the Wall tool: point by point, a
+#                                                          (0.457: Revit's «Inscribed / Circumscribed Polygon»)
 #                                                          (0.454: Revit's «Center-ends Arc» and «Tangent End Arc»)
 #                                                          (0.452: a fillet arc between two walls picked)
 #                                                          (0.451: on a line or an edge picked, Revit's «Pick Lines»)
@@ -156,6 +157,7 @@ class WallTool(_PointTool):
         self.offset = 0.0           # (0.451) Revit's «Offset»: the wall this far from the line drawn / picked
         self.chain = True           # (0.453) Revit's «Chain»: off, each wall starts with a click of its own…
         self.radius = 0.0           # …and «Radius»: the chain's corners rounded (0: sharp)
+        self.sides = 6              # (0.457) a regular polygon's sides
         self._axes = None           # axis lines of the existing walls (cache)
         self._ends = None           # …their ends as one array (0.225)
         self._way_out = None        # (0.454) every wall's ends with the way out of each, for a tangent arc
@@ -244,6 +246,9 @@ class WallTool(_PointTool):
             opts.append(Option("chain", t("ctx.chain"), "toggle", self.chain))
         if self.shape == "line":                            # …and «Radius»
             opts.append(length_option("radius", "ctx.corner_radius", self.radius))
+        if self.shape in ("poly_in", "poly_out"):           # (0.457) a regular polygon's sides
+            from ..core.outline_shapes import SIDES
+            opts.append(Option("sides", t("ctx.sides"), "choice", self.sides, tuple((s, str(s)) for s in SIDES)))
         return opts
 
     def set_option(self, key, value):
@@ -257,6 +262,8 @@ class WallTool(_PointTool):
             self.chain = bool(value)
         elif key == "radius" and float(value) >= 0.0:
             self.radius = float(value)
+        elif key == "sides" and int(value) >= 3:
+            self.sides = int(value)
         elif key == "reference" and value in REFERENCES:
             self.reference = value
         elif key == "shape" and value in WALL_SHAPES and value != self.shape:
@@ -272,6 +279,9 @@ class WallTool(_PointTool):
 
     def hint(self):
         ref = self._ref_text()
+        if self.shape in ("poly_in", "poly_out"):            # (0.457)
+            return t("hint.outline.{}_{}".format(self.shape, 1 if self._corner is not None else 0), n=self.sides) + \
+                " " + t("hint.wall.loop_ref", type=_name(self.spec), ref=ref)
         if self.shape == "rect":
             if self._corner is not None:
                 return t("hint.wall.rect_end", ref=ref)
@@ -347,6 +357,43 @@ class WallTool(_PointTool):
                                  self.reference, storey=self.doc.active_storey)
         self.host.message(t("info.wall_rect", a=_fmt(abs(self._du)), b=_fmt(abs(self._dv)), n=len(made),
                             type=_name(self.spec), ref=self._ref_text()))
+        self.cancel()
+
+    # ------------------------------------------------------------ (0.457) a regular polygon of walls
+
+    def _polygon_ring(self, end):
+        """The polygon's corners [(x, y)] — inscribed: `end` a corner; circumscribed: the middle of a side —, or
+        None."""
+        from ..core import outline_shapes
+        if self._corner is None or end is None:
+            return None
+        loop = outline_shapes.regular(self._corner, end, self.sides, inscribed=self.shape == "poly_in")
+        return None if loop is None else [tuple(c) for c in loop[0]]
+
+    def _polygon_move(self, x, y, modifiers):
+        p, snap = self._point(x, y, self._corner[2], self._corner, modifiers)
+        if p is None:
+            return
+        self._hover = (p, snap)
+        self._end = p
+        ring = self._polygon_ring(p)
+        if ring is None:
+            return
+        z = float(self._corner[2])
+        self._show_band(ring, z, np.array((float(self._corner[0]), float(self._corner[1]), z)))
+        edge = np.array((p[0], p[1], z))
+        self.viewport.show_temp_dims([temp_dims.TempDim(np.asarray(self._corner, dtype=float), edge, Z)])
+        show_snap(self.viewport, snap, edge)
+        self.host.set_vcb(_fmt(float(np.linalg.norm((p - self._corner)[:2]))))
+
+    def _polygon_finish(self, end):
+        ring = self._polygon_ring(end)
+        if ring is None:
+            return
+        z = float(self._corner[2])
+        made = bim.add_wall_loop(self.doc, [(x, y, z) for x, y in ring], self.spec, self.height, self.reference,
+                                 storey=self.doc.active_storey)
+        self.host.message(t("info.wall_polygon", n=len(made), type=_name(self.spec), ref=self._ref_text()))
         self.cancel()
 
     def _face_at(self, x, y):
@@ -948,6 +995,9 @@ class WallTool(_PointTool):
         if self.shape in ("arc", "circle"):
             self._curve_move(x, y, modifiers)
             return
+        if self.shape in ("poly_in", "poly_out") and self._corner is not None:     # (0.457)
+            self._polygon_move(x, y, modifiers)
+            return
         if self.shape == "face":
             self._outline = self._face_at(x, y)
             if self._outline is None:
@@ -1018,6 +1068,9 @@ class WallTool(_PointTool):
                 self._corner = p
                 self.host.set_hint(self.hint())
             return
+        if self.shape in ("poly_in", "poly_out"):            # (0.457) a regular polygon of walls
+            self._polygon_finish(self._end)
+            return
         self._rect_finish()
 
     def _shape_typed(self, text):
@@ -1038,6 +1091,19 @@ class WallTool(_PointTool):
         if self.shape in ("arc", "circle"):
             if values[0] is not None:
                 self._curve_typed(values[0])
+            return
+        if self.shape in ("poly_in", "poly_out"):            # (0.457) its radius typed, towards the mouse
+            if values[0] is None or values[0] <= 0:
+                return
+            if self._corner is None:
+                if self._hover is None:
+                    return
+                self._corner = self._hover[0].copy()
+            towards = (self._end - self._corner) if self._end is not None else np.array((1.0, 0.0, 0.0))
+            towards = np.array((towards[0], towards[1], 0.0))
+            n = float(np.linalg.norm(towards))
+            towards = towards / n if n > 1e-9 else np.array((1.0, 0.0, 0.0))
+            self._polygon_finish(self._corner + towards * values[0])
             return
         if self.shape != "rect":
             return

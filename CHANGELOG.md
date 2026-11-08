@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.457.0 — 2026-11-07
+
+**Parede em polígono regular, como no Revit.**
+
+- **Parede ▸ Forma**: dois ícones novos, **Polígono inscrito** (clique no centro e num canto) e **Polígono
+  circunscrito** (centro e meio de um lado), com o número de **Lados** na barra; ou o raio escrito e Enter. As
+  paredes ficam ligadas nos cantos, desenhadas pelo eixo ou pela face interior / exterior (Tab).
+- Teste na janela real: 29 de 29 passos certos.
+- Testes: o ficheiro Rhino de exemplo com blocos passa a ser criado num processo à parte — a biblioteca rhino3dm, ao
+  criar um bloco com o IfcOpenShell ou o Qt já carregados, às vezes rebentava (um defeito dela; o programa só lê
+  blocos, não os cria).
+
 ## 0.456.0 — 2026-11-07
 
 **Laje, Piso, Teto, Região e Máscara com as opções de desenho do Revit** (o dono: «Sim, põe»).

@@ -1387,7 +1387,8 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
    passa de «Linha» a «Arco tangente» e volta sem se partir. Por fazer: o arco e a parede reta que se tocam não
    ficam ligados — mover uma não arrasta a outra.)
 5. **Polígonos e elipses**: polígono inscrito e circunscrito (paredes, linhas, lajes, regiões) e elipse / elipse
-   parcial (linhas, regiões, desenho 2D).
+   parcial (linhas, regiões, desenho 2D). (0.456.0: lajes, pisos, tetos, regiões e máscaras; 0.457.0: paredes. Falta:
+   na Linha — o Círculo já faz um polígono inscrito pelos seus lados — e a elipse parcial.)
 6. ~~**Concordância como no Revit em tudo o que se desenha**~~ (0.455.0, o dono: «o arco não é um arco, mas um monte
    de segmentos… tentei no polígono… também na região, máscara»): nas linhas um arco verdadeiro, escolhido inteiro, o
    raio na cota temporária e nas Propriedades (as linhas seguem, tangentes); no canto de um polígono; no Desenho 2D
