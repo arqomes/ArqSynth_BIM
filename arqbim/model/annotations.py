@@ -301,6 +301,8 @@ class AddAnnotation:
         self.ann, self.label = ann, label
 
     def do(self, doc):
+        if hasattr(doc, "mark_alone"):
+            doc.mark_alone([self.ann])                     # (0.465: «=» off on a typical storey: its own)
         doc.annotations.append(self.ann)
         doc.dimensions_changed()
 
@@ -316,6 +318,8 @@ class AddAnnotations:
         self.anns, self.label = list(anns), label
 
     def do(self, doc):
+        if hasattr(doc, "mark_alone"):
+            doc.mark_alone(self.anns)                      # (0.465)
         doc.annotations.extend(self.anns)
         doc.dimensions_changed()
 

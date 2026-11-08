@@ -164,7 +164,8 @@ def arrow(tip, look, size):
 
 # ------------------------------------------------------------ (0.360) the symbols' styles (graphic_styles «symbols»)
 
-DASHES = {"dashdot": (10.0, 2.5, 1.5, 2.5), "dashed": (6.0, 3.0), "continuous": None, "ends": None}   # mm on paper
+DASHES = {"dashdot": (10.0, 2.5, 1.5, 2.5), "dashed": (6.0, 3.0), "continuous": None, "ends": None,   # mm on paper
+          "dotted": (0.3, 1.5)}                  # (0.465: dots — round-capped on paper)
 ENDS = 8.0                  # mm: a section's line drawn only at its ends ("ends"): this long at each
 
 

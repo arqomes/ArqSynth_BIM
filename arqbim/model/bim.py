@@ -4530,12 +4530,12 @@ def unmake_typical(doc, storey):
             if target == source:
                 continue
             dz = levels.get(target, 0.0) - levels.get(source, 0.0)
-            for a in [a for a in doc.annotations if a.view == ("plan", source)]:
+            for a in [a for a in doc.annotations if a.view == ("plan", source) and not a.extra.get("alone")]:
                 c = copy.deepcopy(a)
                 c.view = ("plan", target)
                 c.points = [np.asarray(p, dtype=float) + (0.0, 0.0, dz) for p in a.points]
                 anns.append(c)
-            for d in [d for d in doc.dimensions if d.view == ("plan", source)]:
+            for d in [d for d in doc.dimensions if d.view == ("plan", source) and not getattr(d, "alone", False)]:
                 c = copy.deepcopy(d)
                 c.view = ("plan", target)
                 c.refs = [_counterpart_ref(doc, ref, target) for ref in (getattr(d, "refs", None) or ())]

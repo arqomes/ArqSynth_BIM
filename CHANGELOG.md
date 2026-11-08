@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.465.0 — 2026-11-08
+
+**Linha de pontos, opções com desenhos e o «=» ligar/desligar** (o dono: «acrescentar o tipo de linha de pontos. O botão
+= deve ligável e desligavel. Só faz o efeito quando o botão está ligado… colocar opções visuais em vez de texto»).
+
+- **Linha de pontos** para os níveis (e para os outros símbolos: cortes, detalhes), no ecrã, nas folhas e no PDF
+  (pontos redondos).
+- **Aparência dos níveis com desenhos em vez de listas de texto**: cada opção é uma fila de botões com o desenho do que
+  fica — a linha, a cor (quadradinhos; o último abre a paleta), a extremidade, as pontas e a disposição do texto. O
+  nome aparece ao passar o rato. Os desenhos seguem o tema claro ou escuro.
+- **Botão «=»** no painel Pavimentos, ligado ao abrir o projeto:
+  - ligado: o que se faz num pavimento igual (modelar, mudar, apagar, cotar, desenhar na planta) faz-se em todos;
+  - desligado: cada pavimento muda sozinho e o que se fizer assim fica só nele, mesmo depois de voltar a ligar.
+  A marca «=A» fica a cinzento e o rodapé diz «(= desligado)».
+- A opção do painel passa a chamar-se **«No 3D, ver só o pavimento ativo»** (na fita: «3D: só o pavimento ativo»). A
+  dica explica que vale também para cortes e alçados, e que a planta mostra sempre só o seu pavimento (o dono: «a
+  opção: ver só o pavimento ativo, deveria ser mais clara, para mostrar que é no 3D»).
+
 ## 0.464.0 — 2026-11-08
 
 **Níveis ajustáveis em cada vista, e a linha só dos lados** (o dono: «os símbolos dos níveis precisam ser ajustável no

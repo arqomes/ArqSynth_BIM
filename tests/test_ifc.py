@@ -4341,6 +4341,24 @@ class TypicalFloors(unittest.TestCase):
             doc.undo()                                                              # (one step: shared again)
             self.assertEqual(doc.annotations_of(("plan", second)), [text])
             self.assertEqual(len(doc.dimensions), 1)
+            # (0.465, the owner: «O botão = deve ligável e desligavel. Só faz o efeito quando o botão está ligado»)
+            doc.typical_live = False
+            self.assertEqual(doc.annotations_of(("plan", second)), [])              # (off: each its own)
+            self.assertEqual(doc.ifc.counterparts(wall), [])
+            walls = lambda s: [e.GlobalId for e in doc.ifc.file.by_type("IfcWall") if doc.ifc.storey_of(e.GlobalId) == s]  # noqa
+            bim.add_wall(doc, np.array((0.0, 3.0, 6.0)), np.array((4.0, 3.0, 6.0)), spec, storey=second)
+            self.assertEqual((len(walls(first)), len(walls(second))), (1, 2))       # (made on Piso 2 only)
+            bim.resize_wall(doc, wall, at_end=1.0)                                  # (Piso 1's longer, not Piso 2's)
+            lengths = sorted(round(doc.ifc.wall_params(w)[0], 6) for w in walls(first) + walls(second))
+            self.assertIn(6.0, lengths)
+            self.assertIn(5.0, lengths)
+            note = notes2d.Annotation(("plan", second), "text", [np.array((2.0, 2.0, 6.0))], text="Só aqui")
+            doc.execute(notes2d.AddAnnotation(note, "t"))
+            self.assertTrue(note.extra.get("alone"))
+            doc.typical_live = True                                                 # (on again: equal again…)
+            self.assertEqual(doc.annotations_of(("plan", first)), [text])           # (…but «Só aqui» stays its own)
+            self.assertEqual(set(map(id, doc.annotations_of(("plan", second)))), {id(text), id(note)})
+            self.assertEqual(len(doc.ifc.counterparts(wall)), 1)
         finally:
             doc.modified = False
 

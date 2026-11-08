@@ -112,9 +112,12 @@ def draw_level(p, s, w, h, k=None):
         return QtCore.QPointF(float(q[0]) * k, base - (float(q[1]) - 3.0) * k)
 
     def pen(mm, dashes=None):
-        q = QtGui.QPen(ink, max(mm * k, 1.0))
+        q = QtGui.QPen(QtGui.QBrush(ink), max(mm * k, 1.0))
         if dashes:
             q.setDashPattern([d * k / max(q.widthF(), 1e-6) for d in dashes])
+            if tuple(dashes) == marks_model.DASHES["dotted"]:              # (0.465: round dots)
+                q.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+                q.setWidthF(max(q.widthF(), 1.6))
         return q
     p.setPen(pen(s["pen"], parts.dashes))
     for q0, q1 in parts.pieces:

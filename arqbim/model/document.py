@@ -975,7 +975,8 @@ class Document:
         if view is None:
             return []
         twins = self.twin_views(view)                       # (0.463: a typical storey's plan: its equals' too)
-        out = [d for d in self.dimensions if d.view in twins]
+        view = tuple(view)
+        out = [d for d in self.dimensions if d.view == view or (d.view in twins and not getattr(d, "alone", False))]
         if view[0] == "plan" and self.grid_settings.get("dims") and self.grids:
             out += self.grid_dimensions(tuple(view))
         return out
@@ -986,7 +987,7 @@ class Document:
         — the dimensions and the drawing made in one are in all (the same ones: changed or deleted in one, in all),
         as its elements are (ifc/typical.py) —; any other view only itself."""
         view = tuple(view)
-        if view[0] != "plan" or self.loading:
+        if view[0] != "plan" or self.loading or not self.typical_live:      # (0.465: «=» off — each its own)
             return {view}
         try:
             model = self.ifc.typical_of(view[1])
@@ -1013,7 +1014,38 @@ class Document:
         if view is None:
             return []
         twins = self.twin_views(view)
-        return [a for a in self.annotations if a.view in twins]
+        view = tuple(view)
+        return [a for a in self.annotations if a.view == view or (a.view in twins and not a.extra.get("alone"))]
+
+    @property
+    def typical_live(self):
+        """(0.465) The typical floors' replication on (the Storeys panel's «=»): what is made, changed or deleted on
+        one, its plan's dimensions and drawing, on all — off: each storey on its own meanwhile."""
+        return bool(getattr(self.ifc, "typical_live", True))
+
+    @typical_live.setter
+    def typical_live(self, on):
+        self.ifc.typical_live = bool(on)
+
+    def mark_alone(self, items):
+        """(0.465) Dimensions or drawings made on a typical storey's plan while its replication is off: marked as its
+        own (not shown in its equals' plans when it is on again)."""
+        if self.typical_live:
+            return
+        for item in items:
+            view = tuple(getattr(item, "view", ()) or ())
+            if not view or view[0] != "plan":
+                continue
+            try:
+                typical = self.ifc.typical_of(view[1]) is not None
+            except Exception:
+                typical = False
+            if not typical:
+                continue
+            if hasattr(item, "extra"):
+                item.extra["alone"] = True
+            else:
+                item.alone = True
 
     def schedules_changed(self):
         """(called by the command of the project's own schedules, 0.131)"""

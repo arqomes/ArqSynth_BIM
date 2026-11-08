@@ -628,6 +628,8 @@ def _dashed_pen(pen, style, dpmm):
     if dashes:
         width = max(line.widthF(), 1e-6)
         line.setDashPattern([d * dpmm / width for d in dashes])
+        if style.get("line") == "dotted":              # (0.465: round dots)
+            line.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
     return line
 
 

@@ -339,6 +339,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sp.on_new, sp.on_delete, sp.on_only_active = self.new_storey, self._delete_storey, self.set_only_active_storey
         sp.on_typical = self.typical_floors
         sp.on_level_style = self.set_level_style                                # (0.462) the levels' look
+        sp.on_typical_live = self.set_typical_live                              # (0.465) «=» on / off
         self.tree_panel = project_tree.dock(self, beside=self.storeys_panel, below=self.props)
         self.tree_panel.on_select, self.tree_panel.on_frame = self._select_from_tree, self._frame_from_tree
         self.tree_panel.on_shown = self._refresh_tree
@@ -4960,6 +4961,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message(t("info.symbol_styles"))
         return True
 
+    def set_typical_live(self, on):
+        """(0.465, the owner: «O botão = deve ligável e desligavel. Só faz o efeito quando o botão está ligado») The
+        typical floors' replication switched on or off (the Storeys panel's «=»): off, what is made, changed or deleted
+        on a typical storey — its plan's dimensions and drawing too — is on it alone (and stays so); on again, the
+        floors go on being equal. For this session (on when a project is opened)."""
+        self.doc.typical_live = bool(on)
+        self.viewport.apply_storey_view()                  # (a plan's shared drawing shown, or not)
+        self._refresh_storeys()
+        self.message(t("info.typical_live_on" if on else "info.typical_live_off"), warning=not on)
+
     def set_level_style(self, level):
         """(0.462) The levels' look from the Storeys panel (their line, colour, end, words, seen in 3D): the project's
         graphic style's level symbol — every section, elevation, sheet, PDF, DXF and the 3D view follow. One undo
@@ -8682,7 +8693,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.doc.loading:
             for k, (_model, members) in enumerate(sorted(self.doc.ifc.typical_sets().items(), key=lambda kv: kv[1])):
                 letters.update({s: chr(ord("A") + k % 26) for s in members})
-        self.storeys_panel.show_storeys(self.doc.storeys(), self.doc.active_storey, letters)
+        self.storeys_panel.show_storeys(self.doc.storeys(), self.doc.active_storey, letters,
+                                        live=self.doc.typical_live)                       # (0.465: «=» on / off)
         self.storeys_panel.show_level_style(styles_model.symbol(self.doc.graphic_style, "level"))     # (0.462)
         name, z = self._storey(self.doc.active_storey)
         view = (t("storeys.status_plan") if self.viewport.plan
@@ -8692,6 +8704,8 @@ class MainWindow(QtWidgets.QMainWindow):
             mates = [n for g, n, _z in self.doc.storeys() if g != self.doc.active_storey
                      and letters.get(g) == letters[self.doc.active_storey]]
             equal = t("storeys.status_typical", others=", ".join(mates)) if mates else ""
+            if mates and not self.doc.typical_live:
+                equal += t("storeys.status_live_off")
         self.storey_label.setText(t("storeys.status", name=name, z=storeys.level_text(z)) + equal + view)
 
     def _update_title(self):

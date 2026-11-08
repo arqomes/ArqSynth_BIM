@@ -73,9 +73,23 @@ class StoreysPanel(QtWidgets.QDockWidget):
         buttons.addWidget(self.btn_new)
         buttons.addWidget(self.btn_delete)
         buttons.addWidget(self.btn_typical)
+        # (0.465, the owner: «O botão = deve ligável e desligavel. Só faz o efeito quando o botão está ligado») the
+        # typical floors' replication on / off
+        self.btn_live = QtWidgets.QToolButton()
+        self.btn_live.setText("=")
+        self.btn_live.setCheckable(True)
+        self.btn_live.setChecked(True)
+        self.btn_live.setToolTip(t("storeys.live_tip"))
+        font = self.btn_live.font()
+        font.setBold(True)
+        font.setPointSizeF(font.pointSizeF() * 1.3)
+        self.btn_live.setFont(font)
+        self.btn_live.setMinimumWidth(30)
+        buttons.addWidget(self.btn_live)
         buttons.addStretch(1)
         layout.addLayout(buttons)
-        self.only_active = QtWidgets.QCheckBox(t("storeys.only_active"))
+        self.only_active = QtWidgets.QCheckBox(t("storeys.only_active"))     # (0.465: «No 3D, …»)
+        self.only_active.setToolTip(t("tip.only_active"))
         layout.addWidget(self.only_active)
         layout.addWidget(self._look_box())                 # (0.462) the levels' look
         layout.addStretch(1)
@@ -90,6 +104,7 @@ class StoreysPanel(QtWidgets.QDockWidget):
         self.on_only_active = None   # (bool)
         self.on_typical = None       # () the active storey: made equal to others, or no longer (0.90)
         self.on_level_style = None   # (dict) the levels' look changed (0.462): their style's fields
+        self.on_typical_live = None  # (bool) the typical floors' replication switched on / off (0.465, «=»)
 
         self._levels = {}
         self._filling = False
@@ -101,6 +116,7 @@ class StoreysPanel(QtWidgets.QDockWidget):
         self.btn_new.clicked.connect(lambda: self._later(self.on_new))
         self.btn_delete.clicked.connect(self._delete)
         self.btn_typical.clicked.connect(lambda: self._later(self.on_typical, sorted(self._picked)))
+        self.btn_live.toggled.connect(lambda on: self._later(self.on_typical_live, on))
         self.only_active.toggled.connect(lambda on: self._later(self.on_only_active, on))
 
     @staticmethod
@@ -124,15 +140,19 @@ class StoreysPanel(QtWidgets.QDockWidget):
         self.look_preview = LevelPreview()
         form.addRow(self.look_preview)
 
+        from . import level_icons                         # (0.465, the owner: «opções visuais em vez de texto»)
+
         def choice(key, label):
-            combo = QtWidgets.QComboBox()
+            icon_of, size = level_icons.ICONS[key]
+            row = level_icons.IconChoice(icon_of, size)
             for value in styles_model.SYMBOL_CHOICES[key]:
-                combo.addItem(t("symbols.{}.{}".format(key, value)), value)
-            combo.currentIndexChanged.connect(lambda _i: self._look_changed())
-            form.addRow(t(label), combo)
-            return combo
+                row.addItem(t("symbols.{}.{}".format(key, value)), value)
+            row.currentIndexChanged.connect(lambda _i: self._look_changed())
+            form.addRow(t(label), row)
+            return row
         self.look_line = choice("line", "storeys.look_line")
-        self.look_colour = QtWidgets.QComboBox()
+        self.look_colour = level_icons.IconChoice(level_icons.colour_icon,
+                                                  (level_icons.SWATCH + 4, level_icons.SWATCH + 4))
         for key, value in LEVEL_COLOURS:
             self.look_colour.addItem(t("storeys.colour." + key), value)
         self.look_colour.currentIndexChanged.connect(lambda _i: self._colour_chosen())
@@ -187,6 +207,9 @@ class StoreysPanel(QtWidgets.QDockWidget):
         self._look_filling = True
         try:
             self._look = dict(style)
+            for row in (self.look_line, self.look_mark, self.look_ends, self.look_label):
+                if hasattr(row, "refresh"):
+                    row.refresh()                          # (0.465: the theme's ink)
             for combo, key in ((self.look_line, "line"), (self.look_mark, "mark"), (self.look_ends, "ends"),
                                (self.look_label, "label")):
                 combo.blockSignals(True)
@@ -210,10 +233,14 @@ class StoreysPanel(QtWidgets.QDockWidget):
 
     # ------------------------------------------------------------ content
 
-    def show_storeys(self, levels, active, typical=None):
+    def show_storeys(self, levels, active, typical=None, live=True):
         """levels: [(guid, name, level m)] lowest first; active: guid drawn on; typical: {guid: the letter of
-        its set of equal storeys} (0.90: "=A" in the third column)."""
+        its set of equal storeys} (0.90: "=A" in the third column); live (0.465): their replication on («=» pressed;
+        off: their letters greyed)."""
         typical = typical or {}
+        self.btn_live.blockSignals(True)
+        self.btn_live.setChecked(bool(live))
+        self.btn_live.blockSignals(False)
         self._filling = True
         self.table.blockSignals(True)
         self.table.clear()
@@ -231,6 +258,9 @@ class StoreysPanel(QtWidgets.QDockWidget):
                     font = item.font(col)
                     font.setBold(True)
                     item.setFont(col, font)
+            if guid in typical and not live:                # (0.465: «=» off — its mark greyed)
+                item.setForeground(2, QtGui.QBrush(QtGui.QColor("#9a9a9a")))
+                item.setToolTip(2, t("storeys.live_off_tip"))
             self.table.addTopLevelItem(item)
             if guid == active:
                 self.table.setCurrentItem(item)

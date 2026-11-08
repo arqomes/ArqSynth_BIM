@@ -42,6 +42,8 @@ class Dimension:
     # or None; eq: it says the type's «IG» (its string made equal)
     note: dict = None
     eq: bool = False
+    # (0.465) made on a typical storey's plan with its replication off («=»): its own — not in its equals' plans
+    alone: bool = False
 
 
 def new_chain():
@@ -60,6 +62,8 @@ class ReplaceDimensions:
         self._where = [(doc.dimensions.index(d), d) for d in self.remove if d in doc.dimensions]
         for _k, d in self._where:
             doc.dimensions.remove(d)
+        if hasattr(doc, "mark_alone"):
+            doc.mark_alone(self.add)                       # (0.465: «=» off on a typical storey: its own)
         doc.dimensions.extend(self.add)
         doc.dimensions_changed()
 
@@ -331,6 +335,8 @@ class AddDimension:
         self.dim, self.label = dim, label
 
     def do(self, doc):
+        if hasattr(doc, "mark_alone"):
+            doc.mark_alone([self.dim])                     # (0.465)
         doc.dimensions.append(self.dim)
         doc.dimensions_changed()
 
@@ -685,6 +691,8 @@ def to_dict(dim):
         out["note"] = {k: str(v) for k, v in dim.note.items() if v}
     if dim.eq:
         out["eq"] = True
+    if dim.alone:                                    # (0.465)
+        out["alone"] = True
     return out
 
 
@@ -704,6 +712,6 @@ def from_dict(data, shift):
                          str(data["style"]) if data.get("style") else None,
                          str(data["chain"]) if data.get("chain") else None,
                          {str(k): str(v) for k, v in data["note"].items() if v} if isinstance(data.get("note"), dict)
-                         and data["note"] else None, bool(data.get("eq", False)))
+                         and data["note"] else None, bool(data.get("eq", False)), bool(data.get("alone", False)))
     except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return None

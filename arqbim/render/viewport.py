@@ -2922,7 +2922,8 @@ class Viewport:
 
         def line(a2, b2, kind):
             pieces, dashes = marks_model.line_pieces(a2, b2, styles[kind], mm)
-            target = lines if not dashes else (short_dashes if dashes == marks_model.DASHES["dashed"] else dashed)
+            target = lines if not dashes else (short_dashes if dashes in (marks_model.DASHES["dashed"],
+                                                                          marks_model.DASHES["dotted"]) else dashed)
             target.extend(p for a, b in pieces for p in (to3(a), to3(b)))
 
         if self.plan:
@@ -3000,15 +3001,18 @@ class Viewport:
         symbols — their lines dashed as their style says, their marks filled, their words —, in their style's colour
         (or the symbols' ink). extra: more of their line, in 3D (a level's ring round the building, in 3D)."""
         colour = style.get("colour") or MARK_COLOR
-        segs = {None: [], "dashdot": [], "dashed": []}
+        segs = {None: [], "dashdot": [], "dashed": [], "dotted": []}
+        kinds = {v: k for k, v in marks_model.DASHES.items() if v and k in segs}
+
+        def key_of(dashes):
+            return None if not dashes else kinds.get(tuple(dashes), "dashdot")
         for p in parts:
-            key = None if not p.dashes else "dashed" if p.dashes == marks_model.DASHES["dashed"] else "dashdot"
-            segs[key] += [to3(q) for a, b in p.pieces for q in (a, b)]
+            segs[key_of(p.dashes)] += [to3(q) for a, b in p.pieces for q in (a, b)]
             segs[None] += [to3(q) for a, b in p.outline for q in (a, b)]
         for a, b, dashes in extra:
-            key = None if not dashes else "dashed" if dashes == marks_model.DASHES["dashed"] else "dashdot"
-            segs[key] += [a, b]
-        patterns = {None: {}, "dashdot": {"dash_pattern": (10, 3, 2, 3)}, "dashed": {"dash_pattern": (6, 3)}}
+            segs[key_of(dashes)] += [a, b]
+        patterns = {None: {}, "dashdot": {"dash_pattern": (10, 3, 2, 3)}, "dashed": {"dash_pattern": (6, 3)},
+                    "dotted": {"dash_pattern": (1, 3)}}                       # (0.465: dots)
         for key, pts in segs.items():
             if pts:
                 self._mark_objects.append(gfx.Line(gfx.Geometry(positions=_f32(pts)), _mat(

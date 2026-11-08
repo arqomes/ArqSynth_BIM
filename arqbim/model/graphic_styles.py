@@ -43,7 +43,7 @@ DEFAULTS = {
 # (0.360) what each part of a symbol may be
 SYMBOL_KINDS = ("section", "elevation", "detail", "level")
 SYMBOL_CHOICES = {"head": ("circle", "square", "none"), "arrow": ("filled", "open", "none"),
-                  "line": ("dashdot", "dashed", "continuous", "ends"),
+                  "line": ("dashdot", "dashed", "dotted", "continuous", "ends"),          # (0.465: dotted)
                   "mark": ("triangle", "target", "square", "none"),                     # (0.462: the square)
                   "ends": ("right", "left", "both"),                                    # (0.462)
                   "label": ("level_name", "name_level", "name_over", "level_over")}

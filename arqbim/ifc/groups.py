@@ -52,9 +52,12 @@ class GroupMixin:
         return None if role is None else int(role)
 
     def counterparts(self, guid):
-        """The same element (same role) in the other copies of its group."""
+        """The same element (same role) in the other copies of its group — (0.465) a typical floor's none while its
+        replication is switched off (the Storeys panel's «=»: what is changed on one storey changes on it alone)."""
         group = self.group_of(guid)
         if group is None:
+            return []
+        if not getattr(self, "typical_live", True) and self._params(group).get("Pavimento"):
             return []
         role = self.role_of(guid)
         out = []

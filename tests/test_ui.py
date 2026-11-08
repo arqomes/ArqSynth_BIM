@@ -587,6 +587,50 @@ class LevelEnds(unittest.TestCase):
             doc.modified = False
 
 
+class LevelPictures(unittest.TestCase):
+    """0.465 — the owner: «acrescentar o tipo de linha de pontos… colocar opções visuais em vez de texto»: the
+    levels' look chosen by pictures (each with its words as a tip), a dotted line among them; «=» on and off in the
+    Storeys panel."""
+
+    def test_pictures_and_dots(self):
+        from arqbim.model import graphic_styles as gs
+        from arqbim.model import symbols
+        from arqbim.ui import level_icons, storeys
+        self.assertIn("dotted", gs.SYMBOL_CHOICES["line"])
+        self.assertEqual(gs.clean({"symbols": {"level": {"line": "dotted"}}})["symbols"]["level"]["line"], "dotted")
+        parts = symbols.level_parts(3.0, 0.0, 10.0, "Piso 1", dict(gs.symbol(None, "level"), line="dotted"), 0.1)
+        self.assertEqual(parts.dashes, symbols.DASHES["dotted"])
+        panel = storeys.StoreysPanel(None)
+        try:
+            for row in (panel.look_line, panel.look_mark, panel.look_ends, panel.look_label, panel.look_colour):
+                self.assertIsInstance(row, level_icons.IconChoice)              # (pictures, not a list of words)
+            dots = panel.look_line.button("dotted")
+            self.assertEqual(dots.toolTip(), "Pontos")
+            self.assertFalse(dots.icon().isNull())
+            sent = []
+            panel.on_level_style = sent.append
+            dots.click()
+            for _ in range(3):
+                pump()
+            self.assertEqual((panel.look_line.currentData(), sent[-1]["line"]), ("dotted", "dotted"))
+            panel.look_mark.button("square").click()
+            for _ in range(3):
+                pump()
+            self.assertEqual(sent[-1]["mark"], "square")
+            live = []
+            panel.on_typical_live = live.append
+            self.assertTrue(panel.btn_live.isChecked())                         # («=» on at first)
+            panel.btn_live.click()
+            for _ in range(3):
+                pump()
+            self.assertEqual(live, [False])
+            panel.show_storeys([("G", "Térreo", 0.0), ("A", "Piso 1", 3.0)], "A", {"A": "A"}, live=False)
+            self.assertFalse(panel.btn_live.isChecked())
+            self.assertEqual(live, [False])                                     # (shown: nothing sent back)
+        finally:
+            panel.deleteLater()
+
+
 class TypicalPicking(unittest.TestCase):
     """0.463 — the owner: «Se quiser selecionar um grupo de nível e igualar»: several storeys picked in the Storeys
     panel's list (kept as the list is made again) — «Igualar (n)» sends them; on a typical storey «Separar»."""

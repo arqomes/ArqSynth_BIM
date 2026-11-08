@@ -520,7 +520,7 @@ _STRINGS = {
     "rib.short.position_camera": ("Câmara", "Camera"),
     "rib.short.analyse": ("Analisar", "Analyse"),
     "rib.short.kitchen": ("Cozinha", "Kitchen"),
-    "rib.small.only_active": ("Só o pavimento ativo", "Active storey only"),
+    "rib.small.only_active": ("3D: só o pavimento ativo", "3D: active storey only"),
     "rib.small.show_analytical": ("Mostrar analítico", "Show analytical"),
     "rib.small.remove_water_proposal": ("Tirar a proposta", "Remove proposal"),
     "rib.small.remove_electrical_proposal": ("Tirar a proposta", "Remove proposal"),
@@ -2140,6 +2140,20 @@ _STRINGS = {
                             "dimensions and 2D drawing of one's plan are in all their plans. Pick several in the list "
                             "(Ctrl or Shift) and «Make equal»; “=A” marks the storeys equal to each other."),
     "storeys.status_typical": (" · igual a {others}", " · equal to {others}"),
+    # (0.465) «=»: the typical floors' replication on / off
+    "storeys.live_tip": ("«=» ligado: o que se faz num pavimento igual (modelar, mudar, apagar, cotar, desenhar na "
+                         "planta) faz-se em todos os iguais. Desligado: cada pavimento muda sozinho, e o que fizer "
+                         "assim fica só nele.", "«=» on: what is done on a typical storey (modelling, changing, "
+                         "deleting, dimensioning, drawing on its plan) is done on all its equals. Off: each storey "
+                         "changes on its own, and what is done so stays its own."),
+    "storeys.live_off_tip": ("Igual aos outros, mas com o «=» desligado: o que fizer aqui fica só neste pavimento",
+                             "Equal to the others, but with «=» off: what you do here stays on this storey"),
+    "storeys.status_live_off": (" (= desligado)", " (= off)"),
+    "info.typical_live_on": ("«=» ligado: o que fizer num pavimento igual faz-se de novo em todos os iguais.",
+                             "«=» on: what you do on a typical storey is done again on all its equals."),
+    "info.typical_live_off": ("«=» desligado: cada pavimento muda sozinho — o que fizer agora fica só nele, mesmo "
+                              "quando voltar a ligar o «=».", "«=» off: each storey changes on its own — what you do "
+                              "now stays on it, even when «=» is on again."),
     "info.typical_taken": ("«{name}» já é igual a outros pavimentos: separe-o primeiro (Separar).",
                            "“{name}” is already equal to other storeys: separate it first (Separate)."),
     "info.typical_made": ("«{name}» e {others} são agora iguais: o que modelar, mudar ou apagar num deles faz-se em "
@@ -5015,6 +5029,7 @@ _STRINGS = {
     "symbols.arrow.none": ("Nenhuma", "None"),
     "symbols.line.dashdot": ("Traço-ponto", "Dash-dot"),
     "symbols.line.dashed": ("Tracejada", "Dashed"),
+    "symbols.line.dotted": ("Pontos", "Dotted"),
     "symbols.line.continuous": ("Contínua", "Continuous"),
     "symbols.line.ends": ("Só nas pontas", "Only at its ends"),
     "symbols.mark.triangle": ("Triângulo", "Triangle"),
@@ -5786,7 +5801,7 @@ _STRINGS = {
     "storeys.level": ("Cota", "Level"),
     "storeys.new": ("+ Novo", "+ New"),
     "storeys.delete": ("Apagar", "Delete"),
-    "storeys.only_active": ("Ver só o pavimento ativo", "Show the active storey only"),
+    "storeys.only_active": ("No 3D, ver só o pavimento ativo", "In 3D, show the active storey only"),   # (0.465)
     "storeys.default_name": ("Piso {n}", "Level {n}"),
     "storeys.status": ("Pavimento: {name} ({z})", "Storey: {name} ({z})"),
     "act.storey_new": ("Novo pavimento", "New storey"),
@@ -6251,9 +6266,11 @@ _STRINGS = {
                  "Closes the program; with changes not saved, it asks first."),
     "tip.storey_down": ("Passa para o pavimento de baixo: as ferramentas desenham nele e a planta (F4) mostra-o. PgUp "
                         "sobe.", "Goes to the storey below: the tools draw on it and the plan (F4) shows it. PgUp goes up."),
-    "tip.only_active": ("No 3D, mostra só o pavimento ativo (os outros escondem-se): para trabalhar num andar sem os "
-                        "de cima à frente.", "In 3D, only the active storey shown (the others hidden): to work on one "
-                                             "floor without those above in the way."),
+    "tip.only_active": ("No 3D (e nos cortes e alçados), mostra só o pavimento ativo — o que está a negrito na lista — "
+                        "e esconde os outros: para trabalhar num andar sem os de cima à frente. A planta mostra sempre "
+                        "só o seu pavimento.", "In 3D (and in sections and elevations), only the active storey shown — "
+                        "the one in bold in the list — and the others hidden: to work on one floor without those above "
+                        "in the way. A plan always shows its own storey only."),
     "tip.component_edit": ("Abre a cópia escolhida de um componente para a mudar de forma; ao fechar, a forma nova passa "
                            "a todas as cópias.", "Opens the chosen copy of a component to reshape it; when closed, the "
                                                  "new shape goes to every copy."),

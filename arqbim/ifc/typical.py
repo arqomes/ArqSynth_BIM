@@ -29,6 +29,10 @@ def _translation(dz):
 
 class TypicalMixin:
     created = None                 # GlobalIds of the elements made since the transaction began (None: not kept)
+    # (0.465, the owner: «O botão = deve ligável e desligavel. Só faz o efeito quando o botão está ligado») the typical
+    # floors' replication on (made, changed, deleted on one: on all) or off (each storey on its own meanwhile — what is
+    # made then stays its own)
+    typical_live = True
 
     # ------------------------------------------------------------ the sets
 
@@ -137,7 +141,7 @@ class TypicalMixin:
         """At the end of a command: the elements it made on a typical storey join that storey's group copy and
         are copied to the set's other storeys. Returns the existing elements whose shape changed (walls joined)."""
         made, self.created = list(self.created or ()), None          # (the copies made here are not tracked)
-        if not made:
+        if not made or not self.typical_live:                       # (0.465: «=» off — it stays on its storey)
             return []
         sets = self.typical_sets()
         if not sets:
