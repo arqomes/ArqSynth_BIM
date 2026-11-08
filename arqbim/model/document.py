@@ -1205,6 +1205,26 @@ class Document:
                     setattr(sheet.views[view], key, value)
         self._views_command(_label("cmd.change_sheet"), change)
 
+    def set_sheet_type(self, indices, paper, portrait, template, fields=None):
+        """(0.470) Sheets given a type — their paper, how it stands, their title block's template (Editar tipo…: every
+        sheet of the type, or one) — and, with `fields`, what the title block shows on every sheet. One undo step;
+        nothing if nothing changes."""
+        paper = paper if paper in sheets_model.PAPERS else "A3"
+        template = template if template in sheets_model.TEMPLATES else "full"
+        indices = [k for k in indices if 0 <= k < len(self.sheets)]
+        fields = sheets_model.read_title_fields({k: (v.strip() if isinstance(v, str) else v)
+                                                 for k, v in fields.items()}) if fields is not None else None
+        if all(self.sheets[k].kind == (paper, bool(portrait), template) for k in indices) and \
+                (fields is None or fields == self.title_block):
+            return
+
+        def change(doc):
+            for k in indices:
+                doc.sheets[k].paper, doc.sheets[k].portrait, doc.sheets[k].template = paper, bool(portrait), template
+            if fields is not None:
+                doc.title_block = copy.deepcopy(fields)
+        self._views_command(_label("cmd.sheet_type"), change)
+
     def set_title_block(self, fields, index=None, name=None, number=None, revisions=None):
         """The title block: the project's fields ({sheets.TITLE_FIELDS: text}, the same on every
         sheet; 0.127: its own fields and the numbering too) and, for sheet `index`, its name, number

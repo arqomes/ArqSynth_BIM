@@ -20,6 +20,8 @@ from . import pdf
 
 PAPER_BG = QtGui.QColor("#7d7f83")
 PICKED = QtGui.QColor("#1f74d1")
+ZOOM_STEP = 1.2                 # (0.470) a wheel's step nearer
+ZOOM_LEAST, ZOOM_MOST = 1.0, 40.0    # …the whole sheet at least, 40 times nearer at most
 
 
 class SheetCanvas(QtWidgets.QWidget):
@@ -31,14 +33,43 @@ class SheetCanvas(QtWidgets.QWidget):
         self.selected = None          # index of the view picked on the sheet
         self._drag = None             # (view index, mouse mm at the start, centre at the start)
         self._label = None            # (0.238) a label dragged: (view index, its annotation, key, mouse mm, its spot)
+        # (0.470, the owner: «permitir zoom na folha») how near it is seen: the wheel brings the paper under the mouse
+        # nearer, the middle button drags it, a double click with it (or «Ver tudo») shows it whole again
+        self.zoom = 1.0
+        self.pan = (0.0, 0.0)         # px: the paper moved so from the middle
+        self._panning = None          # the mouse where the middle button last was
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(640, 460)
 
     def fit(self):
-        """(pixels per mm, x, y of the paper's corner) to show the whole sheet with a margin."""
+        """(pixels per mm, x, y of the paper's corner): the whole sheet with a margin — (0.470) nearer by the zoom,
+        moved by the pan."""
         w, h = self.owner.sheet.size() if self.owner.sheet is not None else sheets_model.PAPERS["A3"]
-        s = min((self.width() - 24) / w, (self.height() - 24) / h)
-        return s, (self.width() - w * s) / 2, (self.height() - h * s) / 2
+        s = min((self.width() - 24) / w, (self.height() - 24) / h) * self.zoom
+        return s, (self.width() - w * s) / 2 + self.pan[0], (self.height() - h * s) / 2 + self.pan[1]
+
+    def zoom_at(self, factor, pos=None):
+        """(0.470) Nearer (factor > 1) or farther, the paper under `pos` (px; None: the middle) staying under it."""
+        pos = pos if pos is not None else QtCore.QPointF(self.width() / 2, self.height() / 2)
+        x, y = self.to_mm(pos)
+        self.zoom = min(max(self.zoom * factor, ZOOM_LEAST), ZOOM_MOST)
+        if self.zoom <= ZOOM_LEAST + 1e-9:
+            self.pan = (0.0, 0.0)                         # (all of it again: in the middle)
+        else:
+            s, x0, y0 = self.fit()
+            self.pan = (self.pan[0] + pos.x() - (x0 + x * s), self.pan[1] + pos.y() - (y0 + y * s))
+        self.update()
+
+    def fit_all(self):
+        """(0.470) The whole sheet in view again."""
+        self.zoom, self.pan = 1.0, (0.0, 0.0)
+        self.update()
+
+    def wheelEvent(self, event):
+        steps = event.angleDelta().y() / 120.0
+        if steps:
+            self.zoom_at(ZOOM_STEP ** steps, event.position())
+        event.accept()
 
     def to_mm(self, pos):
         s, x0, y0 = self.fit()
@@ -76,6 +107,10 @@ class SheetCanvas(QtWidgets.QWidget):
         return None
 
     def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.MouseButton.MiddleButton:       # (0.470) the paper dragged
+            self._panning = event.position()
+            self.setCursor(QtCore.Qt.CursorShape.ClosedHandCursor)
+            return
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         x, y = self.to_mm(event.position())
@@ -91,7 +126,11 @@ class SheetCanvas(QtWidgets.QWidget):
         self.update()
 
     def mouseDoubleClickEvent(self, event):
-        """On the title block: fill it in. (0.238) On a label moved by hand: back to its place."""
+        """On the title block: fill it in. (0.238) On a label moved by hand: back to its place. (0.470) With the
+        middle button: the whole sheet again (as Revit's)."""
+        if event.button() == QtCore.Qt.MouseButton.MiddleButton:
+            self.fit_all()
+            return
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         x, y = self.to_mm(event.position())
@@ -111,6 +150,12 @@ class SheetCanvas(QtWidgets.QWidget):
         return left <= x <= left + w and top <= y <= top + h
 
     def mouseMoveEvent(self, event):
+        if self._panning is not None:                    # (0.470) the paper follows the middle button
+            at = event.position()
+            self.pan = (self.pan[0] + at.x() - self._panning.x(), self.pan[1] + at.y() - self._panning.y())
+            self._panning = at
+            self.update()
+            return
         if self._label is not None:                      # (0.238) the label follows the mouse
             k, i, _key, (x0, y0), spot = self._label
             x, y = self.to_mm(event.position())
@@ -123,6 +168,10 @@ class SheetCanvas(QtWidgets.QWidget):
         self.owner.drag(k, (cx + x - x0, cy + y - y0))
 
     def mouseReleaseEvent(self, event):
+        if self._panning is not None and event.button() == QtCore.Qt.MouseButton.MiddleButton:
+            self._panning = None
+            self.unsetCursor()
+            return
         if self._label is not None and event.button() == QtCore.Qt.MouseButton.LeftButton:
             k, i, key, (x0, y0), spot = self._label
             self._label = None
@@ -161,13 +210,8 @@ class SheetWindow(QtWidgets.QWidget):
         self._stale = False           # the model changed since they were made
         self._busy = self._later = False
 
-        self.paper = QtWidgets.QComboBox()
-        self.paper.addItems(list(sheets_model.PAPERS))
-        self.paper.activated.connect(lambda _k: self._change(paper=self.paper.currentText()))
-        self.template = QtWidgets.QComboBox()                   # (0.129) its title block's template
-        for key in sheets_model.TEMPLATES:
-            self.template.addItem(t("sheet.template." + key), key)
-        self.template.activated.connect(lambda _k: self._change(template=self.template.currentData()))
+        # (0.470, the owner: «A edição do tipo da folha e propriedades devem ficar na coluna de propriedade») its paper
+        # and title block are its type: in the Properties panel (Editar tipo…), no longer on this bar
         self.scale = QtWidgets.QComboBox()
         self.scale.addItem(t("sheet.scale_auto"), None)
         for n in sheets_model.SCALES:
@@ -180,15 +224,18 @@ class SheetWindow(QtWidgets.QWidget):
         self.refresh_button.clicked.connect(lambda: self.refresh(again=True))
         self.export = QtWidgets.QPushButton(t("sheet.export"))
         self.export.clicked.connect(lambda: self.host.export_sheets([self.sheet]))
-        self.title_block = QtWidgets.QPushButton(t("sheet.title_block"))
-        self.title_block.setToolTip(t("sheet.title_block_tip"))
-        self.title_block.clicked.connect(self.edit_title_block)
+        self.canvas = SheetCanvas(self)
+        # (0.470, «permitir zoom na folha») nearer, farther, all of it — the wheel and the middle button too
+        self.zoom_out, self.zoom_in, self.zoom_all = (QtWidgets.QToolButton() for _k in range(3))
+        for button, text, tip, act in ((self.zoom_out, "−", "sheet.zoom_out", lambda: self.canvas.zoom_at(1 / 1.5)),
+                                       (self.zoom_in, "+", "sheet.zoom_in", lambda: self.canvas.zoom_at(1.5)),
+                                       (self.zoom_all, t("sheet.zoom_all"), "sheet.zoom_all_tip", self.canvas.fit_all)):
+            button.setText(text)
+            button.setToolTip(t(tip))
+            button.clicked.connect(act)
         bar = QtWidgets.QHBoxLayout()
-        bar.addWidget(QtWidgets.QLabel(t("sheet.paper")))
-        bar.addWidget(self.paper)
-        bar.addWidget(QtWidgets.QLabel(t("sheet.template")))
-        bar.addWidget(self.template)
-        bar.addWidget(self.title_block)
+        for button in (self.zoom_out, self.zoom_in, self.zoom_all):
+            bar.addWidget(button)
         bar.addSpacing(16)
         bar.addWidget(QtWidgets.QLabel(t("sheet.view_scale")))
         bar.addWidget(self.scale)
@@ -196,7 +243,6 @@ class SheetWindow(QtWidgets.QWidget):
         bar.addStretch(1)
         bar.addWidget(self.refresh_button)
         bar.addWidget(self.export)
-        self.canvas = SheetCanvas(self)
         self.hint = QtWidgets.QLabel(t("sheet.hint"))
         self.hint.setWordWrap(True)
         layout = QtWidgets.QVBoxLayout(self)
@@ -215,6 +261,7 @@ class SheetWindow(QtWidgets.QWidget):
         """Show this sheet (its tab was chosen)."""
         if sheet.uid != self._uid:
             self.canvas.selected = None
+            self.canvas.zoom, self.canvas.pan = 1.0, (0.0, 0.0)      # (0.470: another sheet: all of it)
         self._uid = sheet.uid
         if self._stale:
             self._made, self._stale = {}, False
@@ -231,8 +278,6 @@ class SheetWindow(QtWidgets.QWidget):
         sheet = self.sheet
         if sheet is None:             # (gone: its tab closes)
             return
-        self.paper.setCurrentText(sheet.paper)
-        self.template.setCurrentIndex(max(0, self.template.findData(sheet.template)))
         keys = [self.host.drawing_key(v.kind, v.ref) for v in sheet.views]
         need = [v for key, v in zip(keys, sheet.views) if again or key not in self._made]
         if need:
@@ -362,8 +407,9 @@ class SheetWindow(QtWidgets.QWidget):
         self._change(tidy=True)
 
     def edit_title_block(self):
+        """(0.470) A double click on the title block: the sheet's type (Editar tipo…, its own window)."""
         if self.sheet is not None:
-            self.host.edit_title_block(self.host.doc.sheets.index(self.sheet))
+            self.host.edit_sheet_type(self.host.doc.sheets.index(self.sheet))
 
     def _change(self, **changes):
         index = self.host.doc.sheets.index(self.sheet)

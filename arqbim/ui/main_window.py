@@ -1932,6 +1932,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             self._left_up(panel)
             if name == "sheets":
+                self.tree_panel.set_scope("sheets")         # (0.470: the navigator's own Folhas tab)
                 self.tree_panel.focus(("views", "sheets"))
             self.module = name
             self.module_actions[name].setChecked(True)
@@ -3568,6 +3569,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Show a view (its tab was chosen): the 3D view, a storey's plan, a section, an elevation,
         a sheet (the sheet's page instead of the 3D canvas)."""
         self._stop_drawing()
+        self._props_sheet = None                    # (0.470: a sheet chosen in the navigator: no longer)
         kind = key[0]
         if kind == "start":                        # (0.387) the start page: the side panels step aside
             if self.start_page is None:
@@ -6551,6 +6553,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if isinstance(action, str) and action.startswith("surface_"):      # (0.395) a parametric surface
             self._surface_property(action, guid, value)
             return
+        if isinstance(action, str) and action.startswith("sheet_"):        # (0.470) a sheet's: guid is its uid
+            self._sheet_property(action, guid, value)
+            return
         try:
             if action == "line_length":                    # a line (0.62): the lines joined at its end follow
                 line_edit.set_length(doc, *guid, value)
@@ -8293,6 +8298,60 @@ class MainWindow(QtWidgets.QMainWindow):
                                         sheets_model.number_of(doc.sheets, sheet, doc.title_block), project,
                                         sheet.revisions)
 
+    def edit_sheet_type(self, index):
+        """(0.470) A sheet's «Editar tipo…», as Revit's Type Properties of a title block: its paper, how it stands, its
+        title block's template — for every sheet of the type, or this one — and what the title block shows on every
+        sheet. One undo step on OK."""
+        if not 0 <= index < len(self.doc.sheets):
+            return
+        from .sheet_type_dialog import SheetTypeDialog
+        doc, sheet = self.doc, self.doc.sheets[index]
+        dialog = SheetTypeDialog(self, sheet, doc.sheets, doc.title_block, self.title_block()["project"],
+                                 sheets_model.number_of(doc.sheets, sheet, doc.title_block))
+        self._sheet_type_dialog = dialog                  # (tests fill it in)
+        if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+            self._sheet_type_dialog = None
+            return
+        self._sheet_type_dialog = None
+        targets = [k for k, s in enumerate(doc.sheets) if s.kind == sheet.kind] if dialog.everyone() else [index]
+        doc.set_sheet_type(targets, *dialog.kind(), fields=dialog.fields())
+        from .sheet_type_dialog import kind_label
+        self.message(t("info.sheet_type", type=kind_label(dialog.kind()), n=len(targets)))
+
+    def _sheet_property(self, action, uid, value):
+        """(0.470) A sheet's property changed in the Properties panel (uid: the sheet's)."""
+        doc = self.doc
+        index = next((k for k, s in enumerate(doc.sheets) if s.uid == uid), None)
+        if index is None:
+            return
+        sheet = doc.sheets[index]
+        if action == "sheet_type":
+            doc.set_sheet_type([index], *value)
+        elif action == "sheet_edit_type":
+            self.edit_sheet_type(index)
+        elif action == "sheet_name":
+            doc.rename_sheet(index, value)
+        elif action == "sheet_number":
+            doc.set_title_block(doc.title_block, index, number=value)
+        elif action == "sheet_sets":
+            doc.set_sheet_sets(index, [n.strip() for n in str(value).split(",") if n.strip()])
+        elif action == "sheet_revisions":
+            from .sheet_type_dialog import RevisionsDialog
+            dialog = RevisionsDialog(self, sheet)
+            self._revisions_dialog = dialog               # (tests fill it in)
+            if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+                doc.set_title_block(doc.title_block, index, revisions=dialog.revisions())
+            self._revisions_dialog = None
+        self._show_properties()
+
+    def _properties_sheet(self):
+        """(0.470) The sheet whose properties the panel shows: the sheet tab's shown, else the one chosen in the
+        navigator (until something else is chosen); None."""
+        if self.sheet_shown():
+            return self.sheet_window.sheet
+        uid = getattr(self, "_props_sheet", None)
+        return next((s for s in self.doc.sheets if s.uid == uid), None) if uid else None
+
     def edit_title_block(self, index=None):
         """The title block dialog: the project's fields (0.127: its own ones, the sheets' numbering) and, for
         sheet `index`, its name, number and revisions."""
@@ -8434,6 +8493,12 @@ class MainWindow(QtWidgets.QMainWindow):
             doc.change_sheet(args[0], view=args[1], remove=True)
         elif action == "title_block":
             self.edit_title_block(args[0])
+        elif action == "props":                             # (0.470) a sheet chosen in the navigator: its properties
+            self._props_sheet = doc.sheets[args[0]].uid if 0 <= args[0] < len(doc.sheets) else None
+            self.props.show()
+            self._show_properties()
+        elif action == "edit_type":                         # (0.470)
+            self.edit_sheet_type(args[0])
         elif action == "by_storey":
             self.sheets_by_storey()
         elif action in ("export_png", "export_svg"):        # (0.128) one sheet, or all (index None)
@@ -8945,6 +9010,14 @@ class MainWindow(QtWidgets.QMainWindow):
         dims = [d for d in self.viewport.selected_dims if d in self.doc.dimensions]
         if dims and not self.viewport.selection and not self.doc.loading:         # dimensions (0.193)
             self.props.show_dimensions(self.doc, dims, self.viewport.view_plane())
+            return
+        if self.viewport.selection:
+            self._props_sheet = None                # (0.470: something chosen in the model: its, from now on)
+        sheet = self._properties_sheet() if not self.viewport.selection and not self.doc.loading else None
+        if sheet is not None:                     # (0.470) a sheet's, as Revit's: its type on top, Editar tipo…
+            from .sheet_type_dialog import kinds
+            self.props.show_sheet(self.doc, sheet, sheets_model.number_of(self.doc.sheets, sheet, self.doc.title_block),
+                                  kinds(), self.title_block()["project"])
             return
         if self.viewport.selection or not hasattr(self, "views") or self.sheet_shown() or self.doc.loading:
             self.props.show_selection(self.doc, self.viewport.selection)

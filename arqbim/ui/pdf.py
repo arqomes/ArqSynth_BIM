@@ -877,9 +877,12 @@ def _writer(path, project, title):
 
 
 def _set_paper(writer, size):
-    page = QtGui.QPageSize(QtCore.QSizeF(size[1], size[0]), QtGui.QPageSize.Unit.Millimeter)  # portrait sizes
-    writer.setPageLayout(QtGui.QPageLayout(page, QtGui.QPageLayout.Orientation.Landscape,
-                                           QtCore.QMarginsF(0, 0, 0, 0), QtGui.QPageLayout.Unit.Millimeter))
+    """The page of a sheet (w, h mm): lying down, or (0.470) standing up."""
+    w, h = size
+    page = QtGui.QPageSize(QtCore.QSizeF(min(w, h), max(w, h)), QtGui.QPageSize.Unit.Millimeter)  # portrait sizes
+    turn = QtGui.QPageLayout.Orientation.Landscape if w > h else QtGui.QPageLayout.Orientation.Portrait
+    writer.setPageLayout(QtGui.QPageLayout(page, turn, QtCore.QMarginsF(0, 0, 0, 0),
+                                           QtGui.QPageLayout.Unit.Millimeter))
 
 
 def write(path, drawing, block, credit=""):

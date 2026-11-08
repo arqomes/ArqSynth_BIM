@@ -794,7 +794,7 @@ class BrowserTabs(unittest.TestCase):
                                {"plans": [("S", "Térreo", 0.0)]}, {"components": [("T", "Porta P1", 2, True)],
                                                                     "groups": []})
             tabs = [panel.scope_bar.tabText(k) for k in range(panel.scope_bar.count())]
-            self.assertEqual(tabs, ["Tudo", "Vistas", "Biblioteca", "Projeto"])
+            self.assertEqual(tabs, ["Tudo", "Vistas", "Biblioteca", "Projeto", "Folhas"])     # (0.470: Folhas last)
             self.assertEqual(panel.scope_bar.shape(), QtWidgets.QTabBar.Shape.RoundedSouth)    # (at its foot)
 
             def shown():

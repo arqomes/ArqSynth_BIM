@@ -9,7 +9,14 @@ Sizes on the sheet in millimetres, from the sheet's top-left corner (y down, as 
 import uuid
 from dataclasses import dataclass, field
 
-PAPERS = {"A3": (420.0, 297.0), "A2": (594.0, 420.0), "A1": (841.0, 594.0), "A0": (1189.0, 841.0)}  # landscape
+PAPERS = {"A4": (297.0, 210.0), "A3": (420.0, 297.0), "A2": (594.0, 420.0), "A1": (841.0, 594.0),   # landscape
+          "A0": (1189.0, 841.0)}                     # (0.470, the owner: «deve incluir tamanho A4»)
+
+
+def paper_size(paper, portrait=False):
+    """(w, h) mm of a paper — (0.470) stood up (portrait: its short side across)."""
+    w, h = PAPERS.get(paper, PAPERS["A3"])
+    return (h, w) if portrait else (w, h)
 SCALES = (20, 50, 100, 200, 500, 1000)
 MARGIN = 10.0                  # mm: the border's distance from the paper's edge
 TITLE_W, TITLE_H = 120.0, 40.0     # mm: the title block, bottom right inside the border
@@ -48,9 +55,15 @@ class Sheet:
     revisions: list = field(default_factory=list)   # (0.127) [{"code", "date", "text"}], oldest first
     sets: list = field(default_factory=list)        # (0.128) the sets it is in ("Licenciamento", "Execução"…)
     template: str = "full"                          # (0.129) its title block's template (TEMPLATES)
+    portrait: bool = False                          # (0.470) its paper stood up
 
     def size(self):
-        return PAPERS.get(self.paper, PAPERS["A3"])
+        return paper_size(self.paper, self.portrait)
+
+    @property
+    def kind(self):
+        """(0.470) Its type, as Revit's title block types: its paper, how it stands, its title block's template."""
+        return self.paper, bool(self.portrait), self.template
 
 
 # (0.127) beside TITLE_FIELDS in the project's title block: its own fields ("extra": [[label, text]…], printed
@@ -174,10 +187,10 @@ def title_box(size, template="full"):
     return w - MARGIN - bw, h - MARGIN - bh, bw, bh
 
 
-def drawing_area(paper, template="full"):
+def drawing_area(paper, template="full", portrait=False):
     """(left, top, width, height) in mm where views are laid out: inside the border, above the
     title block (0.129: beside the strip)."""
-    w, h = PAPERS.get(paper, PAPERS["A3"])
+    w, h = paper_size(paper, portrait)
     if template == "strip":
         return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - STRIP_W - 12, h - 2 * MARGIN - 8
     return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - 8, h - 2 * MARGIN - block_size(template)[1] - 12
@@ -246,7 +259,7 @@ def layout(sheet, extents, defaults=None, extra_rows=0):
     largest usual scale at which all the views laid out fit (all of them the same, as an
     architect would). Views with a place keep it. (0.127) The rows over the title block — the
     sheet's revisions and the project's `extra_rows` own fields — are kept clear."""
-    left, top, width, height = drawing_area(sheet.paper, sheet.template)
+    left, top, width, height = drawing_area(sheet.paper, sheet.template, getattr(sheet, "portrait", False))
     if sheet.template != "strip":                     # (in a strip, the rows are in its column)
         rows = (len(sheet.revisions) + 1 if sheet.revisions else 0) + int(extra_rows)
         height -= rows * REVISION_ROW
@@ -297,6 +310,8 @@ def to_dict(sheet):
         data["sets"] = clean_sets(sheet.sets)
     if sheet.template != "full":
         data["template"] = sheet.template
+    if sheet.portrait:                                # (0.470)
+        data["portrait"] = True
     return data
 
 
@@ -316,7 +331,8 @@ def from_dict(data):
         sheet = Sheet(str(data["name"]), paper if paper in PAPERS else "A3", views,
                       number=str(number) if isinstance(number, str) else "",
                       revisions=clean_revisions(data.get("revisions")), sets=clean_sets(data.get("sets")),
-                      template=data.get("template") if data.get("template") in TEMPLATES else "full")
+                      template=data.get("template") if data.get("template") in TEMPLATES else "full",
+                      portrait=bool(data.get("portrait", False)))
         if isinstance(uid, str) and uid:
             sheet.uid = uid                          # (the same sheet when reopened: its tab finds it)
         return sheet

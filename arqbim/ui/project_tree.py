@@ -30,8 +30,11 @@ CATEGORIES = ("IfcWall", "IfcCurtainWall", "IfcColumn", "IfcBeam", "IfcFooting",
               "IfcJunctionBox", "IfcCableCarrierSegment", "IfcCableCarrierFitting", "IfcBuildingElementProxy")          # their order in a storey; others follow by name
 # (0.461) the tabs at the panel's foot: what the tree shows — all of it, the views, the library, the model (its spatial
 # tree and the sketches) — each the tree's top-level groups whose key starts so
-SCOPES = ("all", "views", "library", "project")
-SCOPE_ROOTS = {"views": ("views",), "library": ("library",), "project": ("spatial", "cat")}
+# (0.470, the owner: «Colocar a opção de filtro da folha também no rodapé… deve ficar última aba, já que a ultima
+# coisa a ser feita é folha e impressão») the sheets last: their group alone, its sheets at the top of the tree
+SCOPES = ("all", "views", "library", "project", "sheets")
+SCOPE_ROOTS = {"views": ("views",), "library": ("library",), "project": ("spatial", "cat"), "sheets": ("views",)}
+SHEETS = ("views", "sheets")         # the sheets' group (in the views')
 
 
 def category_label(ifc_class):
@@ -90,7 +93,12 @@ class ProjectTree(QtWidgets.QDockWidget):
         self.scope_bar.setDrawBase(False)
         self.scope_bar.setUsesScrollButtons(False)        # (all four in view: a narrow panel shortens their words)
         self.scope_bar.setElideMode(QtCore.Qt.TextElideMode.ElideRight)
-        self.scope_bar.setStyleSheet("QTabBar::tab { padding: 4px 6px; min-width: 0px; }")
+        # (0.470: five of them — narrow enough to be read whole in the panel's usual width)
+        self.scope_bar.setStyleSheet("QTabBar::tab { padding: 4px 1px; min-width: 0px; }")
+        small = self.scope_bar.font()
+        if small.pointSizeF() > 0:
+            small.setPointSizeF(small.pointSizeF() - 0.5)
+            self.scope_bar.setFont(small)
         for k, name in enumerate(SCOPES):
             self.scope_bar.addTab(t("tree.scope." + name))
             self.scope_bar.setTabToolTip(k, t("tip.tree.scope." + name))
@@ -414,6 +422,16 @@ class ProjectTree(QtWidgets.QDockWidget):
                 item.setExpanded(True)
             return own or shown
 
+        sheets = self._items.get(SHEETS)
+        if self.scope == "sheets" and sheets is not None:   # (0.470: the sheets' group as the tree's top)
+            walk(sheets)
+            sheets.setHidden(False)
+            sheets.setExpanded(True)
+            if self.tree.rootIndex() != self.tree.indexFromItem(sheets):
+                self.tree.setRootIndex(self.tree.indexFromItem(sheets))
+            return
+        if self.tree.rootIndex().isValid():
+            self.tree.setRootIndex(QtCore.QModelIndex())
         for k in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(k)
             if self.in_scope(item.data(0, KEY)):
@@ -422,13 +440,17 @@ class ProjectTree(QtWidgets.QDockWidget):
                 item.setHidden(True)                  # (0.461: another tab's)
 
     def in_scope(self, key):
-        """(0.461) Is a top-level group of the tree (its key) in the tab chosen at the panel's foot?"""
+        """(0.461) Is a group of the tree (its key) in the tab chosen at the panel's foot? (0.470) The sheets' tab:
+        their group and what is in it."""
+        if self.scope == "sheets":
+            return key is not None and (key[:2] == SHEETS or key[0] in ("sheet", "sheetview"))
         roots = SCOPE_ROOTS.get(self.scope)
         return roots is None or (key is not None and key[0] in roots)
 
     def set_scope(self, scope):
         """(0.461) The tab at the panel's foot: what the tree shows — "all", "views", "library" or "project" (the
-        model: its spatial tree and the sketches); the one chosen kept for the next session."""
+        model: its spatial tree and the sketches) — (0.470) or "sheets" (their group alone, last: the last thing
+        done); the one chosen kept for the next session."""
         if scope not in SCOPES:
             return
         self.scope = scope
@@ -451,7 +473,8 @@ class ProjectTree(QtWidgets.QDockWidget):
         if item is None:
             return False
         if not self.in_scope(key):                    # (0.461: its tab chosen — the library's, the views')
-            self.set_scope(next((s for s, roots in SCOPE_ROOTS.items() if key[0] in roots), "all"))
+            self.set_scope("sheets" if key[:2] == SHEETS or key[0] in ("sheet", "sheetview") else    # (0.470)
+                           next((s for s, roots in SCOPE_ROOTS.items() if key[0] in roots), "all"))
         parent = item
         while parent is not None:
             parent.setExpanded(True)
@@ -483,7 +506,10 @@ class ProjectTree(QtWidgets.QDockWidget):
 
     def _clicked(self, item, _column):
         key = item.data(0, KEY)
-        if key is not None and key[0] in ("view", "views", "lib", "library", "sheet", "sheetview", "grid"):
+        if key is not None and key[0] == "sheet":    # (0.470) a sheet: its properties (Revit's), opened on a double one
+            self._later(self.on_sheet, "props", key[1])
+            return
+        if key is not None and key[0] in ("view", "views", "lib", "library", "sheetview", "grid"):
             return                                    # views and the library work with a double-click
         self._later(self.on_select, sorted(self._selected_members() or set(self._members_of(item)), key=str))
 
@@ -611,7 +637,7 @@ class ProjectTree(QtWidgets.QDockWidget):
             menu.addAction(t("tree.print_sheet"), lambda: self._later(self.on_sheet, "print", key[1]))
             menu.addAction(t("tree.sheet_sets"), lambda: self._later(self.on_sheet, "sets", key[1]))
             menu.addAction(t("tree.rename"), lambda: self.tree.editItem(item, 0))
-            menu.addAction(t("sheet.title_block"), lambda: self._later(self.on_sheet, "title_block", key[1]))
+            menu.addAction(t("props.edit_type"), lambda: self._later(self.on_sheet, "edit_type", key[1]))   # (0.470)
             menu.addAction(t("tree.remove_sheet"), lambda: self._later(self.on_sheet, "remove", key[1]))
         elif key[0] == "sheetview":
             if key[4] is not None:
@@ -623,6 +649,8 @@ class ProjectTree(QtWidgets.QDockWidget):
 
     def _menu(self, pos):
         item = self.tree.itemAt(pos)
+        if item is None and self.scope == "sheets":     # (0.470: the sheets' tab — its group's menu, under them too)
+            item = self._items.get(SHEETS)
         key = item.data(0, KEY) if item is not None else None
         menu = self.menu_for(key, item) if key is not None else None
         if menu is not None:

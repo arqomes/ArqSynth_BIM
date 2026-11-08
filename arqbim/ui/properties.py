@@ -1263,6 +1263,63 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._done()
         self.tree.setCurrentItem(None)
 
+    def show_sheet(self, doc, sheet, number, kinds, project=""):
+        """(0.470, the owner: «A edição do tipo da folha e propriedades devem ficar na coluna de propriedade. E a edição
+        numa janela própria que abre como no revit») A sheet's properties, as Revit's with a sheet chosen: its type on
+        top — its paper, how it stands, its title block (kinds: [(label, (paper, portrait, template))]) — with
+        «Editar tipo…» under it (the type's own window); its number (blank: its place among the sheets, `number`),
+        its name, its sets, its revisions, its views; what its title block shows of the project (the same on every
+        sheet: changed in Editar tipo…)."""
+        from . import icons
+        self._clear()
+        uid = sheet.uid
+        self._set_header(sheet.name, t("props.sheet_kind"), icons.module_icon("sheets"))
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName("props_type")
+        combo.setToolTip(t("props.sheet_type_tip"))
+        for label, kind in kinds:
+            combo.addItem(label, kind)
+        combo.setCurrentIndex(max(0, next((k for k, (_l, kind) in enumerate(kinds) if kind == sheet.kind), 0)))
+
+        def chosen(index):
+            kind = combo.itemData(index)
+            if kind is not None and tuple(kind) != sheet.kind:
+                self._emit("sheet_type", uid, tuple(kind))
+        combo.activated.connect(chosen)
+        self._set_type_combo(combo, None)
+        self.editors["sheet_type"] = combo
+        self._header_button("sheet_edit_type", t("props.edit_type"), t("props.sheet_edit_type_tip"),
+                            lambda _c=False: self._emit("sheet_edit_type", uid, None))
+        self._begin(t("props.g.identity"))
+        self._text_editor(t("props.sheet_number"), sheet.number, "sheet_number", uid)
+        edit = self.editors.get("sheet_number")
+        if edit is not None and not sheet.number:
+            edit.setPlaceholderText(t("props.sheet_number_auto", n=number))
+        self._text_editor(t("props.sheet_name"), sheet.name, "sheet_name", uid)
+        self._begin(t("props.g.sheet"))
+        self._row(t("props.sheet_paper"), t("props.sheet_paper_value", paper=sheet.paper,
+                                             way=t("props.sheet_way." + ("portrait" if sheet.portrait else "landscape"))))
+        self._row(t("props.sheet_template"), t("sheet.template." + sheet.template))
+        self._row(t("props.sheet_views"), str(len(sheet.views)))
+        self._text_editor(t("props.sheet_sets"), ", ".join(sheet.sets), "sheet_sets", uid)
+        item = self._row(t("props.sheet_revisions"), "")
+        button = QtWidgets.QPushButton(t("props.sheet_revisions_button", n=len(sheet.revisions)))
+        button.setToolTip(t("props.sheet_revisions_tip"))
+        button.clicked.connect(lambda _c=False: self._emit("sheet_revisions", uid, None))
+        self.tree.setItemWidget(item, 1, button)
+        self.editors["sheet_revisions"] = button
+        self._begin(t("props.g.sheet_project"))
+        from ..model import sheets as sheets_model
+        fields = doc.title_block or {}
+        for key in sheets_model.TITLE_FIELDS:
+            value = str(fields.get(key) or "") or (project if key == "project" else "")
+            self._row(t("tb." + key), value or "—")
+        for label, text in fields.get(sheets_model.EXTRA_KEY) or ():
+            self._row(label, text or "—")
+        self._note(t("props.sheet_hint"), theme.C["note"])
+        self._done()
+        self.tree.setCurrentItem(None)
+
     def _note(self, text, colour):
         """A line of advice across the panel (broken in lines: the panel is narrow)."""
         note = self._row(textwrap.fill(text, 48))

@@ -144,12 +144,14 @@ _STRINGS = {
     "sheet.export": ("Exportar PDF…", "Export PDF…"),
     "sheet.hint": ("Arraste uma vista para a mudar de sítio. Clique numa vista para lhe escolher a escala; "
                    "Delete tira-a da folha. Para pôr mais vistas: painel Projeto, botão direito numa planta, "
-                   "corte ou alçado ▸ Pôr na folha. Duplo clique na legenda para a preencher. As etiquetas das "
-                   "armaduras e das plantas de estrutura também se arrastam (duplo clique: voltam ao sítio).",
+                   "corte ou alçado ▸ Pôr na folha. Papel e legenda: painel Propriedades (Editar tipo…, ou duplo "
+                   "clique na legenda). Roda do rato: zoom; botão do meio: mover. As etiquetas das armaduras e das "
+                   "plantas de estrutura também se arrastam (duplo clique: voltam ao sítio).",
                    "Drag a view to move it. Click a view to choose its scale; Delete takes it off the sheet. "
                    "To put more views: Project panel, right-click a plan, section or elevation ▸ Put on sheet. "
-                   "Double-click the title block to fill it in. The labels of reinforcement drawings and "
-                   "structure plans can be dragged too (double-click: back to their place)."),
+                   "Paper and title block: Properties panel (Edit type…, or double-click the title block). Mouse "
+                   "wheel: zoom; middle button: pan. The labels of reinforcement drawings and structure plans can "
+                   "be dragged too (double-click: back to their place)."),
     "sheet.title_block": ("Legenda…", "Title block…"),
     "sheet.title_block_tip": ("Os dados da obra na legenda (iguais em todas as folhas), o nome e o número desta "
                               "folha. Também com duplo clique na legenda.",
@@ -1795,6 +1797,57 @@ _STRINGS = {
     "cmd.put_on_sheet": ("Pôr na folha", "Put on sheet"),
     "cmd.change_sheet": ("Mudar a folha", "Change the sheet"),
     "cmd.title_block": ("Mudar a legenda", "Change the title block"),
+    "cmd.sheet_type": ("Mudar o tipo da folha", "Change the sheet type"),                # (0.470)
+    "info.sheet_type": ("Tipo «{type}» em {n} folha(s). Ctrl+Z desfaz.", "Type “{type}” on {n} sheet(s). Ctrl+Z "
+                        "undoes it."),
+    "props.sheet_kind": ("Folha", "Sheet"),
+    "props.sheet_type_tip": ("O tipo da folha: papel, orientação e carimbo. Editar tipo… muda-o em todas as folhas "
+                             "desse tipo.", "The sheet's type: paper, orientation and title block. Edit type… changes "
+                             "it on every sheet of that type."),
+    "props.sheet_edit_type_tip": ("Abre a janela do tipo, como no Revit: papel, orientação, carimbo e o que o carimbo "
+                                  "mostra em todas as folhas.", "Opens the type's window, as in Revit: paper, "
+                                  "orientation, title block and what it shows on every sheet."),
+    "props.sheet_number": ("Número da folha", "Sheet number"),
+    "props.sheet_number_auto": ("{n} (automático)", "{n} (automatic)"),
+    "props.sheet_name": ("Nome da folha", "Sheet name"),
+    "props.g.sheet": ("Folha", "Sheet"),
+    "props.sheet_paper": ("Papel", "Paper"),
+    "props.sheet_paper_value": ("{paper} {way}", "{paper} {way}"),
+    "props.sheet_way.landscape": ("horizontal", "landscape"),
+    "props.sheet_way.portrait": ("vertical", "portrait"),
+    "props.sheet_template": ("Carimbo", "Title block"),
+    "props.sheet_views": ("Vistas na folha", "Views on the sheet"),
+    "props.sheet_sets": ("Conjuntos", "Sets"),
+    "props.sheet_revisions": ("Revisões", "Revisions"),
+    "props.sheet_revisions_button": ("Revisões ({n})…", "Revisions ({n})…"),
+    "props.sheet_revisions_tip": ("As revisões da folha: código, data e o que mudou (impressas sobre o carimbo).",
+                                  "The sheet's revisions: code, date and what changed (printed over the title "
+                                  "block)."),
+    "props.g.sheet_project": ("Carimbo (em todas as folhas)", "Title block (on every sheet)"),
+    "props.sheet_hint": ("Conjuntos: nomes separados por vírgulas. O papel, o carimbo e os dados do projeto mudam-se "
+                         "em Editar tipo…", "Sets: names split by commas. The paper, the title block and the "
+                         "project's data change in Edit type…"),
+    "sheettype.title": ("Propriedades do tipo — folha", "Type properties — sheet"),
+    "sheettype.family": ("Família", "Family"),
+    "sheettype.family_name": ("Carimbo ArqSynth", "ArqSynth title block"),
+    "sheettype.type": ("Tipo", "Type"),
+    "sheettype.name": ("{paper} {way} · {template}", "{paper} {way} · {template}"),
+    "sheettype.params": ("Parâmetros do tipo", "Type parameters"),
+    "sheettype.paper": ("Papel", "Paper"),
+    "sheettype.way": ("Orientação", "Orientation"),
+    "sheettype.template": ("Carimbo", "Title block"),
+    "sheettype.apply_to": ("Aplicar a:", "Apply to:"),
+    "sheettype.all": ("todas as folhas deste tipo ({n})", "every sheet of this type ({n})"),
+    "sheettype.only": ("só «{name}»", "only “{name}”"),
+    "sheettype.shown": ("O que o carimbo mostra (em todas as folhas)", "What the title block shows (on every sheet)"),
+    "sheettype.number_now": ("Número desta folha agora: {n}", "This sheet's number now: {n}"),
+    "sheettype.revisions_title": ("Revisões — {name}", "Revisions — {name}"),
+    "sheet.zoom_in": ("Aproximar (também a roda do rato)", "Zoom in (the mouse wheel too)"),
+    "sheet.zoom_out": ("Afastar (também a roda do rato)", "Zoom out (the mouse wheel too)"),
+    "sheet.zoom_all": ("Ver tudo", "Fit"),
+    "sheet.zoom_all_tip": ("A folha inteira (também duplo clique com o botão do meio). Arrastar com o botão do meio "
+                           "move a folha.", "The whole sheet (a double click with the middle button too). Dragging "
+                           "with the middle button moves the sheet."),
     "cmd.dimension_delete": ("Apagar cota", "Delete dimension"),
     "cmd.dimension_walls": ("Cotar paredes", "Dimension the walls"),
     "act.dimension_walls": ("Cotar paredes (cadeias e totais)", "Dimension the walls (chains and totals)"),

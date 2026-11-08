@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.470.0 — 2026-11-08
+
+**Folhas: aba própria no navegador, propriedades na coluna, «Editar tipo…» como no Revit, A4 e zoom** (o dono:
+«Colocar a opção de filtro da folha também no rodapé… deve ficar última aba, já que a ultima coisa a ser feita é folha
+e impressão»; «A edição do tipo da folha e propriedades devem ficar na coluna de propriedade. E a edição numa janela
+própria que abre como no revit»; «deve incluir tamanho A4»; «permitir zoom na folha»).
+
+- **Navegador do Projeto**: aba **Folhas** no rodapé, a última (Tudo, Vistas, Biblioteca, Projeto, Folhas). Mostra só
+  as folhas e as vistas de cada uma; o clique direito tem imprimir e exportar. As folhas continuam em «Tudo». O ícone
+  Folhas da barra lateral abre esta aba.
+- **Propriedades da folha** na coluna Propriedades, como no Revit: um clique numa folha do navegador, ou a folha
+  aberta sem nada escolhido nela.
+  - Em cima, o **tipo** da folha (papel, orientação e carimbo: «A3 horizontal · Completo»), a escolher na lista.
+  - Por baixo, **Editar tipo…**.
+  - Identificação: número (vazio = automático) e nome.
+  - Folha: papel, carimbo, vistas na folha, conjuntos (separados por vírgulas) e **Revisões…**.
+  - Carimbo (em todas as folhas): os dados do projeto que o carimbo mostra.
+- **Editar tipo…** abre a janela do tipo, como as Propriedades do tipo do Revit:
+  - família «Carimbo ArqSynth»; papel, orientação e modelo de carimbo, com a imagem da folha;
+  - aplicar a todas as folhas deste tipo (como no Revit) ou só a esta;
+  - o que o carimbo mostra em todas as folhas: obra, dono de obra, local, autor, fase, campos próprios e numeração;
+  - também abre com duplo clique na legenda da folha, ou pelo clique direito numa folha no navegador.
+  - O papel, o modelo e o botão «Legenda…» saíram da barra da folha.
+- **Papel A4**, e qualquer papel **na vertical** (A4 a A0). O PDF sai na orientação da folha.
+- **Zoom na folha**:
+  - a roda do rato aproxima no sítio do cursor, e o botão do meio arrasta a folha;
+  - duplo clique com o botão do meio, ou «Ver tudo», mostra a folha inteira;
+  - botões − e + na barra da folha.
+
 ## 0.469.0 — 2026-11-08
 
 **As texturas e o aspeto realista dos materiais no 3D (estilo Realista) e no render** (continuação do pedido do dono:
