@@ -122,6 +122,33 @@ def _arc_centre(p):
     _dots(p, (12, 22))
 
 
+def _poly_in(p):
+    """(0.456) Revit's «Inscribed Polygon»: a hexagon, its corners on the dashed circle."""
+    p.setPen(_pen(QtGui.QColor("#9a9a9a"), 1.2, (2, 2)))
+    p.drawEllipse(QtCore.QPointF(16, 16), 12, 12)
+    p.setPen(_pen(INK, 2.0))
+    _poly(p, [_at(16, 16, 12, 90 + k * 60) for k in range(6)], closed=True)
+    _dots(p, (16, 16))
+
+
+def _poly_out(p):
+    """(0.456) Revit's «Circumscribed Polygon»: a hexagon round the dashed circle, touching it."""
+    p.setPen(_pen(QtGui.QColor("#9a9a9a"), 1.2, (2, 2)))
+    p.drawEllipse(QtCore.QPointF(16, 16), 10.5, 10.5)
+    p.setPen(_pen(INK, 2.0))
+    _poly(p, [_at(16, 16, 12.1, k * 60) for k in range(6)], closed=True)
+    _dots(p, (16, 16))
+
+
+def _ellipse(p):
+    """(0.456) Revit's «Ellipse»."""
+    p.setPen(_pen(INK))
+    p.drawEllipse(QtCore.QPointF(16, 16), 13, 8)
+    p.setPen(_pen(INK, 1.2, (2, 2)))
+    p.drawLine(QtCore.QPointF(16, 16), QtCore.QPointF(29, 16))
+    _dots(p, (16, 16), (29, 16))
+
+
 def _arc_tangent(p):
     """(0.454) Revit's «Tangent End Arc»: a wall, and the arc leaving its end, tangent."""
     p.setPen(_pen(QtGui.QColor("#9a9a9a"), 2.2))
@@ -283,7 +310,8 @@ DRAWN = {
     "centre": _arc_centre, "pie": _pie, "bezier": _bezier, "curvo": _bezier, "freehand": _freehand, "face": _face,
     "wand": _wand, "blocks": _blocks, "terrain": _terrain, "region": _region, "mask": _mask, "text": _text,
     "spot": _spot, "level": _level, "keynote": _keynote, "path": _path, "pick": _pick, "fillet": _fillet,
-    "arc_center": _arc_centre, "arc_tangent": _arc_tangent,
+    "arc_center": _arc_centre, "arc_tangent": _arc_tangent, "poly_in": _poly_in, "poly_out": _poly_out,
+    "ellipse": _ellipse,
 }
 
 

@@ -123,6 +123,34 @@ def bulged(p, bulges, closed):
     return np.array(out, dtype=float)
 
 
+def region_from_loop(loop):
+    """(0.456) A region's points (2D) and bulges from an outline drawn (core/outline_loops: a circle's arcs, rounded
+    corners — bulges; an ellipse's Bézier quarters — in pieces)."""
+    from ..core import curves
+    corners, sides = loop
+    pts, bulges = [], []
+    n = len(corners)
+    for k in range(n):
+        p, q = np.asarray(corners[k], dtype=float), np.asarray(corners[(k + 1) % n], dtype=float)
+        side = sides[k] if k < len(sides) else None
+        pts.append(p)
+        if side and side.get("kind") == "arc":
+            chord = float(np.linalg.norm(q - p))
+            m = np.asarray(side["through"], dtype=float)
+            right = np.array(((q - p)[1], -(q - p)[0])) / max(chord, 1e-12)
+            sag = float((m - (p + q) / 2) @ right)                  # (positive: to the right, counter-clockwise)
+            bulges.append(2.0 * sag / chord if chord > 1e-12 else 0.0)
+        elif side:
+            pieces = curves.side_points(p, q, side)[:-1]           # (a curve: in pieces, straight)
+            bulges.append(0.0)
+            for r in pieces:
+                pts.append(np.asarray(r, dtype=float))
+                bulges.append(0.0)
+        else:
+            bulges.append(0.0)
+    return pts, bulges
+
+
 def corner_fillet(ann, side_a, keep_a, side_b, keep_b, radius, origin, u, v):
     """(0.455, the owner: «isso também deve ser colocado na região, máscara etc») Revit's «Fillet Arc» on a drawing:
     the corner between the sides side_a and side_b (next to each other, both straight) of a region, a mask, a

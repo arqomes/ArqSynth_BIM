@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.456.0 — 2026-11-07
+
+**Laje, Piso, Teto, Região e Máscara com as opções de desenho do Revit** (o dono: «Sim, põe»).
+
+- **Forma / Contorno** na barra (ícones novos): **polígono inscrito** (clique no centro e num canto) e **polígono
+  circunscrito** (centro e meio de um lado), com o número de **Lados** na barra; **elipse** (centro, ponta de um eixo,
+  largura — ou os semieixos escritos); **Escolher linhas**: clique nas linhas, arestas ou faces de parede uma a uma —
+  o contorno faz-se delas, cada canto onde uma encontra a seguinte; clique de novo na primeira (ou Enter) para fechar.
+  O Teto e o Piso ganham também o **círculo**.
+- **Afastamento**: o contorno sai essa distância para fora (negativo: para dentro). **Raio dos cantos**: todos os
+  cantos arredondados (no retângulo, polígono, polígonos regulares e linhas escolhidas). A pré-visualização já mostra
+  o contorno final.
+- As curvas ficam como desenhadas (arcos e curvas no contorno: «Editar contorno» muda-as depois).
+- **Desenho 2D ▸ Região / Máscara**: a fila **Contorno** com as mesmas formas, o Afastamento e o Raio (os arcos
+  guardados como arcos).
+- Barra do Teto mais curta (Rasgo, Sanca, Descida) para caber num ecrã de 1920 px.
+- Teste na janela real alargado: 28 de 28 passos certos.
+
 ## 0.455.0 — 2026-11-07
 
 **Arco de concordância como no Revit, em linhas, polígonos e no Desenho 2D** (o dono: «o arco não é um arco, mas um

@@ -12751,6 +12751,146 @@ class DrawingAsRevit(unittest.TestCase):
             doc.modified = False
 
 
+class OutlinesAsRevit(unittest.TestCase):
+    """0.456 — the owner: «Sim, põe» (Revit's «Draw» panel on a floor, a ceiling, a slab): a regular polygon inscribed
+    and circumscribed, an ellipse (four Bézier quarters), the outline of the lines picked, the Offset, the corners'
+    Radius — and a slab, a ceiling, a floor finish made over them (their curves kept as drawn)."""
+
+    @staticmethod
+    def _host(doc):
+        from types import SimpleNamespace
+        vp = SimpleNamespace(clear_overlays=lambda: None, show_tip=lambda *a: None, show_polygon=lambda *a, **k: None,
+                             show_label=lambda *a: None, tracking=SimpleNamespace(clear=lambda: None))
+        return SimpleNamespace(doc=doc, viewport=vp, message=lambda *a, **k: None, set_hint=lambda *a: None,
+                               set_vcb=lambda *a: None)
+
+    def test_shapes(self):
+        from arqbim.core import curves, outline_loops, outline_shapes as sh
+        loop = sh.regular((0, 0), (2, 0), 6, inscribed=True)
+        self.assertTrue(all(abs(math.hypot(*c) - 2.0) < 1e-9 for c in loop[0]))            # (corners on the circle)
+        loop = sh.regular((0, 0), (2, 0), 4, inscribed=False)
+        np.testing.assert_allclose(sorted(round(abs(c), 9) for p in loop[0] for c in p), [2.0] * 8)   # (a 4×4 square)
+        self.assertAlmostEqual(outline_loops.area([loop]), 16.0, places=9)
+        ell = sh.ellipse((0, 0), (3, 0), 2)
+        ring = curves.profile_outline(*ell)
+        self.assertTrue(all(abs((x / 3) ** 2 + (y / 2) ** 2 - 1.0) < 2e-3 for x, y in ring))   # (on the ellipse)
+        self.assertAlmostEqual(outline_loops.area([ell]), math.pi * 6, delta=0.05)
+        rect = sh.picked([((0, 0), (1, 0)), ((4, -1), (0, 1)), ((5, 3), (-1, 0)), ((0, 5), (0, -1))])
+        self.assertEqual(sorted(rect[0]), [(0.0, 0.0), (0.0, 3.0), (4.0, 0.0), (4.0, 3.0)])
+        self.assertIsNone(sh.picked([((0, 0), (1, 0)), ((0, 1), (1, 0)), ((5, 3), (0, 1))]))   # (two parallel)
+        grown = sh.offset(rect, 0.5)
+        self.assertAlmostEqual(outline_loops.area([grown]), 5.0 * 4.0, places=9)
+        self.assertIsNone(sh.offset(rect, -2.0))                                             # (in too far)
+        round_ = sh.rounded(rect, 1.0)
+        self.assertEqual(len(round_[0]), 8)
+        self.assertAlmostEqual(outline_loops.area([round_]), 12.0 - 4 * (1 - math.pi / 4), places=2)
+        small = sh.rounded(rect, 9.0)                                                        # (kept to the sides)
+        self.assertIsNotNone(outline_loops.polygon([small]))
+
+    def test_slab_ceiling_floor_made(self):
+        from arqbim.core import outline_shapes as sh
+        from arqbim.tools.slab import CeilingTool, FlooringTool, SlabTool
+        doc = Document()
+        try:
+            host = self._host(doc)
+            slab = SlabTool(host)
+            self.assertEqual(len(slab.shapes), 8)
+            slab.set_option("shape", "poly_in")
+            self.assertEqual([o.key for o in slab.options()][-3:], ["sides", "offset", "radius"])
+            slab.set_option("sides", 6)
+            slab._finish_loop(sh.regular((0, 0), (2, 0), 6), 0.0)
+            guid = [o.id for o in doc.objects.values() if o.is_bim][-1]
+            self.assertAlmostEqual(doc.ifc.slab_outline(guid)["area"], 3 * math.sqrt(3) / 2 * 4, places=6)
+            slab.set_option("shape", "ellipse")                         # an ellipse: its curves kept (its drawing)
+            slab._finish_loop(sh.ellipse((10, 0), (13, 0), 2), 0.0)
+            guid = [o.id for o in doc.objects.values() if o.is_bim][-1]
+            self.assertAlmostEqual(doc.ifc.slab_outline(guid)["area"], math.pi * 6, delta=0.1)
+            slab.set_option("shape", "rect")                            # a rectangle 10 cm out, its corners rounded
+            slab.set_option("offset", 0.1)
+            slab.set_option("radius", 0.5)
+            slab._finish_loop([[(20, 0), (24, 0), (24, 3), (20, 3)], [None] * 4], 0.0)
+            guid = [o.id for o in doc.objects.values() if o.is_bim][-1]
+            self.assertAlmostEqual(doc.ifc.slab_outline(guid)["area"], 4.2 * 3.2 - 4 * 0.25 * (1 - math.pi / 4),
+                                   delta=0.02)
+            slab.set_option("shape", "pick")                             # the lines picked
+            slab.offset = slab.radius = 0.0
+            slab._lines = [(np.array(p, float), np.array(d, float), None)
+                           for p, d in (((30, 0, 0), (1, 0, 0)), ((34, 0, 0), (0, 1, 0)), ((34, 3, 0), (-1, 0, 0)),
+                                        ((30, 3, 0), (0, -1, 0)))]
+            slab._finish_picked()
+            guid = [o.id for o in doc.objects.values() if o.is_bim][-1]
+            self.assertAlmostEqual(doc.ifc.slab_outline(guid)["area"], 12.0, places=6)
+            for cls, kind in ((CeilingTool, "ceiling"), (FlooringTool, "flooring")):
+                tool = cls(host)
+                self.assertIn("ellipse", tool.shapes)
+                tool.set_option("shape", "circle")
+                self.assertFalse(tool.round_slab())
+                tool._corner, tool._end = np.array((40.0, 0.0, 0.0)), np.array((42.0, 0.0, 0.0))
+                tool._finish_loop(tool._centred_loop(tool._end), 0.0)
+                made = [o.id for o in doc.objects.values() if o.is_bim and doc.ifc.kind_of(o.id) == kind]
+                self.assertEqual(len(made), 1)
+                params = doc.ifc.ceiling_params(made[0]) if kind == "ceiling" else None
+                if params is not None:
+                    from shapely.geometry import Polygon
+                    self.assertAlmostEqual(Polygon(params["outline"]).area, math.pi * 4, delta=0.05)
+        finally:
+            doc.modified = False
+
+
+class RegionOutlinesAsRevit(unittest.TestCase):
+    """0.456 — a region / a mask drawn as a floor's outline (Revit's «Draw» panel on a filled region): a circle (its
+    four arcs as bulges), a regular polygon, an ellipse (in pieces), the lines picked, a rectangle 10 cm out with its
+    corners rounded — through the Desenho 2D tool."""
+
+    def test_regions(self):
+        from types import SimpleNamespace
+        from arqbim.core import outline_loops, outline_shapes as sh
+        from arqbim.model import annotations as notes2d
+        from arqbim.tools.draft import DraftTool
+        o, u, v, n = np.zeros(3), np.array((1.0, 0, 0)), np.array((0, 1.0, 0)), np.array((0, 0, 1.0))
+        pts, bulges = notes2d.region_from_loop(outline_loops.circle((0, 0), 2.0))
+        self.assertEqual(len(pts), 4)
+        np.testing.assert_allclose(bulges, [math.tan(math.pi / 8)] * 4, atol=1e-9)        # (four quarter arcs)
+        doc = Document()
+        try:
+            vp = SimpleNamespace(view_plane=lambda: (o, u, v, n), current_view=lambda: ("plan", "s"),
+                                 clear_overlays=lambda: None, show_lines=lambda *a: None)
+            host = SimpleNamespace(doc=doc, viewport=vp, message=lambda *a, **k: None, set_hint=lambda *a: None,
+                                   set_vcb=lambda *a: None)
+            tool = DraftTool(host)
+            tool.set_option("shape", "mask")
+            keys = [opt.key for opt in tool.options()]
+            self.assertIn("mode", keys)
+            area = lambda ann: notes2d.area(ann, o, u, v)                                  # noqa: E731
+            tool.set_option("mode", "circle")
+            tool._points = [np.zeros(3)]
+            tool._region_finish(tool._region_loop(np.array((2.0, 0.0))))
+            self.assertAlmostEqual(area(doc.annotations[-1]), math.pi * 4, delta=0.02)    # (a true circle)
+            self.assertEqual(doc.annotations[-1].hatch, "mask")
+            tool.set_option("mode", "poly_in")
+            tool._points = [np.zeros(3)]
+            tool._region_finish(tool._region_loop(np.array((2.0, 0.0))))
+            self.assertAlmostEqual(area(doc.annotations[-1]), 3 * math.sqrt(3) / 2 * 4, places=6)
+            tool.set_option("mode", "ellipse")
+            tool._points = [np.zeros(3), np.array((3.0, 0.0, 0.0))]
+            tool._region_finish(tool._region_loop(np.array((0.0, 2.0))))
+            self.assertAlmostEqual(area(doc.annotations[-1]), math.pi * 6, delta=0.05)
+            tool.set_option("mode", "pick")
+            tool._lines = [(np.array(p, float), np.array(d, float), None)
+                           for p, d in (((0, 0), (1, 0)), ((4, 0), (0, 1)), ((4, 3), (-1, 0)), ((0, 3), (0, -1)))]
+            tool.enter()
+            self.assertAlmostEqual(area(doc.annotations[-1]), 12.0, places=6)
+            tool.set_option("mode", "rect")
+            tool.set_option("offset", 0.1)
+            tool.set_option("radius", 0.5)
+            tool._points = [np.zeros(3)]
+            tool._region_finish(tool._region_loop(np.array((4.0, 3.0))))
+            self.assertAlmostEqual(area(doc.annotations[-1]), 4.2 * 3.2 - (1 - math.pi / 4), delta=0.01)
+            self.assertEqual(len(doc.annotations), 5)
+        finally:
+            doc.modified = False
+
+
 class AlignAnything(unittest.TestCase):
     """0.449 — the owner: «o comando alinhar … deve funcionar com linhas, pisos, e qualquer elementos no projeto»:
     any element's level edges, the nearest one (parallel to the reference); a loose line aligned alone (the line

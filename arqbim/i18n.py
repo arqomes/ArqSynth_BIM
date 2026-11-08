@@ -2717,6 +2717,51 @@ _STRINGS = {
     "slabshape.rect": ("Retângulo", "Rectangle"),
     "slabshape.poly": ("Polígono", "Polygon"),
     "slabshape.circle": ("Círculo", "Circle"),
+    # (0.456) Revit's «Draw» panel on a floor, a ceiling, a slab
+    "slabshape.poly_in": ("Polígono inscrito", "Inscribed polygon"),
+    "slabshape.poly_out": ("Polígono circunscrito", "Circumscribed polygon"),
+    "slabshape.ellipse": ("Elipse", "Ellipse"),
+    "slabshape.pick": ("Escolher linhas (o contorno das linhas clicadas)", "Pick lines (the outline of the lines "
+                       "clicked)"),
+    "ceilshape.circle": ("Círculo", "Circle"),
+    "ceilshape.poly_in": ("Polígono inscrito", "Inscribed polygon"),
+    "ceilshape.poly_out": ("Polígono circunscrito", "Circumscribed polygon"),
+    "ceilshape.ellipse": ("Elipse", "Ellipse"),
+    "ceilshape.pick": ("Escolher linhas (o contorno das linhas clicadas)", "Pick lines (the outline of the lines "
+                       "clicked)"),
+    "ctx.sides": ("Lados", "Sides"),
+    "ctx.region_outline": ("Contorno", "Outline"),
+    "ctx.outline_offset": ("Afastamento", "Offset"),
+    "hint.outline.circle_0": ("Círculo: clique no centro. (Tab muda a forma.)", "Circle: click its centre. (Tab "
+                              "changes the shape.)"),
+    "hint.outline.poly_in_0": ("Polígono inscrito de {n} lados: clique no centro (os lados na barra).",
+                               "Inscribed polygon of {n} sides: click its centre (the sides on the bar)."),
+    "hint.outline.poly_in_1": ("Clique num canto do polígono — ou escreva o raio até um canto e Enter. Esc desiste.",
+                               "Click a corner of the polygon — or type the radius to a corner and Enter. Esc gives "
+                               "up."),
+    "hint.outline.poly_out_0": ("Polígono circunscrito de {n} lados: clique no centro (os lados na barra).",
+                                "Circumscribed polygon of {n} sides: click its centre (the sides on the bar)."),
+    "hint.outline.poly_out_1": ("Clique no meio de um lado — ou escreva a distância do centro ao lado e Enter. Esc "
+                                "desiste.", "Click the middle of a side — or type the distance from the centre to a "
+                                "side and Enter. Esc gives up."),
+    "hint.outline.ellipse_0": ("Elipse: clique no centro.", "Ellipse: click its centre."),
+    "hint.outline.ellipse_1": ("Clique na ponta de um eixo — ou escreva esse semieixo e Enter.",
+                               "Click the end of one axis — or type that half-axis and Enter."),
+    "hint.outline.ellipse_2": ("Mova o rato para a largura e clique — ou escreva o outro semieixo e Enter.",
+                               "Move the mouse for its width and click — or type the other half-axis and Enter."),
+    "hint.outline.pick_0": ("Escolher linhas: clique numa linha, aresta, face de parede ou eixo — o contorno faz-se "
+                            "das linhas clicadas, cada canto onde uma encontra a seguinte.",
+                            "Pick lines: click a line, an edge, a wall's face or an axis — the outline is made of the "
+                            "lines clicked, each corner where one meets the next."),
+    "hint.outline.pick_1": ("Clique na linha seguinte ({n} escolhida). Delete tira a última; Esc desiste.",
+                            "Click the next line ({n} picked). Delete takes the last back; Esc gives up."),
+    "hint.outline.pick_2": ("Clique na linha seguinte ({n} escolhidas). Delete tira a última; Esc desiste.",
+                            "Click the next line ({n} picked). Delete takes the last back; Esc gives up."),
+    "hint.outline.pick_3": ("Mais linhas — ou clique de novo na primeira (ou Enter) para fechar ({n} escolhidas).",
+                            "More lines — or click the first again (or Enter) to close ({n} picked)."),
+    "err.outline_picked": ("As linhas escolhidas não fecham um contorno (duas seguidas paralelas, ou o contorno "
+                           "cruza-se).", "The lines picked close no outline (two in a row parallel, or it crosses "
+                           "itself)."),
     "slabshape.wand": ("Varinha mágica", "Magic wand"),
     "slabfn.estrutural": ("Estrutural", "Structural"),
     "slabfn.acabamento": ("Acabamento (sobre o nível)", "Finish (on the level)"),
@@ -2747,6 +2792,9 @@ _STRINGS = {
                              "too small."),
     "info.slab_outline": ("Laje de {a} com {n} cantos criada ({type}). Ctrl+Z desfaz.",
                           "{a} slab with {n} corners created ({type}). Ctrl+Z undoes."),
+    "info.slab_curved": ("Laje de {a} criada, o contorno com curvas como desenhado ({type}; Editar contorno muda-o). "
+                         "Ctrl+Z desfaz.", "{a} slab created, its outline curved as drawn ({type}; Edit outline "
+                         "changes it). Ctrl+Z undoes."),
     "info.slab_circle": ("Laje circular de raio {r} criada ({type}). Ctrl+Z desfaz.",
                          "Round slab of radius {r} created ({type}). Ctrl+Z undoes."),
     "err.slab_wand_open": ("Aqui não há paredes fechadas à volta", "There are no closed walls round here"),
@@ -3928,9 +3976,9 @@ _STRINGS = {
     "info.ceiling": ("Teto {style} de {a} a {h} do pavimento. Ctrl+Z desfaz.",
                      "{style} ceiling of {a} at {h} over the storey. Ctrl+Z undoes."),
     # ceilings' shadow gap and bulkhead, wall finishes, lights (0.119)
-    "ctx.ceiling_gap": ("Rasgo junto às paredes", "Shadow gap at the walls"),
-    "ctx.bulkhead": ("Sanca (largura)", "Bulkhead (width)"),
-    "ctx.bulkhead_drop": ("Sanca (descida)", "Bulkhead (drop)"),
+    "ctx.ceiling_gap": ("Rasgo", "Shadow gap"),                  # (0.456: shorter — the bar fits 1920 px)
+    "ctx.bulkhead": ("Sanca", "Bulkhead"),
+    "ctx.bulkhead_drop": ("Descida", "Drop"),
     "refuse.ceiling_gap": ("o rasgo vai de 0 a 20 cm", "the shadow gap goes from 0 to 20 cm"),
     "tool.wall_finish": ("Revestimento de parede", "Wall finish"),
     "elem.cladding": ("Revestimento", "Wall finish"),

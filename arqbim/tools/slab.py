@@ -16,6 +16,7 @@ Delete takes it away. Each change is one undo step."""
 import numpy as np
 
 from ..core import outline_loops
+from ..core import outline_shapes
 from ..core import roof_blocks as core_blocks
 from ..core import roofs as core_roofs
 from ..core import slabs as core_slabs
@@ -32,7 +33,10 @@ from .bim_draw import CLOSE_PX, MIN_LENGTH, _fmt, _name, _PointTool, length_opti
 from .outline_grips import OutlineGrips
 
 Z = np.array((0.0, 0.0, 1.0))
-SHAPES = ("rect", "poly", "circle", "wand")
+# (0.456, Revit's «Draw» panel on a floor) + a regular polygon inscribed / circumscribed, an ellipse, the lines picked
+SHAPES = ("rect", "poly", "circle", "poly_in", "poly_out", "ellipse", "pick", "wand")
+CENTRED = ("circle", "poly_in", "poly_out", "ellipse")      # (0.456) drawn from their centre
+ROUNDED = ("rect", "poly", "poly_in", "poly_out", "pick")   # (0.456) their corners can be rounded (Revit's «Radius»)
 
 
 def _area(a):
@@ -63,21 +67,39 @@ class SlabTool(_PointTool):
         self._end = None                # the point under the mouse (a polygon's next corner, a circle's edge)
         self._start_ref = None          # before the first click: where a typed distance starts from
         self._du = self._dv = 0.0
+        self.sides = 6                  # (0.456) a regular polygon's sides
+        self.offset = 0.0               # (0.456) Revit's «Offset»: the outline this much out (in, negative)…
+        self.radius = 0.0               # …and «Radius»: its corners rounded
+        self._axis = None               # (0.456) an ellipse's first axis end
+        self._lines = []                # (0.456) the lines picked: [(a point, its direction, the edge)]
 
     def set_spec(self, spec):
         self.spec = spec
         self.host.set_hint(self.hint())
 
+    def shape_option(self, label="ctx.slab_shape", prefix="slabshape."):
+        return Option("shape", t(label), "choice", self.shape, tuple((s, t(prefix + s)) for s in self.shapes))
+
+    def outline_options(self):
+        """(0.456) Revit's options of a floor's sketch: a polygon's sides, the Offset, the corners' Radius."""
+        opts = []
+        if self.shape in ("poly_in", "poly_out"):
+            opts.append(Option("sides", t("ctx.sides"), "choice", self.sides,
+                               tuple((s, str(s)) for s in outline_shapes.SIDES)))
+        if self.shape in ROUNDED + CENTRED:
+            opts.append(length_option("offset", "ctx.outline_offset", self.offset))
+        if self.shape in ROUNDED:
+            opts.append(length_option("radius", "ctx.corner_radius", self.radius))
+        return opts
+
     def options(self):
-        opts = [type_option(self.spec, "slab"),
-                Option("shape", t("ctx.slab_shape"), "choice", self.shape,
-                       tuple((s, t("slabshape." + s)) for s in SHAPES)),
+        opts = [type_option(self.spec, "slab"), self.shape_option(),
                 Option("function", t("ctx.slab_function"), "choice", self.function,
                        tuple((f, t("slabfn." + f)) for f in core_slabs.FUNCTIONS))]
         if self.shape == "wand":
             opts.append(Option("reach", t("ctx.slab_reach"), "choice", self.reach,
                                tuple((r, t("slabreach." + r)) for r in core_slabs.REACHES)))
-        return opts
+        return opts + self.outline_options()
 
     def set_option(self, key, value):
         if key == "type":
@@ -88,6 +110,12 @@ class SlabTool(_PointTool):
             self.function = value
         elif key == "reach" and value in core_slabs.REACHES:
             self.reach = value
+        elif key == "sides" and int(value) >= 3:
+            self.sides = int(value)
+        elif key == "offset":
+            self.offset = float(value)
+        elif key == "radius" and float(value) >= 0.0:
+            self.radius = float(value)
         self.host.set_hint(self.hint())
 
     def set_shape(self, shape):
@@ -101,8 +129,22 @@ class SlabTool(_PointTool):
         self.host.message(t("info.slab_shape", shape=t("slabshape." + self.shape)))
         return True
 
+    def outline_hint(self):
+        """(0.456) The step of the new outlines (a polygon inscribed / circumscribed, an ellipse, the lines picked), or
+        None for the others."""
+        if self.shape in ("poly_in", "poly_out"):
+            return t("hint.outline.{}_{}".format(self.shape, 1 if self._corner is not None else 0), n=self.sides)
+        if self.shape == "ellipse":
+            return t("hint.outline.ellipse_" + str(0 if self._corner is None else 1 if self._axis is None else 2))
+        if self.shape == "pick":
+            return t("hint.outline.pick_" + str(min(len(self._lines), 3)), n=len(self._lines))
+        return None
+
     def hint(self):
         name = _name(self.spec)
+        step = self.outline_hint()
+        if step is not None:
+            return step
         if self.shape == "poly":
             return t("hint.slab.poly_next") if self._points else t("hint.slab.poly_start", type=name)
         if self.shape == "circle":
@@ -133,9 +175,208 @@ class SlabTool(_PointTool):
         self._start_ref = start_reference(snap)
         show_start_reference(self.viewport, self._start_ref, p)
 
+    # ------------------------------------------------------------ (0.456) Revit's other outlines
+
+    def _final(self, loop):
+        """The loop as it will be made: moved out / in by the Offset, its corners rounded by the Radius (None: it
+        could not be — moved in too far)."""
+        if loop is None:
+            return None
+        loop = outline_shapes.ccw(loop)
+        if self.offset and outline_shapes.straight(loop):
+            loop = outline_shapes.offset(loop, self.offset)
+        if loop is not None and self.radius > 0 and outline_shapes.straight(loop):
+            loop = outline_shapes.rounded(loop, self.radius)
+        return loop
+
+    def _centred_loop(self, end):
+        """The loop of a polygon / an ellipse / (the coverings') circle from its centre to `end` (the Offset in its
+        size: a curved outline is not moved out as a polygon is)."""
+        c = self._corner
+        if c is None or end is None:
+            return None
+        if self.shape in ("poly_in", "poly_out"):
+            return outline_shapes.regular(c, end, self.sides, inscribed=self.shape == "poly_in")
+        if self.shape == "circle":
+            r = float(np.linalg.norm((end - c)[:2])) + self.offset
+            return outline_loops.circle(c[:2], r)
+        if self._axis is None:                           # an ellipse: its first half-axis, the other as wide for now
+            r = float(np.linalg.norm((end - c)[:2]))
+            if r < outline_shapes.MIN_SIZE:
+                return None
+            d = (end - c)[:2] / r
+            return outline_shapes.ellipse(c, c[:2] + d * (r + self.offset), r + self.offset)
+        a = float(np.linalg.norm((self._axis - c)[:2]))
+        d = (self._axis - c)[:2] / max(a, 1e-12)
+        return outline_shapes.ellipse(c, c[:2] + d * (a + self.offset),
+                                      outline_shapes.axis_distance(c, self._axis, end) + self.offset)
+
+    def _show_loop(self, loop, z, label=True):
+        if loop is None:
+            self.viewport.show_polygon([], segments=[], colors=[])
+            return
+        ring = [np.array((x, y, z)) for x, y in outline_loops.rings([loop])[0]]
+        segs = _ring_segments(ring)
+        self.viewport.show_polygon(ring, segments=segs, colors=[PREVIEW] * len(segs))
+        if label and len(ring) >= 3:
+            self.viewport.show_label(_area(abs(core_slabs.ring_area([(p[0], p[1]) for p in ring]))),
+                                     np.mean(ring, axis=0))
+
+    def _outline_move(self, x, y, modifiers):
+        if self.shape == "pick":
+            self._pick_move(x, y)
+            return
+        if self._corner is None:
+            self._first_point(x, y, modifiers)
+            return
+        p, snap = self._point(x, y, self._corner[2], self._corner, modifiers=modifiers)
+        if p is None:
+            return
+        self._hover = (p, snap)
+        self._end = p
+        z = float(self._corner[2])
+        self._show_loop(self._final(self._centred_loop(p)), z)
+        edge = np.array((p[0], p[1], z))
+        if self.shape == "ellipse" and self._axis is not None:
+            self.viewport.show_lines([self._corner, self._axis], [PREVIEW, PREVIEW])
+        else:
+            self.viewport.show_temp_dims([TempDim(np.asarray(self._corner, dtype=float), edge, Z)])
+        show_snap(self.viewport, snap, edge)
+        self.host.set_vcb(_fmt(float(np.linalg.norm((p - self._corner)[:2]))))
+
+    def _outline_down(self, x, y, modifiers):
+        if self.shape == "pick":
+            self._pick_down(x, y)
+            return
+        if self._corner is None:
+            p, _snap = self._point(x, y, modifiers=modifiers)
+            if p is not None:
+                self._corner = p
+                self.host.set_hint(self.hint())
+            return
+        if self._end is None or np.linalg.norm((self._end - self._corner)[:2]) < MIN_LENGTH:
+            return
+        if self.shape == "ellipse" and self._axis is None:
+            self._axis = np.array((self._end[0], self._end[1], self._corner[2]))
+            self.host.set_hint(self.hint())
+            return
+        self._finish_loop(self._centred_loop(self._end), float(self._corner[2]))
+
+    def _outline_typed(self, value):
+        """A length typed: a polygon's radius (to a corner, inscribed; to a side's middle, circumscribed), an
+        ellipse's half-axes one after the other — towards the mouse."""
+        if self.shape == "pick" or value is None or value <= 0:
+            return
+        if self._corner is None:
+            if self._hover is None:
+                return
+            self._corner = self._hover[0].copy()
+        c = self._corner
+        towards = (self._end - c) if self._end is not None else np.array((1.0, 0.0, 0.0))
+        towards = np.array((towards[0], towards[1], 0.0))
+        n = float(np.linalg.norm(towards))
+        towards = towards / n if n > 1e-9 else np.array((1.0, 0.0, 0.0))
+        if self.shape == "ellipse" and self._axis is None:
+            self._axis = c + towards * value
+            self.host.set_hint(self.hint())
+            return
+        if self.shape == "ellipse":
+            a = float(np.linalg.norm((self._axis - c)[:2]))
+            d = (self._axis - c)[:2] / a
+            loop = outline_shapes.ellipse(c, c[:2] + d * (a + self.offset), value + self.offset)
+        else:
+            loop = self._centred_loop(c + towards * value)
+        self._finish_loop(loop, float(c[2]))
+
+    def _pick_lines_now(self, x, y):
+        from . import pick_lines
+        return pick_lines.edge_at(self.viewport, self.doc, x, y)
+
+    def _picked_loop(self, extra=None):
+        lines = [(a, d) for a, d, _e in self._lines] + ([extra] if extra is not None else [])
+        return outline_shapes.picked(lines)
+
+    def _same_edge(self, edge, other):
+        return all(np.linalg.norm(np.asarray(p, dtype=float) - np.asarray(q, dtype=float)) < 1e-6
+                   for p, q in zip(edge, other)) or \
+            all(np.linalg.norm(np.asarray(p, dtype=float) - np.asarray(q, dtype=float)) < 1e-6
+                for p, q in zip(edge, other[::-1]))
+
+    def _pick_move(self, x, y):
+        """Revit's «Pick Lines» on a floor: the lines clicked one after another make the outline, each corner where one
+        meets the next; the first clicked again (or Enter) closes it."""
+        edge = self._pick_lines_now(x, y)
+        z = self.doc.work_level()
+        self.viewport.clear_overlays()
+        if edge is not None and hasattr(self.viewport, "show_glyph"):
+            self.viewport.show_glyph(None, None, edge)
+        if len(self._lines) >= 2:
+            closing = edge is not None and len(self._lines) >= 3 and self._same_edge(edge, self._lines[0][2])
+            extra = None if edge is None or closing else (np.asarray(edge[0], dtype=float),
+                                                          np.asarray(edge[1], dtype=float) - edge[0])
+            loop = self._final(self._picked_loop(extra))
+            if loop is not None:
+                self._show_loop(loop, z)
+                if closing:
+                    self.viewport.show_tip(t("snap.close"), np.asarray(edge[0], dtype=float))
+                return
+        segs = [np.array((*np.asarray(p, dtype=float)[:2], z)) for _a, _d, e in self._lines for p in e]
+        if segs:
+            self.viewport.show_lines(segs, [PREVIEW] * len(segs))
+
+    def _pick_down(self, x, y):
+        edge = self._pick_lines_now(x, y)
+        if edge is None:
+            self.host.message(t("tip.wall_pick_none"), warning=True)
+            return
+        if len(self._lines) >= 3 and self._same_edge(edge, self._lines[0][2]):
+            self._finish_picked()
+            return
+        if any(self._same_edge(edge, e) for _a, _d, e in self._lines):
+            return
+        a, b = (np.asarray(p, dtype=float) for p in edge)
+        if float(np.linalg.norm((b - a)[:2])) < MIN_LENGTH:
+            return
+        self._lines.append((a, b - a, (a, b)))
+        self.host.set_hint(self.hint())
+
+    def _finish_picked(self):
+        loop = self._picked_loop()
+        if loop is None:
+            self.host.message(t("err.outline_picked"), warning=True)
+            return
+        self._finish_loop(loop, self.doc.work_level())
+
+    def _finish_loop(self, loop, z):
+        """The outline drawn made (moved by the Offset, rounded by the Radius): the slab — a covering — over it."""
+        final = self._final(loop)
+        if final is None:
+            self.host.message(t("err.slab_outline_bad"), warning=True)
+            return
+        if outline_loops.polygon([final]) is None:
+            self.host.message(t("err.slab_outline_bad"), warning=True)
+            return
+        if self._make_loop(final, z) is not None:
+            self.cancel()
+
+    def _make_loop(self, loop, z):
+        ring = outline_loops.rings([loop])[0]
+        guid = bim.add_slab_outline(self.doc, ring, z, self.spec, storey=self.doc.active_storey,
+                                    function=self.function, loops=[loop] if outline_loops.curved([loop]) else None)
+        info = self.doc.ifc.slab_outline(guid)
+        if outline_loops.curved([loop]):                 # (an ellipse, rounded corners: no «corners» to count)
+            self.host.message(t("info.slab_curved", a=_area(info["area"]), type=_name(self.spec)))
+        else:
+            self.host.message(t("info.slab_outline", a=_area(info["area"]), n=len(loop[0]), type=_name(self.spec)))
+        return guid
+
     def pointer_move(self, x, y, modifiers):
         if self.shape == "wand":
             self._wand_preview(x, y)
+            return
+        if self.shape in ("poly_in", "poly_out", "ellipse", "pick") or \
+                self.shape == "circle" and not self.round_slab():
+            self._outline_move(x, y, modifiers)
             return
         if self.shape == "poly":
             if not self._points:
@@ -176,6 +417,10 @@ class SlabTool(_PointTool):
         if self.shape == "wand":
             self._wand_click(x, y)
             return
+        if self.shape in ("poly_in", "poly_out", "ellipse", "pick") or \
+                self.shape == "circle" and not self.round_slab():          # (0.456)
+            self._outline_down(x, y, modifiers)
+            return
         if self.shape == "poly":
             if not self._points:
                 p, _snap = self._point(x, y, modifiers=modifiers)
@@ -205,13 +450,23 @@ class SlabTool(_PointTool):
 
     # ------------------------------------------------------------ keyboard
 
+    def round_slab(self):
+        """A circle drawn is a true circle in the IFC (a slab's); (0.456) a covering's is an outline of four arcs."""
+        return True
+
     def enter(self):
-        """Enter with nothing typed: a polygon closes."""
+        """Enter with nothing typed: a polygon closes; (0.456) the lines picked close."""
         if self.shape == "poly" and len(self._points) >= 3:
             self._finish_poly()
+        elif self.shape == "pick" and len(self._lines) >= 3:
+            self._finish_picked()
 
     def delete(self):
-        """Delete: a polygon's last corner taken back."""
+        """Delete: a polygon's last corner taken back; (0.456) the last line picked."""
+        if self.shape == "pick" and self._lines:
+            self._lines.pop()
+            self.host.set_hint(self.hint())
+            return
         if self.shape == "poly" and self._points:
             self._points.pop()
             self.host.message(t("info.slab_corner_back", n=len(self._points)))
@@ -226,6 +481,10 @@ class SlabTool(_PointTool):
             return
         a, b = values
         if self.shape == "wand":
+            return
+        if self.shape in ("poly_in", "poly_out", "ellipse", "pick") or \
+                self.shape == "circle" and not self.round_slab():          # (0.456)
+            self._outline_typed(a)
             return
         if self.shape in ("poly", "circle") and a is None:
             return
@@ -271,14 +530,28 @@ class SlabTool(_PointTool):
         self._end = None
         self._start_ref = None
         self._du = self._dv = 0.0
+        self._axis = None
+        self._lines = []
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
         self.host.set_vcb("")
 
     # ------------------------------------------------------------ rectangle
 
+    def _rect_loop(self):
+        c = self._corner
+        return [[(c[0], c[1]), (c[0] + self._du, c[1]), (c[0] + self._du, c[1] + self._dv), (c[0], c[1] + self._dv)],
+                [None] * 4]
+
+    def _shaped(self):
+        """(0.456) The Offset or the Radius asked for: the outline goes the new outlines' way."""
+        return bool(self.offset) or self.radius > 0
+
     def _finish(self):
         if abs(self._du) < MIN_LENGTH or abs(self._dv) < MIN_LENGTH:
+            return
+        if self._shaped():
+            self._finish_loop(self._rect_loop(), float(self._corner[2]))
             return
         bim.add_slab(self.doc, self._corner, self._du, self._dv, self.spec, storey=self.doc.active_storey,
                      function=self.function)
@@ -289,7 +562,10 @@ class SlabTool(_PointTool):
         c = self._corner
         pts = [c, c + (self._du, 0, 0), c + (self._du, self._dv, 0), c + (0, self._dv, 0)]
         segs = _ring_segments(pts)
-        self.viewport.show_polygon(pts, segments=segs, colors=[PREVIEW] * len(segs))
+        if self._shaped() and abs(self._du) > MIN_LENGTH and abs(self._dv) > MIN_LENGTH:
+            self._show_loop(self._final(self._rect_loop()), float(c[2]), label=False)   # (0.456: as it will be)
+        else:
+            self.viewport.show_polygon(pts, segments=segs, colors=[PREVIEW] * len(segs))
         dims = "{} × {}".format(_fmt(abs(self._du)), _fmt(abs(self._dv)))
         middle = (pts[0] + pts[2]) / 2
         self.viewport.show_temp_dims([outside_dim(pts[0], pts[1], middle), outside_dim(pts[1], pts[2], middle)])
@@ -342,6 +618,9 @@ class SlabTool(_PointTool):
         if core_slabs.outline_polygon(outline) is None:
             self.host.message(t("err.slab_outline_bad"), warning=True)
             return
+        if self._shaped():                               # (0.456)
+            self._finish_loop([outline, [None] * len(outline)], float(self._points[0][2]))
+            return
         guid = bim.add_slab_outline(self.doc, outline, self._points[0][2], self.spec, storey=self.doc.active_storey,
                                     function=self.function)
         info = self.doc.ifc.slab_outline(guid)
@@ -369,6 +648,7 @@ class SlabTool(_PointTool):
         self.host.set_vcb(_fmt(r))
 
     def _finish_circle(self, radius):
+        radius = radius + self.offset                    # (0.456) the Offset: a circle that much wider
         if radius < MIN_LENGTH:
             return
         bim.add_slab_circle(self.doc, self._corner[:2], radius, self._corner[2], self.spec,
@@ -607,7 +887,8 @@ class CeilingTool(SlabTool):
 
     name = "ceiling"
     keys_help = "keys.ceiling"
-    shapes = ("wand", "rect", "poly")
+    # (0.456, Revit's «Draw» panel) + a circle, a regular polygon inscribed / circumscribed, an ellipse, the lines picked
+    shapes = ("wand", "rect", "poly", "circle", "poly_in", "poly_out", "ellipse", "pick")
 
     def __init__(self, host):
         super().__init__(host)
@@ -621,14 +902,13 @@ class CeilingTool(SlabTool):
 
     def options(self):
         from ..core import ceilings as core_ceilings
-        return [Option("shape", t("ctx.roof_shape"), "choice", self.shape,
-                       tuple((s, t("ceilshape." + s)) for s in self.shapes)),
+        return [self.shape_option("ctx.roof_shape", "ceilshape."),
                 Option("style", t("ctx.ceiling_style"), "choice", self.style,
                        tuple((s, t("ceilstyle." + s)) for s in core_ceilings.STYLES)),
                 length_option("height", "ctx.ceiling_height", self.height),
                 length_option("gap", "ctx.ceiling_gap", self.gap),
                 length_option("bulkhead", "ctx.bulkhead", self.bulkhead),
-                length_option("drop", "ctx.bulkhead_drop", self.drop)]
+                length_option("drop", "ctx.bulkhead_drop", self.drop)] + self.outline_options()
 
     def set_option(self, key, value):
         if key == "style":
@@ -652,16 +932,24 @@ class CeilingTool(SlabTool):
         return True
 
     def hint(self):
+        step = self.outline_hint()                       # (0.456)
+        if step is not None:
+            return step
         if self.shape == "poly" and self._points:
             return t("hint.slab.poly_next")
         if self.shape == "rect" and self._corner is not None:
             return t("hint.slab.end")
+        if self.shape == "circle":
+            return t("hint.slab.circle_end") if self._corner is not None else t("hint.outline.circle_0")
         return t("hint.ceiling." + self.shape, style=t("ceilstyle." + self.style).lower(), h=_fmt(self.height))
 
-    def _make(self, outline, holes=()):
+    def round_slab(self):
+        return False                                     # (0.456: a covering's circle, four arcs)
+
+    def _make(self, outline, holes=(), loops=None):
         try:
             guid = bim.add_ceiling(self.doc, outline, self.height, self.style, holes, gap=self.gap,
-                                   bulkhead=(self.bulkhead, self.drop) if self.bulkhead > 0 else None)
+                                   bulkhead=(self.bulkhead, self.drop) if self.bulkhead > 0 else None, loops=loops)
         except ValueError as exc:
             from ..i18n import refusal
             self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
@@ -671,8 +959,16 @@ class CeilingTool(SlabTool):
                             h=_fmt(self.height)))
         return guid
 
+    def _make_loop(self, loop, z):
+        """(0.456) A covering over the outline drawn (its arcs and curves kept as drawn)."""
+        ring = outline_loops.rings([loop])[0]
+        return self._make(ring, (), loops=[loop] if outline_loops.curved([loop]) else None)
+
     def _finish(self):
         if abs(self._du) < MIN_LENGTH or abs(self._dv) < MIN_LENGTH:
+            return
+        if self._shaped():                               # (0.456)
+            self._finish_loop(self._rect_loop(), float(self._corner[2]))
             return
         c = self._corner
         self._make([(c[0], c[1]), (c[0] + self._du, c[1]), (c[0] + self._du, c[1] + self._dv), (c[0], c[1] + self._dv)])
@@ -682,6 +978,9 @@ class CeilingTool(SlabTool):
         outline = [(float(p[0]), float(p[1])) for p in self._points]
         if core_slabs.outline_polygon(outline) is None:
             self.host.message(t("err.slab_outline_bad"), warning=True)
+            return
+        if self._shaped():                               # (0.456)
+            self._finish_loop([outline, [None] * len(outline)], float(self._points[0][2]))
             return
         self._make(outline)
         self.cancel()
@@ -713,10 +1012,9 @@ class FlooringTool(CeilingTool):
 
     def options(self):
         from ..ifc.coverings import FLOORINGS
-        return [Option("shape", t("ctx.roof_shape"), "choice", self.shape,
-                       tuple((s, t("ceilshape." + s)) for s in self.shapes)),
+        return [self.shape_option("ctx.roof_shape", "ceilshape."),
                 Option("finish", t("ctx.flooring"), "choice", self.finish,
-                       tuple((k, t("flooring." + k)) for k in FLOORINGS))]
+                       tuple((k, t("flooring." + k)) for k in FLOORINGS))] + self.outline_options()
 
     def set_option(self, key, value):
         if key == "finish":
@@ -726,15 +1024,20 @@ class FlooringTool(CeilingTool):
         super().set_option(key, value)
 
     def hint(self):
+        step = self.outline_hint()                       # (0.456)
+        if step is not None:
+            return step
         if self.shape == "poly" and self._points:
             return t("hint.slab.poly_next")
         if self.shape == "rect" and self._corner is not None:
             return t("hint.slab.end")
+        if self.shape == "circle":
+            return t("hint.slab.circle_end") if self._corner is not None else t("hint.outline.circle_0")
         return t("hint.flooring." + self.shape, f=t("flooring." + self.finish).lower())
 
-    def _make(self, outline, holes=()):
+    def _make(self, outline, holes=(), loops=None):
         try:
-            guid = bim.add_flooring(self.doc, outline, self.finish, holes)
+            guid = bim.add_flooring(self.doc, outline, self.finish, holes, loops=loops)
         except ValueError as exc:
             from ..i18n import refusal
             self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)

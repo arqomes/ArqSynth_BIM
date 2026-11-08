@@ -14,6 +14,7 @@ changes what is drawn.
 
 import numpy as np
 
+from ..core import outline_loops, outline_shapes
 from ..core.sketch_geometry import ray_plane
 from ..core.units import format_length, parse_lengths
 from ..i18n import decimal_sep, t
@@ -24,6 +25,9 @@ from .base import LEFT, RIGHT, SNAPPABLE, Option, show_snap
 from .bim_draw import _PointTool
 
 CLOSE_PX = 10                    # pixels: a click this near the first point closes a polyline / region
+REGION_OUTLINES = ("poly", "rect", "circle", "poly_in", "poly_out", "ellipse", "pick")   # (0.456) a region's outline
+REGION_CENTRED = ("circle", "poly_in", "poly_out", "ellipse")
+REGION_ROUNDED = ("poly", "rect", "poly_in", "poly_out", "pick")
 TEXT_SIZES = (1.8, 2.5, 3.5, 5.0)   # mm on paper
 NEEDED = {"line": 2, "rectangle": 2, "circle": 2, "arc": 3, "text": 1, "spot": 1, "level": 1,   # points that end it
           "keynote": 2}
@@ -48,6 +52,14 @@ class DraftTool(_PointTool):
         self._end = None             # the point under the mouse
         self._fillet = []            # (0.455) the sides picked for a fillet: [(annotation, side, the point 2D)]
         self._fillet_now = None      # …and the fillet under the mouse
+        # (0.456, Revit's «Draw» panel on a filled / masking region) its outline drawn as a polygon point by point, a
+        # rectangle, a circle, a regular polygon, an ellipse or the lines picked — moved by an Offset, its corners
+        # rounded by a Radius
+        self.outline = "poly"
+        self.sides = 6
+        self.offset = 0.0
+        self.radius = 0.0
+        self._lines = []             # the lines picked (2D): [(a point, its direction, the edge (world))]
 
     @property
     def accepts_typing(self):
@@ -56,7 +68,13 @@ class DraftTool(_PointTool):
             return len(self._points) == 1
         if self.shape == "fillet":                           # (0.455) the fillet's radius
             return len(self._fillet) >= 2
+        if self._outlined():                                 # (0.456) a polygon's radius, an ellipse's half-axes
+            return self.outline in REGION_CENTRED and len(self._points) in (1, 2)
         return self.shape in ("line", "circle", "rectangle") and len(self._points) == 1
+
+    def _outlined(self):
+        """(0.456) A region drawn by one of Revit's other outlines (not point by point)."""
+        return self.shape == "region" and self.outline != "poly"
 
     @property
     def accepts_text(self):
@@ -70,6 +88,15 @@ class DraftTool(_PointTool):
         shapes.insert(shapes.index("arc") + 1, "fillet")       # (0.455) Revit's «Fillet Arc» on what is drawn
         shown = "mask" if self.shape == "region" and self.hatch == "mask" else self.shape
         opts = [Option("shape", t("ctx.draft_shape"), "choice", shown, tuple((k, t("draft." + k)) for k in shapes))]
+        if self.shape == "region":                           # (0.456) its outline's shapes, as a floor's
+            opts.append(Option("mode", t("ctx.region_outline"), "choice", self.outline,
+                               tuple((m, t("slabshape." + m)) for m in REGION_OUTLINES)))
+            if self.outline in ("poly_in", "poly_out"):
+                opts.append(Option("sides", t("ctx.sides"), "choice", self.sides,
+                                   tuple((s, str(s)) for s in outline_shapes.SIDES)))
+            opts.append(Option("offset", t("ctx.outline_offset"), "length", float(self.offset)))
+            if self.outline in REGION_ROUNDED:
+                opts.append(Option("radius", t("ctx.corner_radius"), "length", float(self.radius)))
         if self.shape == "region" and self.hatch != "mask":
             opts.append(Option("hatch", t("ctx.draft_hatch"), "choice", self.hatch,
                                tuple((h, t("drafthatch." + h)) for h in notes2d.HATCHES)))
@@ -98,7 +125,16 @@ class DraftTool(_PointTool):
                 self.hatch = "diagonal"
             self.set_shape(value)
             return
-        if key == "hatch" and value in notes2d.HATCHES:
+        if key == "mode" and value in REGION_OUTLINES:      # (0.456)
+            self.cancel()
+            self.outline = value
+        elif key == "sides" and int(value) >= 3:
+            self.sides = int(value)
+        elif key == "offset":
+            self.offset = float(value)
+        elif key == "radius" and float(value) >= 0.0:
+            self.radius = float(value)
+        elif key == "hatch" and value in notes2d.HATCHES:
             self.hatch = value
         elif key == "size":
             self.size = float(value)
@@ -126,6 +162,16 @@ class DraftTool(_PointTool):
         n = len(self._points)
         if self.shape == "fillet":                          # (0.455)
             return t("hint.draft.fillet_" + str(min(len(self._fillet), 2)))
+        if self._outlined():                                # (0.456) the steps of a region's other outlines
+            if self.outline == "rect":
+                return t("hint.draft.end_rectangle") if n else t("hint.draft.rectangle")
+            if self.outline == "circle":
+                return t("hint.slab.circle_end") if n else t("hint.outline.circle_0")
+            if self.outline in ("poly_in", "poly_out"):
+                return t("hint.outline.{}_{}".format(self.outline, min(n, 1)), n=self.sides)
+            if self.outline == "ellipse":
+                return t("hint.outline.ellipse_" + str(min(n, 2)))
+            return t("hint.outline.pick_" + str(min(len(self._lines), 3)), n=len(self._lines))
         if self.shape == "text":
             return t("hint.draft.text_2") if n else t("hint.draft.text")
         if n == 0:
@@ -303,9 +349,171 @@ class DraftTool(_PointTool):
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
 
+    # ------------------------------------------------------------ (0.456) a region's other outlines
+
+    def _to2(self, p):
+        origin, u, v, _n = self.viewport.view_plane()
+        return notes2d.to2([p], origin, u, v)[0]
+
+    def _region_loop(self, end2):
+        """The outline (2D, core/outline_loops) the clicks so far and the mouse at end2 make, or None."""
+        pts = [self._to2(p) for p in self._points]
+        if self.outline == "pick":
+            lines = [(a, d) for a, d, _e in self._lines]
+            return outline_shapes.picked(lines)
+        if not pts or end2 is None:
+            return None
+        c = pts[0]
+        if self.outline == "rect":
+            (x0, y0), (x1, y1) = c, end2
+            if abs(x1 - x0) < notes2d.MIN_SIZE or abs(y1 - y0) < notes2d.MIN_SIZE:
+                return None
+            return [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)], [None] * 4]
+        if self.outline in ("poly_in", "poly_out"):
+            return outline_shapes.regular(c, end2, self.sides, inscribed=self.outline == "poly_in")
+        if self.outline == "circle":
+            return outline_loops.circle(c, float(np.linalg.norm(end2 - c)) + self.offset)
+        if len(pts) == 1:                                    # an ellipse: one half-axis so far
+            r = float(np.linalg.norm(end2 - c))
+            if r < outline_shapes.MIN_SIZE:
+                return None
+            return outline_shapes.ellipse(c, c + (end2 - c) / r * (r + self.offset), r + self.offset)
+        a = float(np.linalg.norm(pts[1] - c))
+        d = (pts[1] - c) / max(a, 1e-12)
+        return outline_shapes.ellipse(c, c + d * (a + self.offset),
+                                      outline_shapes.axis_distance(c, pts[1], end2) + self.offset)
+
+    def _region_final(self, loop):
+        """The outline as it will be drawn: moved by the Offset (a straight one), its corners rounded."""
+        if loop is None:
+            return None
+        loop = outline_shapes.ccw(loop)
+        if self.offset and outline_shapes.straight(loop):
+            loop = outline_shapes.offset(loop, self.offset)
+        if loop is not None and self.radius > 0 and outline_shapes.straight(loop):
+            loop = outline_shapes.rounded(loop, self.radius)
+        return loop
+
+    def _show_region(self, loop):
+        origin, u, v, _n = self.viewport.view_plane()
+        if loop is None:
+            self.viewport.show_lines([], [])
+            return
+        ring = outline_loops.rings([loop])[0]
+        pts = [origin + u * q[0] + v * q[1] for q in ring]
+        segs = [w for a, b in zip(pts, pts[1:] + pts[:1]) for w in (a, b)]
+        self.viewport.show_lines(segs, [PREVIEW] * len(segs))
+
+    def _region_move(self, x, y, modifiers):
+        if self.outline == "pick":
+            from . import pick_lines
+            edge = pick_lines.edge_at(self.viewport, self.doc, x, y)
+            if edge is not None and len(self._lines) >= 2:
+                a, b = (self._to2(np.asarray(p, dtype=float)) for p in edge)
+                lines = [(p, d) for p, d, _e in self._lines]
+                closing = len(self._lines) >= 3 and self._same(edge, self._lines[0][2])
+                loop = outline_shapes.picked(lines if closing else lines + [(a, b - a)])
+                self._show_region(self._region_final(loop))
+            elif self._lines:
+                origin, u, v, _n = self.viewport.view_plane()
+                segs = [np.asarray(w, dtype=float) for _p, _d, e in self._lines for w in e]
+                self.viewport.show_lines(segs, [PREVIEW] * len(segs))
+            if edge is not None and hasattr(self.viewport, "show_glyph"):
+                self.viewport.show_glyph(None, None, edge)
+            return
+        p, snap = self._pick(x, y)
+        if p is None:
+            return
+        p = self._on_paper(p)
+        self._hover = (p, snap)
+        self._end = p
+        show_snap(self.viewport, snap, p)
+        if not self._points:
+            return
+        self._show_region(self._region_final(self._region_loop(self._to2(p))))
+        a2, b2 = self._to2(self._points[-1]), self._to2(p)
+        self.host.set_vcb(_fmt(float(np.linalg.norm(b2 - a2))))
+
+    @staticmethod
+    def _same(edge, other):
+        ends = [np.asarray(q, dtype=float) for q in other]
+        return all(np.linalg.norm(np.asarray(p, dtype=float) - q) < 1e-6 for p, q in zip(edge, ends)) or \
+            all(np.linalg.norm(np.asarray(p, dtype=float) - q) < 1e-6 for p, q in zip(edge, ends[::-1]))
+
+    def _region_down(self, x, y):
+        if self.outline == "pick":
+            from . import pick_lines
+            edge = pick_lines.edge_at(self.viewport, self.doc, x, y)
+            if edge is None:
+                self.host.message(t("tip.wall_pick_none"), warning=True)
+                return
+            if len(self._lines) >= 3 and self._same(edge, self._lines[0][2]):
+                self._region_finish(outline_shapes.picked([(p, d) for p, d, _e in self._lines]))
+                return
+            if any(self._same(edge, e) for _p, _d, e in self._lines):
+                return
+            a, b = (self._to2(np.asarray(p, dtype=float)) for p in edge)
+            if float(np.linalg.norm(b - a)) < notes2d.MIN_SIZE:
+                return
+            self._lines.append((a, b - a, edge))
+            self.host.set_hint(self.hint())
+            return
+        p, _snap = self._pick(x, y)
+        if p is None:
+            return
+        p = self._on_paper(p)
+        if self._points and np.linalg.norm(p - self._points[-1]) < notes2d.MIN_SIZE:
+            return
+        if not self._points or self.outline == "ellipse" and len(self._points) == 1:
+            self._points.append(p)
+            self.host.set_hint(self.hint())
+            return
+        self._region_finish(self._region_loop(self._to2(p)))
+
+    def _region_typed(self, value):
+        """A length typed towards the mouse: a circle's / polygon's radius, an ellipse's half-axes one by one."""
+        if value is None or value <= 0 or not self._points:
+            return
+        c = self._to2(self._points[0])
+        towards = self._to2(self._end) - c if self._end is not None else np.array((1.0, 0.0))
+        n = float(np.linalg.norm(towards))
+        towards = towards / n if n > 1e-9 else np.array((1.0, 0.0))
+        origin, u, v, _n = self.viewport.view_plane()
+        if self.outline == "ellipse" and len(self._points) == 1:
+            q = c + towards * value
+            self._points.append(origin + u * q[0] + v * q[1])
+            self.host.set_hint(self.hint())
+            return
+        if self.outline == "ellipse":
+            a2 = self._to2(self._points[1])
+            a = float(np.linalg.norm(a2 - c))
+            d = (a2 - c) / max(a, 1e-12)
+            loop = outline_shapes.ellipse(c, c + d * (a + self.offset), value + self.offset)
+        else:
+            loop = self._region_loop(c + towards * value)
+        self._region_finish(loop)
+
+    def _region_finish(self, loop):
+        """The region (a mask) drawn over the outline: its arcs kept as its sides' bulges."""
+        final = self._region_final(loop)
+        if final is None or outline_loops.polygon([final]) is None:
+            self.host.message(t("err.slab_outline_bad"), warning=True)
+            return
+        origin, u, v, _n = self.viewport.view_plane()
+        pts2, bulges = notes2d.region_from_loop(final)
+        ann = self._draft([origin + u * q[0] + v * q[1] for q in pts2])
+        if any(abs(b) > 1e-12 for b in bulges):
+            ann.extra["bulges"] = bulges
+        self.doc.execute(notes2d.AddAnnotation(ann, t("cmd.draft")))
+        self.host.message(t("info.draft", k=t("draft." + ann.kind)))
+        self.cancel()
+
     def pointer_move(self, x, y, modifiers):
         if self.shape == "fillet":
             self._fillet_move(x, y)
+            return
+        if self._outlined():                                 # (0.456)
+            self._region_move(x, y, modifiers)
             return
         p, snap = self._pick(x, y)
         if p is None:
@@ -345,6 +553,9 @@ class DraftTool(_PointTool):
         if self.shape == "fillet":                           # (0.455)
             self._fillet_down(x, y)
             return
+        if self._outlined():                                 # (0.456)
+            self._region_down(x, y)
+            return
         if self._near_first(x, y):
             self._finish(closed=True)
             return
@@ -368,6 +579,10 @@ class DraftTool(_PointTool):
         self.host.set_hint(self.hint())
 
     def enter(self):
+        if self._outlined():                                 # (0.456) the lines picked close
+            if self.outline == "pick" and len(self._lines) >= 3:
+                self._region_finish(outline_shapes.picked([(p, d) for p, d, _e in self._lines]))
+            return
         if self.shape in ("polyline", "region"):
             self._finish(closed=self.shape == "region")
 
@@ -376,6 +591,11 @@ class DraftTool(_PointTool):
             values = parse_lengths(text, 1)
             if len(self._fillet) >= 2 and values is not None and values[0] is not None and values[0] > 0:
                 self._make_fillet(values[0])
+            return
+        if self._outlined():                                 # (0.456)
+            values = parse_lengths(text, 1)
+            if values is not None:
+                self._region_typed(values[0])
             return
         if self.shape == "text":
             if self._points and text.strip():
@@ -415,6 +635,10 @@ class DraftTool(_PointTool):
             pts.append(pts[0])
         if self.shape in ("polyline",) and len(pts) < 2 or self.shape == "region" and len(pts) < 3:
             return
+        if self.shape == "region" and (self.offset or self.radius > 0):     # (0.456) moved, its corners rounded
+            ring = [tuple(map(float, self._to2(p))) for p in pts]
+            self._region_finish([ring, [None] * len(ring)])
+            return
         self._make(pts)
 
     def _make(self, pts, text=""):
@@ -433,6 +657,7 @@ class DraftTool(_PointTool):
         self._end = None
         self._element = None
         self._fillet, self._fillet_now = [], None
+        self._lines = []
         self.viewport.clear_overlays()
         self.host.set_vcb("")
         self.host.set_hint(self.hint())

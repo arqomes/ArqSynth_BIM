@@ -479,9 +479,10 @@ def _coverings(ifc, predefined):
 
 
 def add_ceiling(doc, outline, height=CEILING_HEIGHT, style="continuous", holes=(), storey=None, gap=0.0,
-                bulkhead=None):
+                bulkhead=None, loops=None):
     """A ceiling (0.118) over `outline` (plan, with holes), its underside `height` over the storey; (0.119) a
-    shadow gap `gap` along its edge, a bulkhead (width, drop) round it. One undo step. Returns its GlobalId."""
+    shadow gap `gap` along its edge, a bulkhead (width, drop) round it; (0.456) `loops`: its outline as drawn, its
+    sides arcs or curves (core/outline_loops). One undo step. Returns its GlobalId."""
     storey = storey or doc.active_storey
     level = next((z for g, _n, z in doc.ifc.storeys() if g == storey), 0.0)
     language, prefix = lang(), t("elem.ceiling")
@@ -489,6 +490,8 @@ def add_ceiling(doc, outline, height=CEILING_HEIGHT, style="continuous", holes=(
     def action(ifc):
         name = "{} {}".format(prefix, _coverings(ifc, "CEILING") + 1)
         ceiling = ifc.add_ceiling(outline, level + float(height), name, style, holes, language, storey=storey)
+        if loops:
+            ifc.set_covering_outline(ceiling.GlobalId, loops)
         if gap or bulkhead:
             ifc.set_ceiling(ceiling.GlobalId, gap=gap or None, bulkhead=bulkhead)
         return ceiling.GlobalId
@@ -496,16 +499,20 @@ def add_ceiling(doc, outline, height=CEILING_HEIGHT, style="continuous", holes=(
     return doc.execute(IfcCommand(t("cmd.ceiling"), action)).result
 
 
-def add_flooring(doc, outline, finish="ceramico", holes=(), storey=None):
+def add_flooring(doc, outline, finish="ceramico", holes=(), storey=None, loops=None):
     """(0.374, the study's «Piso») A floor finish over `outline` (plan, with holes) on the storey's level: an
-    IfcCovering FLOORING of that finish. One undo step. Returns its GlobalId."""
+    IfcCovering FLOORING of that finish; (0.456) `loops`: its outline as drawn (arcs, curves). One undo step. Returns
+    its GlobalId."""
     storey = storey or doc.active_storey
     level = next((z for g, _n, z in doc.ifc.storeys() if g == storey), 0.0)
     language, prefix = lang(), t("elem.flooring")
 
     def action(ifc):
         name = "{} {}".format(prefix, _coverings(ifc, "FLOORING") + 1)
-        return ifc.add_flooring(outline, level, name, finish, holes, language, storey=storey).GlobalId
+        guid = ifc.add_flooring(outline, level, name, finish, holes, language, storey=storey).GlobalId
+        if loops:
+            ifc.set_covering_outline(guid, loops)
+        return guid
 
     return doc.execute(IfcCommand(t("cmd.flooring"), action)).result
 
@@ -2535,9 +2542,10 @@ def add_slab(doc, corner, du, dv, spec, storey=None, function="estrutural"):
     return doc.execute(IfcCommand(t("cmd.slab"), action)).result
 
 
-def add_slab_outline(doc, outline, z, spec, storey=None, holes=(), function="estrutural"):
+def add_slab_outline(doc, outline, z, spec, storey=None, holes=(), function="estrutural", loops=None):
     """A slab over a plan outline [(x, y)…] (0.100: a polygon, or what the magic wand found — with its holes)
-    clicked at the level z (its place as add_slab's). One undo step. Returns its GlobalId."""
+    clicked at the level z (its place as add_slab's). (0.456) loops: the outline as drawn (core/outline_loops — its
+    sides arcs or curves: an ellipse, rounded corners), kept with it. One undo step. Returns its GlobalId."""
     bottom = _slab_bottom(doc, float(z), spec, function)
     outline = [(float(x), float(y)) for x, y in outline]
     holes = [[(float(x), float(y)) for x, y in h] for h in holes]
@@ -2545,8 +2553,11 @@ def add_slab_outline(doc, outline, z, spec, storey=None, holes=(), function="est
 
     def action(ifc):
         name = "{} {}".format(prefix, ifc.count("IfcSlab") + 1)
-        return ifc.add_slab_outline(spec, outline, bottom, name, language, storey=storey, holes=holes,
+        guid = ifc.add_slab_outline(spec, outline, bottom, name, language, storey=storey, holes=holes,
                                     function=function).GlobalId
+        if loops:
+            ifc.set_slab_outline(guid, None, loops=loops)
+        return guid
 
     return doc.execute(IfcCommand(t("cmd.slab"), action)).result
 

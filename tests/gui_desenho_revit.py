@@ -468,7 +468,110 @@ def draft_region_mask():
     check("linhas_2d_arco", len(arcs2) == 1, "{} {}".format([n.kind for n in doc.annotations], win.last_message))
 
 
-for name, fn in (("parede_raio", wall_radius), ("parede_cadeia", wall_chain_off), ("parede_afastamento", wall_offset),
+# ------------------------------------------------------------------ (0.456) the Slab, the Floor, the Ceiling
+
+
+def made_of(doc, kind):
+    return [o.id for o in doc.objects.values() if o.is_bim and doc.ifc.kind_of(o.id) == kind]
+
+
+def covering_area(doc, guid):
+    from shapely.geometry import Polygon
+    p = doc.ifc.ceiling_params(guid)
+    return Polygon(p["outline"]).area
+
+
+def slab_shapes():
+    doc = fresh((6.0, 2.0, 0.0), 9.0)
+    win.set_tool("slab")
+    bar_icon("shape", "poly_in")                       # a hexagon inscribed: centre, its radius typed
+    click_at((0, 0, 0))
+    move_to((2, 0.3, 0))
+    type_value("2")
+    s = made_of(doc, "slab")
+    area = doc.ifc.slab_outline(s[-1])["area"] if s else None
+    check("laje_poligono_inscrito", s and same(area, 3 * math.sqrt(3) / 2 * 4, 0.02), area)
+    bar_icon("shape", "ellipse")                       # an ellipse: centre, its half-axes typed (3 along x, 2)
+    click_at((8, 0, 0))
+    move_to((10, 0.0, 0))
+    type_value("3")
+    move_to((8.5, 1.5, 0))
+    type_value("2")
+    s = made_of(doc, "slab")
+    area = doc.ifc.slab_outline(s[-1])["area"] if len(s) == 2 else None
+    check("laje_elipse", area is not None and same(area, math.pi * 6, 0.05), "{} {}".format(area, win.last_message))
+    shot("laje_formas")
+    line_tool()                                        # four lines, then the outline of them picked
+    for a, b in (((0, 4, 0), (4, 4, 0)), ((4, 3.5, 0), (4, 7.5, 0)), ((4.5, 7, 0), (-0.5, 7, 0)),
+                 ((0, 7.5, 0), (0, 3.5, 0))):
+        click_at(a)
+        click_at(b)
+        key(Qt.Key.Key_Escape)
+    win.set_tool("slab")
+    bar_icon("shape", "pick")
+    for p in ((2, 4.05, 0), (4.05, 5.5, 0), (2, 7.05, 0), (0.05, 5.5, 0), (2, 4.05, 0)):
+        click_at(p)
+    s = made_of(doc, "slab")
+    area = doc.ifc.slab_outline(s[-1])["area"] if len(s) == 3 else None
+    check("laje_escolher_linhas", area is not None and same(area, 12.0, 0.15), "{} {}".format(area,
+                                                                                               win.last_message))
+    bar_icon("shape", "rect")                          # 10 cm out, its corners rounded 0,50
+    bar_value("offset", 0.1)
+    bar_value("radius", 0.5)
+    click_at((8, 4, 0))
+    click_at((12, 7, 0))
+    s = made_of(doc, "slab")
+    area = doc.ifc.slab_outline(s[-1])["area"] if len(s) == 4 else None
+    check("laje_afastamento_raio", area is not None and same(area, 4.2 * 3.2 - (1 - math.pi / 4), 0.15), area)
+    bar_value("offset", 0.0)
+    bar_value("radius", 0.0)
+    shot("laje_escolher_raio")
+
+
+def coverings():
+    doc = fresh((3.0, 1.0, 0.0), 7.0)
+    win.set_tool("flooring")
+    bar_icon("shape", "circle")
+    click_at((0, 0, 0))
+    click_at((1.5, 0, 0))
+    f = made_of(doc, "flooring")
+    check("piso_circulo", len(f) == 1 and same(covering_area(doc, f[0]), math.pi * 2.25, 0.1),
+          [covering_area(doc, g) for g in f])
+    win.set_tool("ceiling")
+    bar_icon("shape", "poly_out")
+    bar_value("sides", 8)
+    click_at((6, 0, 0))
+    click_at((7.5, 0, 0))
+    c = made_of(doc, "ceiling")
+    area = covering_area(doc, c[0]) if c else None
+    check("teto_poligono_circunscrito", c and same(area, 8 * 1.5 ** 2 * math.tan(math.pi / 8), 0.15), area)
+    shot("piso_teto")
+
+
+def region_outlines():
+    from arqbim.model import annotations as notes2d
+    doc = fresh((3.0, 1.0, 0.0), 7.0)
+    win.set_tool("draft")
+    bar_icon("shape", "mask")
+    bar_icon("mode", "circle")                         # a round mask: its centre, the radius typed
+    click_at((0, 0, 0))
+    move_to((1, 0.2, 0))
+    type_value("1,5")
+    bar_icon("mode", "poly_out")                       # another mask: a hexagon round a circle of 1 m
+    click_at((5, 0, 0))
+    move_to((6, 0.1, 0))
+    type_value("1")
+    shot("regiao_formas")
+    plane = vp.view_plane()
+    areas = [notes2d.area(a, *plane[:3]) for a in doc.annotations]
+    check("regiao_mascara_circulo_hexagono", len(areas) == 2 and same(areas[0], math.pi * 2.25, 0.02) and
+          same(areas[1], 6 * math.tan(math.pi / 6), 0.02), areas)
+    bar_icon("mode", "poly")
+    bar_icon("shape", "line")
+
+
+for name, fn in (("laje_formas", slab_shapes), ("piso_teto", coverings), ("regiao_formas", region_outlines),
+                 ("parede_raio", wall_radius), ("parede_cadeia", wall_chain_off), ("parede_afastamento", wall_offset),
                  ("parede_arcos", wall_arcs), ("parede_concordancia", wall_fillet), ("parede_escolher", wall_pick),
                  ("parede_snaps", wall_snaps), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
                  ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask)):
