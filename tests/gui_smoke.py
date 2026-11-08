@@ -846,6 +846,7 @@ def bim_flow():
     loose_furniture_flow()            # (0.440)
     ripado_screen_flow()              # (0.441)
     sheet_bar_flow()                  # (0.472)
+    title_block_editor_flow()         # (0.473)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -10236,11 +10237,9 @@ def sheet_bar_flow():
     cad, dxf, imagem, svg… um botão editar o carimbo»): a sheet with the ground floor's plan — on the parameters' bar
     its commands (zoom, Arrumar, Importar desenho…, Editar carimbo…, Atualizar desenhos, Exportar PDF…), no own bar
     over the paper; the plan clicked: its scale on the bar; a DXF imported: on the sheet, picked, its scale on the bar
-    (made 1:50), dragged, Delete takes it off, Ctrl+Z back; a picture imported too; Editar carimbo…: the company's name,
-    a row more — on every sheet, template «custom». Captured: 472_folha_barra.png, 472_carimbo.png."""
+    (made 1:50), dragged, Delete takes it off, Ctrl+Z back; a picture imported too; Editar carimbo…: (0.473) the title
+    block drawn on the sheet (title_block_editor_flow), left at once. Captured: 472_folha_barra.png."""
     import tempfile
-    from arqbim.model import sheets as sm
-    from arqbim.ui import company_title_block_dialog as ctb
     key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
     pump(400)
     from arqbim.ifc import catalog
@@ -10307,36 +10306,173 @@ def sheet_bar_flow():
     QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(400)
     undone = len(doc.sheets[index].imports) == 2
-    seen = {}
-
-    def fill():
-        d = QtWidgets.QApplication.activeModalWidget()
-        if not isinstance(d, ctb.CompanyTitleBlockDialog):
-            QtCore.QTimer.singleShot(100, fill)
-            return
-        d.name.setText("Atelier Teste, Lda.")
-        d.contacts.setPlainText("Rua do Farol, 1\nLisboa · 210 000 000")
-        d.set_logo(png)
-        d._add_row({"h": 6.0, "cells": [["blank", 1.0], ["date", 1.0]]})
-        d.changed()
-        pump(100)
-        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
-            d.grab().save(os.path.join(OUT, "472_carimbo.png"))
-        seen["rows"] = len(d.company()["rows"])
-        d.accept()
-
-    QtCore.QTimer.singleShot(100, fill)
-    sw.act_title_block.trigger()
-    pump(600)
-    block = doc.title_block.get(sm.COMPANY_KEY) or {}
-    company = block.get("name") == "Atelier Teste, Lda." and len(block.get("rows") or ()) == seen.get("rows") and \
-        all(s.template == "custom" for s in doc.sheets) and block.get("logo") == png
     shot("472_folha_barra.png")
+    sw.act_title_block.trigger()                     # (0.473: the title block drawn on the sheet itself)
+    pump(400)
+    company = sw.editor is not None
+    if company:
+        sw.finish_editor(apply=False)
+        pump(200)
     check("folha_barra_importar_carimbo", on_bar and no_own_bar and scale_on_bar and imported and rescaled and moved
           and two and deleted and undone and company and picture is not None,
           "barra={} sem_barra_propria={} escala_vista={} importado={} escala={} arrastado={} dois={} apagado={} "
           "desfeito={} carimbo={} {}".format(on_bar, no_own_bar, scale_on_bar, imported, rescaled, moved, two, deleted,
                                              undone, company, texts))
+
+
+def title_block_editor_flow():
+    """0.473 (the owner: «se o carimbo pudesse abrir na tela e o utilizador usar as ferramentas de desenhos e inserir
+    os campos… maior liberdade criativa»): two sheets; «Editar carimbo…»: the title block on the sheet itself, its
+    tools on the parameters' bar, started from what the sheet shows (the full template, 120 × 40 mm). Linha: two
+    clicks, the second near the outline's corner — on it; Campo: a click, «Dono de obra» chosen on the bar; Texto: a
+    click, «Atelier Teste» written, Enter; its size 12 on the bar; Delete: gone, Ctrl+Z: back; Imagem: a click (a
+    picture given); a window from the right picks the line and the text, the arrow moves them 0,5 mm; «Guardar no
+    escritório»: in the suite's folder; Concluir: on both sheets («custom»), one undo step in the project; again,
+    something drawn and Cancelar: the project as it was. Captured: 473_carimbo_na_tela.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    from arqbim.model import company_title_block as office
+    from arqbim.model import sheets as sm
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                    catalog.BY_KEY["parede_alv_20"])
+    index, _k = doc.put_on_sheet(None, "plan", doc.storeys()[0][0])
+    doc.add_sheet()
+    win.open_sheet(index)
+    pump(800)
+    sw = win.sheet_window
+    sw.act_title_block.trigger()
+    pump(600)
+    ed = sw.editor
+    started = ed is not None and sm.drawn_size(ed.items) == (120.0, 40.0)
+    texts = [a.text() for a in win.context_bar.actions() if a.text()]
+    bar = "sheet_tb_tool" in win.context_bar.fields and any("Concluir" in x for x in texts) and \
+        "sheet_tb_start" in win.context_bar.fields
+    shot("473_carimbo_barra.png")
+    canvas_ = sw.canvas
+
+    def spot(p):
+        s, x0, y0 = canvas_.fit()
+        cx, cy = ed.corner()
+        return QtCore.QPoint(int(round(x0 + (cx + p[0]) * s)), int(round(y0 + (cy + p[1]) * s)))
+
+    def click(p, mods=Qt.KeyboardModifier.NoModifier):
+        move_event(canvas_, spot(p), Qt.MouseButton.NoButton)
+        QtTest.QTest.mouseClick(canvas_, Qt.MouseButton.LeftButton, mods, spot(p))
+        pump(120)
+
+    if not started:
+        check("carimbo_na_tela", False, "editor={} itens={}".format(ed, None if ed is None else len(ed.items)))
+        return
+    n0 = len(ed.items)
+    win._context_option("sheet_tb_tool", "line")
+    pump(100)
+    click((-140.0, -45.0))
+    click((-120.6, -40.4))                                   # (near the outline's corner: on it)
+    line = ed.items[-1] if len(ed.items) == n0 + 1 else None
+    snapped = line is not None and line["kind"] == "line" and line["pts"] == [[-140.0, -45.0], [-120.0, -40.0]]
+    win._context_option("sheet_tb_tool", "field")
+    pump(100)
+    click((-160.0, -30.0))
+    win._context_option("sheet_tb_field", "client")
+    pump(100)
+    field = ed.items[-1]
+    fielded = field["kind"] == "field" and field["field"] == "client" and "sheet_tb_field" in win.context_bar.fields
+    win._context_option("sheet_tb_tool", "text")
+    pump(100)
+    click((-160.0, -52.0))
+    writer = ed.writer
+    if writer is not None:
+        writer.setPlainText("Atelier Teste")
+        QtTest.QTest.keyClick(writer, Qt.Key.Key_Return)
+        pump(200)
+    text = next((i for i in ed.items if i["kind"] == "text" and i["text"] == "Atelier Teste"), None)
+    win._context_option("sheet_tb_size", 12.0)
+    pump(100)
+    sized = text is not None and ed.items[ed.picked[0]]["size"] == 12.0 if ed.picked else False
+    shot("473_carimbo_na_tela.png")
+    canvas_.setFocus()
+    before = len(ed.items)
+    QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Delete)
+    pump(150)
+    deleted = len(ed.items) == before - 1
+    QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(150)
+    back = len(ed.items) == before and any(i.get("text") == "Atelier Teste" for i in ed.items)
+    png = os.path.join(tempfile.mkdtemp(), "logotipo.png")
+    image = QtGui.QImage(300, 120, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("#1f74d1"))
+    image.save(png)
+    win._context_option("sheet_tb_tool", "image")
+    pump(100)
+    ed.next_picture = png
+    click((-200.0, -30.0))
+    pictured = ed.items[-1]["kind"] == "image" and ed.items[-1]["path"] == os.path.abspath(png)
+    win._context_option("sheet_tb_tool", "select")
+    pump(100)
+    QtTest.QTest.mousePress(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, spot((-110.0, -60.0)))
+    for k in range(1, 6):
+        p = (-110.0 - 8.0 * k, -60.0 + 3.6 * k)
+        move_event(canvas_, spot(p), Qt.MouseButton.LeftButton)
+        pump(30)
+    QtTest.QTest.mouseRelease(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, spot((-150.0, -42.0)))
+    pump(150)
+    kinds = sorted(ed.items[k]["kind"] for k in ed.picked)
+    windowed = kinds == ["line", "text"]
+    QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Left)
+    pump(150)
+    nudged = line is not None and any(i["kind"] == "line" and i["pts"][1] == [-120.5, -40.0] for i in ed.items)
+    saved = ed.save_office()
+    kept = saved is not None and os.path.isfile(office.path()) and \
+        any(i["kind"] == "image" and os.path.isfile(i["path"]) for i in office.load()["items"])
+    drawn = [dict(i) for i in ed.items]
+    steps = len(doc.undo_stack) if hasattr(doc, "undo_stack") else None
+    ed.act_done.trigger()
+    pump(600)
+    block = doc.title_block.get(sm.COMPANY_KEY) or {}
+    done = sw.editor is None and all(s.template == "custom" for s in doc.sheets) and len(doc.sheets) == 2 and \
+        block.get("items") == sm.clean_company({"items": drawn})["items"]
+    doc.undo()
+    pump(300)
+    undone = all(s.template == "full" for s in doc.sheets) and sm.COMPANY_KEY not in doc.title_block
+    doc.redo()
+    pump(300)
+    ed = sw.start_editor()
+    pump(300)
+    again = ed is not None and ed.items == block.get("items")
+    if ed is not None:
+        win._context_option("sheet_tb_tool", "rect")
+        click((-60.0, -70.0))
+        click((-20.0, -50.0))
+        drew = len(ed.items) == len(block["items"]) + 1
+
+        def answer(which):
+            def go():
+                box = getattr(sw, "_cancel_box", None)
+                if box is None or not box.isVisible():
+                    QtCore.QTimer.singleShot(100, go)
+                    return
+                next(b for b in box.buttons() if b.text() == which).click()
+            return go
+        QtCore.QTimer.singleShot(100, answer("Continuar a desenhar"))
+        ed.act_cancel.trigger()
+        pump(300)
+        stayed = sw.editor is ed
+        QtCore.QTimer.singleShot(100, answer("Sair sem guardar"))
+        ed.act_cancel.trigger()
+        pump(300)
+        drew = drew and stayed
+    else:
+        drew = False
+    cancelled = drew and sw.editor is None and doc.title_block.get(sm.COMPANY_KEY) == block
+    check("carimbo_na_tela", started and bar and snapped and fielded and text is not None and sized and deleted
+          and back and pictured and windowed and nudged and kept and done and undone and again and cancelled,
+          "comecou={} barra={} linha={} campo={} texto={} tamanho={} apagado={} desfeito={} imagem={} janela={} ({}) "
+          "seta={} escritorio={} concluido={} desfeito_no_projeto={} reaberto={} cancelado={} passos={} {}".format(
+              started, bar, snapped, fielded, text is not None, sized, deleted, back, pictured, windowed, kinds,
+              nudged, kept, done, undone, again, cancelled, steps, line))
 
 
 def sheets_wizard_flow():

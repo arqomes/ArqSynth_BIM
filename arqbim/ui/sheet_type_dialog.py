@@ -66,6 +66,12 @@ class SheetPicture(QtWidgets.QWidget):
         p.setPen(QtGui.QPen(QtGui.QColor("#6b8fc7"), 1.0, QtCore.Qt.PenStyle.DashLine))
         p.drawRect(rect(left, top, aw, ah))
         bx, by, _bw, _bh = sheets_model.title_box((w, h), template)
+        if template == "custom":                         # (0.473) the company's drawing, small
+            from . import pdf
+            p.save()
+            p.translate(x0, y0)
+            pdf.paint_drawn(p, k, w - m, h - m, sheets_model.company()["items"], {})
+            p.restore()
         p.setPen(QtGui.QPen(QtGui.QColor("#2b2f36"), 0.8))
         for cx, cy, cw, ch, _what, _size, bold in sheets_model.cells_of(template):
             box = rect(bx + cx, by + cy, cw, ch)

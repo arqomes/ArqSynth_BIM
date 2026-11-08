@@ -68,6 +68,25 @@ class SheetCanvas(QtWidgets.QWidget):
         self.zoom, self.pan = 1.0, (0.0, 0.0)
         self.update()
 
+    def zoom_to(self, left, top, w, h):
+        """(0.473) That part of the paper (mm) filling the view, in its middle."""
+        self.zoom, self.pan = 1.0, (0.0, 0.0)
+        s1 = self.fit()[0]
+        if w > 0 and h > 0 and s1 > 0:
+            self.zoom = min(max(min((self.width() - 24) / (w * s1), (self.height() - 24) / (h * s1)), ZOOM_LEAST),
+                            ZOOM_MOST)
+            s, x0, y0 = self.fit()
+            self.pan = (self.width() / 2 - (x0 + (left + w / 2) * s), self.height() / 2 - (y0 + (top + h / 2) * s))
+        self.update()
+
+    def event(self, event):
+        # (0.473) while the title block is drawn, its keys (Delete, Ctrl+Z…) are its own, not the window's shortcuts
+        if event.type() == QtCore.QEvent.Type.ShortcutOverride and self.owner.editor is not None and \
+                self.owner.editor.owns_shortcut(event):
+            event.accept()
+            return True
+        return super().event(event)
+
     def wheelEvent(self, event):
         steps = event.angleDelta().y() / 120.0
         if steps:
@@ -97,8 +116,15 @@ class SheetCanvas(QtWidgets.QWidget):
             for i in imports:
                 if i.uid == uid:
                     i.at = at
-        pdf.paint_sheet(painter, s, (w, h), self.owner.host.title_block(sheet), self.owner.placed,
-                        template=sheet.template, imports=imports)
+        editor = self.owner.editor
+        block = self.owner.host.title_block(sheet)
+        pdf.paint_sheet(painter, s, (w, h), block, self.owner.placed,
+                        template="custom" if editor is not None else sheet.template, imports=imports,
+                        title=editor is None)
+        if editor is not None:                               # (0.473) the title block being drawn, over it
+            editor.paint(painter, s, (w, h), pdf.sheet_texts(block, self.owner.placed))
+            painter.end()
+            return
         frame = self.owner.frame_of(self.selected)
         rect = frame.rect() if frame is not None else None
         picked = next((i for i in imports if i.uid == self.owner.picked_import), None)
@@ -127,10 +153,18 @@ class SheetCanvas(QtWidgets.QWidget):
             self._panning = event.position()
             self.setCursor(QtCore.Qt.CursorShape.ClosedHandCursor)
             return
+        editor = self.owner.editor
+        if editor is not None:                               # (0.473) the title block being drawn
+            x, y = self.to_mm(event.position())
+            if event.button() == QtCore.Qt.MouseButton.LeftButton:
+                editor.press(x, y, event.modifiers())
+            elif event.button() == QtCore.Qt.MouseButton.RightButton:
+                editor.right_click()
+            return
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         x, y = self.to_mm(event.position())
-        mine = self.owner.import_picked()               # (0.472) the drawing picked, under the mouse: it, not a view
+        mine = self.owner.import_picked()              # (0.472) the drawing picked, under the mouse: it, not a view
         size = pdf.import_size(mine) if mine is not None else None
         if size is not None and abs(x - mine.at[0]) <= size[0] / 2 and abs(y - mine.at[1]) <= size[1] / 2:
             self.selected, self._drag = None, None
@@ -164,6 +198,9 @@ class SheetCanvas(QtWidgets.QWidget):
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         x, y = self.to_mm(event.position())
+        if self.owner.editor is not None:                    # (0.473) a text written, a picture changed
+            self.owner.editor.double_click(x, y)
+            return
         hit = self.owner.label_at(x, y)
         if hit is not None:
             self._drag = self._label = None
@@ -186,6 +223,10 @@ class SheetCanvas(QtWidgets.QWidget):
             self._panning = at
             self.update()
             return
+        if self.owner.editor is not None:                # (0.473)
+            x, y = self.to_mm(event.position())
+            self.owner.editor.move(x, y, event.buttons(), event.modifiers())
+            return
         if self._label is not None:                      # (0.238) the label follows the mouse
             k, i, _key, (x0, y0), spot = self._label
             x, y = self.to_mm(event.position())
@@ -207,6 +248,13 @@ class SheetCanvas(QtWidgets.QWidget):
         if self._panning is not None and event.button() == QtCore.Qt.MouseButton.MiddleButton:
             self._panning = None
             self.unsetCursor()
+            if self.owner.editor is not None and self.owner.editor.tool != "select":
+                self.setCursor(QtCore.Qt.CursorShape.CrossCursor)
+            return
+        if self.owner.editor is not None:                # (0.473)
+            if event.button() == QtCore.Qt.MouseButton.LeftButton:
+                x, y = self.to_mm(event.position())
+                self.owner.editor.release(x, y, event.modifiers())
             return
         if self._label is not None and event.button() == QtCore.Qt.MouseButton.LeftButton:
             k, i, key, (x0, y0), spot = self._label
@@ -234,6 +282,8 @@ class SheetCanvas(QtWidgets.QWidget):
             self.owner.move_view(k, (cx + x - x0, cy + y - y0))
 
     def keyPressEvent(self, event):
+        if self.owner.editor is not None and self.owner.editor.key(event):      # (0.473)
+            return
         if event.key() in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace) and self.selected is not None:
             self.owner.take_off(self.selected)
             return
@@ -250,6 +300,7 @@ class SheetWindow(QtWidgets.QWidget):
     def __init__(self, host, parent=None):
         super().__init__(parent)
         self.host = host              # the main window: document, drawings, PDF export
+        self.editor = None            # (0.473) the company's title block being drawn on the sheet (TitleBlockEditor)
         self._uid = None              # the sheet shown (see sheet)
         self.frames = []              # sheets.Frame per view (None: nothing to draw)
         self.placed = []              # (drawing, frame, label) as painted
@@ -293,6 +344,8 @@ class SheetWindow(QtWidgets.QWidget):
         """What the window's parameters' bar shows while the sheet is: its commands and the scale (or width) of the
         view or drawing picked."""
         from ..tools.base import Option
+        if self.editor is not None:                      # (0.473) the title block being drawn: its tools
+            return self.editor.context_items()
         items = [("title", t("ctx.sheet")), ("action", self.act_zoom_out), ("action", self.act_zoom_in),
                  ("action", self.act_zoom_all), ("separator",)]
         k, item = self.canvas.selected, self.import_picked()
@@ -317,6 +370,10 @@ class SheetWindow(QtWidgets.QWidget):
 
     def option(self, key, value):
         """A setting of the parameters' bar changed (the sheet's)."""
+        if key.startswith("sheet_tb_"):
+            if self.editor is not None:
+                self.editor.option(key, value)
+            return
         if key == "sheet_scale" and self.canvas.selected is not None:
             self._change(view=self.canvas.selected, scale=value)
         elif key == "sheet_import_scale" and self.picked_import is not None:
@@ -412,6 +469,12 @@ class SheetWindow(QtWidgets.QWidget):
 
     def show_sheet(self, sheet):
         """Show this sheet (its tab was chosen)."""
+        if self.editor is not None and self.editor.doc is not self.host.doc:   # (0.473: another project)
+            self.editor.finish_writing(keep=False)
+            self.editor = None
+            self.canvas.setMouseTracking(False)
+            self.canvas.unsetCursor()
+            self.hint.setText(t("sheet.hint"))
         if sheet.uid != self._uid:
             self.canvas.selected = None
             self.canvas.zoom, self.canvas.pan = 1.0, (0.0, 0.0)      # (0.470: another sheet: all of it)
@@ -563,6 +626,55 @@ class SheetWindow(QtWidgets.QWidget):
         """(0.470) A double click on the title block: the sheet's type (Editar tipo…, its own window)."""
         if self.sheet is not None:
             self.host.edit_sheet_type(self.host.doc.sheets.index(self.sheet))
+
+    # ------------------------------------------------------------ (0.473) the company's title block drawn here
+
+    def start_editor(self):
+        """«Editar carimbo…»: the company's title block drawn on this sheet (ui/title_block_editor), its tools on the
+        parameters' bar. Returns the editor."""
+        if self.sheet is None:
+            return None
+        if self.editor is None:
+            from .title_block_editor import TitleBlockEditor, start_drawing
+            self.editor = TitleBlockEditor(self, start_drawing(self.host.doc, self.sheet))
+        self.picked(None, None)
+        self.canvas.setMouseTracking(True)
+        self.hint.setText(t("tbe.hint"))
+        self.editor.zoom_in()
+        self.canvas.setFocus()
+        self.host.refresh_context_bar()
+        return self.editor
+
+    def finish_editor(self, apply=True, ask=False):
+        """«Concluir» (apply: the drawing kept with the project, on every sheet or this one — one undo step) or
+        «Cancelar» (ask: first, when something was drawn)."""
+        editor = self.editor
+        if editor is None:
+            return False
+        editor.finish_writing()
+        if not apply and ask and editor.changed_since_start():
+            box = QtWidgets.QMessageBox(QtWidgets.QMessageBox.Icon.Question, t("tbe.title"), t("tbe.cancel_ask"),
+                                        parent=self)
+            leave = box.addButton(t("tbe.cancel_leave"), QtWidgets.QMessageBox.ButtonRole.DestructiveRole)
+            box.setDefaultButton(box.addButton(t("tbe.cancel_stay"), QtWidgets.QMessageBox.ButtonRole.RejectRole))
+            self._cancel_box = box                       # (tests answer it)
+            box.exec()
+            self._cancel_box = None
+            if box.clickedButton() is not leave:
+                return False
+        self.editor = None
+        self.canvas.setMouseTracking(False)
+        self.canvas.unsetCursor()
+        self.hint.setText(t("sheet.hint"))
+        if apply and self.sheet is not None:
+            doc = self.host.doc
+            indices = list(range(len(doc.sheets))) if editor.everyone else [doc.sheets.index(self.sheet)]
+            doc.set_company_title_block(editor.company(), indices)
+            self.host.message(t("info.company_title_block", n=len(indices)))
+        self.canvas.fit_all()
+        self.refresh()
+        self.host.refresh_context_bar()
+        return True
 
     def _change(self, **changes):
         index = self.host.doc.sheets.index(self.sheet)

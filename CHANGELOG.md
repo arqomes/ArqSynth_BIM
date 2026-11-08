@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.473.0 — 2026-11-08
+
+**O carimbo desenha-se na própria folha** (o dono: «se o carimbo pudesse abrir na tela e o utilizador usar as
+ferramentas de desenhos e inserir os campos seria melhor… Maior liberdade criativa»).
+
+- **Editar carimbo…** já não abre uma janela. A folha fica esbatida e aproxima-se do canto do carimbo, com uma
+  quadrícula clara, e o carimbo desenha-se ali — como a família do carimbo no editor do Revit.
+- Na barra de parâmetros: **✓ Concluir** e **Cancelar**, sempre à vista, e as ferramentas **Selecionar, Linha,
+  Retângulo, Texto, Campo, Imagem**:
+  - **Linha** e **Retângulo**: dois cliques ou arrastar; espessura de 0,13 a 1 mm; o retângulo pode ser cheio (cinza
+    claro, cinza ou preto).
+  - **Texto**: escreve-se no próprio sítio (Enter acaba, Shift+Enter muda de linha); tamanho, negrito, alinhamento e
+    cor (preto ou cinzento).
+  - **Campo**: uma caixa que em cada folha mostra um dado — obra, dono de obra, local, autor, fase, desenho, folha n.º,
+    escala, data, **revisão**, **total de folhas** e os **campos próprios do projeto**. Enquanto se desenha, um campo
+    vazio mostra o seu nome entre ‹ ›, a cinzento (no papel não sai nada).
+  - **Imagem**: o logótipo (PNG, JPG, SVG…) numa caixa, nas suas proporções.
+- **Snaps** como nas ferramentas de desenho, a magenta: pontas e cantos, meios, alinhado com eles ou com a margem,
+  horizontal e vertical; fora disso, de 0,5 em 0,5 mm. Enquanto se desenha aparece o comprimento ou o tamanho em mm.
+- **Selecionar**: clique (Shift: mais), janela (arrastada da direita: tudo o que toca), arrastar para mover, pegas para
+  mudar pontas e cantos, setas (0,5 mm; Shift: 5 mm), Delete, Ctrl+C / Ctrl+V, Ctrl+A, Ctrl+Z / Ctrl+Y, duplo clique
+  num texto para o reescrever (ou numa imagem para a trocar).
+- **Começar de**: o carimbo completo, o compacto, a faixa lateral, o exemplo com logótipo, o do escritório ou em branco
+  (Ctrl+Z volta atrás). Na primeira vez começa do carimbo que a folha mostra.
+- O carimbo fica preso ao **canto de baixo à direita** da margem, em qualquer papel (A4 a A0, deitado ou em pé). As
+  vistas arrumam-se por cima dele — ou ao lado, quando ele sobe pelo lado como uma faixa.
+- **Guardar no escritório** guarda-o para os projetos novos (as imagens copiadas para a pasta da suite ArqSynth). **Em
+  todas as folhas** (ligado) ou só na folha aberta.
+- **✓ Concluir** guarda-o no projeto: um só Ctrl+Z desfaz. **Cancelar** pergunta antes de deitar fora o que mudou.
+- O carimbo feito na 0.472 (linhas de caixas) abre como desenho, para continuar a editar.
+
 ## 0.472.0 — 2026-11-08
 
 **Folhas: os comandos na barra de parâmetros, desenhos importados e o carimbo da empresa** (pedido do dono, com

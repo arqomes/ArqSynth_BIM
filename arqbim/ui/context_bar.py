@@ -118,7 +118,7 @@ class ContextBar(QtWidgets.QToolBar):
         return label
 
     def _add_option(self, option):
-        if option.kind != "toggle":
+        if option.kind != "toggle" and option.label:              # (0.473: no label — a row of tools speaks for itself)
             self.addWidget(self._label("{}:".format(option.label), "ctx_label"))
         if iconic(option):
             # (0.450) a row of icons, the one in use lit, each one's name in its tip — as Revit's «Draw» panel
@@ -150,6 +150,11 @@ class ContextBar(QtWidgets.QToolBar):
             widget = QtWidgets.QLineEdit(format_length(option.value, decimal_sep()))
             widget.setFixedWidth(80)
             widget.editingFinished.connect(lambda w=widget, k=option.key: self._typed(k, w))
+        elif option.kind == "text":
+            # (0.473) words written (a title block's text): given when Enter is pressed or the field is left
+            widget = QtWidgets.QLineEdit(str(option.value or ""))
+            widget.setMinimumWidth(150)
+            widget.editingFinished.connect(lambda w=widget, k=option.key: self._words(k, w))
         elif option.kind == "buttons":
             # (0.410) side by side, the one on lit — a click on another lights it, on the lit one puts it out ("")
             widget = QtWidgets.QWidget(self)
@@ -214,6 +219,9 @@ class ContextBar(QtWidgets.QToolBar):
             elif option.kind == "length":
                 if not widget.hasFocus():
                     widget.setText(format_length(option.value, decimal_sep()))
+            elif option.kind == "text":
+                if not widget.hasFocus():
+                    widget.setText(str(option.value or ""))
             elif option.kind == "buttons":
                 for button in widget.findChildren(QtWidgets.QToolButton):
                     button.setChecked(button.objectName() == "ctx_{}_{}".format(option.key, option.value))
@@ -236,6 +244,11 @@ class ContextBar(QtWidgets.QToolBar):
             widget.setText(format_length(old, decimal_sep()))
             return
         self._changed(key, value)
+
+    def _words(self, key, widget):
+        """(0.473) A text field left or confirmed: its words, when they changed."""
+        if widget.text() != str(self.fields[key][1].value or ""):
+            self._changed(key, widget.text())
 
     @staticmethod
     def _flag(widget):

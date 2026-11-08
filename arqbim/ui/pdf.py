@@ -850,24 +850,31 @@ def _text(painter, dpmm, x, y, w, h, text, size, bold=False, align=QtCore.Qt.Ali
                      align | QtCore.Qt.AlignmentFlag.AlignVCenter, text)
 
 
-def paint_sheet(painter, dpmm, size, block, placed, credit="", template="full", imports=()):
-    """A sheet: its border, the views placed = [(drawing, Frame, label)], the title block (its
-    texts: sheets.title_texts; the scale and the date are added here; 0.129: its template). size:
-    (w, h) mm of the paper; dpmm: painter units per mm. credit: small, under the title block. (0.472) imports: the
-    drawings from outside put on it (sheets.SheetImport)."""
-    paint_imports(painter, dpmm, imports)
-    for drawing, frame, label in placed:
-        if hasattr(drawing, "paper_size"):               # (a schedule's table, 0.132)
-            paint_table(painter, drawing, frame.centre, dpmm, label)
-        else:
-            paint_drawing(painter, drawing, frame.scale, frame.centre, dpmm, label)
+def sheet_texts(block, placed):
+    """What a sheet's title block shows: its texts (sheets.title_texts) with the scales of its views and today's date;
+    its number with its last revision's code."""
     scales = sorted({frame.scale for d, frame, _l in placed if not hasattr(d, "paper_size")})
     texts = dict(block, scale=" · ".join("1:{}".format(s) for s in scales),
                  date=datetime.date.today().strftime("%d/%m/%Y"))
     revisions = block.get("revisions") or []
     if revisions and revisions[-1].get("code") and texts.get("number"):    # (its last revision by its number)
         texts["number"] = "{} · {}".format(texts["number"], revisions[-1]["code"])
-    _title_block(painter, dpmm, size[0], size[1], texts, credit, template)
+    return texts
+
+
+def paint_sheet(painter, dpmm, size, block, placed, credit="", template="full", imports=(), title=True):
+    """A sheet: its border, the views placed = [(drawing, Frame, label)], the title block (its
+    texts: sheets.title_texts; the scale and the date are added here; 0.129: its template). size:
+    (w, h) mm of the paper; dpmm: painter units per mm. credit: small, under the title block. (0.472) imports: the
+    drawings from outside put on it (sheets.SheetImport). (0.473) title=False: the company's drawing left out (its
+    editor draws it over)."""
+    paint_imports(painter, dpmm, imports)
+    for drawing, frame, label in placed:
+        if hasattr(drawing, "paper_size"):               # (a schedule's table, 0.132)
+            paint_table(painter, drawing, frame.centre, dpmm, label)
+        else:
+            paint_drawing(painter, drawing, frame.scale, frame.centre, dpmm, label)
+    _title_block(painter, dpmm, size[0], size[1], sheet_texts(block, placed), credit, template, title)
 
 
 def _writer(path, project, title):
@@ -1032,58 +1039,133 @@ def print_sheets(printer, pages, credit=""):
 CELL_LABEL = 4.5           # points: the small grey name of each box ("Obra", "Escala"…)
 
 
-def _title_block(painter, dpmm, width, height, texts, credit, template="full"):
+def _title_block(painter, dpmm, width, height, texts, credit, template="full", title=True):
     """The border of the sheet and, bottom right inside it, the title block of its template (sheets.CELLS):
     boxes, each with its name small at the top and its text under it (cut short with "…" if it does not fit);
-    a strip's column down the right side."""
+    a strip's column down the right side; (0.473) the company's own drawing («custom»: sheets.company(); title=False:
+    left out, for its editor)."""
     x0, y0, bw, bh = sheets_model.title_box((width, height), template)
     painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
     painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.35 * dpmm))
     painter.drawRect(QtCore.QRectF(MARGIN * dpmm, MARGIN * dpmm, (width - 2 * MARGIN) * dpmm,
                                    (height - 2 * MARGIN) * dpmm))                 # the sheet's border
-    if template == "strip":                                                        # (its column, 0.129)
-        painter.drawLine(QtCore.QPointF(x0 * dpmm, MARGIN * dpmm), QtCore.QPointF(x0 * dpmm, (height - MARGIN) * dpmm))
-    painter.drawRect(QtCore.QRectF(x0 * dpmm, y0 * dpmm, bw * dpmm, bh * dpmm))
-    label_h = CELL_LABEL * 0.3528 * 1.3                                           # points -> mm
-    labels = texts.get("labels") or {}
-    for x, y, w, h, key, size, bold in sheets_model.cells_of(template):
-        painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.18 * dpmm))
-        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        painter.drawRect(QtCore.QRectF((x0 + x) * dpmm, (y0 + y) * dpmm, w * dpmm, h * dpmm))
-        if key == "blank":                                                        # (0.472: an empty box)
-            continue
-        if key == "logo":                                                         # (0.472) the company's logo
-            _fit_picture(painter, dpmm, texts.get("logo") or "", x0 + x + 1.0, y0 + y + 1.0, w - 2.0, h - 2.0)
-            continue
-        if key == "contacts":                                                     # (0.472) a few lines, small
-            _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, labels.get(key) or t("tb." + key),
-                  CELL_LABEL, colour="#6b6b6b")
-            _lines(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5 + label_h, w - 2.4, h - 0.8 - label_h,
-                   texts.get(key, ""), min(size, 6))
-            continue
-        _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, labels.get(key) or t("tb." + key),
-              CELL_LABEL, colour="#6b6b6b")
-        _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5 + label_h, w - 2.4, h - 0.8 - label_h,
-              texts.get(key, ""), size, bold, elide=True)
-    _over_title_block(painter, dpmm, x0, y0, texts, bw)
+    if template == "custom":
+        if title:
+            paint_drawn(painter, dpmm, width - MARGIN, height - MARGIN, sheets_model.company()["items"], texts)
+            if bw and bh and not sheets_model.block_beside((width, height), template):
+                _over_title_block(painter, dpmm, x0, y0, texts, bw)
+    else:
+        if template == "strip":                                                    # (its column, 0.129)
+            painter.drawLine(QtCore.QPointF(x0 * dpmm, MARGIN * dpmm),
+                             QtCore.QPointF(x0 * dpmm, (height - MARGIN) * dpmm))
+        painter.drawRect(QtCore.QRectF(x0 * dpmm, y0 * dpmm, bw * dpmm, bh * dpmm))
+        label_h = CELL_LABEL * 0.3528 * 1.3                                       # points -> mm
+        for x, y, w, h, key, size, bold in sheets_model.cells_of(template):
+            painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.18 * dpmm))
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawRect(QtCore.QRectF((x0 + x) * dpmm, (y0 + y) * dpmm, w * dpmm, h * dpmm))
+            _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, t("tb." + key), CELL_LABEL,
+                  colour="#6b6b6b")
+            _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5 + label_h, w - 2.4, h - 0.8 - label_h,
+                  texts.get(key, ""), size, bold, elide=True)
+        _over_title_block(painter, dpmm, x0, y0, texts, bw)
     if credit:
         _text(painter, dpmm, x0 - 60.0, height - MARGIN + 0.8, bw + 60.0, 2.6, credit, 5, colour="#6b6b6b",
               align=QtCore.Qt.AlignmentFlag.AlignRight)
 
 
-_PICTURES = {}                  # (0.472) path -> (modified time, QImage)
+ALIGN = {"left": QtCore.Qt.AlignmentFlag.AlignLeft, "center": QtCore.Qt.AlignmentFlag.AlignHCenter,
+         "right": QtCore.Qt.AlignmentFlag.AlignRight}
+PLACEHOLDER = "#8a94a3"           # (0.473) an empty field's name, a picture's place — only while the title block is drawn
+
+
+def field_label(field):
+    """(0.473) A field's name («Obra», «Escala»…; a project's own field: its own)."""
+    if field.startswith(sheets_model.EXTRA_FIELD):
+        return field[len(sheets_model.EXTRA_FIELD):]
+    return t("tb." + field)
+
+
+def item_box(item, cx, cy):
+    """(0.473) (x, y, w, h) mm on the paper of an item of the company's drawing (its points from the corner cx, cy)."""
+    (ax, ay), (bx, by) = item["pts"]
+    return cx + min(ax, bx), cy + min(ay, by), abs(bx - ax), abs(by - ay)
+
+
+def paint_drawn(painter, dpmm, cx, cy, items, texts, placeholders=False):
+    """(0.473) The company's title block as drawn (sheets.clean_item's items, from the border's inside corner cx, cy
+    mm): its lines and rectangles at their thickness, its texts, its fields filled in with the sheet's texts, its
+    pictures in their boxes. placeholders: an empty field shows its name, a picture without a file its place (while
+    the title block is drawn)."""
+    for item in items:
+        kind = item["kind"]
+        x, y, w, h = item_box(item, cx, cy)
+        if kind == "line":
+            (ax, ay), (bx, by) = item["pts"]
+            painter.setPen(QtGui.QPen(QtGui.QColor("black"), item["pen"] * dpmm))
+            painter.drawLine(QtCore.QPointF((cx + ax) * dpmm, (cy + ay) * dpmm),
+                             QtCore.QPointF((cx + bx) * dpmm, (cy + by) * dpmm))
+        elif kind == "rect":
+            pen = QtGui.QPen(QtGui.QColor("black"), item["pen"] * dpmm)
+            pen.setJoinStyle(QtCore.Qt.PenJoinStyle.MiterJoin)
+            painter.setPen(pen)
+            painter.setBrush(QtGui.QColor(item["fill"]) if item["fill"] else QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawRect(QtCore.QRectF(x * dpmm, y * dpmm, w * dpmm, h * dpmm))
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        elif kind == "image":
+            if picture_of(item["path"]) is not None:
+                _fit_picture(painter, dpmm, item["path"], x, y, w, h)
+            elif placeholders:
+                pen = QtGui.QPen(QtGui.QColor(PLACEHOLDER), 1.0, QtCore.Qt.PenStyle.DashLine)
+                painter.setPen(pen)
+                painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+                box = QtCore.QRectF(x * dpmm, y * dpmm, w * dpmm, h * dpmm)
+                painter.drawRect(box)
+                painter.drawLine(box.topLeft(), box.bottomRight())
+                painter.drawLine(box.topRight(), box.bottomLeft())
+                _box_text(painter, dpmm, x, y, w, h, t("tbe.image"), 6.0, colour=PLACEHOLDER, align="center")
+        else:
+            words = item["text"] if kind == "text" else sheets_model.field_text(texts, item["field"])
+            colour, italic = item["colour"], False
+            if not words and placeholders:
+                words = "‹{}›".format(t("tbe.text_new") if kind == "text" else field_label(item["field"]))
+                colour, italic = PLACEHOLDER, True
+            _box_text(painter, dpmm, x, y, w, h, words, item["size"], item["bold"], item["align"], colour, italic)
+
+
+def _box_text(painter, dpmm, x, y, w, h, text, size, bold=False, align="left", colour="black", italic=False):
+    """(0.473) A text in its box (x, y, w, h mm): one line in the box's middle (cut short with «…» when longer),
+    several from its top."""
+    if not text:
+        return
+    font = QtGui.QFont("Segoe UI")
+    font.setPixelSize(max(1, round(size * 0.3528 * dpmm)))
+    font.setBold(bold)
+    font.setItalic(italic)
+    painter.setFont(font)
+    painter.setPen(QtGui.QColor(colour))
+    flags = ALIGN.get(align, ALIGN["left"])
+    rect = QtCore.QRectF(x * dpmm, y * dpmm, max(w, 0.5) * dpmm, max(h, 0.5) * dpmm)
+    if "\n" in text:
+        painter.drawText(rect, flags | QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.TextFlag.TextWordWrap, text)
+        return
+    text = painter.fontMetrics().elidedText(text, QtCore.Qt.TextElideMode.ElideRight, int(rect.width()) + 1)
+    painter.drawText(rect, flags | QtCore.Qt.AlignmentFlag.AlignVCenter, text)
+
+
+_SHEET_PICTURES = {}            # (0.472) path -> (modified time, QImage or None): logos, pictures put on sheets
 
 
 def picture_of(path):
     """(0.472) A picture file, read once while it is unchanged (None when it cannot be read)."""
     try:
         stamp = os.path.getmtime(path)
-    except (OSError, TypeError):
+    except (OSError, TypeError, ValueError):
         return None
-    found = _PICTURES.get(path)
+    found = _SHEET_PICTURES.get(path)
     if found is None or found[0] != stamp:
         image = QtGui.QImage(path)
-        found = _PICTURES[path] = (stamp, None if image.isNull() else image)
+        found = _SHEET_PICTURES[path] = (stamp, None if image.isNull() else image)
     return found[1]
 
 
@@ -1095,17 +1177,6 @@ def _fit_picture(painter, dpmm, path, x, y, w, h):
     k = min(w / image.width(), h / image.height())
     pw, ph = image.width() * k, image.height() * k
     painter.drawImage(QtCore.QRectF((x + (w - pw) / 2) * dpmm, (y + (h - ph) / 2) * dpmm, pw * dpmm, ph * dpmm), image)
-
-
-def _lines(painter, dpmm, x, y, w, h, text, size):
-    """(0.472) Text of several lines (a company's contacts) in the box, from its top."""
-    font = QtGui.QFont("Segoe UI")
-    font.setPixelSize(max(1, round(size * 0.3528 * dpmm)))
-    painter.setFont(font)
-    painter.setPen(QtGui.QColor("black"))
-    painter.drawText(QtCore.QRectF(x * dpmm, y * dpmm, w * dpmm, h * dpmm),
-                     QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.TextFlag.TextWordWrap,
-                     text)
 
 
 def import_size(item):

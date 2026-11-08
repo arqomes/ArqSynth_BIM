@@ -2631,11 +2631,21 @@ class MainWindow(QtWidgets.QMainWindow):
                       icon=act.icon() if act is not None else None)
         return True
 
+    def _title_block_editor(self):
+        """(0.473) The company's title block being drawn on the sheet shown, or None."""
+        return self.sheet_window.editor if hasattr(self, "sheet_window") and self.sheet_shown() else None
+
     def undo(self):
+        if self._title_block_editor() is not None:     # (0.473: the drawing's own steps until «Concluir»)
+            self._title_block_editor().undo()
+            return
         self.tool.cancel()
         self.doc.undo()
 
     def redo(self):
+        if self._title_block_editor() is not None:
+            self._title_block_editor().redo()
+            return
         self.tool.cancel()
         self.doc.redo()
 
@@ -3781,7 +3791,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """Delete: on a sheet, the view picked there comes off the sheet (nothing of the model is
         deleted); else what the tool has selected."""
         if self.sheet_shown():
-            if self.sheet_window.canvas.selected is not None:
+            if self.sheet_window.editor is not None:                          # (0.473) the title block drawn
+                self.sheet_window.editor.delete_picked()
+            elif self.sheet_window.canvas.selected is not None:
                 self.sheet_window.take_off(self.sheet_window.canvas.selected)
             elif self.sheet_window.picked_import is not None:                 # (0.472) a drawing from outside
                 self.sheet_window.take_off_import(self.sheet_window.picked_import)
@@ -8314,30 +8326,25 @@ class MainWindow(QtWidgets.QMainWindow):
             return sheets_model.title_texts(doc.title_block, title, "", project)
         return sheets_model.title_texts(doc.title_block, sheet.name,
                                         sheets_model.number_of(doc.sheets, sheet, doc.title_block), project,
-                                        sheet.revisions)
+                                        sheet.revisions, len(doc.sheets))
 
     def edit_company_title_block(self, index=None):
-        """(0.472, the owner: «um botão editar o carimbo… personalizada de acordo com a sua empresa») The company's own
-        title block made in its window (ui/company_title_block_dialog): kept with the project, given to this sheet or
-        to every sheet (their template «Da empresa»). One undo step on OK."""
-        from .company_title_block_dialog import CompanyTitleBlockDialog, start_company
+        """(0.472, the owner: «um botão editar o carimbo… personalizada de acordo com a sua empresa»; 0.473: «se o
+        carimbo pudesse abrir na tela e o utilizador usar as ferramentas de desenhos e inserir os campos») The
+        company's own title block drawn on the sheet (`index`, the one shown, else the first): its tools on the
+        parameters' bar (ui/title_block_editor); «Concluir» keeps it with the project — one undo step. Returns the
+        editor, None when there is no sheet to draw it on."""
         doc = self.doc
-        if index is None and self.sheet_shown() and self.sheet_window.sheet is not None:
-            index = doc.sheets.index(self.sheet_window.sheet)
-        sheet = doc.sheets[index] if index is not None and 0 <= index < len(doc.sheets) else None
-        dialog = CompanyTitleBlockDialog(self, start_company(doc.title_block),
-                                         self.title_block(sheet) if sheet is not None else self.title_block(),
-                                         sheet.name if sheet is not None else "")
-        self._company_dialog = dialog                    # (tests fill it in)
-        try:
-            if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
-                return None
-        finally:
-            self._company_dialog = None
-        targets = list(range(len(doc.sheets))) if dialog.everyone() or sheet is None else [index]
-        doc.set_company_title_block(dialog.company(), targets)
-        self.message(t("info.company_title_block", n=len(targets)))
-        return targets
+        if not doc.sheets:
+            self.message(t("tbe.no_sheet"), warning=True)
+            return None
+        if index is None:
+            shown = self.sheet_window.sheet if self.sheet_shown() else None
+            index = doc.sheets.index(shown) if shown is not None else 0
+        index = min(max(int(index), 0), len(doc.sheets) - 1)
+        if not (self.sheet_shown() and self.sheet_window.sheet is doc.sheets[index]):
+            self.open_sheet(index)
+        return self.sheet_window.start_editor()
 
     def edit_sheet_type(self, index):
         """(0.470) A sheet's «Editar tipo…», as Revit's Type Properties of a title block: its paper, how it stands, its

@@ -227,7 +227,8 @@ projeto. Os tamanhos são relativos: P (um ou dois dias de trabalho meu), M (alg
    por piso, revisões, campos próprios, numeração~~ (0.127.0), ~~conjuntos, publicação; exportar PNG, SVG~~
    (0.128.0) ~~e DXF~~ (0.129.0: de uma vista) (o PDF já existe); ~~imprimir~~ (0.128.0). ~~Os comandos da folha
    na barra de parâmetros, importar DWG/DXF/imagem/SVG para a folha e editar o carimbo da empresa~~ (0.472.0, pedido
-   do dono com captura).
+   do dono com captura); ~~o carimbo desenhado na própria folha, com linhas, retângulos, textos, imagens e campos~~
+   (0.473.0, o dono: «maior liberdade criativa»).
 7. ~~**Tabelas:** editor com campos, fórmulas, filtros e modelos~~ (0.131.0: tabelas próprias do projeto,
    guardadas com nome); ~~tabelas nas folhas~~ (0.132.0).
 8. ~~**Vistas:** alçados cardinais automáticos~~ (já existiam desde a 0.29.0), ~~vistas de detalhe~~

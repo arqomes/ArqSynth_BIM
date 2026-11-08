@@ -75,7 +75,8 @@ EOF
 
 class Model(unittest.TestCase):
     """The kinds by extension; a drawing put on a sheet saved and read back — its file found beside the project when
-    the folder moved; the company's title block: its boxes row by row, its size, kept by the project's fields."""
+    the folder moved; the company's title block (0.472's rows: read as a drawing), its size, kept by the project's
+    fields."""
 
     def test_kinds_and_dict(self):
         self.assertEqual([sm.import_kind(p) for p in ("a.DWG", "b.dxf", "c.svg", "d.png", "e.JPG", "f.txt")],
@@ -99,20 +100,23 @@ class Model(unittest.TestCase):
                              (20, (100.0, 80.0), item.uid))
 
     def test_company(self):
-        company = sm.clean_company(sm.DEFAULT_COMPANY)
-        cells = sm.company_cells(company)
-        self.assertEqual(len(cells), sum(len(r["cells"]) for r in company["rows"]))
-        first = [c for c in cells if c[1] == 0.0]
-        self.assertAlmostEqual(sum(c[2] for c in first), company["width"], places=3)
-        self.assertEqual([c[4] for c in first], ["logo", "company", "contacts"])
-        sm.use_company(dict(company, width=150.0))
-        self.assertAlmostEqual(sm.block_size("custom")[0], 150.0, places=3)
-        self.assertAlmostEqual(sm.block_size("custom")[1], sum(r["h"] for r in company["rows"]), places=3)
+        """(0.473) 0.472's rows of boxes, read: a drawing — its logo's box, the company's name and contacts as texts,
+        a field in each box — as large as the rows were (170 × 57,5 mm)."""
+        company = sm.clean_company(dict(sm.DEFAULT_ROWS, name="Atelier X", contacts="Rua A, 1\nLisboa"))
+        kinds = [i["kind"] for i in company["items"]]
+        self.assertEqual(kinds.count("image"), 1)
+        texts = [i["text"] for i in company["items"] if i["kind"] == "text"]
+        self.assertIn("Atelier X", texts)
+        self.assertIn("Rua A, 1\nLisboa", texts)
+        fields = {i["field"] for i in company["items"] if i["kind"] == "field"}
+        self.assertEqual(fields, {"project", "client", "site", "author", "stage", "title", "scale", "date", "number"})
+        self.assertEqual(sm.drawn_size(company["items"]), (170.0, 57.5))
+        sm.use_company(company)
+        self.assertEqual(sm.block_size("custom"), (170.0, 57.5))
         self.assertIsNone(sm.clean_company({"rows": [{"h": 5, "cells": [["nada", 1]]}]}))
-        fields = sm.read_title_fields({"project": "Moradia", sm.COMPANY_KEY: dict(company, name="Atelier X")})
-        self.assertEqual(fields[sm.COMPANY_KEY]["name"], "Atelier X")
-        texts = sm.title_texts(fields, "Planta", "01", "obra")
-        self.assertEqual((texts["company"], texts["project"]), ("Atelier X", "Moradia"))
+        read = sm.read_title_fields({"project": "Moradia", sm.COMPANY_KEY: company})
+        self.assertEqual(read[sm.COMPANY_KEY], company)
+        self.assertEqual(sm.title_texts(read, "Planta", "01", "obra")["project"], "Moradia")
         self.assertIn("custom", sm.TEMPLATES)
 
 
@@ -138,18 +142,20 @@ class DocumentSheets(unittest.TestCase):
             uid = doc.sheets[k].imports[0].uid
             doc.change_sheet_import(k, uid, at=(200.0, 120.0), scale=50)
             self.assertEqual((doc.sheets[k].imports[0].at, doc.sheets[k].imports[0].scale), ((200.0, 120.0), 50))
-            company = dict(sm.DEFAULT_COMPANY, name="Atelier X", contacts="Rua A, 1\nLisboa")
+            company = {"items": [{"kind": "rect", "pts": [[-100, -30], [0, 0]], "pen": 0.35},
+                                 {"kind": "text", "pts": [[-98, -28], [-40, -20]], "text": "Atelier X\nLisboa"},
+                                 {"kind": "field", "pts": [[-98, -18], [-2, -10]], "field": "title", "size": 9}]}
             doc.set_company_title_block(company, [k])
             self.assertEqual(doc.sheets[k].template, "custom")
-            self.assertEqual(doc.title_block[sm.COMPANY_KEY]["name"], "Atelier X")
+            self.assertEqual(doc.title_block[sm.COMPANY_KEY]["items"][1]["text"], "Atelier X\nLisboa")
             doc.set_title_block({"project": "Moradia T3"})
-            self.assertEqual(doc.title_block[sm.COMPANY_KEY]["name"], "Atelier X")       # (kept)
+            self.assertEqual(len(doc.title_block[sm.COMPANY_KEY]["items"]), 3)        # (kept)
             ifc_path = os.path.join(tmp, "obra.ifc")
             doc.save(ifc_path)
             again = Document()
             again.open(ifc_path)
             self.assertEqual(again.sheets[k].template, "custom")
-            self.assertEqual(again.title_block[sm.COMPANY_KEY]["contacts"], "Rua A, 1\nLisboa")
+            self.assertEqual(again.title_block[sm.COMPANY_KEY], sm.clean_company(company))
             self.assertEqual([i.name for i in again.sheets[k].imports], ["detalhe.dxf"])
             doc.change_sheet_import(k, uid, remove=True)
             self.assertEqual(doc.sheets[k].imports, [])

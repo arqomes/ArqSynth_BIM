@@ -644,6 +644,46 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.473 — O carimbo desenhado na folha
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.473.0**. Faça Ctrl+N e desenhe quatro paredes em
+   retângulo (ferramenta **Parede**; na barra de parâmetros escolha a forma **Retângulo**).
+2. No **Navegador do Projeto**, botão direito em **Plantas ▸ Térreo ▸ Pôr na folha ▸ Nova folha**. Abre a folha.
+3. Na barra de parâmetros (por baixo da fita), clique em **Editar carimbo…**.
+   - A folha fica esbatida, aproxima-se do canto de baixo à direita e aparece uma quadrícula clara. O carimbo fica por
+     cima, nítido. Os campos vazios mostram o nome entre ‹ › a cinzento (só enquanto desenha).
+   - A barra diz **Carimbo**, **✓ Concluir**, **Cancelar**, depois **Selecionar · Linha · Retângulo · Texto · Campo ·
+     Imagem**, e **Começar de**, **Guardar no escritório** e **Em todas as folhas**.
+4. **Linha**: clique em **Linha** na barra e escolha a **Espessura** 0,5 mm. Clique num ponto um pouco acima do
+   carimbo; leve o rato até ao canto de cima à esquerda do carimbo.
+   - Junto do canto aparece um **quadrado magenta**: clique — a linha acaba exatamente no canto.
+   - Enquanto desenha, vê o comprimento em mm ao lado do rato.
+   - Uma linha quase horizontal ou vertical endireita-se (aparece uma cruz magenta e uma guia tracejada).
+5. **Retângulo**: clique em **Retângulo**, em **Preenchimento** escolha «Cinza claro» e arraste um retângulo pequeno.
+6. **Texto**: clique em **Texto** e clique dentro de uma caixa do carimbo. Aparece uma caixa com borda azul: escreva o
+   nome da sua empresa e carregue em **Enter** (Shift+Enter muda de linha). Na barra, mude o **Tamanho** para 12 pt e
+   ligue **Negrito**.
+7. **Campo**: clique em **Campo** e clique numa zona livre. Na barra, em **Campo**, escolha «Dono de obra» (veja
+   também «Total de folhas» e «Revisão»). Mostra o que está nos dados da obra (Editar tipo… da folha).
+8. **Imagem**: clique em **Imagem**, arraste uma caixa e escolha o logótipo (PNG, JPG ou SVG): aparece na caixa, nas
+   suas proporções.
+9. Clique em **Selecionar** e experimente:
+   - clique na linha do passo 4: fica azul com dois quadradinhos (pegas); arraste uma pega para mudar a ponta;
+   - arraste o texto do passo 6 para outro sítio (agarra aos cantos e alinha com o resto);
+   - arraste uma janela **da direita para a esquerda** por cima de vários elementos: escolhe tudo o que ela toca;
+   - as **setas** deslocam 0,5 mm (com Shift, 5 mm); **Delete** apaga; **Ctrl+Z** desfaz; **Ctrl+C** e **Ctrl+V**
+     copiam; **duplo clique** num texto volta a escrevê-lo.
+10. Com nada escolhido, em **Começar de** escolha «Faixa lateral»: o carimbo passa a uma faixa do lado direito.
+    Carregue em **Ctrl+Z**: volta ao que tinha.
+11. Clique em **Guardar no escritório**: aparece a mensagem com a pasta onde ficou.
+12. Clique em **✓ Concluir**. A folha volta ao normal com o seu carimbo; nas Propriedades, Carimbo «Da empresa
+    (personalizado)». As vistas arrumam-se fora do carimbo. **Ctrl+Z** desfaz tudo de uma vez; Ctrl+Y refaz.
+13. Clique em **Exportar PDF…** e abra o PDF: o carimbo sai como o desenhou, com os campos preenchidos.
+14. Faça Ctrl+N, ponha uma planta numa folha e clique em **Editar carimbo…**: começa com o carimbo que guardou no
+    escritório. Desenhe uma linha e clique em **Cancelar**: pergunta se quer sair sem guardar. Clique em **Continuar a
+    desenhar**: fica no carimbo. Clique outra vez em **Cancelar** e depois em **Sair sem guardar**: a folha fica como
+    estava.
+
 ## 0.472 — Folhas: comandos na barra, desenhos importados, carimbo da empresa
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.472.0**. Faça Ctrl+N e desenhe quatro paredes em
@@ -659,17 +699,8 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Clique outra vez em **Importar desenho** e escolha uma imagem (PNG ou JPG). Na barra, escolha a **Largura** (por
    exemplo 100 mm) e arraste-a para o sítio.
 6. Com a imagem escolhida, carregue em **Delete**: sai da folha. Carregue em Ctrl+Z: volta.
-7. Clique em **Editar carimbo**. Na janela:
-   - escreva o **Nome** da empresa e os **Contactos** (duas linhas);
-   - em **Logótipo**, clique em **Escolher…** e escolha uma imagem;
-   - nas **Linhas do carimbo**, mude a altura de uma linha, mude o campo de uma caixa e clique em **+** para juntar uma
-     caixa; clique em **+ Linha** para juntar uma linha;
-   - em **Nomes dos campos**, escreva «Projeto» no lugar de «Obra»;
-   - a imagem à esquerda mostra o carimbo como vai ficar. Deixe **todas as folhas** e clique em **OK**.
-8. O carimbo da folha passa a ser o da empresa (nas Propriedades: Carimbo «Da empresa (personalizado)»).
-9. Clique em **Exportar PDF** e abra o PDF: a planta, o DXF, a imagem e o carimbo da empresa estão lá.
-10. Abra **Editar carimbo** outra vez e clique em **Guardar como carimbo da empresa**. Faça Ctrl+N, ponha uma planta
-    numa folha, abra **Editar carimbo** e clique em **Usar o da empresa**: vem o carimbo guardado.
+7. Clique em **Exportar PDF** e abra o PDF: a planta, o DXF e a imagem estão lá.
+8. (**Editar carimbo** mudou na 0.473: o carimbo desenha-se na própria folha — siga a secção 0.473.)
 
 ## 0.441 — Ripado solto
 

@@ -6,7 +6,9 @@ made when the sheet is shown or printed, so a sheet is always the model as it is
 Sizes on the sheet in millimetres, from the sheet's top-left corner (y down, as on paper).
 """
 
+import math
 import os
+import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -119,18 +121,19 @@ def number_of(sheets, sheet, fields=None):
     return "{}{:0{}d}".format(fields.get("prefix") or "", k + 1, max(1, min(digits, 4)))
 
 
-def title_texts(fields, title, number="", project="", revisions=()):
+def title_texts(fields, title, number="", project="", revisions=(), count=0):
     """What a title block shows ({field: text}): the project's fields (TITLE_FIELDS; `project`
     when the project's name is not given), the drawing's title and its number — and (0.127) the project's own
-    fields ("extra": [(label, text)]) and the sheet's revisions ("revisions": [{code, date, text}])."""
+    fields ("extra": [(label, text)]) and the sheet's revisions ("revisions": [{code, date, text}]); (0.473) its last
+    revision's code ("revision") and how many sheets there are ("count")."""
     out = {k: str(fields.get(k) or "").strip() for k in TITLE_FIELDS}
     out["project"] = out["project"] or project
     out["title"], out["number"] = title, number
     out[EXTRA_KEY] = [tuple(pair) for pair in fields.get(EXTRA_KEY) or ()]
     out["revisions"] = [dict(r) for r in revisions]
-    company = use_company(fields.get(COMPANY_KEY))   # (0.472) the company's title block: its name, contacts, logo
-    out["company"], out["contacts"], out["logo"] = company["name"], company["contacts"], company["logo"]
-    out["labels"] = dict(company["labels"])
+    out["revision"] = str(out["revisions"][-1].get("code") or "") if out["revisions"] else ""
+    out["count"] = str(count) if count else ""
+    use_company(fields.get(COMPANY_KEY))             # (0.472) the company's title block, drawn by «custom»
     return out
 
 
@@ -213,15 +216,33 @@ CELLS = {
 
 
 # (0.472, the owner: «um botão editar o carimbo… de forma personalizada de acordo com a sua empresa») the company's own
-# title block («custom»): rows of boxes across its width, each box a field and a share of the row; its company's name,
-# contacts and logo. The project keeps it (its title block's «company»); the suite's folder keeps the company's, for
-# every new project (carimbo.json).
+# title block («custom»); (0.473, the owner: «se o carimbo pudesse abrir na tela e o utilizador usar as ferramentas de
+# desenhos e inserir os campos… maior liberdade criativa») drawn by hand on the sheet itself, as Revit's title block
+# family in its editor: lines, rectangles, texts, pictures (the logo) and fields — a field a box that shows one of each
+# sheet's texts (the project, the drawing, its number, the scale, the date…). Each item's two points ("pts") are mm from
+# the border's inside corner, bottom right (to the left and up: negative), so the title block keeps to that corner on
+# any paper. What it takes from the corner is kept clear of the views — above it, or beside it when it goes up the side
+# (a strip). The project keeps it (its title block's «company»), the suite's folder the office's (carimbo.json). 0.472's
+# rows of boxes become such a drawing when read.
 TEMPLATES = TEMPLATES + ("custom",)
-COMPANY_FIELDS = ("logo", "company", "contacts", "project", "client", "site", "author", "stage", "title", "scale",
-                  "date", "number", "blank")
-BIG = ("project", "title", "number", "company")      # (their text bold and larger)
 COMPANY_KEY = "company"
-DEFAULT_COMPANY = {
+ITEM_KINDS = ("line", "rect", "text", "field", "image")
+FIELDS = ("project", "client", "site", "author", "stage", "title", "number", "scale", "date", "revision", "count")
+EXTRA_FIELD = "extra:"                 # a field of the project's own: "extra:<its name>"
+PENS = (0.13, 0.18, 0.25, 0.35, 0.5, 0.7, 1.0)                                      # mm
+TEXT_SIZES = (4.5, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 18.0, 24.0)    # points
+FILLS = ("", "#e6e6e6", "#b3b3b3", "#000000")
+COLOURS = ("#000000", "#6b6b6b")
+ALIGNS = ("left", "center", "right")
+LABEL_SIZE = 4.5                       # points: the small grey name over a box's text («Obra», «Escala»…)
+FAR = 2000.0                           # mm: no point further from the corner
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+# (0.472's boxes: what each showed — the company's logo, name and contacts besides the fields — and its rows; the
+# program's company title block, a new project's when the office has none)
+LEGACY_FIELDS = ("logo", "company", "contacts", "project", "client", "site", "author", "stage", "title", "scale",
+                 "date", "number", "blank")
+BIG = ("project", "title", "number", "company")      # (their text bold and larger)
+DEFAULT_ROWS = {
     "name": "", "contacts": "", "logo": "", "width": 170.0,
     "rows": [{"h": 16.0, "cells": [["logo", 1.0], ["company", 2.0], ["contacts", 2.0]]},
              {"h": 10.0, "cells": [["project", 1.0]]},
@@ -233,37 +254,161 @@ DEFAULT_COMPANY = {
 _COMPANY = {"data": None}                             # the company title block in use (use_company)
 
 
+def is_field(name):
+    return name in FIELDS or (isinstance(name, str) and name.startswith(EXTRA_FIELD) and len(name) > len(EXTRA_FIELD))
+
+
+def _point(p):
+    x, y = float(p[0]), float(p[1])
+    if not (math.isfinite(x) and math.isfinite(y)):
+        raise ValueError(p)
+    return [round(min(max(x, -FAR), FAR), 3), round(min(max(y, -FAR), FAR), 3)]
+
+
+def clean_item(data):
+    """(0.473) An item of a drawn title block as made or read, or None: {"kind", "pts": [[x, y], [x, y]]} and — a line
+    or a rectangle — its "pen" (mm) and a rectangle's "fill" ("" or a colour); a text or a field its "size" (points),
+    "bold", "align", "colour" and its "text" / "field"; a picture its file ("path")."""
+    try:
+        kind = data["kind"]
+        if kind not in ITEM_KINDS or len(data["pts"]) != 2:
+            return None
+        item = {"kind": kind, "pts": [_point(p) for p in data["pts"]]}
+        if kind in ("line", "rect"):
+            item["pen"] = round(min(max(float(data.get("pen", 0.25)), 0.05), 3.0), 3)
+            if kind == "rect":
+                fill = str(data.get("fill") or "")
+                item["fill"] = fill if _HEX.match(fill) else ""
+        elif kind in ("text", "field"):
+            item["size"] = round(min(max(float(data.get("size", 7.0)), 2.0), 72.0), 2)
+            item["bold"] = bool(data.get("bold", False))
+            item["align"] = data.get("align") if data.get("align") in ALIGNS else "left"
+            colour = str(data.get("colour") or "#000000")
+            item["colour"] = colour if _HEX.match(colour) else "#000000"
+            if kind == "text":
+                item["text"] = str(data.get("text") or "")
+            else:
+                if not is_field(data.get("field")):
+                    return None
+                item["field"] = str(data["field"])
+        else:
+            item["path"] = str(data.get("path") or "")
+        return item
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+        return None
+
+
 def clean_company(data):
-    """A company title block as typed or read ({name, contacts, logo, width, rows, labels}), or None."""
+    """The company's title block as drawn or read ({"items": [...]}), or None. (0.472's rows of boxes: turned into a
+    drawing.)"""
     if not isinstance(data, dict):
         return None
+    if isinstance(data.get("items"), (list, tuple)):
+        return {"items": [i for i in (clean_item(d) for d in data["items"] if isinstance(d, dict)) if i is not None]}
+    items = rows_to_items(data)
+    return {"items": items} if items is not None else None
+
+
+def rows_to_items(data):
+    """(0.472's) rows of boxes — each row its height, each box what it shows and its share of the width — as a drawing
+    (cells_to_items), the company's name, contacts and logo in it; None if there are none."""
     rows = []
     for row in data.get("rows") or ():
         try:
             h = min(max(float(row.get("h", 7.0)), 3.0), 80.0)
             cells = [[str(c[0]), min(max(float(c[1]), 0.1), 20.0)] for c in row.get("cells") or ()
-                     if isinstance(c, (list, tuple)) and len(c) == 2 and str(c[0]) in COMPANY_FIELDS]
+                     if isinstance(c, (list, tuple)) and len(c) == 2 and str(c[0]) in LEGACY_FIELDS]
         except (TypeError, ValueError, AttributeError):
             continue
         if cells:
-            rows.append({"h": h, "cells": cells})
+            rows.append((h, cells))
     if not rows:
         return None
     try:
         width = min(max(float(data.get("width", 170.0)), 40.0), 400.0)
     except (TypeError, ValueError):
         width = 170.0
-    labels = {str(k): str(v).strip() for k, v in (data.get("labels") or {}).items()
-              if str(k) in COMPANY_FIELDS and str(v).strip()}
-    return {"name": str(data.get("name") or "").strip(), "contacts": str(data.get("contacts") or "").strip(),
-            "logo": str(data.get("logo") or ""), "width": width, "rows": rows, "labels": labels}
+    boxes, y = [], 0.0
+    for h, cells in rows:
+        total = sum(share for _f, share in cells) or 1.0
+        x = 0.0
+        for key, share in cells:
+            w = width * share / total
+            big = key in BIG
+            boxes.append((round(x, 3), round(y, 3), round(w, 3), h, key, max(5, min(14, int(h * (0.95 if big else 0.8)))),
+                          big))
+            x += w
+        y += h
+    labels = {str(k): str(v).strip() for k, v in (data.get("labels") or {}).items() if str(v).strip()}
+    return cells_to_items(boxes, labels, str(data.get("name") or "").strip(), str(data.get("contacts") or "").strip(),
+                          str(data.get("logo") or ""))
+
+
+def cells_to_items(cells, labels=None, name="", contacts="", logo=""):
+    """(0.473) A template's boxes (CELLS': x, y, w, h mm from its top-left, what it shows, text size, bold) drawn as
+    items from the corner: the outline, each box, its name small and grey at its top, its field under it — the
+    company's name and contacts as texts, its logo as a picture."""
+    from ..i18n import t
+    labels = labels or {}
+    bw = max(x + w for x, _y, w, _h, *_r in cells)
+    bh = max(y + h for _x, y, _w, h, *_r in cells)
+
+    def at(x, y):
+        return [round(x - bw, 3), round(y - bh, 3)]
+    items = [{"kind": "rect", "pts": [at(0.0, 0.0), at(bw, bh)], "pen": 0.35, "fill": ""}]
+    label_h = LABEL_SIZE * 0.3528 * 1.3
+    for x, y, w, h, key, size, bold in cells:
+        items.append({"kind": "rect", "pts": [at(x, y), at(x + w, y + h)], "pen": 0.18, "fill": ""})
+        if key == "blank":
+            continue
+        if key == "logo":
+            items.append({"kind": "image", "pts": [at(x + 1.0, y + 1.0), at(x + w - 1.0, y + h - 1.0)], "path": logo})
+            continue
+        if key == "company":
+            items.append({"kind": "text", "pts": [at(x + 1.5, y + 1.0), at(x + w - 1.5, y + h - 1.0)],
+                          "text": name or t("tbe.company_name"), "size": float(min(size, 11)), "bold": True,
+                          "align": "left", "colour": "#000000"})
+            continue
+        items.append({"kind": "text", "pts": [at(x + 1.2, y + 0.5), at(x + w - 1.2, y + 0.5 + label_h)],
+                      "text": labels.get(key) or t("tb." + key), "size": LABEL_SIZE, "bold": False, "align": "left",
+                      "colour": "#6b6b6b"})
+        if key == "contacts":
+            items.append({"kind": "text", "pts": [at(x + 1.2, y + 0.5 + label_h), at(x + w - 1.2, y + h - 0.5)],
+                          "text": contacts or t("tbe.contacts"), "size": float(min(size, 6)), "bold": False,
+                          "align": "left", "colour": "#000000"})
+            continue
+        items.append({"kind": "field", "pts": [at(x + 1.2, y + 0.5 + label_h), at(x + w - 1.2, y + h - 0.3)],
+                      "field": key, "size": float(size), "bold": bool(bold), "align": "left", "colour": "#000000"})
+    return [clean_item(i) for i in items]
+
+
+TEMPLATE_STARTS = ("full", "compact", "strip", "company", "blank")    # (0.473) what the editor may start from
+
+
+def template_items(template, inner_h=None):
+    """(0.473) A template drawn as a company title block's items: "full", "compact", "strip" (its column's line up to
+    the border's top, `inner_h` mm above the corner), "company" (the program's own) or "blank"."""
+    if template == "blank":
+        return []
+    if template not in ("full", "compact", "strip"):
+        return rows_to_items(DEFAULT_ROWS)
+    cells = CELLS[template]
+    items = cells_to_items(cells)
+    if template == "strip" and inner_h:
+        bh = max(y + h for _x, y, _w, h, *_r in cells)
+        items.insert(1, clean_item({"kind": "line", "pts": [[-STRIP_W, -float(inner_h)], [-STRIP_W, -bh]],
+                                    "pen": 0.35}))
+    return items
+
+
+def default_company():
+    return {"items": template_items("company")}
 
 
 def use_company(data):
-    """The company title block the «custom» template draws (the project's): CELLS["custom"] made of it."""
-    company = clean_company(data) or clean_company(DEFAULT_COMPANY)
+    """The company title block the «custom» template draws (the project's; the program's when it has none)."""
+    company = clean_company(data) or default_company()
     _COMPANY["data"] = company
-    CELLS["custom"] = company_cells(company)
     return company
 
 
@@ -271,32 +416,34 @@ def company():
     return _COMPANY["data"] or use_company(None)
 
 
-def company_cells(company):
-    """The boxes of a company title block: (x, y, w, h, field, text size (pt), bold), as CELLS' — row by row, each
-    box its share of the width."""
-    out, y, width = [], 0.0, float(company["width"])
-    for row in company["rows"]:
-        total = sum(share for _f, share in row["cells"]) or 1.0
-        x = 0.0
-        for key, share in row["cells"]:
-            w = width * share / total
-            big = key in BIG
-            size = max(5, min(14, int(row["h"] * (0.95 if big else 0.8))))
-            out.append((round(x, 3), round(y, 3), round(w, 3), row["h"], key, size, big))
-            x += w
-        y += row["h"]
-    return tuple(out)
+def drawn_size(items):
+    """(0.473) (w, h) mm a drawn title block takes from the corner (how far left and up it goes)."""
+    xs = [p[0] for i in items for p in i["pts"]]
+    ys = [p[1] for i in items for p in i["pts"]]
+    if not xs:
+        return 0.0, 0.0
+    return max(0.0, -min(xs)), max(0.0, -min(ys))
+
+
+def field_text(texts, field):
+    """(0.473) What a field shows on a sheet (texts: title_texts', with the scale and the date)."""
+    if field.startswith(EXTRA_FIELD):
+        name = field[len(EXTRA_FIELD):]
+        return next((str(v) for k, v in texts.get(EXTRA_KEY) or () if k == name), "")
+    return str(texts.get(field) or "")
 
 
 def cells_of(template):
-    """The boxes of a title block template (the company's for «custom»)."""
+    """The boxes of a title block template (none for «custom»: it is drawn, company())."""
     if template == "custom":
-        company()
+        return ()
     return CELLS.get(template, CELLS["full"])
 
 
 def block_size(template):
-    """(w, h) mm of a template's boxes."""
+    """(w, h) mm of a template's boxes (0.473: what the company's drawing takes)."""
+    if template == "custom":
+        return drawn_size(company()["items"])
     cells = cells_of(template)
     return max(x + w for x, _y, w, _h, *_r in cells), max(y + h for _x, y, _w, h, *_r in cells)
 
@@ -309,13 +456,32 @@ def title_box(size, template="full"):
     return w - MARGIN - bw, h - MARGIN - bh, bw, bh
 
 
+def block_beside(size, template="full"):
+    """(0.473) Are the views beside the title block (it goes up the side, as the strip) rather than above it? For the
+    company's drawing, whichever leaves them more room."""
+    if template == "strip":
+        return True
+    if template != "custom":
+        return False
+    bw, bh = block_size(template)
+    if not (bw and bh):
+        return False
+    iw, ih = size[0] - 2 * MARGIN - 8, size[1] - 2 * MARGIN - 8
+    return max(iw - bw - 4, 0.0) * ih > iw * max(ih - bh - 4, 0.0)
+
+
 def drawing_area(paper, template="full", portrait=False):
     """(left, top, width, height) in mm where views are laid out: inside the border, above the
-    title block (0.129: beside the strip)."""
+    title block (0.129: beside the strip; 0.473: the company's drawing, above or beside it)."""
     w, h = paper_size(paper, portrait)
     if template == "strip":
         return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - STRIP_W - 12, h - 2 * MARGIN - 8
-    return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - 8, h - 2 * MARGIN - block_size(template)[1] - 12
+    bw, bh = block_size(template)
+    if template == "custom" and not (bw and bh):
+        return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - 8, h - 2 * MARGIN - 8
+    if block_beside((w, h), template):
+        return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - bw - 12, h - 2 * MARGIN - 8
+    return MARGIN + 4, MARGIN + 4, w - 2 * MARGIN - 8, h - 2 * MARGIN - bh - 12
 
 
 @dataclass
@@ -382,7 +548,7 @@ def layout(sheet, extents, defaults=None, extra_rows=0):
     architect would). Views with a place keep it. (0.127) The rows over the title block — the
     sheet's revisions and the project's `extra_rows` own fields — are kept clear."""
     left, top, width, height = drawing_area(sheet.paper, sheet.template, getattr(sheet, "portrait", False))
-    if sheet.template != "strip":                     # (in a strip, the rows are in its column)
+    if not block_beside(sheet.size(), sheet.template):   # (in a strip, the rows are in its column)
         rows = (len(sheet.revisions) + 1 if sheet.revisions else 0) + int(extra_rows)
         height -= rows * REVISION_ROW
     fixed = [v.scale or (defaults[k] if defaults else None) for k, v in enumerate(sheet.views)]
