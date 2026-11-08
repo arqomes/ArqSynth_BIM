@@ -18,7 +18,7 @@ from ..i18n import t
 
 THREE_D = ("3d",)
 START = ("start",)                  # (0.387) the start page: a tab, but not the project's (no camera, not saved)
-NO_CAMERA = ("sheet", "start")
+NO_CAMERA = ("sheet", "start", "table")     # (0.477: a table, in its tab as a sheet: ("table", its ref))
 
 
 class ViewTabs(QtCore.QObject):

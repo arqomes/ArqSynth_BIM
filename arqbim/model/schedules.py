@@ -583,12 +583,66 @@ def write_xlsx(path, header, table, decimal=",", title=None, author="ArqSynth BI
     book.save(path)
 
 
-TABLE_FORMATS = (".xlsx", ".csv")
+TABLE_FORMATS = (".xlsx", ".csv", ".json")
 
 
-def write_table(path, header, table, decimal=",", title=None):
-    """(0.370) A table to `path` by its extension: an Excel workbook (.xlsx, write_xlsx), else a CSV (write_csv)."""
-    if os.path.splitext(path)[1].lower() == ".xlsx":
+def unit_of(column):
+    """(0.477) A column's unit as other programs take it: "m", "m2", "m3", "un", "kg", "W", "A", "mm2" or ""."""
+    if column in ("area", "projected"):
+        return "m2"
+    if column == "volume":
+        return "m3"
+    if column in COUNTS or column == "count":
+        return "un"
+    if column in ("length", "height", "thickness", "width", "perimeter", "metres", "conduit", *EDGES):
+        return "m"
+    return {"weight": "kg", "power": "W", "current": "A", "breaker": "A", "section": "mm2"}.get(column, "")
+
+
+JSON_FORMAT = "arqsynth-tabela"      # (0.477) what the JSON says it is (KazaFix Cost and the suite read it by this)
+JSON_VERSION = 1
+
+
+def write_json(path, header, table, title=None, columns=None, project=None, decimal=","):
+    """(0.477, the owner: «exportar essas quantidades para os outros aplicativos, especialmente o app de geração de preço
+    que estou desenvolvendo KazaFix Cost») A table as JSON for another program to read:
+
+        {"formato": "arqsynth-tabela", "versao": 1, "titulo": "Paredes", "projeto": "Moradia",
+         "colunas": [{"chave": "length", "nome": "Comprimento", "unidade": "m"}, …],
+         "linhas": [{"length": 4.5, "name": "Parede 1", …}, …],
+         "totais": {"length": 19.2, …}}
+
+    numbers as numbers (in metres, m², m³), texts as they are shown; "chave" is the program's own name of the column
+    (stable between versions), "nome" the heading as shown. The rows are dicts by "chave"; a column without a key
+    (columns None) keyed by its heading."""
+    import json
+    keys = list(columns) if columns else list(header)
+    cols = [{"chave": k, "nome": str(h), "unidade": unit_of(k)} for k, h in zip(keys, header)]
+    rows_out, sums = [], {}
+    for line in table:
+        if len(line) <= 1:                                  # (a total's line, as the CSV's)
+            continue
+        row = {}
+        for k, v in zip(keys, line):
+            value, _decimals = xlsx_value(v, decimal)
+            row[k] = value
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and unit_of(k) not in ("", "A") and \
+                    (k in SUMMED or k.startswith("formula:") or k == "count"):
+                sums[k] = round(sums.get(k, 0) + value, 6)
+        rows_out.append(row)
+    data = {"formato": JSON_FORMAT, "versao": JSON_VERSION, "titulo": str(title or ""), "projeto": str(project or ""),
+            "colunas": cols, "linhas": rows_out, "totais": sums}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+def write_table(path, header, table, decimal=",", title=None, columns=None, project=None):
+    """(0.370) A table to `path` by its extension: an Excel workbook (.xlsx, write_xlsx), (0.477) JSON for other
+    programs (.json, write_json), else a CSV (write_csv)."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".xlsx":
         write_xlsx(path, header, table, decimal, title)
+    elif ext == ".json":
+        write_json(path, header, table, title, columns, project, decimal)
     else:
         write_csv(path, header, table, decimal)

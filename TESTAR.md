@@ -644,6 +644,33 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.477 — Tabelas na tela, geridas no painel lateral
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.477.0**. Faça Ctrl+N e desenhe três paredes
+   (ferramenta **Parede**).
+2. Na barra lateral (os ícones à esquerda), clique em **Quantidades**: abre o painel **Tabelas** na coluna da
+   esquerda, com a árvore — «Tabelas do projeto (0)», «Quantidades do modelo» com «Paredes (3)», «Ambientes e
+   acabamentos», «Portas e janelas»…
+3. Clique em **Paredes (3)**: abre a aba «Tabela — Paredes» na tela, com o título «<Paredes>», as três paredes
+   numeradas e os totais por baixo.
+   - Na barra de parâmetros: **Propriedades…**, **Por tipo**, **Realçar no modelo**, **Pôr numa folha**,
+     **Exportar…**.
+   - Clique numa linha: a parede fica escolhida no modelo. Clique em **Realçar no modelo**: as paredes ficam
+     escolhidas e enquadradas.
+4. No painel, clique em **Nova tabela…**: abre «Propriedades da tabela» com as abas **Campos**, **Filtro** e
+   **Classificar/Agrupar**.
+   - Em **Nome** escreva «Paredes por área».
+   - Em **Campos tabelados**, escolha «Volume» e clique em **←**: passa para os **Campos disponíveis**. Escolha-o lá e
+     clique em **→**: volta. Use ↑ ↓ para mudar a ordem.
+   - Clique em **ƒx** e escreva a fórmula `length * height` (área bruta).
+   - Na aba **Classificar/Agrupar**, escolha classificar por «Comprimento».
+   - Clique em **OK**: a aba passa a «Tabela — Paredes por área» e a árvore mostra-a em «Tabelas do projeto».
+5. Botão direito na tabela nova da árvore: **Duplicar** (aparece a cópia), e depois **Apagar** a cópia.
+6. Com uma tabela aberta, clique em **Exportar…** e escolha o tipo **JSON para outros programas — KazaFix Cost**.
+   Abra o ficheiro num editor de texto: tem `"formato": "arqsynth-tabela"`, as colunas com `chave`, `nome` e
+   `unidade`, e as linhas com os números.
+7. Carregue em Ctrl+T: a aba da tabela fecha-se. Outra vez Ctrl+T: abre a última tabela vista.
+
 ## 0.475 — Ambientes: o programa de necessidades no painel lateral
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.475.0**. Faça Ctrl+N.

@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.477.0 — 2026-11-08
+
+**Tabelas na tela, geridas no painel lateral — 1.ª fase** (o dono: «A aba de tabelas também deve ser gerenciada pelo
+painel lateral, mas a tabela deve ser gerada na tela e não no rodapé… seria bom copiar o revit»).
+
+- O botão **Quantidades** da barra lateral abre o painel **Tabelas** na coluna da esquerda. A árvore tem todas as
+  tabelas, cada uma com o número de linhas:
+  - as **Tabelas do projeto**;
+  - as do programa: Quantidades do modelo, Ambientes e acabamentos, Portas e janelas, Instalações e Anotações.
+
+  Tem também uma caixa para procurar uma tabela.
+- Um clique numa tabela abre-a **numa aba na tela**, como uma folha. Por cima vai o título como no Revit
+  («<Paredes>»), as linhas são numeradas e os totais vão por baixo. Ctrl+T abre a última tabela vista e, com uma
+  tabela à vista, fecha-a. As tabelas deixaram de ficar no fundo da janela.
+- Os comandos da tabela vão na **barra de parâmetros**: Propriedades…, Por tipo, Realçar no modelo, Pôr numa folha,
+  Exportar… e Apagar (nas do projeto).
+- No painel ficam os botões **Nova tabela…**, **Propriedades…**, **Duplicar**, **Apagar** e **Exportar…**. O botão
+  direito tem ainda «Pôr numa folha nova».
+- **Propriedades da tabela como no Revit**, em abas:
+  - **Campos**: «Selecionar campos disponíveis em» (a categoria), uma pesquisa de nomes, e «Campos disponíveis» ao
+    lado de «Campos tabelados (na ordem)». Entre as duas listas, → acrescenta e ← tira; ↑ ↓ mudam a ordem; ƒx cria um
+    valor calculado (uma fórmula);
+  - **Filtro**;
+  - **Classificar/Agrupar**.
+
+  A tabela de uma categoria fica uma tabela do projeto ao mudar as propriedades.
+- **Exportar…** grava também **JSON para outros programas**, a pensar no **KazaFix Cost**. Leva o nome de cada coluna
+  e a sua chave fixa, a unidade (m, m², m³, un…), as linhas com os números como números e os totais. Continua também
+  a gravar Excel (XLSX) e CSV.
+- As próximas fases estão no PLANO (Tabelas como no Revit e no Excel):
+  - células como no Excel (unir, alinhar, bordas, fórmulas);
+  - formatação e aparência;
+  - mais tabelas (vistas, folhas, mapa de vãos, materiais, áreas);
+  - as tabelas no modelo base.
+
 ## 0.475.0 — 2026-11-08
 
 **Ambientes: o programa de necessidades no painel lateral** (o dono: «A aba ambiente quero que funcione no painel

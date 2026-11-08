@@ -343,7 +343,42 @@ _STRINGS = {
     "sched.by_storey": ("Agrupar por pavimento", "Group by storey"),
     "sched.count_rooms": ("{n} ambientes", "{n} rooms"),
     "sched.by_type": ("Agrupar por tipo", "Group by type"),
-    "sched.export": ("Exportar (Excel, CSV)…", "Export (Excel, CSV)…"),
+    "sched.export": ("Exportar (Excel, CSV, JSON)…", "Export (Excel, CSV, JSON)…"),
+    # (0.477) a table in its tab over the canvas, the side panel «Tabelas»
+    "sched.export_short": ("Exportar…", "Export…"),
+    "sched.export_tip": ("A tabela para o Excel (XLSX), CSV, ou JSON para outros programas (KazaFix Cost): números "
+                         "como números, com as unidades.",
+                         "The table to Excel (XLSX), CSV, or JSON for other programs (KazaFix Cost): numbers as "
+                         "numbers, with their units."),
+    "sched.properties": ("Propriedades…", "Properties…"),
+    "sched.properties_tip": ("Os campos, os filtros, a ordem e os grupos da tabela, como as Propriedades da tabela do "
+                             "Revit (a tabela de uma categoria fica uma tabela do projeto).",
+                             "The table's fields, filters, order and groups, as Revit's Schedule Properties (a "
+                             "category's table becomes one of the project's)."),
+    "sched.highlight": ("Realçar no modelo", "Highlight in model"),
+    "sched.highlight_tip": ("Escolhe no modelo os elementos das linhas escolhidas (todas, se nenhuma) e enquadra-os.",
+                            "Picks in the model the elements of the rows chosen (all, if none) and frames them."),
+    "sched.bar_title": ("Tabela: {name}", "Schedule: {name}"),
+    "tab.table": ("Tabela — {name}", "Schedule — {name}"),
+    "tables.title": ("Tabelas", "Schedules"),
+    "tables.hint": ("Clique numa tabela para a abrir na tela. Botão direito: mais comandos.",
+                    "Click a schedule to open it on the canvas. Right button: more commands."),
+    "tables.search": ("Procurar tabela…", "Find a schedule…"),
+    "tables.new": ("Nova tabela…", "New schedule…"),
+    "tables.new_tip": ("Uma tabela do projeto, como no Revit: a categoria, os campos, os filtros, a ordem e os grupos.",
+                       "A schedule of the project's, as in Revit: the category, fields, filters, order and groups."),
+    "tables.duplicate": ("Duplicar", "Duplicate"),
+    "tables.open": ("Abrir", "Open"),
+    "tables.put": ("Pôr numa folha nova", "Put on a new sheet"),
+    "tables.own_tip": ("Tabela do projeto ({cat})", "The project's schedule ({cat})"),
+    "tables.copy_name": ("{name} (cópia)", "{name} (copy)"),
+    "tables.group.own": ("Tabelas do projeto", "The project's schedules"),
+    "tables.group.quantities": ("Quantidades do modelo", "Model quantities"),
+    "tables.group.rooms": ("Ambientes e acabamentos", "Rooms and finishes"),
+    "tables.group.openings": ("Portas e janelas", "Doors and windows"),
+    "tables.group.services": ("Instalações", "Services"),
+    "tables.group.notes": ("Anotações", "Annotations"),
+    "info.table_deleted": ("Tabela apagada. Ctrl+Z desfaz.", "Schedule deleted. Ctrl+Z undoes."),
     "sched.count": ("{n} elementos", "{n} elements"),
     "sched.col.name": ("Nome", "Name"),
     "sched.col.type": ("Tipo", "Type"),
@@ -359,8 +394,10 @@ _STRINGS = {
     "sched.col.count": ("Quantidade", "Count"),
     "info.schedule_exported": ("Tabela exportada: {f}", "Schedule exported: {f}"),
     # (0.370) the tables as Excel workbooks too
-    "sched.table_filter": ("Livro do Excel (*.xlsx);;Tabela CSV para o Excel (*.csv)",
-                           "Excel workbook (*.xlsx);;CSV table for Excel (*.csv)"),
+    "sched.table_filter": ("Livro do Excel (*.xlsx);;Tabela CSV para o Excel (*.csv);;"
+                           "JSON para outros programas — KazaFix Cost (*.json)",
+                           "Excel workbook (*.xlsx);;CSV table for Excel (*.csv);;"
+                           "JSON for other programs — KazaFix Cost (*.json)"),
     "err.xlsx_missing": ("Para gravar em Excel (XLSX) é preciso a biblioteca openpyxl, que não está instalada. Grave "
                          "em CSV, que o Excel também abre.",
                          "Saving as Excel (XLSX) needs the openpyxl library, which is not installed. Save as CSV, "
@@ -2205,7 +2242,8 @@ _STRINGS = {
                       "na planta e as zonas conflitantes.",
                       "The room programme: each storey's rooms, the area wanted, placing them in the plan and the "
                       "conflicting zones."),
-    "tip.mod.quantities": ("As tabelas e as quantidades do modelo.", "The model's schedules and quantities."),
+    "tip.mod.quantities": ("As tabelas: a árvore de todas no painel lateral; cada uma abre-se na tela (Ctrl+T).",
+                           "The schedules: their tree in the side panel; each opens on the canvas (Ctrl+T)."),
     "tip.mod.materials": ("Os materiais com miniaturas: um clique pinta com ele; Editar: na vista, em corte e "
                           "realista, com texturas.", "The materials with miniatures: one click paints with it; Edit: in "
                           "view, cut and realistic, with textures."),
@@ -5364,12 +5402,26 @@ _STRINGS = {
     "sched.delete": ("Apagar", "Delete"),
     "sched.own": ("Tabela: {name}", "Schedule: {name}"),
     "sched.untitled": ("Tabela nova", "New schedule"),
-    "sched.editor": ("Tabela do projeto", "The project's schedule"),
+    "sched.editor": ("Propriedades da tabela", "Schedule properties"),
     "sched.def_name": ("Nome", "Name"),
-    "sched.def_category": ("Elementos", "Elements"),
-    "sched.def_fields": ("Colunas (marque as que quer; arraste para mudar a ordem):",
-                         "Columns (tick the ones wanted; drag to change their order):"),
-    "sched.def_formulas": ("Colunas com fórmulas:", "Columns with formulas:"),
+    "sched.def_category": ("Selecionar campos disponíveis em", "Select available fields from"),
+    "sched.def_fields": ("Campos tabelados (na ordem):", "Scheduled fields (in order):"),
+    "sched.def_formulas": ("Valores calculados (ƒx):", "Calculated values (ƒx):"),
+    # (0.477) the Properties as Revit's, in tabs
+    "sched.tab.fields": ("Campos", "Fields"),
+    "sched.tab.filter": ("Filtro", "Filter"),
+    "sched.tab.sort": ("Classificar/Agrupar", "Sorting/Grouping"),
+    "sched.search_label": ("Pesquisa de nomes de parâmetro", "Search parameter names"),
+    "sched.search_fields": ("escreva parte do nome", "type part of the name"),
+    "sched.available": ("Campos disponíveis:", "Available fields:"),
+    "sched.available_n": ("Campos disponíveis: {n} itens", "Available fields: {n} items"),
+    "sched.add_field": ("Acrescentar o campo à tabela", "Add the field to the schedule"),
+    "sched.remove_field": ("Tirar o campo da tabela", "Remove the field from the schedule"),
+    "sched.calculated": ("Valor calculado (uma fórmula com os campos de números)",
+                         "Calculated value (a formula of the number fields)"),
+    "sched.formula_new": ("Valor calculado", "Calculated value"),
+    "sched.field_up": ("Subir o campo", "Move the field up"),
+    "sched.field_down": ("Descer o campo", "Move the field down"),
     "sched.formula_name": ("Nome", "Name"),
     "sched.formula_expr": ("Fórmula", "Formula"),
     "sched.formula_hint": ("Na fórmula: números (1,10), + − * / ( ), round(x; casas), min, max, abs, e as colunas "

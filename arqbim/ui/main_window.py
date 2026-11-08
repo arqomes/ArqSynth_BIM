@@ -380,7 +380,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._scene_thumbs = {}       # (0.363) scene key -> JPEG of its view (the Presentation panel's thumbnails)
         self._move_play = None        # (0.364) a scene's camera move being played: {frames, kept, timer, started}
         self._sheet_drawings = {}     # drawing key -> Drawing, made since the model last changed
-        self.schedules_panel = schedules.dock(self)
+        # (0.477, the owner: «a tabela deve ser gerada na tela e não no rodapé») a table is a tab's page over the canvas,
+        # as a sheet is; the tables are chosen in the side panel «Tabelas»
+        self.schedules_panel = schedules.dock(self.centralWidget())
+        self._central_layout.addWidget(self.schedules_panel, 1)
         sp = self.schedules_panel
         sp.on_edit, sp.on_frame = self._on_property_edit, self._frame_from_tree
         sp.on_select = lambda ids: self._select_from_tree(self._circuit_points(ids))      # (a circuit: its points)
@@ -388,18 +391,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.doc.schedule_defs, defs, t("cmd.schedules")))
         sp.on_put = lambda index, kind, ref: self.sheet_action("put", index, kind, ref)   # (0.132) on a sheet
         sp.on_shown, sp.on_export = lambda: self._refresh_schedules(), self._export_schedule
-        act = sp.toggleViewAction()
-        act.setText(t("sched.title"))
-        act.setShortcut(QtGui.QKeySequence("Ctrl+T"))
-        self.addAction(act)            # (0.182: its key works with the menus hidden — a menu's own would not)
+        sp.on_ref = self._table_ref_shown                                              # (0.477)
+        sp.on_highlight = lambda ids: (self._select_from_tree(ids), self._frame_from_tree(ids))
+        self.act_tables = QtGui.QAction(t("sched.title"), self)
+        self.act_tables.setShortcut(QtGui.QKeySequence("Ctrl+T"))
+        self.act_tables.triggered.connect(lambda _on=False: self.toggle_table())
+        self.addAction(self.act_tables)  # (0.182: its key works with the menus hidden — a menu's own would not)
         self.view_menu.addSeparator()
         self.view_menu.addAction(self.props.toggleViewAction())   # reopen the panels after closing them
         self.view_menu.addAction(self.storeys_panel.toggleViewAction())
         self.view_menu.addAction(self.tree_panel.toggleViewAction())
-        self.view_menu.addAction(self.schedules_panel.toggleViewAction())
+        self.view_menu.addAction(self.act_tables)
         self.view_menu.addAction(self.rules_panel.toggleViewAction())
         self.ids_panel = ids_panel.dock(self)
-        self.tabifyDockWidget(self.schedules_panel, self.ids_panel)
         self.ids_panel.on_open = lambda: self.check_ids()
         self.ids_panel.on_again = lambda: self.check_ifc() if self._last_check == "ifc" else self.check_ids(
             self._ids_path)
@@ -408,15 +412,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._ids_path = None         # the IDS checked last
         self._last_check = "ids"      # what the panel shows: "ids" | "ifc" (the certification checks, 0.70)
         self.view_menu.addAction(self.ids_panel.toggleViewAction())
-        self.notes_panel = notes_panel.dock(self, beside=self.schedules_panel)
+        self.notes_panel = notes_panel.dock(self, beside=self.ids_panel)
         np_ = self.notes_panel
         np_.on_new, np_.on_go, np_.on_comment = self.new_note, self.go_to_note, self.comment_note
         np_.on_toggle, np_.on_delete = self.toggle_note, self.delete_note
         np_.on_import, np_.on_export = self.import_notes, self.export_notes
         self.view_menu.addAction(self.notes_panel.toggleViewAction())
         self.panels_menu.addActions([p.toggleViewAction() for p in (                 # (0.182: the ribbon's View)
-            self.props, self.storeys_panel, self.tree_panel, self.schedules_panel, self.rules_panel, self.ids_panel,
-            self.notes_panel)])
+            self.props, self.storeys_panel, self.tree_panel, self.rules_panel, self.ids_panel, self.notes_panel)])
+        self.panels_menu.addAction(self.act_tables)                                  # (0.477: a table's tab)
         self._build_modules()
 
         self.viewport.renderer.add_event_handler(self._on_pointer, "pointer_down", "pointer_move", "pointer_up")
@@ -1814,7 +1818,8 @@ class MainWindow(QtWidgets.QMainWindow):
     MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules", "settings")
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
                     "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel",   # (0.468)
-                    "rooms": "program_panel"}                   # (0.475: the programme's manager, no longer a table)
+                    "rooms": "program_panel",                   # (0.475: the programme's manager, no longer a table)
+                    "quantities": "tables_panel"}               # (0.477: the tables' tree, each opened in its tab)
 
     def _build_modules(self):
         """(0.184) Panel 4, the compact bar at the far left — icons only — and panel 5 beside it: the Project
@@ -1847,6 +1852,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.program_panel.on_storey = lambda guid: self.set_active_storey(guid)
         self.program_panel.on_ai = lambda: self.copy_program_prompt()
         self.program_panel.visibilityChanged.connect(lambda shown: self._refresh_program() if shown else None)
+        # (0.477, the owner: «A aba de tabelas também deve ser gerenciada pelo painel lateral») the «Quantidades»
+        # module's panel: the tree of every table, each opened in its tab over the canvas
+        from . import tables_panel as tables_ui
+        self.tables_panel = tables_ui.TablesPanel(self)
+        self.addDockWidget(left, self.tables_panel)
+        self.tables_panel.hide()
+        self.left_panels.append(self.tables_panel)
+        self.tables_panel.raise_ = lambda p=self.tables_panel: self._left_up(p)
+        tp = self.tables_panel
+        tp.on_open, tp.on_new, tp.on_properties = self.open_table, self.new_table, self.table_properties
+        tp.on_duplicate, tp.on_delete, tp.on_export = self.duplicate_table, self.delete_table, self.export_table
+        tp.on_put = lambda ref: self.sheet_action("put", None, "schedule", ref)
+        tp.visibilityChanged.connect(lambda shown: self._refresh_tables_panel() if shown else None)
         self.presentation_panel = presentation_panel.dock(self, self.program_panel)    # (0.363, hidden until asked)
         pp = self.presentation_panel
         pp.on_change, pp.on_order, pp.on_initial = self._scene_change, self._scene_order, self._scene_initial
@@ -1922,7 +1940,7 @@ class MainWindow(QtWidgets.QMainWindow):
             panel.show()
         QtWidgets.QDockWidget.raise_(panel)
         names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library",
-                 "materials_panel": "materials", "program_panel": "rooms"}
+                 "materials_panel": "materials", "program_panel": "rooms", "tables_panel": "quantities"}
         name = names.get(next((a for a in names if getattr(self, a, None) is panel), ""))
         if name and getattr(self, "module_actions", None) and \
                 not (name == "project" and self.module in ("library", "sheets")):
@@ -1948,10 +1966,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tree_panel.focus(("views", "sheets"))
             self.module = name
             self.module_actions[name].setChecked(True)
-        elif name == "quantities":
-            sp = self.schedules_panel
-            sp.show()
-            sp.raise_()
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])
@@ -1979,6 +1993,8 @@ class MainWindow(QtWidgets.QMainWindow):
         tool = self.tool
         if tool is None:
             return []
+        if self.table_shown():                      # (0.477) a table: its commands (Propriedades…, Exportar…)
+            return self.schedules_panel.context_items()
         if self.sheet_shown():                      # (0.472, the owner) a sheet: its commands, as a tool's
             return self.sheet_window.context_items()
         if tool.name != "select":
@@ -3612,6 +3628,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.canvas.hide()
             if self.sheet_window is not None:
                 self.sheet_window.hide()
+            self.schedules_panel.hide()                # (0.477: a table's page)
             self.start_page.refresh()
             self.start_page.show()
             self._step_docks_aside(True)
@@ -3621,6 +3638,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.start_page.hide()
             self._step_docks_aside(False)
             self.canvas.show()                     # (a sheet's branch below hides it again)
+        if kind == "table":                        # (0.477) a table, in place of the canvas as a sheet
+            self.canvas.hide()
+            if self.sheet_window is not None:
+                self.sheet_window.hide()
+            sp = self.schedules_panel
+            sp.doc = self.doc
+            sp.show()
+            sp.show_ref(key[1])
+            self._tick_plan(False)
+            self._refresh_properties()
+            self.refresh_context_bar()
+            if hasattr(self, "tables_panel"):
+                self.tables_panel.mark(key[1])
+            return
+        if self.table_shown():
+            self.schedules_panel.hide()
+            self.canvas.show()
+            self.refresh_context_bar()
         if kind == "sheet":
             sheet = next((s for s in self.doc.sheets if s.uid == key[1]), None)
             if sheet is not None:
@@ -3773,6 +3808,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return view.name if view is not None else t("tab.3d")
         if key[0] == "sheet":
             return next((s.name for s in self.doc.sheets if s.uid == key[1]), t("sheet.window"))
+        if key[0] == "table":                                    # (0.477)
+            self.schedules_panel.doc = self.doc
+            return t("tab.table", name=self.schedules_panel.title_of(key[1]))
         return self.view_label(key[0], key[1])
 
     def _view_exists(self, key):
@@ -3783,6 +3821,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return any(s.name == key[1] for s in self.doc.sections)
         if key[0] == "sheet":
             return any(s.uid == key[1] for s in self.doc.sheets)
+        if key[0] == "table":                                    # (0.477) a category's, or the project's own
+            ref = str(key[1])
+            return ref in schedules_model.CATEGORIES or any("def:" + d.uid == ref for d in self.doc.schedule_defs)
         if key[0] == "3d" and len(key) > 1:
             return self.doc.view3d(key[1]) is not None
         return True
@@ -3797,6 +3838,85 @@ class MainWindow(QtWidgets.QMainWindow):
     def sheet_shown(self):
         """A sheet's tab is shown (not the 3D canvas)."""
         return self.sheet_window is not None and not self.sheet_window.isHidden()
+
+    def table_shown(self):
+        """(0.477) A table's tab is shown (not the 3D canvas)."""
+        return hasattr(self, "schedules_panel") and not self.schedules_panel.isHidden()
+
+    # ------------------------------------------------------------ (0.477) the tables, in their tabs
+
+    def open_table(self, ref=None):
+        """A table in its tab over the canvas: `ref` a category's key or "def:<uid>" (None: the one last shown, at
+        first the walls')."""
+        ref = ref or self.schedules_panel.ref() or "walls"
+        self.views.open(("table", ref))
+        return self.schedules_panel
+
+    def toggle_table(self):
+        """Ctrl+T: the table last shown in its tab — or, a table's tab in view, it closed (as the panel it was)."""
+        current = self.views.current()
+        if current is not None and current[0] == "table":
+            self.views.close_current()
+            return None
+        return self.open_table()
+
+    def _table_ref_shown(self, ref):
+        """The table page shows another table (chosen there): its tab follows, the side panel marks it."""
+        if self.table_shown():
+            current = self.views.current()
+            if current is None or current[0] != "table" or current[1] != ref:
+                self.views.retarget(("table", ref))
+            self.refresh_context_bar()
+        if hasattr(self, "tables_panel"):
+            self.tables_panel.mark(ref)
+
+    def new_table(self, category="walls"):
+        """Nova tabela… (as Revit's New Schedule): a table of the project's own of that category — its Properties
+        asked (name, fields, filter, sort…) and, on OK, opened in its tab."""
+        category = category if category in schedules_model.CATEGORIES else "walls"
+        self.open_table(category)
+        defn = schedules_model.ScheduleDef(t("sched.untitled"), category, list(schedules_model.available(category)))
+        self.schedules_panel.edit_schedule(defn)
+        return self.schedules_panel
+
+    def table_properties(self, ref):
+        """A table's Propriedades… (its tab opened first)."""
+        self.open_table(ref)
+        self.schedules_panel.properties()
+
+    def duplicate_table(self, ref):
+        """Duplicar: a table of the project's own like this one (a category's: its columns), opened. One undo step."""
+        own = next((d for d in self.doc.schedule_defs if "def:" + d.uid == ref), None)
+        if own is not None:
+            copy_ = schedules_model.def_from_dict(dict(schedules_model.def_to_dict(own), uid=None))
+            copy_.name = t("tables.copy_name", name=own.name)
+        elif ref in schedules_model.CATEGORIES:
+            copy_ = schedules_model.ScheduleDef(t("sched.cat." + ref), ref, list(schedules_model.available(ref)))
+        else:
+            return None
+        self.doc.execute(schedules_model.SetScheduleDefs(self.doc.schedule_defs, self.doc.schedule_defs + [copy_],
+                                                         t("cmd.schedules")))
+        self.open_table("def:" + copy_.uid)
+        return copy_
+
+    def delete_table(self, ref):
+        """Apagar a table of the project's own (its tab closed). One undo step."""
+        if not any("def:" + d.uid == ref for d in self.doc.schedule_defs):
+            return False
+        self.doc.execute(schedules_model.SetScheduleDefs(
+            self.doc.schedule_defs, [d for d in self.doc.schedule_defs if "def:" + d.uid != ref], t("cmd.schedules")))
+        self.views.refresh(self._view_exists)
+        self.message(t("info.table_deleted"))
+        return True
+
+    def export_table(self, ref):
+        """Exportar… a table (opened in its tab first): Excel, CSV or JSON for other programs (KazaFix Cost)."""
+        self.open_table(ref)
+        self.schedules_panel._export()
+
+    def _refresh_tables_panel(self):
+        if hasattr(self, "tables_panel") and self.tables_panel.isVisible() and not self.doc.loading:
+            self.tables_panel.show_document(self.doc, self.schedules_panel.ref() if self.table_shown() else None)
 
     def _delete(self):
         """Delete: on a sheet, the view picked there comes off the sheet (nothing of the model is
@@ -7304,8 +7424,9 @@ class MainWindow(QtWidgets.QMainWindow):
             for act, was in getattr(self, "_enabled_before", {}).items():
                 act.setEnabled(was)
             self._enabled_before = {}
-        for panel in (self.tree_panel, self.storeys_panel, self.props, self.schedules_panel, self.rules_panel):
+        for panel in (self.tree_panel, self.storeys_panel, self.props, self.rules_panel):
             panel.widget().setEnabled(not on)
+        self.schedules_panel.setEnabled(not on)            # (0.477: a tab's page, no longer a panel)
         self.loading_box.setVisible(on)
 
     def _open_progress(self, dialog, name, stage, percent):
@@ -7423,6 +7544,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.schedules_panel.doc = self.doc
         if self.schedules_panel.wants(changed, removed):
             self.schedules_panel.refresh()
+        if hasattr(self, "tables_panel") and self.tables_panel.isVisible() and (       # (0.477: the tree's counts)
+                changed is None or removed or VIEWS_CHANGED in changed or any(
+                    self.doc.get(i) is not None and self.doc.get(i).is_bim for i in changed)):
+            self._refresh_tables_panel()
 
     def run_busy(self, fn, label):
         """Run fn() in a worker thread; the window keeps drawing, with a progress window (no
@@ -8732,35 +8857,40 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.export_sheets(sheets, fmt, name=name)
 
-    def _export_schedule(self, header, table, path=None):
+    def _export_schedule(self, header, table, path=None, columns=None):
         """Schedules ▸ Export: the table as shown — (0.370) an Excel workbook, its numbers as numbers, or a CSV for
-        Excel (';' and decimal comma in Portuguese). Returns its path, or None."""
-        title = self.schedules_panel.category.currentText() if hasattr(self, "schedules_panel") else ""
+        Excel (';' and decimal comma in Portuguese); (0.477) or JSON for other programs (KazaFix Cost: its columns'
+        keys and units). Returns its path, or None."""
+        sp = getattr(self, "schedules_panel", None)
+        title = sp.title_of(sp.ref()) if sp is not None and sp.ref() else ""
         if path is None:
             base = os.path.splitext(self.doc.path)[0] if self.doc.path else os.path.join(_documents_dir(), "tabela")
             path = self._table_path(t("sched.export"), "{} - {}.xlsx".format(base, title) if title else base + ".xlsx")
             if path is None:
                 return None
-        if not self._write_table(path, header, table, title):
+        if not self._write_table(path, header, table, title, columns):
             return None
         self.message(t("info.schedule_exported", f=os.path.basename(path)))
         return path
 
     def _table_path(self, title, start):
-        """(0.370) Where a table goes: asked — an Excel workbook (XLSX) first, or a CSV —; a name typed without an
-        extension takes the type chosen's. None: not given."""
+        """(0.370) Where a table goes: asked — an Excel workbook (XLSX) first, or a CSV, (0.477) or JSON —; a name typed
+        without an extension takes the type chosen's. None: not given."""
         path, chosen = QtWidgets.QFileDialog.getSaveFileName(self, title, start, t("sched.table_filter"))
         if not path:
             return None
         if os.path.splitext(path)[1].lower() not in schedules_model.TABLE_FORMATS:
-            path += ".csv" if "csv" in (chosen or "").lower() else ".xlsx"
+            chosen = (chosen or "").lower()
+            path += ".csv" if "csv" in chosen else ".json" if "json" in chosen else ".xlsx"
         return path
 
-    def _write_table(self, path, header, table, title=None):
-        """(0.370) A table to `path`, an Excel workbook or a CSV by its extension (model/schedules.write_table).
-        False (and said why) when it could not be written."""
+    def _write_table(self, path, header, table, title=None, columns=None):
+        """(0.370) A table to `path`, an Excel workbook, a CSV or (0.477) JSON by its extension
+        (model/schedules.write_table). False (and said why) when it could not be written."""
+        project = os.path.splitext(os.path.basename(self.doc.path))[0] if self.doc.path else ""
         try:
-            schedules_model.write_table(path, header, table, decimal=decimal_sep(), title=title)
+            schedules_model.write_table(path, header, table, decimal=decimal_sep(), title=title, columns=columns,
+                                        project=project)
         except ImportError:
             self.message(t("err.xlsx_missing"), warning=True)
             return False

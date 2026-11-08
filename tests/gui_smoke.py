@@ -162,7 +162,7 @@ def shot(name):
         painter = QtGui.QPainter(pix)
         parts = [w for w in win.children() if isinstance(w, QtWidgets.QWidget) and w.isVisible()
                  and not w.isWindow() and w is not win.centralWidget()]
-        for w in parts + [win.view_bar, win.sheet_window]:
+        for w in parts + [win.view_bar, win.sheet_window, getattr(win, "schedules_panel", None)]:   # (0.477: a table)
             if w is not None and w.isVisible():
                 painter.drawPixmap(w.mapTo(win, QtCore.QPoint(0, 0)), w.grab())
         if canvas.isVisible():
@@ -848,6 +848,7 @@ def bim_flow():
     sheet_bar_flow()                  # (0.472)
     title_block_editor_flow()         # (0.473)
     room_program_manager_flow()       # (0.475)
+    tables_panel_flow()               # (0.477)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -1974,6 +1975,8 @@ def schedules_flow():
     panel = win.schedules_panel
     key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
     pump(400)
+    win.open_table("walls")                      # (0.477: Ctrl+T opens the table last shown — the walls' wanted here)
+    pump(300)
     walls = [o.id for o in objects() if o.is_bim and o.ifc_class == "IfcWall"]
     check("tabelas_ctrl_t", panel.isVisible() and panel.table.rowCount() == len(walls)
           and "Comprimento" in panel.text() and panel.totals.text().startswith("{} elementos".format(len(walls))),
@@ -10371,6 +10374,92 @@ def sheet_bar_flow():
           "barra={} sem_barra_propria={} escala_vista={} importado={} escala={} arrastado={} dois={} apagado={} "
           "desfeito={} carimbo={} {}".format(on_bar, no_own_bar, scale_on_bar, imported, rescaled, moved, two, deleted,
                                              undone, company, texts))
+
+
+def tables_panel_flow():
+    """0.477 (the owner: «A aba de tabelas também deve ser gerenciada pelo painel lateral, mas a tabela deve ser gerada
+    na tela e não no rodapé… copiar o revit a forma como cria os elementos e filtra as informações»): three walls; the
+    «Quantidades» module: the side panel «Tabelas» in the left column, its tree with «Paredes (3)»; a click on it: its
+    tab over the canvas «Tabela — Paredes», three rows, its commands on the parameters' bar; Nova tabela…: the
+    Properties as Revit's (Campos / Filtro / Classificar/Agrupar; the fields available and scheduled side by side, → and
+    ←) — «Paredes por área», the volume taken away: the tab becomes it, the tree lists it; Duplicar and Apagar the
+    copy; Exportar… as JSON for KazaFix Cost (its columns' keys and units, numbers as numbers); Ctrl+T closes the tab.
+    Captured: 477_tabelas_painel.png."""
+    import json
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    for a, b in (((0, 0, 0), (5, 0, 0)), ((0, 2, 0), (3, 2, 0)), ((0, 4, 0), (8, 4, 0))):
+        B.add_wall(doc, np.array(a, float), np.array(b, float), spec)
+    pump(200)
+    win.set_module("quantities")
+    pump(400)
+    panel = win.tables_panel
+    side = win.dockWidgetArea(panel) == Qt.DockWidgetArea.LeftDockWidgetArea and panel.isVisible() and \
+        "Paredes (3)" in panel.text()
+    tree_click_item = panel.item_for("walls")
+    panel.tree.setCurrentItem(tree_click_item)
+    panel._open(tree_click_item)
+    pump(400)
+    sp = win.schedules_panel
+    opened = win.table_shown() and win.views.current() == ("table", "walls") and sp.table.rowCount() == 3 and \
+        not canvas.isVisible()
+    texts = [a.text() for a in win.context_bar.actions() if a.text()]
+    bar = any("Propriedades" in x for x in texts) and any("Exportar" in x for x in texts)
+    seen = {}
+
+    def fill():
+        d = getattr(sp, "_editor", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        seen["tabs"] = [d.tabs.tabText(k) for k in range(d.tabs.count())]
+        seen["both"] = d.fields.count() > 0 and d.available.count() == 0 and "volume" in d.chosen_fields()
+        d.name.setText("Paredes por área")
+        d.remove_fields(["volume"])
+        seen["moved"] = "volume" not in d.chosen_fields() and d.available.count() == 1
+        d.accept()
+
+    sp._editor = None
+    QtCore.QTimer.singleShot(100, fill)
+    panel.new_button.click()
+    pump(500)
+    own = next((x for x in doc.schedule_defs if x.name == "Paredes por área"), None)
+    made = own is not None and "volume" not in own.fields and win.views.current() == ("table", "def:" + own.uid) \
+        and "Paredes por área" in panel.text() and seen.get("tabs") == ["Campos", "Filtro", "Classificar/Agrupar"] \
+        and seen.get("both") and seen.get("moved")
+    shot("477_tabelas_painel.png")
+    copy_ = win.duplicate_table("def:" + own.uid) if own is not None else None
+    pump(300)
+    duplicated = copy_ is not None and len(doc.schedule_defs) == 2
+    deleted = copy_ is not None and win.delete_table("def:" + copy_.uid) and len(doc.schedule_defs) == 1
+    pump(300)
+    path = os.path.join(tempfile.mkdtemp(), "paredes.json")
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, "JSON (*.json)"))
+    win.export_table("walls")
+    pump(300)
+    data = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
+    cols = {c["chave"]: c["unidade"] for c in data.get("colunas", ())}
+    exported = data.get("formato") == "arqsynth-tabela" and len(data.get("linhas", ())) == 3 and \
+        cols.get("length") == "m" and cols.get("area") == "m2" and cols.get("volume") == "m3" and \
+        abs(data.get("totais", {}).get("length", 0) - 16.0) < 1e-6 and \
+        isinstance(data["linhas"][0].get("length"), (int, float))
+    tabs_before = sum(1 for k in win.views.keys if k[0] == "table")
+    for _k in range(tabs_before):                    # (Ctrl+T closes the table's tab in view: the next may be one)
+        key(Qt.Key.Key_T, Qt.KeyboardModifier.ControlModifier)
+        pump(200)
+    closed = tabs_before == 2 and not win.table_shown() and canvas.isVisible() and \
+        not any(k[0] == "table" for k in win.views.keys)
+    win.set_module("project")
+    win.open_view("3d", None)
+    pump(300)
+    check("tabelas_no_painel_e_na_tela", side and opened and bar and made and duplicated and deleted and exported
+          and closed,
+          "painel={} aberta={} barra={} nova={} {} duplicada={} apagada={} json={} fechada={} | {}".format(
+              side, opened, bar, made, seen, duplicated, deleted, exported, closed, cols))
 
 
 def room_program_manager_flow():

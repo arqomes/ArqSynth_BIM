@@ -4,11 +4,17 @@ Like a spreadsheet: names, wall lengths and heights, column heights can be typed
 cell (one undo step each, as in the Properties panel). A click selects the element in
 3D, a double-click on a cell one cannot edit frames it; "Export CSV" writes the table
 for Excel. Brought up to date whenever the model changes while it is shown.
+
+(0.477, the owner: «A aba de tabelas também deve ser gerenciada pelo painel lateral, mas a tabela deve ser gerada na
+tela e não no rodapé») The table is a view of its own, in a tab over the canvas as a sheet is (("table", its ref): a
+category's key or "def:<uid>"), its title over it as Revit's («<Paredes>»); the tables are chosen in the side panel
+«Tabelas» (ui/tables_panel.py) and its commands are on the parameters' bar (context_items): Propriedades… (as Revit's
+Table Properties), Por tipo, Realçar no modelo, Pôr na folha, Exportar….
 """
 
 import re
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core.units import format_length, parse_length
 from ..i18n import decimal_sep, t
@@ -30,13 +36,19 @@ def _number(column, value):
     return format_length(value, sep).replace("~ ", "")
 
 
-class SchedulesPanel(QtWidgets.QDockWidget):
+class SchedulesPanel(QtWidgets.QWidget):
+    """(0.477) A table shown in its tab over the canvas (it was a panel along the window's foot: its name kept)."""
+
     def __init__(self, parent):
-        super().__init__(t("sched.title"), parent)
+        super().__init__(parent)
         self.setObjectName("schedules")
-        body = QtWidgets.QWidget()
+        body = self
         layout = QtWidgets.QVBoxLayout(body)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(6, 6, 6, 6)
+        self.heading = QtWidgets.QLabel("")             # (0.477) its title over it, as Revit's «<Paredes>»
+        self.heading.setObjectName("table_heading")
+        self.heading.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.heading)
         bar = QtWidgets.QHBoxLayout()
         self.category = QtWidgets.QComboBox()
         for key in schedules.ORDER:
@@ -51,19 +63,20 @@ class SchedulesPanel(QtWidgets.QDockWidget):
         self.put.setMenu(self.put_menu)
         self.put_menu.aboutToShow.connect(self._fill_put_menu)
         self.totals = QtWidgets.QLabel()
+        self.totals.setWordWrap(True)
         for w in (self.category, self.grouped, self.new_def, self.edit_def, self.delete_def, self.put, self.export):
             bar.addWidget(w)
-        bar.addWidget(self.totals, 1)
+            w.hide()                 # (0.477: the table is chosen in the side panel, its commands on the bar above)
         layout.addLayout(bar)
         self.table = QtWidgets.QTableWidget()
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.DoubleClicked
                                    | QtWidgets.QAbstractItemView.EditTrigger.EditKeyPressed
                                    | QtWidgets.QAbstractItemView.EditTrigger.AnyKeyPressed)
-        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(True)  # (0.477: the rows numbered, as Revit's and a spreadsheet's)
         self.table.setAlternatingRowColors(True)
-        layout.addWidget(self.table)
-        self.setWidget(body)
+        layout.addWidget(self.table, 1)
+        layout.addWidget(self.totals)
 
         # callbacks set by the main window
         self.on_edit = None          # (action, guid, value)
@@ -73,13 +86,33 @@ class SchedulesPanel(QtWidgets.QDockWidget):
         self.on_export = None        # (header, table)
         self.on_defs = None          # (the project's own schedules, all of them, as they are to be now) (0.131)
         self.on_put = None           # (sheet index or None for a new one, "schedule", its ref) (0.132)
+        self.on_ref = None           # (0.477) (its ref): another table shown in it (its tab follows)
+        self.on_highlight = None     # (0.477) (ids): Realçar no modelo — the rows' elements chosen in the model
+
+        # (0.477) its commands, on the window's parameters' bar while a table's tab is shown
+        def act(text, slot, tip=None, checkable=False):
+            a = QtGui.QAction(text, self)
+            a.setCheckable(checkable)
+            if tip:
+                a.setToolTip(tip)
+            a.triggered.connect(slot)
+            return a
+        self.act_properties = act(t("sched.properties"), lambda _on=False: self.properties(),
+                                  t("sched.properties_tip"))
+        self.act_grouped = act(t("sched.by_type"), lambda on: self.grouped.setChecked(on), checkable=True)
+        self.grouped.toggled.connect(lambda on: self.act_grouped.setChecked(on))
+        self.act_highlight = act(t("sched.highlight"), lambda _on=False: self.highlight(), t("sched.highlight_tip"))
+        self.act_put = act(t("sched.put"), lambda _on=False: None)
+        self.act_put.setMenu(self.put_menu)
+        self.act_export = act(t("sched.export_short"), lambda _on=False: self._export(), t("sched.export_tip"))
+        self.act_delete = act(t("sched.delete"), lambda _on=False: self._delete_schedule())
 
         self.doc = None
         self._stale = True
         self._filling = False
         self._shown = set()          # element ids in the table
         self._columns = ()
-        self.category.currentIndexChanged.connect(lambda _i: self.refresh())
+        self.category.currentIndexChanged.connect(lambda _i: self._ref_changed())
         self.grouped.toggled.connect(lambda _on: self.refresh())
         self.export.clicked.connect(self._export)
         self.new_def.clicked.connect(lambda: self.edit_schedule(None))
@@ -88,18 +121,90 @@ class SchedulesPanel(QtWidgets.QDockWidget):
         self.table.itemChanged.connect(self._changed)
         self.table.itemSelectionChanged.connect(self._selected)
         self.table.itemDoubleClicked.connect(self._double_clicked)
-        self.visibilityChanged.connect(lambda shown: shown and self._stale and self.on_shown and self.on_shown())
+        self.restyle()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._stale and self.on_shown is not None:
+            self.on_shown()
+
+    def restyle(self):
+        from . import theme
+        self.heading.setStyleSheet("QLabel#table_heading { font-size: 15px; font-weight: 600; color: %s;"
+                                   " padding: 4px; }" % theme.C["text"])
 
     @staticmethod
     def _later(fn, *args):
         if fn is not None:
             QtCore.QTimer.singleShot(0, lambda: fn(*args))
 
+    # ------------------------------------------------------------ (0.477) the table in its tab
+
+    def ref(self):
+        """The table shown: a category's key, or "def:<uid>" (the project's own)."""
+        return self.category.currentData()
+
+    def show_ref(self, ref):
+        """That table shown (its tab was chosen)."""
+        k = self.category.findData(ref)
+        if k < 0 and self.doc is not None:
+            self._sync_categories()
+            k = self.category.findData(ref)
+        if k >= 0 and k != self.category.currentIndex():
+            self.category.setCurrentIndex(k)           # (refreshes it)
+        else:
+            self.refresh()
+
+    def _ref_changed(self):
+        self.refresh()
+        if self.on_ref is not None and self.ref():
+            self.on_ref(self.ref())
+
+    def title_of(self, ref):
+        """A table's name: its category's («Paredes»), or the project's own one's."""
+        if str(ref).startswith("def:"):
+            own = next((d for d in getattr(self.doc, "schedule_defs", ()) if "def:" + d.uid == ref), None)
+            return own.name if own is not None else t("sched.title")
+        return t("sched.cat." + ref) if ref in schedules.CATEGORIES else t("sched.title")
+
+    def context_items(self):
+        """The parameters' bar while the table is shown: its name, Propriedades…, Por tipo (a category's), Realçar no
+        modelo, Pôr na folha, Exportar… (and Apagar, the project's own)."""
+        own = self._own()
+        items = [("title", t("sched.bar_title", name=self.title_of(self.ref())))]
+        items += [("action", self.act_properties)]
+        if own is None:
+            items.append(("action", self.act_grouped))
+        items += [("separator",), ("action", self.act_highlight), ("action", self.act_put), ("action", self.act_export)]
+        if own is not None:
+            items += [("separator",), ("action", self.act_delete)]
+        return items
+
+    def properties(self):
+        """Propriedades… (as Revit's Table Properties): the project's own table edited — a category's made one of the
+        project's own, starting from its columns."""
+        own = self._own()
+        if own is not None:
+            self.edit_schedule(own)
+            return
+        key = self.ref() if self.ref() in schedules.CATEGORIES else "walls"
+        defn = schedules.ScheduleDef(t("sched.cat." + key), key, list(schedules.available(key)))
+        self.edit_schedule(defn)                         # (a new one: added on OK)
+
+    def highlight(self):
+        """Realçar no modelo: the elements of the rows chosen (all of them, none chosen) chosen in the model."""
+        rows = sorted({i.row() for i in self.table.selectionModel().selectedRows()}) or range(self.table.rowCount())
+        ids = [self.table.item(r, 0).data(GUID) for r in rows if self.table.item(r, 0) is not None]
+        ids = [i for i in ids if i is not None]
+        if ids and self.on_highlight is not None:
+            self._later(self.on_highlight, ids)
+        return ids
+
     # ------------------------------------------------------------ content
 
     def wants(self, changed, removed):
         """Does a document change concern what is shown? (out of view: brought up to date later)"""
-        if not self.isVisible():
+        if self.isHidden():
             self._stale = True
             return False
         return changed is None or self._stale or bool(removed) or any(i in self._shown for i in changed) \
@@ -143,6 +248,7 @@ class SchedulesPanel(QtWidgets.QDockWidget):
             return
         self._stale = False
         self._sync_categories()
+        self.heading.setText("<{}>".format(self.title_of(self.ref())))      # (0.477, as Revit's)
         own = self._own()
         self.grouped.setVisible(own is None)
         self.edit_def.setEnabled(own is not None)
@@ -372,12 +478,11 @@ class SchedulesPanel(QtWidgets.QDockWidget):
         """The table as shown (its values as numbers, for Excel)."""
         header = [self.table.horizontalHeaderItem(c).text() for c in range(self.table.columnCount())]
         if self.on_export is not None:
-            self.on_export(header, list(getattr(self, "_export_rows", [])))
+            self.on_export(header, list(getattr(self, "_export_rows", [])), columns=list(self._columns))
 
 
 def dock(parent):
-    """The panel along the bottom of the window, closed at first (View ▸ Schedules)."""
+    """(0.477) The table's page, hidden until a table's tab is chosen (the window puts it in place of the canvas)."""
     panel = SchedulesPanel(parent)
-    parent.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, panel)
     panel.hide()
     return panel

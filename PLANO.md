@@ -231,6 +231,20 @@ projeto. Os tamanhos são relativos: P (um ou dois dias de trabalho meu), M (alg
    (0.473.0, o dono: «maior liberdade criativa»).
 7. ~~**Tabelas:** editor com campos, fórmulas, filtros e modelos~~ (0.131.0: tabelas próprias do projeto,
    guardadas com nome); ~~tabelas nas folhas~~ (0.132.0).
+   **Tabelas como no Revit e no Excel** (pedido do dono, 2026-11-08: «a tabela deve ser gerada na tela… algo
+   abrangente para criar quantificação, exportar… para o KazaFix Cost… em células como no excel… guardável no arquivo
+   base»), por fases:
+   1. ~~O painel lateral «Tabelas» com a árvore de todas; cada tabela numa aba na tela; os comandos na barra de
+      parâmetros; Propriedades como no Revit (Campos disponíveis ↔ tabelados, Filtro, Classificar/Agrupar); exportar
+      JSON para o KazaFix Cost~~ (0.477.0).
+   2. Células como no Excel: unir células, alinhamento, bordas, fórmulas (=SOMA(C2:C9)…), linhas e células livres
+      (títulos, notas); inserir campos e fórmulas numa célula com o botão direito ou pelo painel.
+   3. Formatação e Aparência como no Revit: nome de cada coluna, unidades e casas decimais por campo, totais por campo,
+      cabeçalhos e rodapés de grupo, totais gerais, «cada instância», grelha e letra.
+   4. Mais tabelas: lista de vistas, lista de folhas, mapa de vãos (portas e janelas juntas), materiais (quantidades
+      por camada e material), áreas (implantação, construção, útil), elementos de várias categorias.
+   5. As tabelas no modelo base (arquivo base) e na biblioteca do escritório, para os outros projetos; importar as
+      tabelas de outro projeto.
 8. ~~**Vistas:** alçados cardinais automáticos~~ (já existiam desde a 0.29.0), ~~vistas de detalhe~~
    (0.133.0: pormenores com chamada), ~~vistas 3D nas folhas~~ (0.134.0: em linhas, axonometria).
    **Fase 5 completa** (faltam os restos anotados nos passos 1, 2 e 3).
