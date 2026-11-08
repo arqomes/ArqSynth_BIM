@@ -3374,9 +3374,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dock_titles()                                 # (0.374: before the panels are made again in the theme)
         self.props.restyle()
         self.quick.restyle()                               # (0.354)
-        for panel in (getattr(self, "program_panel", None), getattr(self, "presentation_panel", None)):
-            if panel is not None:                          # (0.357; 0.363: their notes, the thumbnails' cards)
-                panel.restyle()
+        for panel in (getattr(self, "program_panel", None), getattr(self, "presentation_panel", None),
+                      getattr(self, "materials_panel", None)):
+            if panel is not None:                          # (0.357; 0.363: their notes, the thumbnails' cards; 0.474:
+                panel.restyle()                            # the Materials panel's notes)
         if getattr(self, "_help", None) is not None:       # (the Help panel, once F1 made it)
             self._help.restyle()
         if getattr(self, "start_page", None) is not None:  # (0.387)

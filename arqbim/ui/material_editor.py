@@ -123,6 +123,14 @@ def _settings():
     return QtCore.QSettings(*SETTINGS)
 
 
+def _tint(label, role):
+    """(0.474) A label in a colour of the theme (theme.C[role]) — kept so that MaterialEditor.restyle gives it the new
+    theme's: the panel is made once (0.468), and a colour written in its style sheet stayed the theme's of then (the
+    dark theme's text on the dark canvas: unreadable)."""
+    label.setProperty("theme_colour", role)
+    label.setStyleSheet("QLabel { color: %s; }" % theme.C[role])
+
+
 class ColourButton(QtWidgets.QPushButton):
     """(0.314) A button showing a colour ("#rrggbb"); clicked, the colour chooser."""
 
@@ -531,7 +539,7 @@ class MaterialEditor(QtWidgets.QWidget):
         col.addWidget(self.list, 1)
         self.hint = QtWidgets.QLabel(t("matp.hint"))
         self.hint.setWordWrap(True)
-        self.hint.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        _tint(self.hint, "note")
         col.addWidget(self.hint)
         self.family.currentIndexChanged.connect(lambda _i: self._fill_list(self._chosen_key(), force=False))
         self.search.textChanged.connect(lambda _t: self._fill_list(self._chosen_key(), force=False))
@@ -579,7 +587,7 @@ class MaterialEditor(QtWidgets.QWidget):
         side.addLayout(shapes)
         self.used = QtWidgets.QLabel()
         self.used.setWordWrap(True)
-        self.used.setStyleSheet("QLabel { color: %s; }" % theme.C["ctx_text"])
+        _tint(self.used, "ctx_text")
         side.addWidget(self.used)
         side.addStretch(1)
         top.addLayout(side, 1)
@@ -630,7 +638,7 @@ class MaterialEditor(QtWidgets.QWidget):
         self.cut = _Pair(g, 0, self._changed, model=False, narrow=True)
         self.cut_note = QtWidgets.QLabel(t("mat.cut_by_category"))
         self.cut_note.setWordWrap(True)
-        self.cut_note.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        _tint(self.cut_note, "note")
         g.addWidget(self.cut_note, 2, 0, 1, 3)
         self.cut_sample = _Sample(lambda: self.cut.combos[0].pick())
         self.cut_sample.setFixedSize(*PREVIEW)
@@ -691,7 +699,7 @@ class MaterialEditor(QtWidgets.QWidget):
         self.roughness.setToolTip(t("tip.matp.roughness"))
         self.metallic.setToolTip(t("tip.matp.metallic"))
         opacity_note = QtWidgets.QLabel(t("matp.opacity_note"))
-        opacity_note.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        _tint(opacity_note, "note")
         opacity_note.setWordWrap(True)
         self.emission_colour = ColourButton(t("matp.emission"), "#ffffff")
         self.emission_colour.setMinimumWidth(70)
@@ -814,7 +822,7 @@ class MaterialEditor(QtWidgets.QWidget):
         """(0.319) A group's line of advice: the pattern is chosen by clicking it."""
         hint = QtWidgets.QLabel(t("mat.pick_hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        _tint(hint, "note")
         return hint
 
     def _beside(self):
@@ -1497,6 +1505,14 @@ class MaterialEditor(QtWidgets.QWidget):
             self._dirty = False
             self._fill_list()
 
+    def restyle(self):
+        """(0.474) Its grey notes in the theme now in use (see _tint)."""
+        for label in self.findChildren(QtWidgets.QLabel):
+            role = label.property("theme_colour")
+            if role in theme.C:
+                label.setStyleSheet("QLabel { color: %s; }" % theme.C[role])
+        self.update()
+
 
 class MaterialsPanel(QtWidgets.QDockWidget):
     """(0.468) The materials in the column: the module bar's «Materiais», before the Library."""
@@ -1516,6 +1532,9 @@ class MaterialsPanel(QtWidgets.QDockWidget):
             self._stale = False
         else:
             self._stale = True
+
+    def restyle(self):
+        self.editor.restyle()
 
 
 class MaterialsDialog(QtWidgets.QDialog):

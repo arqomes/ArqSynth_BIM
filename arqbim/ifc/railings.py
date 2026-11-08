@@ -151,25 +151,6 @@ class RailingMixin:
                                                  f.createIfcDirection(tuple(float(c) for c in ref))),
             f.createIfcDirection((0.0, 0.0, 1.0)), float(length * u))
 
-    def _glass_panel(self, a, b, z_lo, z_hi):
-        """A glass panel between two points of the path (its sides upright, its top and foot along the path)."""
-        f, u = self.file, 1.0 / self.unit_scale
-        a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
-        run = float(np.linalg.norm((b - a)[:2]))
-        d = (b - a)[:2] / run
-        rise = float(b[2] - a[2])
-        side = [(0.0, z_lo), (run, rise + z_lo), (run, rise + z_hi), (0.0, z_hi)]
-        coords = [(float(x * u), float(z * u)) for x, z in side] + [(float(side[0][0] * u), float(side[0][1] * u))]
-        left = np.array((-d[1], d[0], 0.0))
-        origin = a + left * GLASS / 2
-        return f.createIfcExtrudedAreaSolid(
-            f.createIfcArbitraryClosedProfileDef("AREA", None, f.createIfcIndexedPolyCurve(
-                f.createIfcCartesianPointList2D(coords), None, False)),
-            f.createIfcAxis2Placement3D(f.createIfcCartesianPoint(tuple(float(c * u) for c in origin)),
-                                        f.createIfcDirection(tuple(float(c) for c in -left)),
-                                        f.createIfcDirection((float(d[0]), float(d[1]), 0.0))),
-            f.createIfcDirection((0.0, 0.0, 1.0)), float(GLASS * u))
-
     def _round_along(self, a, b, diameter):
         """(0.258) A round bar of `diameter` from a to b (any direction): an IfcExtrudedAreaSolid of a circle."""
         f, u = self.file, 1.0 / self.unit_scale

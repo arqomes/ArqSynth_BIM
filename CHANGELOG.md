@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.474.0 — 2026-11-08
+
+**A bateria de testes da janela volta a passar** (o dono: «Faça esta tarefa aqui: corrigir as 24 falhas antigas»).
+Havia 24 verificações a falhar desde as versões 0.442–0.471. Umas eram defeitos do programa, outras testes que
+ficaram para trás depois de mudanças feitas de propósito.
+
+Corrigido no programa:
+
+- **Abrir um IFC em segundo plano**: enquanto o ficheiro ainda era lido, o painel Pavimentos dava um erro (o «=» dos
+  pavimentos iguais perguntava ao IFC antes de ele existir). O rodapé com o pavimento e a árvore não se atualizavam.
+- **Fachada de vidro numa parede curva**: o início e o fim agarravam aos cantos das facetas da parede (as faces da
+  parede curva são desenhadas em bocadinhos retos). O arco saía uns graus ao lado e encostado à face interior. Agora
+  segue exatamente o ponto clicado, sempre entre as pontas da parede.
+- **Tema escuro no painel Materiais**: as notas cinzentas («Usado em … tipo(s)», as dicas) ficavam com a cor do tema
+  claro e quase não se liam. Agora mudam com o tema.
+- Duas funções repetidas no código, em que a segunda escondia a primeira: a imagem da vista (usada nas notas) e o painel
+  de vidro das guardas.
+
+Os testes acompanham agora o que mudou de propósito: a aba «Folhas» do navegador que fica escolhida (0.470), os lados
+do polígono que se escolhem com um clique perto deles (0.459), o valor das cotas em cima da linha (0.446), Afastamento,
+Cadeia e Raio na barra da Parede (0.450), as formas novas da Laje antes da varinha mágica (0.456), o aspeto realista
+dos materiais no render (0.470), o duplo clique na legenda que abre «Editar tipo» (0.470) e as cotas temporárias da
+porta escolhida (0.398).
+
+Ficam 6 das 24. Três só falham na bateria completa: as cotas de relação, a fachada na parede curva e o leitor de
+tutoriais da página inicial. Algum teste anterior deixa estado para trás; para as cotas, já se sabe que está entre os
+fluxos da apresentação e o dos estilos de símbolos. As outras três falham umas vezes sim, outras não (dependem de
+tempos).
+
 ## 0.473.0 — 2026-11-08
 
 **O carimbo desenha-se na própria folha** (o dono: «se o carimbo pudesse abrir na tela e o utilizador usar as

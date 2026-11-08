@@ -1519,17 +1519,20 @@ def sheets_flow():
     pages = pdf.page_count(path) if os.path.exists(path) else 0
     check("folha_em_pdf", pages == 1 and os.path.getsize(path) > 5000, win.last_message)
 
-    from arqbim.ui import title_block_dialog          # double-click the title block: fill it in
+    # double-click the title block: fill it in — (0.470) the sheet's «Editar tipo…», with what the title block shows on
+    # every sheet; the sheet's own number in its Properties
+    from arqbim.ui import sheet_type_dialog, title_block_dialog
 
     def fill_title_block():
         dialog = QtWidgets.QApplication.activeModalWidget()
-        if not isinstance(dialog, title_block_dialog.TitleBlockDialog):
+        if not isinstance(dialog, (title_block_dialog.TitleBlockDialog, sheet_type_dialog.SheetTypeDialog)):
             QtCore.QTimer.singleShot(100, fill_title_block)
             return
         QtTest.QTest.keyClicks(dialog.edits["project"], "Moradia T3")
         QtTest.QTest.keyClicks(dialog.edits["client"], "J. Silva")
         dialog.edits["stage"].setCurrentText("Licenciamento")
-        QtTest.QTest.keyClicks(dialog.number, "A.01")
+        if hasattr(dialog, "number"):
+            QtTest.QTest.keyClicks(dialog.number, "A.01")
         dialog.accept()
 
     QtCore.QTimer.singleShot(100, fill_title_block)
@@ -1538,6 +1541,9 @@ def sheets_flow():
     QtTest.QTest.mouseDClick(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
                              QtCore.QPoint(int(x0 + (w - 20) * s), int(y0 + (h - 20) * s)))
     pump(500)
+    if win.title_block(doc.sheets[0])["number"] != "A.01":
+        win._sheet_property("sheet_number", doc.sheets[0].uid, "A.01")       # (the Properties' «Número da folha»)
+        pump(300)
     block = win.title_block(doc.sheets[0])
     check("folha_legenda", (block["project"], block["client"], block["stage"], block["number"], block["title"])
           == ("Moradia T3", "J. Silva", "Licenciamento", "A.01", "Folha 1")
@@ -1652,6 +1658,7 @@ def views_flow():
     """Views in the Project panel: plans, named sections (the one drawn in plan_flow), elevations."""
     panel = win.tree_panel
     panel.raise_()
+    tree_all()
     pump(300)
     text = panel.text()
     check("vistas_no_painel", "Vistas" in text and "Cortes (1)" in text and "Corte 1" in text and "Norte" in text,
@@ -1780,11 +1787,14 @@ def start_page_flow():
         page.open_tutorial({"title": "Perfil", "open": "testar:0.380"})
         pump(300)
         reader = page.reader
+        docks_seen = [d.objectName() or d.windowTitle() for d in win.findChildren(QtWidgets.QDockWidget)
+                      if d.isVisible()]
+        over_parts = (reader.isVisible(), page.discussions_card.isVisible(), page.supporters_card.isVisible(),
+                      page.recent_card.isVisible(), page.isVisible(), win.start_shown())
         over = reader.isVisible() and not page.discussions_card.isVisible() and \
             not page.supporters_card.isVisible() and reader.geometry().x() > before[0] and \
             abs(reader.geometry().right() - before[1]) <= 2 and \
-            reader.width() >= start_page.READER_MIN_W and page.recent_card.isVisible() and \
-            not any(d.isVisible() for d in win.findChildren(QtWidgets.QDockWidget))
+            reader.width() >= start_page.READER_MIN_W and page.recent_card.isVisible() and not docks_seen
         read_text = "0.380" in reader.view.toPlainText()
         reader.find.setText("cotovelo")
         pump(50)
@@ -1819,8 +1829,9 @@ def start_page_flow():
             shown_where and closed and videos
         if not tutorial:
             print("  tutorial: por_cima={} texto={} procurar={} nada={} passos={} marcado={} onde={} fechou={} "
-                  "videos={}".format(over, read_text, found_words, none_words, steps, marked, shown_where, closed,
-                                     videos))
+                  "videos={} paineis={} leitor={} antes={} (visivel, discussoes, apoiantes, recentes)={}".format(
+                      over, read_text, found_words, none_words, steps, marked, shown_where, closed, videos,
+                      docks_seen, reader.geometry().getRect(), before, over_parts))
         page._open_link("", "Apoiadores")
         not_linked = "ainda não tem endereço" in win.last_message
         opened = win.open_recent(saved)
@@ -2262,7 +2273,22 @@ def far_from_origin():
     shot("42_casa_georreferenciada.png")
 
 
+def tree_all():
+    """(0.461) The navigator's «Tudo» tab chosen, as a person clicks it at the panel's foot (another flow may have left
+    it on another tab — 0.470: «Folhas» stays chosen after the Sheets module, even for the next session)."""
+    from arqbim.ui import project_tree
+    bar = win.tree_panel.scope_bar
+    if bar.currentIndex() != project_tree.SCOPES.index("all"):
+        bar.setCurrentIndex(project_tree.SCOPES.index("all"))
+        pump(100)
+
+
 def tree_click(item, double=False):
+    top = item
+    while top.parent() is not None:
+        top = top.parent()
+    if top.isHidden() or not win.tree_panel.in_scope(top.data(0, Qt.ItemDataRole.UserRole)):
+        tree_all()                               # (in another tab: «Tudo» first)
     tree = win.tree_panel.tree
     tree.scrollToItem(item)
     pump(50)
@@ -2277,6 +2303,7 @@ def project_tree_flow():
     """Phase 2, step 5: the Project panel (spatial tree) with the building opened just before."""
     panel = win.tree_panel
     panel.raise_()
+    tree_all()
     pump(300)
     levels = doc.storeys()
     count = {g: sum(1 for o in objects() if o.is_bim and o.storey == g) for g, _n, _z in levels}
@@ -2877,8 +2904,15 @@ def angles_move_rotate():
     check("mover_porta_ao_longo_da_parede", abs(x1 - x0 - 1.0) < 1e-6, "x {:.3f} -> {:.3f}".format(x0, x1))
 
     # C. Move the wall (its door goes along), then correct the distance by typing --------------------
+    # (the door let go first, Esc: its temporary dimensions — 0.398, as Revit's — lie along the wall, and a click on
+    # one's value types over it)
+    key(Qt.Key.Key_Escape)
+    vp.set_selection(set())
+    pump(200)
     select_at((4.0, 0.0, 2.8))
     picked = vp.selection == {first}
+    picked_seen = ([doc.get(g).ifc_class if doc.get(g) else g for g in vp.selection], dict(vp.face_selection),
+                   win.tool.name)
     lo0 = doc.get(first).mesh.verts.min(axis=0).copy()
     door0 = doc.get(door).mesh.verts.min(axis=0).copy()
     key(Qt.Key.Key_M)
@@ -2899,8 +2933,8 @@ def angles_move_rotate():
     door_shift = doc.get(door).mesh.verts.min(axis=0) - door0
     check("mover_parede_com_porta_e_corrigir", picked and tip == "No eixo verde" and np.allclose(shift1, (0, -1, 0))
           and np.allclose(shift2, (0, -2, 0)) and np.allclose(door_shift, (0, -2, 0)),
-          "selecionada={} dica={!r} 1.º={} corrigido={} porta={}".format(picked, tip, np.round(shift1, 3),
-                                                                       np.round(shift2, 3), np.round(door_shift, 3)))
+          "selecionada={} ({}) dica={!r} 1.º={} corrigido={} porta={}".format(
+              picked, picked_seen, tip, np.round(shift1, 3), np.round(shift2, 3), np.round(door_shift, 3)))
 
     # its end followed the 60° wall it is joined to: it lies on that wall's axis line (the exact length
     # depends on the direction the mouse gave that wall: 60° to the pixel)
@@ -4869,7 +4903,7 @@ def rooms_flow():
 
 def slabs_flow():
     """0.100: the Slab tool in a plan — Tab: polygon, four corners clicked and a click on the first closes it;
-    Tab: circle, its centre clicked and the radius typed; Tab: magic wand, a click inside a 10 × 6 m house (to the
+    Tab: circle, its centre clicked and the radius typed; magic wand (its icon), a click inside a 10 × 6 m house (to the
     walls' inner faces); the polygon selected: the contextual bar offers Edit outline — a corner picked up and put
     down 1 m further (its area changes, one undo step), a corner added in a side's middle and taken away with
     Delete; the round slab's function changed in Properties (it no longer carries)."""
@@ -4916,7 +4950,10 @@ def slabs_flow():
     new = [g for g in (e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")) if g not in before]
     circle = new[0] if len(new) == 1 else None
     circle_ok = circle is not None and abs(doc.ifc.slab_outline(circle)["area"] - np.pi) < 1e-3
-    key(Qt.Key.Key_Tab)
+    # (since 0.456 the polygons, the ellipse and «Escolher linhas» come between the circle and the wand: its icon on
+    # the parameters' bar, as a person picks it)
+    win._context_option("shape", "wand")
+    pump(100)
     wand_shape = win.tool.shape == "wand"
     before = {e.GlobalId for e in doc.ifc.file.by_type("IfcSlab")}
     move(near((3.0, 2.0, 0.0)), 3)
@@ -5383,6 +5420,10 @@ def wall_profile_direct_flow():
     click()
     pump(600)
     tool = win.tool
+    if tool.name != "wall_profile":              # (the two clicks not taken as a double one: the rest cannot go on)
+        check("perfil_direto", False, "o duplo clique não abriu o perfil: ferramenta {}".format(tool.name))
+        key(Qt.Key.Key_Escape)
+        return
     along = (e - s) / np.linalg.norm(e - s)
     square = tool.name == "wall_profile" and abs(float(vp.view_direction() @ along)) < 1e-3 and \
         abs(float(vp.view_direction()[2])) < 1e-3
@@ -12320,11 +12361,16 @@ def faces_alone_flow():
     said = "4,16" in win.last_message
     shot("310_face_selecionada.png")
     pump(700)                                            # (a new click, not a double one)
+    # (0.459: a click within a few pixels of a polygon's side picks that side, as SketchUp's edges — the frame's strip,
+    # 0,2 m, a few pixels across with the whole sketch in view: seen nearer first, as a person would)
+    vp.zoom_box((np.array((0.8, 1.6, 0.0)), np.array((1.6, 2.4, 0.0))))
+    pump(300)
     move(near((1.1, 2.0, 0.0)), 3)
     pump(100)
     click()
     pump(120)
     ring = vp.face_selection == {obj.id: (frame, False)}
+    ring_seen = ({k: (sorted(v[0]), v[1]) for k, v in vp.face_selection.items()}, len(vp.selection), sorted(frame))
     click()
     pump(120)
     edges = vp.face_selection == {obj.id: (frame, True)}
@@ -12332,6 +12378,7 @@ def faces_alone_flow():
     pump(200)
     whole = vp.selection == {obj.id} and not vp.face_selection
     key(Qt.Key.Key_Escape)
+    vp.zoom_extents()
     pump(700)
     move(near((2.5, 2.0, 0.0)), 3)
     pump(100)
@@ -12409,7 +12456,8 @@ def faces_alone_flow():
     check("faces_sozinhas", middle and said and ring and edges and whole and deleted and back and tray and on
           and solid and moved,
           "meio={} área={} moldura={} arestas={} todo={} apagada={} volta={} rebaixo={} ctrl={} sólido={} "
-          "movida={}".format(middle, said, ring, edges, whole, deleted, back, tray, on, solid, moved))
+          "movida={} | na moldura: {}".format(middle, said, ring, edges, whole, deleted, back, tray, on, solid, moved,
+                                              ring_seen))
 
 
 def many_faces_flow():
@@ -14857,6 +14905,7 @@ def curved_curtain_flow():
     cws = [e.GlobalId for e in doc.ifc.file.by_type("IfcCurtainWall")]
     cw = cws[0] if len(cws) == 1 else None
     p = doc.ifc.curtain_params(cw) if cw else None
+    first_seen = (round(math.degrees(p["sweep"]), 2) if p and p.get("sweep") is not None else None, len(cws))
     made = p is not None and p["radius"] is not None and abs(p["radius"] - 5.0) < 0.1 + 1e-6 and \
         abs(abs(p["sweep"]) - math.radians(30)) < math.radians(1.5)
     cut = made and doc.ifc.host_wall(cw) == wall and doc.get(wall).mesh.volume() < full - 0.5 * 2.8 * 0.2 * p["length"]
@@ -14880,8 +14929,9 @@ def curved_curtain_flow():
     pump(500)
     shot("252b_fachada_parede_curva_perto.png")
     check("fachada_em_parede_curva", "arco" in tip and made and cut and slid and follows,
-          "dica={!r} feita={} vão={} deslizou={} acompanha={} raio={}".format(
-              tip[:50], made, cut, slid, follows, round(p["radius"], 3) if p and p["radius"] is not None else None))
+          "dica={!r} feita={} vão={} deslizou={} acompanha={} raio={} (arco, fachadas)={}".format(
+              tip[:50], made, cut, slid, follows, round(p["radius"], 3) if p and p["radius"] is not None else None,
+              first_seen))
 
 
 def keynote_table_flow():
@@ -17588,7 +17638,8 @@ def placement_keys_flow():
 
 
 def context_bar_flow():
-    """0.85: the contextual bar — with the Wall tool its type, shape (0.102), height, reference line and storey, changed right
+    """0.85: the contextual bar — with the Wall tool its type, shape (0.102), height, reference line (0.450: offset,
+    chain, radius) and storey, changed right
     there (and kept in step when Tab changes the reference); with Move, Copy; with Select and a wall selected,
     what is selected and its buttons (Same type, Dimension the walls)."""
     from arqbim.ifc import catalog
@@ -17630,7 +17681,9 @@ def context_bar_flow():
     vp.set_selection(set())
     pump(100)
     wall.height, wall.reference = bim_actions.WALL_HEIGHT, "axis"     # (as the next flows expect them)
-    check("barra_contextual", fields == ["type", "shape", "height", "reference", "storey"] and chosen and in_step
+    # (0.450–0.454: Offset, Chain and Radius beside the location line, as on Revit's Options Bar)
+    check("barra_contextual", fields == ["type", "shape", "height", "reference", "offset", "chain", "radius", "storey"]
+          and chosen and in_step
           and menu_follows and copy and selected,
           "campos={} escolhido={} tab={} menu={} copiar={} selecao={}".format(fields, chosen, in_step, menu_follows,
                                                                           copy, selected))
@@ -17680,7 +17733,8 @@ def modules_flow():
     """0.184 — The compact bar (panel 4) and the Project browser (panel 5): the bar at the far left, narrow, the
     browser and the other left panels beside it, the Properties alone on the right; Storeys brings its panel up;
     Sheets the browser open at the sheets; the search leaves only what matches (Norte); the module in view clicked
-    again folds the left panels away, and back; Rooms the schedules at the rooms."""
+    again folds the left panels away, and back; Rooms the schedules at the rooms. (0.474: the search on «Tudo».)"""
+    from arqbim.ui import project_tree
     key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
     pump(400)
     left = Qt.DockWidgetArea.LeftDockWidgetArea
@@ -17699,6 +17753,10 @@ def modules_flow():
     item = win.tree_panel.tree.currentItem()
     sheets = up(win.tree_panel) and item is not None and \
         tuple(item.data(0, Qt.ItemDataRole.UserRole) or ()) == ("views", "sheets")
+    # (0.470: Sheets leaves the navigator on its «Folhas» tab — the search over everything on «Tudo», as a person
+    # clicks it at the panel's foot)
+    win.tree_panel.scope_bar.setCurrentIndex(project_tree.SCOPES.index("all"))
+    pump(100)
     win.tree_panel.search.setText("Norte")
     pump(200)
     shown = [line.strip() for line in win.tree_panel.text().splitlines()]
@@ -19415,12 +19473,17 @@ def wall_relations_flow():
     shot("361_cotas_eixos.png")
     gap = next(((d, at) for d, at, _t in vp.temp_dims if d.key and d.key[0] == "wall_end"), None)
     picked = turned = typed_shown = longer = undone = False
-    faces_seen = []
+    faces_seen, under = [], None
     if gap is not None:
         move(at(gap[1]), 3)
         move(np.array(at(gap[1])) + vp._dim_frame(gap[0])[1] * np.array(8.0), 1)        # over its value
         picked = win.tool._hover is gap[0]
-        move(at(gap[1]), 3)                                                            # on its line, under its value
+        # on its line, beside its value (0.446: the value sits on the line's middle, as Revit's; a click on it types)
+        move(at(np.asarray(gap[0].a, dtype=float) + (np.asarray(gap[0].b, dtype=float)
+                                                      - np.asarray(gap[0].a, dtype=float)) * 0.15), 3)
+        under = (vp.temp_dim_icon_at(*mouse) is not None, vp.temp_dim_at(*mouse) is not None,
+                 vp.temp_dim_line_at(*mouse) is not None,                              # (icon, value, line…
+                 win.pick_request is not None, win.tool.name)                          # …a command waiting, the tool)
         click()
         pump(300)
         faces_seen = relations()
@@ -19459,8 +19522,9 @@ def wall_relations_flow():
     win.set_plan(False)
     check("cotas_relacoes_paredes", by_axes and bar and picked and turned and saved and typed_shown and longer
           and undone and back,
-          "eixos={} barra={} realce={} faces={} {} guardado={} escrito={} mais_perto={} desfeito={} volta={}".format(
-              axes_seen, bar, picked, turned, faces_seen, saved, typed_shown, longer, undone, back))
+          "eixos={} barra={} realce={} faces={} {} guardado={} escrito={} mais_perto={} desfeito={} volta={} "
+          "sob_o_rato(icone,valor,linha)={}".format(axes_seen, bar, picked, turned, faces_seen, saved, typed_shown,
+                                                    longer, undone, back, under))
 
 
 def symbol_styles_flow():
@@ -20035,10 +20099,16 @@ def low_contrast(widget, least=3.0):
 def theme_dialogs_flow():
     """0.339 — the windows over the main one in the dark theme: the Caixilho Studio in the prototype's dark colours,
     the materials', the types' and the actions' windows dark — every text in them readable (contrast 3 or more against
-    what is under it); the theme light again: the studio light."""
+    what is under it); the theme light again: the studio light. (0.474) A wall in the project: the materials' window
+    says which types use its first material — that note readable too (made once, 0.468: it kept the light theme's
+    colour)."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
     from arqbim.ui import caixilho_studio as cs
     key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
     pump(400)
+    bim_actions.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((4.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_15"])
+    pump(200)
     win.set_theme("dark")
     pump(300)
     seen = {"window": (None, low_contrast(win), None)}         # (0.340: the main window's own, restyled)
@@ -20062,6 +20132,10 @@ def theme_dialogs_flow():
     win.edit_materials()                                     # (0.468: a panel of the column, no longer a window)
     pump(300)
     panel = win.materials_panel
+    panel.editor.select("reboco")                            # (0.474: «Editar», with «Usado em … tipo(s)»)
+    panel.editor.tabs.setCurrentIndex(1)
+    pump(300)
+    used = panel.editor.used.text()
     seen["materials"] = (panel.palette().window().color().name(), low_contrast(panel), cs.BG)
     if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
         panel.grab().save(os.path.join(OUT, "339_materiais_escuro.png"))
@@ -20082,8 +20156,8 @@ def theme_dialogs_flow():
         and seen.get("studio", (None, None, ""))[2] == "#17191c"
     readable = all(not seen.get(n, (None, [None]))[1] for n in ("window", "studio", "materials", "types", "actions"))
     light = seen.get("studio_light", (None, None, ""))[2] == "#ffffff"
-    check("janelas_escuras", dark and readable and light,
-          "escuras={} legiveis={} claro={} vistos={}".format(dark, readable, light, seen))
+    check("janelas_escuras", dark and readable and light and used.startswith("Usado em"),
+          "escuras={} legiveis={} claro={} usado={!r} vistos={}".format(dark, readable, light, used[:40], seen))
 
 
 def render_flow():
@@ -20221,13 +20295,17 @@ def render_setup_flow():
         window.close()
     night = scene is not None and scene.lighting == "night" and scene.sun[2] < 0.0 and scene.exposure == 1.0
     lit = scene is not None and len(scene.lights) == 1 and scene.lights[0][0] > 1000.0
-    shiny = scene is not None and any(f == "glossy" and np.allclose(c, plaster.color, atol=0.01)
-                                      for f, c, _t in scene.groups)
+    # (0.470: a material with a realistic look of its own goes to the render apart, «look:reboco», with that look —
+    # the glossy preset's low roughness)
+    shiny = scene is not None and any(
+        (f == "glossy" and np.allclose(c, plaster.color, atol=0.01))
+        or (f == "look:reboco" and (scene.looks or {}).get(k, {}).get("roughness", 1.0) < 0.3)
+        for k, (f, c, _t) in enumerate(scene.groups))
     check("render_acabamentos_luzes", seen.get("combo") and seen.get("applied") == "reboco" and glossy
           and seen.get("site_on") and "horizonte" in seen.get("down", "") and night and lit and shiny,
-          "combo={} aplicado={} brilhante={} terreno={} sol='{}' noite={} luz={} reboco={}".format(
+          "combo={} aplicado={} brilhante={} terreno={} sol='{}' noite={} luz={} reboco={} {}".format(
               seen.get("combo"), seen.get("applied"), glossy, seen.get("site_on"), seen.get("down"), night, lit,
-              shiny))
+              shiny, sorted({f for f, _c, _t in scene.groups}) if scene is not None else None))
 
 
 def concrete_walls_flow():

@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.473.0
+# Guia das ferramentas — ArqSynth BIM 0.474.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.473.0.
+ArqSynth BIM 0.474.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -747,7 +747,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.436 «Fachada de vidro em arco e por face»; 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»
+- **Passos de teste (TESTAR.md):** 0.474 «Correções encontradas pela bateria de testes»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.436 «Fachada de vidro em arco e por face»; 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»
 
 #### Fachada de vidro
 
@@ -1809,4 +1809,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*244 comandos descritos, gerados do ArqSynth BIM 0.473.0.*
+*244 comandos descritos, gerados do ArqSynth BIM 0.474.0.*

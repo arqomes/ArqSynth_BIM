@@ -1021,7 +1021,10 @@ class Document:
     def typical_live(self):
         """(0.465) The typical floors' replication on (the Storeys panel's «=»): what is made, changed or deleted on
         one, its plan's dimensions and drawing, on all — off: each storey on its own meanwhile."""
-        return bool(getattr(self.ifc, "typical_live", True))
+        try:
+            return bool(getattr(self.ifc, "typical_live", True))
+        except RuntimeError:          # (0.474: the IFC still being read — its stand-in has none: the panel's «=» is on)
+            return True
 
     @typical_live.setter
     def typical_live(self, on):

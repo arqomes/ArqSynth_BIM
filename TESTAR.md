@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.474 — Correções encontradas pela bateria de testes
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.474.0**. Faça Ctrl+N.
+2. **Fachada de vidro numa parede curva**:
+   - desenhe uma parede curva: ferramenta **Parede** e, na barra de parâmetros, o ícone do **arco**; clique no início,
+     no fim e num ponto do arco;
+   - clique em **Arquitetura ▸ Parede cortina**; clique dentro da parede curva, perto de uma ponta, e depois mais à
+     frente, ainda dentro da parede;
+   - a fachada de vidro segue o arco da parede exatamente entre os dois pontos onde clicou (antes saltava uns graus e
+     encostava à face de dentro) e abre o vão na parede.
+3. **Painel Materiais no tema escuro**:
+   - com a parede desenhada, mude para o tema escuro (botão **Tema**, a paleta no cabeçalho, ▸ Escuro);
+   - abra o painel **Materiais** (barra lateral), escolha **Reboco** e a aba **Editar**;
+   - a nota «Usado em … tipo(s): …» e as dicas cinzentas leem-se bem (claras sobre o fundo escuro). Volte ao tema
+     claro: continuam a ler-se.
+4. **Abrir um IFC grande** que já abriu antes (Ficheiro ▸ Abrir): enquanto acaba de ler, o painel Pavimentos mostra os
+   pavimentos e o rodapé diz o pavimento ativo, sem aviso de erro.
+
 ## 0.473 — O carimbo desenhado na folha
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.473.0**. Faça Ctrl+N e desenhe quatro paredes em

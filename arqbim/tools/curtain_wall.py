@@ -13,6 +13,7 @@ import math
 import numpy as np
 
 from ..core import arcs
+from ..core.sketch_geometry import ray_plane
 from ..core.units import format_length, parse_lengths
 from ..i18n import decimal_sep, refusal, t
 from ..model import bim
@@ -206,8 +207,9 @@ class CurtainWallTool(_PointTool):
         self._end = p
         if self._curve is not None:                                    # (0.252) round the curved wall
             centre = self._curve[1]
-            self._show_arc(self._arc_to(math.atan2(p[1] - centre[1], p[0] - centre[0])))
-            show_snap(self.viewport, snap, p)
+            q = self._under_mouse(x, y, self._start[2])                # (0.474: not a facet's corner — see there)
+            q = p if q is None else q
+            self._show_arc(self._arc_to(math.atan2(q[1] - centre[1], q[0] - centre[0])))
             return
         if np.linalg.norm((p - self._start)[:2]) < 1e-6:
             return
@@ -247,17 +249,31 @@ class CurtainWallTool(_PointTool):
         if self._start is None:
             p, _snap = self._point(x, y, modifiers=modifiers)
             if p is not None:
-                self._begin(p)
+                self._begin(p, self._under_mouse(x, y, p[2]))
             return
         if self._curve is not None:
             self._finish_arc(self._sweep)
         elif self._end is not None:
             self._finish(self._end)
 
-    def _begin(self, p):
-        """The start clicked — (0.252) inside a curved wall: put on its arc through it, within its ends."""
+    def _under_mouse(self, x, y, z):
+        """(0.474) The point under the mouse on the level z, as it is — no snap. In a curved wall the snaps took the
+        corners of its facets (the faces' edges are drawn as short straight pieces): the start and the end jumped a
+        few degrees and onto a face (its radius 4,90 m, not the 5,00 m clicked); the arc's own ends are kept anyway
+        (the sweep stays within the wall's)."""
+        origin, direction = self.viewport.ray(x, y)
+        p = ray_plane(origin, direction, np.array((0.0, 0.0, z)), Z)
+        return p if p is not None else ray_plane(origin, direction, np.array((0.0, 0.0, z)), -Z)
+
+    def _begin(self, p, raw=None):
+        """The start clicked — (0.252) inside a curved wall: put on its arc through it (0.474: through the point
+        under the mouse itself, `raw`), within its ends."""
         self._start = p
-        found = self.doc.ifc.curved_wall_at(p, self.height)
+        found = self.doc.ifc.curved_wall_at(raw if raw is not None else p, self.height)
+        if found is None and raw is not None:
+            found = self.doc.ifc.curved_wall_at(p, self.height)
+        elif found is not None and raw is not None:
+            p = np.array((raw[0], raw[1], p[2]))
         if found is not None:
             guid, centre, r, start, sweep = found
             _c, radius, _s, _w, _h, thickness = self.doc.ifc.curved_wall_params(guid)

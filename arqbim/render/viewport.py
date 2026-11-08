@@ -718,7 +718,8 @@ class Viewport:
         self.redraw()
 
     def snapshot(self):
-        """The last image drawn: (height, width, 4) RGBA bytes (a note's picture)."""
+        """The last image drawn: (height, width, 4) RGBA bytes (a note's picture; tests and reports). (0.474: a
+        second definition further down, without the copy into one block, hid this one.)"""
         return np.ascontiguousarray(self.renderer.snapshot())
 
     # ------------------------------------------------------------ the view cube and smooth turns (0.79)
@@ -4892,10 +4893,6 @@ class Viewport:
         if self._tdim_args is not None or self.temp_dims:
             self.show_temp_dims()
         self.redraw()
-
-    def snapshot(self):
-        """Last rendered frame as an (H, W, 4) uint8 array (for tests and reports)."""
-        return np.asarray(self.renderer.snapshot())
 
     # ------------------------------------------------------------ an image of the view (0.329)
 
