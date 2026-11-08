@@ -1362,12 +1362,12 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
 | Revit (Modificar ▸ Colocar ▸ Desenhar) | ArqSynth hoje | Passo |
 | --- | --- | --- |
 | Linha, Retângulo, Círculo | Parede e Linha | — |
-| Polígono inscrito / circunscrito | Círculo com lados (só linhas) | 5 |
+| Polígono inscrito / circunscrito | Círculo com lados (só linhas) — 0.456–0.458: em tudo | 5 |
 | Arco início-fim-raio, arco centro-pontas | Arco de 2 pontos e de centro (linhas); parede só de 3 pontos | 4 |
 | Arco tangente na ponta | «Linha com arcos» (linhas, Tab); parede não | 4 |
 | **Arco de concordância** (escolher 2 elementos) | não há | 2 |
 | Spline | Bézier | — |
-| Elipse, elipse parcial | não há | 5 |
+| Elipse, elipse parcial | não há — 0.456–0.458: lajes, regiões, linhas | 5 |
 | **Escolher linhas** (criar sobre uma linha ou aresta existente) | só a varinha (2 linhas paralelas de um desenho) | 1 |
 | Escolher faces / escolher paredes | «Por face» / a varinha (laje dentro das paredes) | — |
 | Barra: **Afastamento** (a X da linha desenhada ou escolhida) | não há | 1 |
@@ -1386,9 +1386,10 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
    arco).~~ (0.454.0: o «Arco» que havia é o início-fim-raio; novos `arcs.arc_tangent` / `arc_from_centre`; a cadeia
    passa de «Linha» a «Arco tangente» e volta sem se partir. Por fazer: o arco e a parede reta que se tocam não
    ficam ligados — mover uma não arrasta a outra.)
-5. **Polígonos e elipses**: polígono inscrito e circunscrito (paredes, linhas, lajes, regiões) e elipse / elipse
-   parcial (linhas, regiões, desenho 2D). (0.456.0: lajes, pisos, tetos, regiões e máscaras; 0.457.0: paredes. Falta:
-   na Linha — o Círculo já faz um polígono inscrito pelos seus lados — e a elipse parcial.)
+5. ~~**Polígonos e elipses**: polígono inscrito e circunscrito (paredes, linhas, lajes, regiões) e elipse / elipse
+   parcial (linhas, regiões, desenho 2D).~~ (0.456.0: lajes, pisos, tetos, regiões e máscaras; 0.457.0: paredes;
+   0.458.0: na fila «Desenhar» da Linha — o Círculo desenha-os —, a elipse uma face, a elipse parcial uma meia elipse
+   escolhida inteira, os semieixos nas cotas temporárias. Fica por fazer: as linhas do Desenho 2D sem elipse.)
 6. ~~**Concordância como no Revit em tudo o que se desenha**~~ (0.455.0, o dono: «o arco não é um arco, mas um monte
    de segmentos… tentei no polígono… também na região, máscara»): nas linhas um arco verdadeiro, escolhido inteiro, o
    raio na cota temporária e nas Propriedades (as linhas seguem, tangentes); no canto de um polígono; no Desenho 2D

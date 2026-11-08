@@ -149,6 +149,15 @@ def _ellipse(p):
     _dots(p, (16, 16), (29, 16))
 
 
+def _ellipse_part(p):
+    """(0.458) Revit's «Partial Ellipse»: half an ellipse on its dashed axis, its two ends clicked."""
+    p.setPen(_pen(INK, 1.2, (2, 2)))
+    p.drawLine(QtCore.QPointF(3, 22), QtCore.QPointF(29, 22))
+    p.setPen(_pen(INK))
+    p.drawArc(QtCore.QRectF(3, 12, 26, 20), 0, 180 * 16)
+    _dots(p, (3, 22), (29, 22))
+
+
 def _arc_tangent(p):
     """(0.454) Revit's «Tangent End Arc»: a wall, and the arc leaving its end, tangent."""
     p.setPen(_pen(QtGui.QColor("#9a9a9a"), 2.2))
@@ -311,7 +320,7 @@ DRAWN = {
     "wand": _wand, "blocks": _blocks, "terrain": _terrain, "region": _region, "mask": _mask, "text": _text,
     "spot": _spot, "level": _level, "keynote": _keynote, "path": _path, "pick": _pick, "fillet": _fillet,
     "arc_center": _arc_centre, "arc_tangent": _arc_tangent, "poly_in": _poly_in, "poly_out": _poly_out,
-    "ellipse": _ellipse,
+    "ellipse": _ellipse, "ellipse_part": _ellipse_part,
 }
 
 

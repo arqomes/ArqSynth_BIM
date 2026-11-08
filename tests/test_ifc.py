@@ -12763,6 +12763,89 @@ class DrawingAsRevit(unittest.TestCase):
         finally:
             doc.modified = False
 
+    def test_line_polygons_and_ellipses(self):
+        """0.458 — the owner: «Faço também os polígonos e a elipse na Linha? — Sim, faz»: on the Line's row, Revit's
+        inscribed and circumscribed polygons, ellipse and partial ellipse (the Circle tool draws them) — a hexagon face,
+        its corners on the circle; a square round it, its sides touching it; an ellipse face; a half ellipse, a curve
+        picked whole: its two half-axes as temporary dimensions, typed over (the line joined at its end follows), its
+        grips, carried by a mirror."""
+        from types import SimpleNamespace
+        from arqbim.core import curves
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model import curve_edit
+        from arqbim.tools.base import SKETCH_DRAW, switch_draw
+        from arqbim.tools.circle import CircleTool, _Op
+        from arqbim.tools.select import apply_dim, arc_radius_dims
+        doc = Document()
+        try:
+            vp = SimpleNamespace(clear_overlays=lambda: None, show_tip=lambda *a: None, is_shown=lambda o: True,
+                                 view_direction=lambda: np.array((0.0, 0.0, -1.0)),
+                                 tracking=SimpleNamespace(clear=lambda: None))
+            host = self._host(doc, vp)
+            tool = CircleTool(host)
+            host.tool, host.set_tool = tool, lambda name: None
+            self.assertTrue({"poly_in", "poly_out", "ellipse", "ellipse_part"} <= set(SKETCH_DRAW))
+            z, x, y = np.array((0.0, 0.0, 1.0)), np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+
+            def made(centre, radius=0.0, **kw):
+                tool._op = _Op(np.asarray(centre, dtype=float), z, x, y, None, radius=radius, towards=x, **kw)
+                tool._finish()
+                obj = list(doc.objects.values())[-1]
+                return obj, [obj.matrix[:3, :3] @ v + obj.matrix[:3, 3] for v in obj.mesh.verts]
+
+            self.assertTrue(switch_draw(tool, "poly_in"))
+            self.assertEqual((tool.kind, tool.options()[1].key, tool.poly_sides), ("poly_in", "sides", 6))
+            obj, corners = made((0.0, 0.0, 0.0), 2.0)
+            self.assertEqual((len(obj.mesh.faces), len(corners)), (1, 6))
+            np.testing.assert_allclose([np.linalg.norm(c) for c in corners], [2.0] * 6, atol=1e-9)
+            self.assertTrue(any(np.linalg.norm(c - (2.0, 0.0, 0.0)) < 1e-9 for c in corners))     # (a corner there)
+            tool.set_option("draw", "poly_out")
+            tool.set_option("sides", 4)
+            obj, corners = made((10.0, 0.0, 0.0), 1.0)
+            self.assertEqual(len(corners), 4)
+            self.assertAlmostEqual(obj.mesh.face_area(0), 4.0, places=9)                  # (a 2 × 2 square…)
+            middles = [(corners[k] + corners[(k + 1) % 4]) / 2 for k in range(4)]
+            self.assertTrue(any(np.linalg.norm(m - (11.0, 0.0, 0.0)) < 1e-9 for m in middles))   # (…touching there)
+            tool.set_option("draw", "ellipse")
+            self.assertEqual(tool.options()[1].key, "pieces")
+            obj, corners = made((20.0, 0.0, 0.0), 3.0, axis=True, minor=2.0)
+            self.assertEqual(len(corners), curves.ELLIPSE_SEGMENTS)
+            self.assertTrue(all(abs(((c[0] - 20.0) / 3) ** 2 + (c[1] / 2) ** 2 - 1.0) < 1e-9 for c in corners))
+            self.assertAlmostEqual(obj.mesh.face_area(0) / (math.pi * 6.0), 1.0, delta=0.01)
+            line = SketchObject("l", I4, PolyMesh([(26.0, 0.0, 0.0), (30.0, 0.0, 0.0)], lines=[(0, 1)]))
+            doc.execute(AddObject(line))
+            tool.set_option("draw", "ellipse_part")
+            a, b = np.array((30.0, 0.0, 0.0)), np.array((34.0, 0.0, 0.0))
+            obj, pts = made(a, start=a.copy(), end=b, minor=1.5)
+            self.assertTrue(curves.is_half_ellipse(obj.curve) and not obj.mesh.faces)
+            np.testing.assert_allclose(pts[0], a, atol=1e-9)
+            np.testing.assert_allclose(pts[-1], b, atol=1e-9)
+            np.testing.assert_allclose(pts[len(pts) // 2], (32.0, 1.5, 0.0), atol=1e-9)   # (its top: to the left)
+            dims = arc_radius_dims(obj)
+            self.assertEqual(sorted(round(d.value, 9) for d in dims), [1.5, 2.0])
+            apply_dim(doc, next(d for d in dims if d.key[0] == "ellipse_axis"), 3.0)    # (about its centre)
+            obj = doc.get(obj.id)
+            ends = curve_edit._ends(obj)
+            np.testing.assert_allclose(ends, [(29.0, 0.0, 0.0), (35.0, 0.0, 0.0)], atol=1e-9)
+            joined = doc.get(line.id)
+            self.assertTrue(any(np.linalg.norm(v - (29.0, 0.0, 0.0)) < 1e-9 for v in joined.mesh.verts))  # (followed)
+            apply_dim(doc, next(d for d in arc_radius_dims(obj) if d.key[0] == "ellipse_minor"), 1.0)
+            pts = curves.ellipse_points(doc.get(obj.id).curve, 2)
+            np.testing.assert_allclose(pts[1], (32.0, 1.0, 0.0), atol=1e-9)
+            ends, middles, _arrows, what, _adds = curve_edit.grips(doc.get(obj.id))
+            self.assertEqual((len(ends), len(middles), what), (2, 1, ["start", "end", "mid"]))
+            moved = curve_edit.dragged(doc.get(obj.id), "end", (37.0, 0.0, 0.0))
+            np.testing.assert_allclose(curves.ellipse_points(moved, 2), [(29.0, 0.0, 0.0), (33.0, 1.0, 0.0),
+                                                                         (37.0, 0.0, 0.0)], atol=1e-9)
+            mirror = np.diag((1.0, -1.0, 1.0, 1.0))
+            flipped = curves.transform_curve(moved, mirror)
+            np.testing.assert_allclose(curves.ellipse_points(flipped), [mirror[:3, :3] @ p for p in
+                                                                         curves.ellipse_points(moved)], atol=1e-9)
+            tool.activate()                                                     # (the ribbon's Circle: a circle)
+            self.assertEqual(tool.kind, "circle")
+        finally:
+            doc.modified = False
+
     def test_temporary_dimension_made_permanent(self):
         from types import SimpleNamespace
         from arqbim.core import temp_dims

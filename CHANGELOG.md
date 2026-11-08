@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.458.0 — 2026-11-08
+
+**Polígonos e elipses na Linha, como no Revit** (o dono: «Faço também os polígonos e a elipse na Linha? — Sim, faz»).
+
+- A fila **Desenhar** da Linha (e do Retângulo, Círculo, Arco, Bézier, Linha livre) tem agora todas as formas do
+  painel «Desenhar» do Revit, pela ordem dele, com quatro ícones novos:
+  - **Polígono inscrito**: clique no centro e onde fica um canto — ou escreva o raio e Enter;
+  - **Polígono circunscrito**: clique no centro e onde fica o meio de um lado — ou escreva a distância e Enter;
+    os **Lados** (3 a 16) na barra;
+  - **Elipse**: clique no centro, na ponta de um eixo (ou escreva o semieixo) e mova o rato para o outro semieixo
+    (ou escreva-o) — fica uma face, como o círculo, que o Push/Pull levanta com os lados lisos;
+  - **Elipse parcial**: clique nas duas pontas do eixo (ou escreva o comprimento) e mova o rato para a altura (ou
+    escreva-a) — uma **meia elipse** que se escolhe inteira. Escolhida, mostra os **dois semieixos como cotas
+    temporárias**: clique num valor e escreva outro (as linhas presas às pontas acompanham). Tem pegas nas pontas e no
+    cimo, e os semieixos e segmentos nas Propriedades. Se fechar um contorno com linhas, faz a face.
+- Os polígonos e a elipse são desenhados pela ferramenta Círculo; o botão **Círculo** da fita volta sempre ao círculo.
+- Teste na janela real: 37 de 37 passos certos (8 novos para estas formas).
+
 ## 0.457.0 — 2026-11-07
 
 **Parede em polígono regular, como no Revit.**

@@ -62,6 +62,9 @@ def grips(obj):
     if c.get("kind") == "arc" and not c.get("pie") and not curves.is_closed(c):
         pts = curves.arc_points(c["centre"], c["normal"], c["start"], c["angle"], 64)
         return [w(pts[0]), w(pts[-1])], [w(pts[32])], [], ["start", "end", "mid"], []
+    if curves.is_half_ellipse(c):                    # (0.458) a half ellipse: its ends, its top
+        pts = curves.ellipse_points(c, 64)
+        return [w(pts[0]), w(pts[-1])], [w(pts[32])], [], ["start", "end", "mid"], []
     if c.get("kind") == "bezier":
         ends, middles, arrows, what_e, what_m = [], [], [], [], []
         for k, (p, hi, ho) in enumerate(c["anchors"]):
@@ -101,6 +104,21 @@ def dragged(obj, what, target):
         if float(n3 @ normal) < 0:
             angle = -angle
         return curves.arc_curve(centre, normal, s, angle, c.get("segments"), c.get("pie"))
+    if curves.is_half_ellipse(c):                    # (0.458) an end moved: the half ellipse on the new axis, as tall;
+        centre = np.asarray(c["centre"], float)      # its top: that tall (the axis stays)
+        p = p - float((p - centre) @ normal) * normal
+        s, m, e = curves.ellipse_points(c, 2)
+        left = lambda a, b: curves._unit(np.cross(normal, b - a))          # noqa: E731
+        height = float((m - centre) @ left(s, e))
+        if what == "start":
+            s = p
+        elif what == "end":
+            e = p
+        else:
+            height = float((p - centre) @ left(s, e))
+        if np.linalg.norm(e - s) < 1e-6 or abs(height) < 1e-6:
+            return None
+        return curves.half_ellipse(s, e, height, normal, c.get("segments"))
     if c["kind"] == "bezier":
         anchors = [[np.asarray(x, float) for x in a] for a in c["anchors"]]
         auto = list(c.get("auto") or [])

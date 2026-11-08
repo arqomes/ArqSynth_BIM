@@ -4393,9 +4393,15 @@ _STRINGS = {
     "draw.line": ("Linha", "Line"),
     "draw.line_arc": ("Linha com arcos (Tab)", "Line with arcs (Tab)"),
     "draw.rectangle": ("Retângulo", "Rectangle"),
-    "draw.circle": ("Círculo / polígono", "Circle / polygon"),
+    "draw.circle": ("Círculo", "Circle"),
     "draw.arc": ("Arco", "Arc"),
     "draw.bezier": ("Curva de Bézier", "Bézier curve"),
+    # (0.458) Revit's polygons and ellipses, on the Line's row too
+    "draw.poly_in": ("Polígono inscrito (os cantos no círculo)", "Inscribed polygon (its corners on the circle)"),
+    "draw.poly_out": ("Polígono circunscrito (os lados tocam o círculo)",
+                      "Circumscribed polygon (its sides touch the circle)"),
+    "draw.ellipse": ("Elipse", "Ellipse"),
+    "draw.ellipse_part": ("Elipse parcial (meia elipse)", "Partial ellipse (half an ellipse)"),
     "draw.freehand": ("Linha livre (à mão)", "Freehand line"),
     "draw.pick": ("Escolher linhas (sobre uma linha ou aresta)", "Pick lines (on a line or an edge)"),   # (0.451)
     "hint.line.pick": ("Escolher linhas: clique numa linha, aresta, face de parede, eixo da grelha ou linha de um "
@@ -8524,6 +8530,52 @@ _STRINGS = {
     "tool.circle": ("Círculo", "Circle"),
     "info.circle": ("Círculo de raio {r} ({n} lados). Puxe-o com Push/Pull: os lados ficam uma superfície lisa.",
                     "Circle of radius {r} ({n} sides). Pull it with Push/Pull: its sides become one smooth surface."),
+    # (0.458) Revit's polygons and ellipses, drawn by the Circle tool
+    "hint.polygon.centre_in": ("Polígono inscrito ({n} lados): clique no centro (no chão ou numa face).",
+                               "Inscribed polygon ({n} sides): click the centre (on the ground or on a face)."),
+    "hint.polygon.centre_out": ("Polígono circunscrito ({n} lados): clique no centro (no chão ou numa face).",
+                                "Circumscribed polygon ({n} sides): click the centre (on the ground or on a face)."),
+    "hint.polygon.radius_in": ("Clique onde fica um canto, ou escreva o raio (ex.: 1,50) e Enter. Esc cancela.",
+                               "Click where a corner goes, or type the radius (e.g. 1.50) and Enter. Esc cancels."),
+    "hint.polygon.radius_out": ("Clique onde fica o meio de um lado, ou escreva a distância do centro aos lados (ex.: "
+                                "1,50) e Enter. Esc cancela.",
+                                "Click where the middle of a side goes, or type the distance from the centre to the "
+                                "sides (e.g. 1.50) and Enter. Esc cancels."),
+    "hint.ellipse.centre": ("Elipse: clique no centro (no chão ou numa face).",
+                            "Ellipse: click the centre (on the ground or on a face)."),
+    "hint.ellipse.axis": ("Clique na ponta de um dos eixos, ou escreva esse semieixo (ex.: 2,00) e Enter. Esc cancela.",
+                          "Click the end of one axis, or type that half-axis (e.g. 2.00) and Enter. Esc cancels."),
+    "hint.ellipse.minor": ("Mova o rato para o outro semieixo e clique, ou escreva-o e Enter. Esc cancela.",
+                           "Move the mouse for the other half-axis and click, or type it and Enter. Esc cancels."),
+    "hint.ellipse_part.start": ("Elipse parcial: clique onde começa o eixo (no chão ou numa face).",
+                                "Partial ellipse: click where its axis starts (on the ground or on a face)."),
+    "hint.ellipse_part.end": ("Clique onde acaba o eixo, ou escreva o comprimento e Enter. Esc cancela.",
+                              "Click where the axis ends, or type its length and Enter. Esc cancels."),
+    "hint.ellipse_part.height": ("Mova o rato para a altura da meia elipse e clique, ou escreva-a e Enter. Esc "
+                                 "cancela.", "Move the mouse for the half ellipse's height and click, or type it and "
+                                 "Enter. Esc cancels."),
+    "vcb.half_axis": ("Semieixo", "Half-axis"),
+    "cmd.polygon": ("Polígono", "Polygon"),
+    "cmd.ellipse": ("Elipse", "Ellipse"),
+    "obj.ellipse": ("Elipse {n}", "Ellipse {n}"),
+    "info.polygon_in": ("Polígono de {n} lados inscrito no círculo de raio {r} (os cantos no círculo). Puxe-o com "
+                        "Push/Pull.", "Polygon of {n} sides inscribed in the circle of radius {r} (its corners on the "
+                        "circle). Pull it with Push/Pull."),
+    "info.polygon_out": ("Polígono de {n} lados circunscrito ao círculo de raio {r} (os lados tocam o círculo). "
+                         "Puxe-o com Push/Pull.", "Polygon of {n} sides circumscribed about the circle of radius {r} "
+                         "(its sides touch the circle). Pull it with Push/Pull."),
+    "info.ellipse": ("Elipse com semieixos de {a} e {b}. Puxe-a com Push/Pull: os lados ficam uma superfície lisa.",
+                     "Ellipse with half-axes of {a} and {b}. Pull it with Push/Pull: its sides become one smooth "
+                     "surface."),
+    "info.ellipse_part": ("Meia elipse: eixo de {a}, altura de {b}. Selecionada, os dois semieixos mudam-se pelas "
+                          "cotas temporárias.", "Half ellipse: axis of {a}, height of {b}. Selected, its two half-axes "
+                          "change by its temporary dimensions."),
+    "info.ellipse_face": ("A meia elipse fechou o contorno: face de {a} m².",
+                          "The half ellipse closed the outline: a face of {a} m²."),
+    "info.ellipse_changed": ("Elipse mudada: semieixos de {a} e {b}.", "Ellipse changed: half-axes of {a} and {b}."),
+    "curve.ellipse": ("Elipse", "Ellipse"),
+    "props.ellipse_axis": ("Semieixo", "Half-axis"),
+    "props.ellipse_minor": ("Outro semieixo", "Other half-axis"),
     # the Arc tool (0.373)
     "tool.arc": ("Arco", "Arc"),
     "cmd.arc": ("Arco", "Arc"),

@@ -151,6 +151,64 @@ def arc_with(curve, radius=None, angle=None, segments=None):
     return c
 
 
+# ---------------------------------------------------------------- ellipses (0.458, Revit's «Ellipse», «Partial Ellipse»)
+
+ELLIPSE_SEGMENTS = 48
+
+
+def ellipse_curve(centre, normal, axis_end, minor, start=0.0, angle=360.0, segments=None):
+    """An ellipse's data: {"kind": "ellipse", "centre", "normal", "axis" (the end of its first half-axis), "minor" (the
+    other half-axis, about the normal: positive to the left of the first, seen from where the normal points), "start",
+    "angle" (where it starts and how far it turns, in degrees of its parameter: p = centre + A cos θ + B sin θ),
+    "segments"}."""
+    return {"kind": "ellipse", "centre": [float(c) for c in centre], "normal": [float(c) for c in _unit(normal)],
+            "axis": [float(c) for c in axis_end], "minor": float(minor), "start": float(start),
+            "angle": float(angle), "segments": int(segments) if segments else ELLIPSE_SEGMENTS}
+
+
+def half_ellipse(a, b, height, normal, segments=None):
+    """(Revit's «Partial Ellipse») The half ellipse on the axis from a to b, `height` tall — positive to the left of
+    a → b about the normal, negative to its right —, from a to b."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    return ellipse_curve((a + b) / 2, normal, b, height, 180.0, -180.0, segments)
+
+
+def ellipse_axes(curve):
+    """(centre, A, B): the ellipse's centre and its two half-axes (vectors)."""
+    centre = np.asarray(curve["centre"], float)
+    a = np.asarray(curve["axis"], float) - centre
+    return centre, a, _unit(np.cross(_unit(curve["normal"]), a)) * float(curve["minor"])
+
+
+def ellipse_points(curve, segments=None):
+    """The ellipse's points, both ends included (a whole one: without repeating the first)."""
+    centre, a, b = ellipse_axes(curve)
+    angle = float(curve.get("angle", 360.0))
+    count = int(segments or curve.get("segments") or ELLIPSE_SEGMENTS)
+    whole = abs(abs(angle) - 360.0) < 1e-9
+    s, turn = math.radians(float(curve.get("start", 0.0))), math.radians(angle)
+    return [centre + a * math.cos(s + turn * k / count) + b * math.sin(s + turn * k / count)
+            for k in range(count + (0 if whole else 1))]
+
+
+def is_half_ellipse(curve):
+    return curve.get("kind") == "ellipse" and abs(abs(float(curve.get("angle", 360.0))) - 180.0) < 1e-9
+
+
+def ellipse_with(curve, axis=None, minor=None, segments=None):
+    """(0.458) The ellipse changed: its first half-axis `axis` long (the same centre and direction), the other `minor`
+    (on the same side), another number of pieces."""
+    c = dict(curve)
+    centre = np.asarray(c["centre"], float)
+    if axis is not None:
+        c["axis"] = [float(x) for x in centre + _unit(np.asarray(c["axis"], float) - centre) * float(axis)]
+    if minor is not None:
+        c["minor"] = math.copysign(float(minor), float(c["minor"]) or 1.0)
+    if segments is not None:
+        c["segments"] = int(segments)
+    return c
+
+
 # ---------------------------------------------------------------- Bézier curves
 
 def bezier_span(p0, p1, p2, p3, steps=BEZIER_STEPS):
@@ -383,12 +441,14 @@ def curve_points(curve):
         return ([np.asarray(curve["centre"], float)] + pts) if curve.get("pie") else pts
     if kind == "bezier":
         return bezier_points(curve["anchors"], curve.get("closed"), curve.get("steps", BEZIER_STEPS))
+    if kind == "ellipse":                                         # (0.458)
+        return ellipse_points(curve)
     return None
 
 
 def is_closed(curve):
     return bool(curve.get("pie") or curve.get("closed") or
-                (curve.get("kind") == "arc" and abs(abs(curve.get("angle", 0.0)) - 360.0) < 1e-9))
+                (curve.get("kind") in ("arc", "ellipse") and abs(abs(curve.get("angle", 0.0)) - 360.0) < 1e-9))
 
 
 def transform_curve(curve, matrix):
@@ -408,4 +468,9 @@ def transform_curve(curve, matrix):
             out["angle"] = -float(curve["angle"])
     elif curve.get("kind") == "bezier":
         out["anchors"] = [[pt(x) for x in a] for a in curve["anchors"]]
+    elif curve.get("kind") == "ellipse":                          # (0.458) its half-axes carried: the other one's
+        _c, a, b = ellipse_axes(curve)                            # length and side on the new normal (a mirror: the
+        out["centre"], out["axis"] = pt(curve["centre"]), pt(curve["axis"])      # other side)
+        a, b = m[:3, :3] @ a, m[:3, :3] @ b
+        out["minor"] = float(b @ _unit(np.cross(np.asarray(out["normal"], float), a)))
     return out

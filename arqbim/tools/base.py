@@ -135,8 +135,12 @@ class Tool:
 
 # (0.450) the drawing tools of lines, side by side on the contextual bar as Revit's «Draw» panel: a click on one goes to
 # it (straight lines, lines with arcs, a rectangle, a circle, an arc, a Bézier curve, by hand)
-SKETCH_DRAW = ("line", "line_arc", "rectangle", "circle", "arc", "fillet", "bezier", "freehand", "pick")
-#               (0.451: pick lines; 0.452: a fillet arc between two lines)
+SKETCH_DRAW = ("line", "line_arc", "rectangle", "poly_in", "poly_out", "circle", "arc", "fillet", "bezier", "ellipse",
+               "ellipse_part", "freehand", "pick")
+#               (0.451: pick lines; 0.452: a fillet arc between two lines; 0.458: Revit's inscribed and circumscribed
+#               polygons, ellipse and partial ellipse — in Revit's order)
+DRAW_TOOL = {"line_arc": "line", "pick": "line", "fillet": "line",          # (0.458) which tool draws each
+             "poly_in": "circle", "poly_out": "circle", "ellipse": "circle", "ellipse_part": "circle"}
 
 
 def draw_option(current):
@@ -146,18 +150,15 @@ def draw_option(current):
 
 def switch_draw(tool, value):
     """(0.450) Another of the drawing tools chosen on the bar: the window goes to it (a line's arcs: the Line tool
-    with its arcs on). True when it did."""
+    with its arcs on; 0.458: a polygon or an ellipse, the Circle tool drawing it). True when it did."""
     if value not in SKETCH_DRAW:
         return False
-    target = "line" if value in ("line", "line_arc", "pick", "fillet") else value
+    target = DRAW_TOOL.get(value, value)
     if target != tool.name and hasattr(tool.host, "set_tool"):
         tool.host.set_tool(target)
     now = getattr(tool.host, "tool", None)
-    if target == "line" and now is not None and getattr(now, "name", None) == "line":
-        now.arc = value == "line_arc"
-        now.picking = value == "pick"                     # (0.451: picking lines)
-        now.filleting = value == "fillet"                 # (0.452: a fillet arc)
-        now.host.set_hint(now.hint())
+    if now is not None and getattr(now, "name", None) == target and hasattr(now, "take_draw"):
+        now.take_draw(value)
     return True
 
 

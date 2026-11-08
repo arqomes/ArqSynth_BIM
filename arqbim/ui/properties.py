@@ -1721,6 +1721,14 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                                                                         0 < abs(v) <= 360 else None)(parse_angle(s)))
                 self._text_editor(t("props.arc_segments"), str(curve.get("segments")), "arc_segments", obj.id,
                                   parse=lambda s: int(s) if s.strip().isdigit() and int(s) >= 2 else None)
+            elif curve.get("kind") == "ellipse":         # (0.458) its two half-axes and pieces, as Revit's radii
+                scale = float(np.linalg.norm(obj.matrix[:3, 0]))
+                _c, a, b = curves.ellipse_axes(curve)
+                self._length_editor(t("props.ellipse_axis"), float(np.linalg.norm(a)) * scale, "ellipse_axis", obj.id)
+                self._length_editor(t("props.ellipse_minor"), float(np.linalg.norm(b)) * scale, "ellipse_minor",
+                                    obj.id)
+                self._text_editor(t("props.arc_segments"), str(curve.get("segments")), "ellipse_segments", obj.id,
+                                  parse=lambda s: int(s) if s.strip().isdigit() and int(s) >= 2 else None)
             elif curve.get("kind") == "bezier":
                 self._row(t("props.bezier_points"), str(len(curve["anchors"])))
             self._note(t("props.curve_hint"), theme.C["link"])

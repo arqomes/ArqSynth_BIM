@@ -398,6 +398,13 @@ def arc_radius_dims(obj):
     """(0.455, Revit's) An arc picked alone: its radius as a temporary dimension, from its centre to its middle — a
     click on the value and the radius typed changes it (a fillet's: still tangent to its lines)."""
     c = obj.curve or {}
+    if c.get("kind") == "ellipse":                   # (0.458) an ellipse: its two half-axes, each typed over
+        centre, a, b = core_curves.ellipse_axes(c)
+        normal = obj.matrix[:3, :3] @ np.asarray(c["normal"], dtype=float)
+        normal = normal / max(float(np.linalg.norm(normal)), 1e-12)
+        w = lambda p: transform_point(obj.matrix, p)                       # noqa: E731
+        return [temp_dims.TempDim(w(centre), w(centre + v), normal, key=(key, obj.id), offset_px=0.0)
+                for key, v in (("ellipse_axis", a), ("ellipse_minor", b)) if float(np.linalg.norm(v)) > 1e-6]
     if c.get("kind") != "arc" or c.get("pie"):
         return []
     centre = transform_point(obj.matrix, np.asarray(c["centre"], dtype=float))
@@ -469,6 +476,10 @@ def apply_dim(doc, dim, value):
             obj = doc.get(target)
             scale = float(np.linalg.norm(obj.matrix[:3, 0]))
             curve_edit.reshape(doc, target, core_curves.arc_with(obj.curve, radius=value / scale))
+    elif kind in ("ellipse_axis", "ellipse_minor"):       # (0.458) an ellipse's half-axis: about its centre
+        obj = doc.get(target)
+        scale = float(np.linalg.norm(obj.matrix[:3, 0]))
+        curve_edit.reshape(doc, target, core_curves.ellipse_with(obj.curve, **{kind[8:]: value / scale}))
     elif kind == "grid_offset":                           # the axis selected moves across, its neighbour stays
         axis = doc.grids[target]
         away = (np.asarray(dim.a) - np.asarray(dim.b))[:2] / dim.value          # from the neighbour to it

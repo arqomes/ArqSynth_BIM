@@ -427,6 +427,90 @@ def polygon_fillet():
           and not has(pts, (4.0, 0.0), 0.005), "faces={} msg={}".format(len(faces), win.last_message))
 
 
+def click_dim(dim):
+    """A click on a temporary dimension's value (as the owner: the value, then a number typed)."""
+    at = next(a for d, a, _t in vp.temp_dims if d is dim)
+    sx, sy = vp.project(np.asarray(at, float))
+    spot = next(((sx + dx, sy + dy) for r in range(0, 40, 2) for dx in range(-r, r + 1, 2) for dy in (-r, r)
+                 if vp.temp_dim_at(sx + dx, sy + dy) is dim), None)
+    if spot is None:
+        return False
+    mouse[:] = spot
+    QtTest.QTest.mousePress(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, qp(*spot))
+    QtTest.QTest.mouseRelease(canvas, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, qp(*spot))
+    pump(200)
+    deliver()
+    return True
+
+
+def line_shapes():
+    """(0.458) On the Line's row, Revit's polygons and ellipses: an inscribed hexagon (its radius typed), a square round
+    a circle of 1 m, an ellipse (its half-axes typed) — faces —, a half ellipse picked whole, its half-axis typed
+    over; the ribbon's Circle a circle again."""
+    from arqbim.core import curves
+    from arqbim.model import curve_edit
+    doc = fresh((7.0, 3.0, 0.0), 10.0)
+    line_tool()
+    bar_icon("draw", "poly_in")
+    check("linha_poligono_ferramenta", win.tool.name == "circle" and win.tool.kind == "poly_in",
+          "{} {}".format(win.tool.name, getattr(win.tool, "kind", None)))
+    click_at((0, 0, 0))
+    move_to((2, 0.3, 0))
+    type_value("2")
+    faces = [o for o in sketches(doc) if o.mesh.faces]
+    area = faces[-1].mesh.face_area(0) if faces else None
+    check("linha_poligono_inscrito", len(faces) == 1 and len(faces[0].mesh.verts) == 6 and
+          same(area, 3 * math.sqrt(3) / 2 * 4, 0.02), "{} {}".format(area, win.last_message))
+    bar_icon("draw", "poly_out")
+    bar_value("sides", 4)
+    click_at((6, 0, 0))
+    move_to((7, 0.05, 0))
+    type_value("1")
+    faces = [o for o in sketches(doc) if o.mesh.faces]
+    area = faces[-1].mesh.face_area(0) if len(faces) == 2 else None
+    check("linha_poligono_circunscrito", same(area, 4.0, 0.02), "{} {}".format(area, win.last_message))
+    bar_icon("draw", "ellipse")
+    click_at((12, 0, 0))
+    move_to((14, 0.1, 0))
+    type_value("3")
+    move_to((12.5, 1.5, 0))
+    type_value("2")
+    faces = [o for o in sketches(doc) if o.mesh.faces]
+    area = faces[-1].mesh.face_area(0) if len(faces) == 3 else None
+    check("linha_elipse", same(area, math.pi * 6, 0.1), "{} {}".format(area, win.last_message))
+    bar_icon("draw", "ellipse_part")
+    click_at((0, 5, 0))
+    click_at((4, 5, 0))
+    move_to((2, 6.4, 0))
+    type_value("1,5")
+    shot("linha_formas")
+    halves = [o for o in sketches(doc) if o.curve and o.curve.get("kind") == "ellipse"]
+    pts = curves.ellipse_points(halves[0].curve, 2) if halves else []
+    check("linha_meia_elipse", len(halves) == 1 and same([r3(p) for p in pts], [(0, 5), (2, 6.5), (4, 5)]),
+          "{} {}".format([r3(p) for p in pts], win.last_message))
+    if not halves:
+        return
+    half = halves[0]
+    win.set_tool("select")
+    key(Qt.Key.Key_Escape)
+    click_at((2, 6.5, 0))
+    pump(300)
+    dims = [d for d, _at, _t in vp.temp_dims if d.key and d.key[0] in ("ellipse_axis", "ellipse_minor")]
+    check("linha_meia_elipse_escolhida", vp.selection == {half.id} and len(dims) == 2, "seleção={} cotas={}".format(
+        vp.selection, [d.key for d, _a, _t in vp.temp_dims]))
+    axis = next((d for d in dims if d.key[0] == "ellipse_axis"), None)
+    if axis is None or not click_dim(axis):
+        check("linha_meia_elipse_cota_clicavel", False, "o valor não se encontra no ecrã")
+        return
+    type_value("3")
+    shot("linha_meia_elipse_3")
+    ends = [r3(p) for p in curve_edit._ends(doc.get(half.id))]
+    check("linha_meia_elipse_semieixo", same(ends, [(-1, 5), (5, 5)]), "{} {}".format(ends, win.last_message))
+    win.set_tool("circle")
+    pump(100)
+    check("circulo_da_fita_e_circulo", win.tool.kind == "circle", win.tool.kind)
+
+
 # ------------------------------------------------------------------ Align, 2D drawing
 
 
@@ -589,7 +673,8 @@ for name, fn in (("laje_formas", slab_shapes), ("piso_teto", coverings), ("regia
                  ("parede_raio", wall_radius), ("parede_cadeia", wall_chain_off), ("parede_afastamento", wall_offset),
                  ("parede_arcos", wall_arcs), ("parede_concordancia", wall_fillet), ("parede_escolher", wall_pick),
                  ("parede_snaps", wall_snaps), ("parede_poligono", wall_polygon), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
-                 ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask)):
+                 ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask),
+                 ("linha_formas", line_shapes)):
     run(name, fn)
 win.doc.modified = False
 print("RESUMO: {} de {} passaram".format(sum(ok for _n, ok in results), len(results)))

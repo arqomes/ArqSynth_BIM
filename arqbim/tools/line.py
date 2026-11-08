@@ -80,14 +80,19 @@ class LineTool(Tool):
             opts.append(Option("chain", t("ctx.chain"), "toggle", self.chain))
         return opts
 
+    def take_draw(self, value):
+        """(0.450) Straight lines, their arcs, picking lines (0.451) or a fillet arc (0.452), from the bar's row."""
+        self.cancel()
+        self.picking = value == "pick"
+        self.filleting = value == "fillet"
+        self.arc = value == "line_arc"
+        self.host.set_hint(self.hint())
+
     def set_option(self, key, value):
         if key == "shape":
             self.arc = value == "arc"
         elif key == "draw" and value in ("line", "line_arc", "pick", "fillet"):
-            self.cancel()
-            self.picking = value == "pick"
-            self.filleting = value == "fillet"
-            self.arc = value == "line_arc"
+            self.take_draw(value)
         elif key == "draw":
             switch_draw(self, value)
             return

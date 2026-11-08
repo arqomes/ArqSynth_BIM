@@ -6452,6 +6452,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 curve_edit.reshape(doc, guid, arc)
                 self.message(t("info.arc_changed", r=format_length(core_curves.arc_radius(arc) * scale, decimal_sep()),
                                a=format_angle(abs(arc["angle"]), decimal_sep()), n=arc["segments"]))
+            elif action in ("ellipse_axis", "ellipse_minor", "ellipse_segments"):     # (0.458) an ellipse, again
+                obj = doc.get(guid)
+                scale = float(np.linalg.norm(obj.matrix[:3, 0]))
+                lengths = {} if action == "ellipse_segments" else {action[8:]: value / scale}
+                curve = core_curves.ellipse_with(obj.curve, segments=value if action == "ellipse_segments" else None,
+                                                 **lengths)
+                curve_edit.reshape(doc, guid, curve)
+                _c, a, b = core_curves.ellipse_axes(curve)
+                self.message(t("info.ellipse_changed", a=format_length(float(np.linalg.norm(a)) * scale, decimal_sep()),
+                               b=format_length(float(np.linalg.norm(b)) * scale, decimal_sep())))
             elif action == "name":
                 bim.rename(doc, guid, value)
             elif action == "mark":                         # (0.110) a door's / window's mark
