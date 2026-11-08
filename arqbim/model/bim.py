@@ -4271,9 +4271,11 @@ def lot_from_terrain(doc, guid=None):
     return core_lot.from_terrain(points) if points is not None and len(points) >= 3 else None
 
 
-def set_room_program(doc, needs):
-    """(0.357) The project's programme (model/room_program: [Need]) kept in it. One undo step."""
-    doc.execute(IfcCommand(t("cmd.room_program"), lambda ifc: ifc.set_room_program(needs)))
+def set_room_program(doc, needs, building=None, rules=None):
+    """(0.357) The project's programme (model/room_program: [Need]) kept in it — (0.475) its type of building and its
+    own conflicting pairs too, when given. One undo step."""
+    needs = [copy.copy(n) for n in needs]
+    doc.execute(IfcCommand(t("cmd.room_program"), lambda ifc: ifc.set_room_program(needs, building, rules)))
 
 
 def room_from_program(doc, point, need, storey=None):
@@ -4289,16 +4291,14 @@ def room_from_program(doc, point, need, storey=None):
     for info in doc.ifc.spaces(storey):
         if Polygon(info["outline"], info["holes"]).contains(here):
             guid = info["guid"]
-            doc.execute(IfcCommand(t("cmd.room_edit"), lambda ifc: ifc.set_space_data(
-                guid, name=need.name, external=need.external)))
+            doc.execute(IfcCommand(t("cmd.room_edit"), lambda ifc: ifc.set_room_need(guid, need)))   # (0.475)
             return guid, False
     number = doc.ifc.next_space_number(storey)
     language = lang()
 
     def make(ifc):
         space = ifc.add_space(storey, point, need.name, number, language)
-        if need.external:
-            ifc.set_space_data(space.GlobalId, external=True)
+        ifc.set_room_need(space.GlobalId, need)          # (0.475: the line's id and use kept in the room)
         return space.GlobalId
 
     return doc.execute(IfcCommand(t("cmd.room"), make)).result, True

@@ -124,6 +124,25 @@ def sharing(ctx, room_id):
                      and not outside(r) and _region_of(ctx, r) == mine))
 
 
+def conflicting(ctx, room_id):
+    """(0.475) How many rooms this one opens into (a door between them) that its use should not — the rules of
+    conflicting zones of the project's type of building (model/program_rules): a bathroom straight into the kitchen…"""
+    def make():
+        from ..model import program_rules
+        try:
+            found = program_rules.conflicts(ctx.doc, ctx.facts)
+        except Exception:                               # noqa: BLE001 (the IFC still being read)
+            found = []
+        out = {}
+        for a, b, _door, _rule in found:
+            out[a] = out.get(a, 0) + 1
+            out[b] = out.get(b, 0) + 1
+        return out
+    if room_id not in ctx.facts.rooms:
+        return None
+    return float(ctx.keep("conflicting_zones", make).get(room_id, 0))
+
+
 def outside(room):
     """A room that is outside by what it is (a balcony, a courtyard) or as marked: not closed by walls."""
     return bool(room.external) or uses.is_exterior(room.use)
@@ -143,5 +162,6 @@ def subjects(ctx, building_use):
 
 
 WALL = {"sobreposicao": lambda ctx, s: overlaps(ctx, s.id)}
-ROOM = {"fechado": lambda ctx, s: enclosed(ctx, s.id), "partilha_regiao": lambda ctx, s: sharing(ctx, s.id)}
+ROOM = {"fechado": lambda ctx, s: enclosed(ctx, s.id), "partilha_regiao": lambda ctx, s: sharing(ctx, s.id),
+        "zona_conflitante": lambda ctx, s: conflicting(ctx, s.id)}                  # (0.475)
 ELEMENT = {"duplicado": lambda ctx, s: 1.0 if s.id in twins(ctx) else 0.0}

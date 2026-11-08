@@ -847,6 +847,7 @@ def bim_flow():
     ripado_screen_flow()              # (0.441)
     sheet_bar_flow()                  # (0.472)
     title_block_editor_flow()         # (0.473)
+    room_program_manager_flow()       # (0.475)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -1787,14 +1788,25 @@ def start_page_flow():
         page.open_tutorial({"title": "Perfil", "open": "testar:0.380"})
         pump(300)
         reader = page.reader
-        docks_seen = [d.objectName() or d.windowTitle() for d in win.findChildren(QtWidgets.QDockWidget)
-                      if d.isVisible()]
-        over_parts = (reader.isVisible(), page.discussions_card.isVisible(), page.supporters_card.isVisible(),
-                      page.recent_card.isVisible(), page.isVisible(), win.start_shown())
-        over = reader.isVisible() and not page.discussions_card.isVisible() and \
-            not page.supporters_card.isVisible() and reader.geometry().x() > before[0] and \
-            abs(reader.geometry().right() - before[1]) <= 2 and \
-            reader.width() >= start_page.READER_MIN_W and page.recent_card.isVisible() and not docks_seen
+
+        def over_now():
+            docks = [d.objectName() or d.windowTitle() for d in win.findChildren(QtWidgets.QDockWidget)
+                     if d.isVisible()]
+            parts = (reader.isVisible(), page.discussions_card.isVisible(), page.supporters_card.isVisible(),
+                     page.recent_card.isVisible(), page.isVisible(), win.start_shown(), reader.geometry().getRect())
+            ok = reader.isVisible() and not page.discussions_card.isVisible() and \
+                not page.supporters_card.isVisible() and reader.geometry().x() > before[0] and \
+                abs(reader.geometry().right() - before[1]) <= 2 and \
+                reader.width() >= start_page.READER_MIN_W and page.recent_card.isVisible() and not docks
+            return ok, docks, parts
+
+        # (in a wide window, after many flows, the page takes a moment to lay its columns out again)
+        over, docks_seen, over_parts = over_now()
+        for _k in range(20):
+            if over:
+                break
+            pump(100)
+            over, docks_seen, over_parts = over_now()
         read_text = "0.380" in reader.view.toPlainText()
         reader.find.setText("cotovelo")
         pump(50)
@@ -10361,6 +10373,121 @@ def sheet_bar_flow():
                                              undone, company, texts))
 
 
+def room_program_manager_flow():
+    """0.475 (the owner: «A aba ambiente quero que funcione no painel lateral… o painel vai ser um gestor de programa
+    de necessidade»): a house split by a wall with a door in it, its plan; Ambientes on the module bar: the programme's
+    panel in the left column (not the schedules at the foot); two lines made there — «WC» (Instalação sanitária, 4 m²)
+    and «Cozinha» (Cozinha, 40 m²); WC clicked in the list, then a click inside the walls: the room made, the line
+    green, the tool on Cozinha next; Cozinha dropped on the other room (as dragged): orange (33,6 of 40 m²) — and the
+    door between them: both red, «Zonas conflitantes» under the list, said in the balloon and in the footer's count;
+    Ctrl+Z; a JSON list as an AI writes it imported (a restaurant, two storeys); «Pedir à IA…» copies the request.
+    Captured: 475_programa_painel.png."""
+    import json
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    B.set_verify_settings(doc, {"country": "PT", "building_use": "habitacao", "work": "nova", "height": None,
+                                "packs": None, "on": True})
+    spec = catalog.BY_KEY["parede_alv_20"]
+    B.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (10.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                    spec)
+    middle = B.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 6.0, 0.0)), spec)
+    frame = B.wall_frame(doc, middle)
+    win.open_view("plan", doc.active_storey)
+    pump(400)
+    vp.zoom_extents()
+    win.set_tool("select")
+    pump(300)
+    win.set_module("rooms")
+    pump(400)
+    panel = win.program_panel
+    side = win.dockWidgetArea(panel) == Qt.DockWidgetArea.LeftDockWidgetArea and panel.isVisible() and \
+        not win.schedules_panel.isVisible() and win.module_actions["rooms"].isChecked()
+
+    def line(name, use, area):
+        panel.add_line()
+        pump(150)
+        panel.name_edit.setText(name)
+        panel._edited("name")
+        pump(100)
+        panel.use_box.setCurrentIndex(panel.use_box.findData(use))
+        panel._edited("use")
+        pump(100)
+        panel.area_edit.setText(area)
+        panel._edited("area")
+        pump(150)
+
+    line("WC", "sanitario", "4")
+    line("Cozinha", "cozinha", "40")
+    needs = doc.ifc.room_program()
+    made = [(n.name, n.use, n.area, n.storey) for n in needs] == [
+        ("WC", "sanitario", 4.0, doc.active_storey), ("Cozinha", "cozinha", 40.0, doc.active_storey)]
+    panel.select("WC")
+    pump(200)
+    tool_on = win.tool.name == "room_need" and win.tool.need.name == "WC"
+    move(near((2.0, 3.0, 0.0)), 4)
+    pump(100)
+    click()
+    pump(500)
+    green = panel.status_of("WC") == "ok"
+    next_one = win.tool.name == "room_need" and win.tool.need is not None and win.tool.need.name == "Cozinha"
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    kitchen = next(n for n in doc.ifc.room_program() if n.name == "Cozinha")
+    x, y = near((7.0, 3.0, 0.0))
+    win.drop_room_need(kitchen, x, y)                       # (as a name dragged from the list and dropped there)
+    pump(500)
+    orange = panel.status_of("Cozinha") == "short"
+    before = win.verifier.button.text() if getattr(win, "verifier", None) is not None else ""
+    B.add_opening(doc, middle, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 3.0, 1)
+    pump(1200)
+    said = "Zonas conflitantes" in win.last_message          # (said at once, the panel following the model)
+    win._refresh_program()
+    pump(200)
+    red = panel.status_of("WC") == "conflict" and panel.status_of("Cozinha") == "conflict" and \
+        panel.conflicts.isVisible() and "Zonas conflitantes" in panel.conflicts.text()
+    after = win.verifier.button.text() if getattr(win, "verifier", None) is not None else ""
+    footer = before != after and "⚠" in after
+    win.resizeDocks([panel], [210], Qt.Orientation.Horizontal)     # (a narrow column: it must fit all the same)
+    pump(300)
+    scroll = panel.widget()
+    widths = (panel.width(), scroll.viewport().width(), scroll.widget().width(),
+              scroll.widget().minimumSizeHint().width(), panel.geometry().getRect())
+    fits = widths[2] <= widths[1] + 1
+    shot("475_programa_painel.png")
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)        # (the door)
+    pump(600)
+    win._refresh_program()
+    pump(200)
+    undone = panel.status_of("WC") == "ok" and not panel.conflicts.isVisible()
+    path = os.path.join(tempfile.mkdtemp(), "programa_ia.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"tipo": "restaurante", "pisos": [
+            {"nome": doc.storeys()[0][1], "ambientes": [{"nome": "Sala de refeições", "uso": "refeicoes", "area": 60},
+                                                       {"nome": "Cozinha", "uso": "cozinha", "area": 25},
+                                                       {"nome": "IS clientes", "uso": "sanitario", "quantidade": 2}]},
+            {"nome": "Piso 1", "ambientes": [{"nome": "Escritório", "uso": "escritorio", "area": 12}]}]}, f,
+            ensure_ascii=False)
+    imported = win.import_room_program(path) == 4 and doc.ifc.room_program_type() == "restaurante" and \
+        panel.type_box.currentData() == "restaurante"
+    copied = win.copy_program_prompt()
+    asked = "JSON" in copied and "restaurante" in copied and \
+        QtWidgets.QApplication.clipboard().text() == copied
+    key(Qt.Key.Key_Escape)
+    win.set_tool("select")
+    win.set_module("project")
+    win.open_view("3d", None)
+    pump(300)
+    check("programa_no_painel_lateral", side and made and tool_on and green and next_one and orange and red and footer
+          and said and undone and imported and asked and fits,
+          "lateral={} linhas={} ferramenta={} verde={} seguinte={} laranja={} vermelho={} rodape={}→{} dito={} "
+          "desfeito={} json={} ia={} cabe={} {} | {}".format(
+              side, made, tool_on, green, next_one, orange, red, before, after, said, undone, imported, asked, fits,
+              widths, panel.text().replace("\n", " / ")))
+
+
 def title_block_editor_flow():
     """0.473 (the owner: «se o carimbo pudesse abrir na tela e o utilizador usar as ferramentas de desenhos e inserir
     os campos… maior liberdade criativa»): two sheets; «Editar carimbo…»: the title block on the sheet itself, its
@@ -17785,8 +17912,9 @@ def modules_flow():
     back = up(win.tree_panel)
     win.module_actions["rooms"].trigger()
     pump(200)
-    rooms = win.schedules_panel.isVisible() and win.schedules_panel.category.currentData() == "rooms"
-    win.schedules_panel.hide()
+    # (0.475, the owner: «A aba ambiente quero que funcione no painel lateral e não no rodapé»: the programme's panel)
+    rooms = up(win.program_panel) and not win.schedules_panel.isVisible()
+    win.module_actions["project"].trigger()
     pump(100)
     check("barra_compacta_e_navegador", placed and storeys and sheets and found and folded and back and rooms,
           "posicao={} pavimentos={} folhas={} pesquisa={} recolhe={} volta={} ambientes={} ({})".format(
@@ -19330,8 +19458,9 @@ def room_program_flow():
     n = win.import_room_program(path)
     pump(300)
     panel = win.program_panel
+    # (0.475: a line's state — "todo", then "ok" — rather than «0 / 1»: the panel's columns are the areas now)
     listed = n == 3 and panel.isVisible() and panel.list.topLevelItemCount() == 3 and \
-        panel.list.topLevelItem(0).text(2) == "0 / 1"
+        panel.status_of("Quarto") == "todo"
 
     def drop(name, p):
         need = next(d for d in doc.ifc.room_program() if d.name == name)
@@ -19351,7 +19480,7 @@ def room_program_flow():
     drop("Quarto", (2.0, 2.0, 0.0))
     rooms = doc.ifc.spaces()
     made = len(rooms) == 1 and rooms[0]["name"] == "Quarto" and not rooms[0]["external"] and \
-        panel.list.topLevelItem(0).text(2) == "1 / 1"
+        panel.status_of("Quarto") == "ok"
     if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
         shot("357_programa.png")
     drop("Terraço", (1.0, 3.0, 0.0))
@@ -21729,7 +21858,10 @@ def verifier_lot_flow():
     panel.group.setCurrentIndex(panel.group.findData("law"))
     pump(300)
     text = panel.text()
-    listed = "PDM da Praia — " in text and "Lote — Afastamento frontal mínimo | ✗ 4,90 m" in text
+    # (the lot's corner is clicked, taken within 0,3 m of (-5, -5): its front setback 4,90 m give or take as much)
+    front = re.search(r"Lote — Afastamento frontal mínimo \| ✗ (\d+),(\d+) m", text)
+    listed = "PDM da Praia — " in text and front is not None and \
+        abs(float("{}.{}".format(*front.groups())) - 4.90) <= 0.3
     panel.hide()
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
@@ -21738,8 +21870,9 @@ def verifier_lot_flow():
     win.open_view("3d", None)
     pump(300)
     check("verificador_lote", drawn and shown and summary and counted and listed and back,
-          "lote={} vista={} resumo={} rodapé={} painel={} desfeito={} | {!r} | {!r} | {!r}".format(
-              drawn, shown, summary, counted, listed, back, seen.get("summary"), footer, text[:300]))
+          "lote={} vista={} resumo={} rodapé={} painel={} desfeito={} | {!r} | {!r} | {!r} | lote: {!r}".format(
+              drawn, shown, summary, counted, listed, back, seen.get("summary"), footer, text[:300],
+              [ln.strip()[:90] for ln in text.splitlines() if "PDM" in ln or "Lote" in ln][:6]))
 
 
 def verifier_sheet_flow():

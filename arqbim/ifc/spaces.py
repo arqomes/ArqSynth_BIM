@@ -157,15 +157,51 @@ class SpaceMixin:
 
     def room_program(self):
         """(0.357) The project's programme (model/room_program: [Need]) kept in it (IfcProject's «Programa»)."""
+        return self._program()[1]
+
+    def _program(self):
         from ..model import room_program
         projects = self.file.by_type("IfcProject")
-        return room_program.from_text(self._params(projects[0]).get("Programa")) if projects else []
+        return room_program.program_from_text(self._params(projects[0]).get("Programa")) if projects else \
+            (None, [], [])
 
-    def set_room_program(self, needs):
+    def room_program_type(self):
+        """(0.475) The programme's type of building (model/program_rules.BUILDING_TYPES), or None."""
+        return self._program()[0]
+
+    def room_program_rules(self):
+        """(0.475) The project's own pairs of conflicting uses [(use, use)], besides its type's."""
+        return self._program()[2]
+
+    def set_room_program(self, needs, building=None, rules=None):
+        """The programme kept — (0.475) its type of building and own rules as they were when not given."""
         from ..model import room_program
         projects = self.file.by_type("IfcProject")
         if projects:
-            self._set_params(projects[0], {"Programa": room_program.to_text(needs)})
+            old_type, _old, old_rules = self._program()
+            building = old_type if building is None else (building or None)
+            rules = old_rules if rules is None else rules
+            self._set_params(projects[0], {"Programa": room_program.to_text(needs, building, rules)})
+
+    def room_program_links(self):
+        """(0.475) {room GlobalId: the programme line's id it was placed from} (its «Programa»)."""
+        out = {}
+        for space in self.file.by_type("IfcSpace"):
+            uid = self._params(space).get("Programa")
+            if uid:
+                out[space.GlobalId] = str(uid)
+        return out
+
+    def set_room_need(self, guid, need):
+        """(0.475) A room placed from a programme line: its name, interior / exterior, the line's id and use — and the
+        Verifier's use when the line's is one of its (it is then the architect's choice, never guessed)."""
+        from ..model import program_rules
+        self.set_space_data(guid, name=need.name, external=need.external)
+        values = {"Programa": need.uid, "UsoPrograma": need.use or ""}
+        verifier = program_rules.verifier_use(need.use) if need.use else None
+        if verifier and verifier != "outro":
+            values["Uso"] = verifier
+        self._set_params(self.by_guid(guid), values)
 
     # ------------------------------------------------------------ reading
 

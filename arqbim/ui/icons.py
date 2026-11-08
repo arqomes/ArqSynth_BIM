@@ -2738,7 +2738,8 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "door": door_icon, "window": window_icon, "section": section_icon, "dimension": dimension_icon,
               "orbit": orbit_icon, "pan": pan_icon, "zoom": zoom_icon, "zoom_window": zoom_window_icon,
               "position_camera": position_camera_icon, "look_around": look_around_icon, "walk": walk_icon,
-              "room": room_icon, "ramp": ramp_icon, "split_wall": split_wall_icon, "corner_walls": corner_walls_icon,
+              "room": room_icon, "room_need": room_icon,                          # (0.475: a programme line placed)
+              "ramp": ramp_icon, "split_wall": split_wall_icon, "corner_walls": corner_walls_icon,
               "split_gap": split_gap_icon, "trim_extend": trim_extend_icon,                       # (0.300)
               "wall_joins": wall_joins_icon,                                                      # (0.301)
               "wall_opening": wall_opening_icon,                                                  # (0.303)

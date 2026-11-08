@@ -41,6 +41,7 @@ from .rectangle import RectangleTool
 from .roof_parts import DrainTool, VerticalOpeningTool
 from .sanitary import SanitaryTool
 from .room import RoomTool
+from .room_need import RoomNeedTool
 from .section import SectionTool
 from .select import SelectTool
 from .slab import CeilingTool, FlooringTool, RoofTool, SlabOutlineTool, SlabTool
@@ -63,4 +64,4 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              CopyTool, ArrayTool, JoinGeometryTool, UnjoinGeometryTool, ArcTool, FreehandTool, BezierTool,
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
              PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool, RipadoTool,
-             LooseFurnitureTool, RipadoScreenTool)
+             LooseFurnitureTool, RipadoScreenTool, RoomNeedTool)

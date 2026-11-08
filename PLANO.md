@@ -850,6 +850,9 @@ correções». Por ordem:
      etc.~~ (0.360.0: Anotar ▸ Símbolos…, com o corte, o alçado, o pormenor e o nível, cada um desenhado ao lado).
 7. ~~**«Ambiente» em vez de «Sala»:**~~ (0.357.0) interior ou exterior; o programa de necessidades importado de um CSV
    ou texto; arrastar um nome da lista para dentro de um espaço da planta cria aí o ambiente com esse nome.
+   ~~O gestor do programa no painel lateral (Ambientes): lista por piso com uso e área pretendida, colocar com um
+   clique ou arrastando, verde / laranja / vermelho, zonas conflitantes por tipo de edifício, importar JSON de uma
+   IA~~ (0.475.0, pedido do dono).
 8. ~~**A porta em planta:**~~ (0.359.0)
    - o aro, a folha e os remates (guarnições) desenhados como peças separadas, não como uma massa só (em todas as
      escalas: a planta desenha a porta pelo seu desenho, não pelo corte do corpo 3D);

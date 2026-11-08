@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.475.0 — 2026-11-08
+
+**Ambientes: o programa de necessidades no painel lateral** (o dono: «A aba ambiente quero que funcione no painel
+lateral e não no rodapé… o painel vai ser um gestor de programa de necessidade»).
+
+- O botão **Ambientes** da barra lateral abre agora o painel do programa de necessidades na coluna da esquerda. Antes
+  abria as tabelas no fundo da janela.
+- No topo do painel, o **tipo de edifício** e o **piso** mostrado (ou «Todos os pisos»). Os tipos: habitação,
+  hospital, clínica / centro de saúde, escola, creche, lar de idosos, escritórios, comércio, armazém de venda,
+  minimercado, supermercado, restaurante / café, hotel, farmácia, banco e esquadra de polícia.
+- A lista de cada piso faz-se no painel: **+ Ambiente**, **Apagar** e **Limpar**. Cada ambiente tem nome, **uso /
+  categoria** (os do tipo de edifício), **área pretendida** (opcional), quantidade, piso e exterior. Cada mudança é um
+  passo de Ctrl+Z.
+- Para **colocar** um ambiente:
+  - clique nele na lista e depois dentro das paredes. Debaixo do rato aparece a área e se chega à meta. Depois de
+    colocado, a ferramenta passa sozinha ao ambiente seguinte do piso que falta colocar;
+  - ou arraste-o da lista e largue-o no espaço.
+- Cores da lista:
+  - **verde**: a meta foi atingida (a área pedida ou mais, tantos quantos pedidos);
+  - **laranja**: está colocado mas com menos área (ou menos vezes) do que o pedido, para verificar;
+  - **vermelho**: zonas conflitantes.
+- **Zonas conflitantes**: regras por tipo de edifício para ambientes que não devem comunicar diretamente por uma
+  porta. Alguns exemplos:
+  - em todos: instalação sanitária ↔ cozinha;
+  - habitação: garagem ↔ quarto;
+  - hospital e clínica: sujos ↔ esterilização; no hospital, morgue ↔ zonas do público;
+  - restaurante: instalação sanitária ↔ sala de refeições;
+  - lojas de alimentos: instalação sanitária ↔ área de venda, talho, padaria e câmara frigorífica;
+  - banco: cofre e tesouraria ↔ público;
+  - polícia: celas e armeiro ↔ público.
+
+  Quando acontece:
+  - aparece logo um aviso;
+  - as duas linhas ficam a vermelho, com a explicação por baixo da lista;
+  - o Verificador conta o aviso «Zonas conflitantes — verifique» no rodapé, e mostra-o no painel (Ir para,
+    Exceção…) e na ficha.
+- **Importar…** lê também **JSON**, como uma IA o escreve: por pisos ou numa lista, com chaves em português ou inglês.
+  Os pisos encontram-se pelo nome e os usos pelo nome ou por uma palavra. **Pedir à IA…** copia o pedido certo para
+  colar numa IA (ChatGPT, Claude, Gemini…).
+- Cada ambiente colocado guarda a ligação à sua linha do programa e o seu uso, que o Verificador também usa.
+
 ## 0.474.0 — 2026-11-08
 
 **A bateria de testes da janela volta a passar** (o dono: «Faça esta tarefa aqui: corrigir as 24 falhas antigas»).

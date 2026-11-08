@@ -1353,39 +1353,103 @@ _STRINGS = {
     "props.room_exterior_short": ("exterior", "exterior"),
     # (0.357) the programme (programa de necessidades)
     "act.room_program": ("Programa de necessidades", "Room programme"),
-    "tip.room_program": ("A lista dos ambientes que o projeto pede, importada de um ficheiro (CSV ou texto: nome; "
-                         "área; quantidade; interior/exterior). Arraste um nome para dentro de um espaço da planta "
-                         "para fazer lá esse ambiente; ao lado, quantos já estão feitos e a sua área.",
-                         "The rooms the project asks for, imported from a file (CSV or text: name; area; how many; "
-                         "interior/exterior). Drag a name into a space of the plan to make that room there; beside "
-                         "it, how many are made and their area."),
-    "program.title": ("Programa de necessidades", "Room programme"),
-    "program.hint": ("Arraste um nome para dentro de um espaço da planta: o ambiente fica lá com esse nome.",
-                     "Drag a name into a space of the plan: the room is made there with that name."),
+    "tip.room_program": ("O programa de necessidades no painel lateral (Ambientes): a lista dos ambientes de cada piso, "
+                         "com o uso e a área pretendida. Clique num ambiente da lista e depois dentro das paredes para "
+                         "o colocar (ou arraste-o para lá): verde quando a área é atingida, laranja para verificar, "
+                         "vermelho nas zonas conflitantes.",
+                         "The room programme in the side panel (Rooms): each storey's rooms, with their use and the "
+                         "area wanted. Click a room of the list, then inside walls to place it (or drag it there): "
+                         "green when the area is reached, orange to check, red for conflicting zones."),
+    "program.title": ("Ambientes — programa de necessidades", "Rooms — programme"),
+    "program.hint": ("Clique num ambiente e depois dentro das paredes para o colocar (ou arraste-o). Verde: meta "
+                     "atingida · laranja: verificar · vermelho: zonas conflitantes.",
+                     "Make each storey's list of rooms. Click a room, then inside the plan's walls to place it — or "
+                     "drag it there. Green: area reached · Orange: to check · Red: conflicting zones."),
     "program.import": ("Importar…", "Import…"),
+    "program.import_tip": ("Uma lista num ficheiro: CSV ou texto (nome; área; quantidade; interior/exterior), ou JSON "
+                           "(por exemplo feito com uma IA — veja «Pedir à IA…»).",
+                           "A list in a file: CSV or text (name; area; how many; interior/exterior), or JSON (for "
+                           "instance made with an AI — see «Ask an AI…»)."),
     "program.clear": ("Limpar", "Clear"),
-    "program.filter": ("Programa (*.csv *.txt)", "Programme (*.csv *.txt)"),
+    "program.filter": ("Programa (*.json *.csv *.txt)", "Programme (*.json *.csv *.txt)"),
     "program.col.name": ("Ambiente", "Room"),
-    "program.col.area": ("Área prevista", "Area wanted"),
+    "program.col.use": ("Uso", "Use"),
+    "program.col.area_short": ("Pretendida", "Wanted"),
+    "program.col.area": ("Área pretendida", "Area wanted"),
     "program.col.made": ("Feitos", "Made"),
-    "program.col.made_area": ("Área feita", "Area made"),
-    "program.drag_tip": ("Arraste «{name}» para dentro de um espaço da planta.",
-                         "Drag «{name}» into a space of the plan."),
-    "program.totals": ("{n} ambientes no programa, {done} feitos. Área prevista {a}; feita {m}.",
-                       "{n} rooms in the programme, {done} made. Area wanted {a}; made {m}."),
-    "program.empty": ("Sem programa: importe um ficheiro (Importar…).", "No programme: import a file (Import…)."),
+    "program.col.made_area": ("Feito", "Made"),
+    "program.drag_tip": ("Clique e depois clique dentro das paredes da planta — ou arraste «{name}» para lá.",
+                         "Click, then click inside the plan's walls — or drag «{name}» there."),
+    "program.totals": ("{n} ambientes, {done} com a meta atingida. Área pretendida {a}; feita {m}.",
+                       "{n} rooms, {done} with their goal reached. Area wanted {a}; made {m}."),
+    "program.empty": ("Sem ambientes neste piso: «+ Ambiente», ou importe uma lista (Importar…).",
+                      "No rooms on this storey: «+ Room», or import a list (Import…)."),
+    "program.building": ("Edifício", "Building"),
+    "program.storey": ("Piso", "Storey"),
+    "program.all_storeys": ("Todos os pisos", "Every storey"),
+    "program.any_storey": ("Qualquer piso", "Any storey"),
+    "program.line": ("Ambiente escolhido", "Room chosen"),
+    "program.area_optional": ("opcional, em m²", "optional, in m²"),
+    "program.count": ("Quantidade", "How many"),
+    "program.external": ("Exterior", "Outside"),
+    "program.external_tip": ("Um ambiente exterior: varanda, terraço, pátio, recreio.",
+                             "An outside room: balcony, terrace, yard, playground."),
+    "program.add": ("+ Ambiente", "+ Room"),
+    "program.add_tip": ("Mais um ambiente na lista do piso mostrado.", "One more room on the storey shown."),
+    "program.delete": ("Apagar", "Delete"),
+    "program.new_name": ("Novo ambiente", "New room"),
+    "program.ai": ("Pedir à IA…", "Ask an AI…"),
+    "program.ai_tip": ("Copia um pedido para colar numa IA (ChatGPT, Claude, Gemini…): ela responde com o programa em "
+                       "JSON; guarde-o num ficheiro .json e use «Importar…».",
+                       "Copies a request to paste in an AI (ChatGPT, Claude, Gemini…): it answers with the programme "
+                       "as JSON; save it in a .json file and use «Import…»."),
+    "program.ai_what": ("um edifício de {type}", "a {type} building"),
+    "program.conflicts": ("Zonas conflitantes ({n}) — verifique:", "Conflicting zones ({n}) — check:"),
+    "program.conflict_line": ("«{a}» ↔ «{b}»: {why}", "«{a}» ↔ «{b}»: {why}"),
+    "program.status.todo": ("«{name}» ainda não está no projeto.", "«{name}» is not in the project yet."),
+    "program.status.ok": ("«{name}»: meta atingida (a área pedida, ou mais).", "«{name}»: goal reached."),
+    "program.status.short": ("«{name}»: colocado, mas com menos área (ou menos vezes) do que o pedido — verifique.",
+                             "«{name}»: placed, but smaller (or fewer) than asked — check it."),
+    "program.status.conflict": ("«{name}» abre diretamente para um ambiente de uso incompatível — verifique as zonas "
+                                "conflitantes.", "«{name}» opens straight into a room of an incompatible use — check "
+                                                 "the conflicting zones."),
     "cmd.room_program": ("Programa de necessidades", "Room programme"),
-    "info.program_none": ("O programa está vazio: clique em «Importar…» no painel e escolha um CSV ou um texto com um "
-                          "ambiente por linha (nome; área; quantidade; interior/exterior).",
-                          "The programme is empty: click «Import…» in the panel and choose a CSV or a text with a "
-                          "room a line (name; area; how many; interior/exterior)."),
-    "err.program_empty": ("{f} não tem ambientes (uma linha por ambiente: nome; área; quantidade; interior/exterior).",
-                          "{f} has no rooms (a line a room: name; area; how many; interior/exterior)."),
-    "info.program_imported": ("Programa importado de {f}: {n} ambientes. Arraste-os para a planta.",
-                              "Programme imported from {f}: {n} rooms. Drag them onto the plan."),
+    "info.program_none": ("O programa está vazio: «+ Ambiente» no painel, ou «Importar…» uma lista (CSV, texto ou "
+                          "JSON).",
+                          "The programme is empty: «+ Room» in the panel, or «Import…» a list (CSV, text or JSON)."),
+    "err.program_empty": ("{f} não tem ambientes (uma linha por ambiente: nome; área; quantidade; interior/exterior — "
+                          "ou um JSON com «ambientes»).",
+                          "{f} has no rooms (a line a room: name; area; how many; interior/exterior — or a JSON with "
+                          "«rooms»)."),
+    "err.program_json": ("{f} não é um JSON que se leia: {e}", "{f} is not a JSON that can be read: {e}"),
+    "info.program_imported": ("Programa importado de {f}: {n} ambientes. Clique num deles e depois dentro das paredes "
+                              "(ou arraste-o).",
+                              "Programme imported from {f}: {n} rooms. Click one, then inside walls (or drag it)."),
     "info.program_made": ("Ambiente «{name}» feito. Ctrl+Z desfaz.", "Room «{name}» made. Ctrl+Z undoes."),
     "info.program_named": ("O ambiente aqui passou a chamar-se «{name}». Ctrl+Z desfaz.",
                            "The room here is now called «{name}». Ctrl+Z undoes."),
+    "info.program_area_ok": ("Área {a}: meta atingida.", "Area {a}: goal reached."),
+    "info.program_area_short": ("Área {a}, menos do que os {w} pedidos — verifique.",
+                                "Area {a}, less than the {w} asked — check it."),
+    "info.program_conflict": ("Zonas conflitantes — verifique: «{name}» abre diretamente para um ambiente de uso "
+                              "incompatível. {why}",
+                              "Conflicting zones — check: «{name}» opens straight into a room of an incompatible "
+                              "use. {why}"),
+    "info.program_conflict_new": ("Zonas conflitantes — verifique: «{a}» abre diretamente para «{b}». {why}",
+                                  "Conflicting zones — check: «{a}» opens straight into «{b}». {why}"),
+    "info.program_storey_done": ("Todos os ambientes deste piso estão no projeto.",
+                                 "Every room of this storey is in the project."),
+    "info.program_ai": ("Pedido para a IA copiado: cole-o numa IA, guarde a resposta num ficheiro .json e use "
+                        "«Importar…» no painel Ambientes.",
+                        "Request for an AI copied: paste it in an AI, save the answer in a .json file and use "
+                        "«Import…» in the Rooms panel."),
+    "tool.room_need": ("Colocar ambiente do programa", "Place a room of the programme"),
+    "hint.room_need": ("Clique dentro das paredes para colocar «{name}»{area}. Esc: terminar.",
+                       "Click inside walls to place «{name}»{area}. Esc: done."),
+    "hint.room_need_area": (" (pretendidos {a})", " ({a} wanted)"),
+    "hint.room_need_none": ("Escolha um ambiente na lista do painel Ambientes.", "Choose a room in the Rooms panel."),
+    "hint.room_need_enough": ("✓ meta atingida", "✓ goal reached"),
+    "hint.room_need_short": ("faltam {a}", "{a} short"),
     "props.room_number": ("Número", "Number"),
     "props.room_area": ("Área", "Area"),
     "props.room_perimeter": ("Perímetro", "Perimeter"),
@@ -2137,7 +2201,10 @@ _STRINGS = {
     "tip.mod.library": ("Os componentes com miniaturas: os do projeto, os da sua biblioteca local e os da web.",
                         "The components with miniatures: the project's, your local library's and the web's."),
     "tip.mod.sheets": ("As folhas e as vistas postas nelas.", "The sheets and the views on them."),
-    "tip.mod.rooms": ("O quadro dos ambientes: áreas e acabamentos.", "The rooms' schedule: areas and finishes."),
+    "tip.mod.rooms": ("O programa de necessidades: a lista dos ambientes de cada piso, a área pretendida, colocá-los "
+                      "na planta e as zonas conflitantes.",
+                      "The room programme: each storey's rooms, the area wanted, placing them in the plan and the "
+                      "conflicting zones."),
     "tip.mod.quantities": ("As tabelas e as quantidades do modelo.", "The model's schedules and quantities."),
     "tip.mod.materials": ("Os materiais com miniaturas: um clique pinta com ele; Editar: na vista, em corte e "
                           "realista, com texturas.", "The materials with miniatures: one click paints with it; Edit: in "

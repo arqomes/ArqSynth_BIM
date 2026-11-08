@@ -644,6 +644,37 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.475 — Ambientes: o programa de necessidades no painel lateral
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.475.0**. Faça Ctrl+N.
+2. Desenhe quatro paredes em retângulo de 10 × 6 m (ferramenta **Parede**, forma **Retângulo** na barra de parâmetros)
+   e uma parede a dividir o retângulo, a 4 m da esquerda.
+3. Abra a planta: no **Navegador do Projeto**, duplo clique em **Vistas ▸ Plantas ▸ Térreo**.
+4. Na barra lateral (à esquerda, os ícones), clique em **Ambientes**: abre o painel «Ambientes — programa de
+   necessidades» na coluna da esquerda (já não as tabelas no fundo da janela).
+5. Em **Edifício** deixe «Habitação»; em **Piso**, o Térreo.
+6. Clique em **+ Ambiente**: aparece «Novo ambiente». Em baixo, em **Ambiente escolhido**:
+   - em **Ambiente** escreva «WC» e carregue Enter;
+   - em **Uso** escolha «Instalação sanitária»;
+   - em **Área pretendida** escreva 4 e carregue Enter.
+7. Outra vez **+ Ambiente**: «Cozinha», uso «Cozinha», área pretendida 40.
+8. Clique na linha **WC** da lista e leve o rato à planta: aparece o contorno do espaço, a sua área e «✓ meta
+   atingida» (ou quanto falta). Clique dentro do espaço da esquerda: o ambiente fica feito e a linha **WC** fica
+   **verde**. A ferramenta passa sozinha à **Cozinha**.
+9. Carregue Esc. Arraste a linha **Cozinha** da lista e largue-a dentro do espaço da direita: o ambiente fica feito e a
+   linha fica **laranja** (33,6 m², menos do que os 40 pedidos). O aviso diz a área e que é para verificar.
+10. Ponha uma porta na parede do meio (**Arquitetura ▸ Porta**, clique na parede do meio):
+    - aparece logo o aviso «Zonas conflitantes — verifique: …»;
+    - as duas linhas ficam **vermelhas** e, por baixo da lista, vem a explicação;
+    - no rodapé, o Verificador conta mais um aviso ⚠.
+11. Carregue Ctrl+Z (sai a porta): as linhas voltam a verde e a laranja.
+12. Em **Edifício** escolha «Restaurante»: em **Uso** aparecem os usos de um restaurante (sala de refeições, copa
+    suja, câmara frigorífica…).
+13. Clique em **Pedir à IA…** (aparece a mensagem) e cole com Ctrl+V numa IA (ChatGPT, Claude…), acrescentando por
+    exemplo «com 150 m² em dois pisos». Guarde a resposta num ficheiro `programa.json` e use **Importar…**: a lista
+    fica com os ambientes de cada piso, com o uso e a área.
+14. No campo **Piso**, escolha outro piso: a lista mostra os ambientes desse piso; «Todos os pisos» mostra-os todos.
+
 ## 0.474 — Correções encontradas pela bateria de testes
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.474.0**. Faça Ctrl+N.

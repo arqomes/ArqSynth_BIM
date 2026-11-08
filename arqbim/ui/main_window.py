@@ -899,7 +899,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "param_surface": "",                                  # (0.395)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
                 "work_plane": "",                                     # (0.412)
-                "lot": ""}                                            # (0.423)
+                "lot": "",                                            # (0.423)
+                "room_need": ""}                                      # (0.475: a programme line placed)
         for name in self.tools:
             key = keys[name]
             shown = ("Espaço" if lang() == "pt" else "Space") if key == "Space" else key
@@ -1812,7 +1813,8 @@ class MainWindow(QtWidgets.QMainWindow):
     # (0.468, the owner: «A aba materiais eu quero que fique antes da aba biblioteca»)
     MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules", "settings")
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
-                    "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel"}   # (0.468)
+                    "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel",   # (0.468)
+                    "rooms": "program_panel"}                   # (0.475: the programme's manager, no longer a table)
 
     def _build_modules(self):
         """(0.184) Panel 4, the compact bar at the far left — icons only — and panel 5 beside it: the Project
@@ -1831,9 +1833,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.addDockWidget(left, p)
             p.setVisible(p is self.tree_panel)
             p.raise_ = lambda p=p: self._left_up(p)
-        self.program_panel = room_program_panel.dock(self, self.rules_panel)    # (0.357, hidden until asked for)
+        # (0.357, hidden until asked for; 0.475, the owner: «A aba ambiente quero que funcione no painel lateral» — the
+        # «Ambientes» module's panel, one of the left ones: the programme's manager)
+        self.program_panel = room_program_panel.ProgramPanel(self)
+        self.addDockWidget(left, self.program_panel)
+        self.program_panel.hide()
+        self.left_panels.append(self.program_panel)
+        self.program_panel.raise_ = lambda p=self.program_panel: self._left_up(p)
         self.program_panel.on_import = lambda: self.import_room_program()
         self.program_panel.on_clear = lambda: self.clear_room_program()
+        self.program_panel.on_change = self.change_room_program
+        self.program_panel.on_place = self.start_room_need
+        self.program_panel.on_storey = lambda guid: self.set_active_storey(guid)
+        self.program_panel.on_ai = lambda: self.copy_program_prompt()
         self.program_panel.visibilityChanged.connect(lambda shown: self._refresh_program() if shown else None)
         self.presentation_panel = presentation_panel.dock(self, self.program_panel)    # (0.363, hidden until asked)
         pp = self.presentation_panel
@@ -1910,7 +1922,7 @@ class MainWindow(QtWidgets.QMainWindow):
             panel.show()
         QtWidgets.QDockWidget.raise_(panel)
         names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library",
-                 "materials_panel": "materials"}
+                 "materials_panel": "materials", "program_panel": "rooms"}
         name = names.get(next((a for a in names if getattr(self, a, None) is panel), ""))
         if name and getattr(self, "module_actions", None) and \
                 not (name == "project" and self.module in ("library", "sheets")):
@@ -1936,12 +1948,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tree_panel.focus(("views", "sheets"))
             self.module = name
             self.module_actions[name].setChecked(True)
-        elif name in ("quantities", "rooms"):
+        elif name == "quantities":
             sp = self.schedules_panel
             sp.show()
             sp.raise_()
-            if name == "rooms":
-                sp.category.setCurrentIndex(max(0, sp.category.findData("rooms")))
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])
@@ -8898,6 +8908,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if mates and not self.doc.typical_live:
                 equal += t("storeys.status_live_off")
         self.storey_label.setText(t("storeys.status", name=name, z=storeys.level_text(z)) + equal + view)
+        if hasattr(self, "program_panel") and self.program_panel.isVisible():         # (0.475: its storey's lines)
+            self.program_panel.follow_storey(self.doc.active_storey)
 
     def _update_title(self):
         shared = t("share.title_mark") if sharing.central_of(self.doc.path) else ""
@@ -8938,14 +8950,17 @@ class MainWindow(QtWidgets.QMainWindow):
             if not path:
                 return 0
         try:
-            needs = room_program.read(path)
+            building, needs = room_program.read_program(path, self.doc.storeys())   # (0.475: JSON too, an AI's)
         except OSError as exc:
             self.message(t("err.open", f=os.path.basename(path), e=exc), warning=True)
+            return 0
+        except ValueError as exc:
+            self.message(t("err.program_json", f=os.path.basename(path), e=exc), warning=True)
             return 0
         if not needs:
             self.message(t("err.program_empty", f=os.path.basename(path)), warning=True)
             return 0
-        bim.set_room_program(self.doc, needs)
+        bim.set_room_program(self.doc, needs, building)
         self.program_panel.show()
         self.program_panel.raise_()
         self._refresh_program()
@@ -8958,8 +8973,28 @@ class MainWindow(QtWidgets.QMainWindow):
             self._refresh_program()
 
     def _refresh_program(self):
-        if hasattr(self, "program_panel") and self.program_panel.isVisible() and not self.doc.loading:
-            self.program_panel.show_program(self.doc.ifc.room_program(), self.doc.ifc.spaces())
+        """(0.475) The Programme panel shown again: each line against the rooms placed, the conflicting zones."""
+        if not (hasattr(self, "program_panel") and self.program_panel.isVisible()) or self.doc.loading:
+            return
+        from ..model import program_rules, room_program
+        ifc = self.doc.ifc
+        needs = ifc.room_program()
+        storeys = self.doc.storeys()
+        states = room_program.states(needs, ifc.spaces(), ifc.room_program_links(), storeys)
+        try:
+            found = program_rules.conflicts(self.doc)
+        except Exception:                                 # noqa: BLE001 (the IFC still being read)
+            found = []
+        self.program_panel.show_program(needs, building=program_rules.project_type(self.doc), states=states,
+                                        conflicts=found, storeys=storeys, active=self.doc.active_storey)
+        # a conflict that was not there (a door put between them, a room's use changed): said at once
+        pairs = {frozenset(c[:2]) for c in found}
+        before, self._program_pairs = getattr(self, "_program_pairs", None), (id(self.doc.ifc), pairs)
+        if before is not None and before[0] == id(self.doc.ifc):
+            new = [c for c in found if frozenset(c[:2]) not in before[1]]
+            if new:
+                a, b = (((self.doc.ifc.space_info(g) or {}).get("name") or "?") for g in new[0][:2])
+                self.message(t("info.program_conflict_new", a=a, b=b, why=new[0][3][2]), warning=True)
 
     def _room_drop(self, event, et):
         """A drag over the view: a name of the programme taken (its own kind of data), dropped — the room there."""
@@ -8994,9 +9029,86 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("err.room_open"), warning=True)
             return None
         guid, made = found
-        self.message(t("info.program_made" if made else "info.program_named", name=need.name))
         self._refresh_program()
+        self._said_room_need(need, guid, made)
         return guid
+
+    # ------------------------------------------------------------ (0.475) the programme's manager
+
+    def change_room_program(self, needs, building=None):
+        """The Programme panel's lines (or its type of building) changed there: kept — one undo step."""
+        bim.set_room_program(self.doc, needs, building)
+        self._refresh_program()
+
+    def start_room_need(self, need):
+        """A line of the Programme panel clicked: placed with the next click inside walls (tools/room_need.py) — on
+        its storey (made the active one)."""
+        from ..model import room_program
+        floor = room_program.storey_of(need, self.doc.storeys())
+        if floor is not None and floor != self.doc.active_storey:
+            self.set_active_storey(floor)
+        if self.tool.name != "room_need":
+            self.set_tool("room_need")
+        self.tools["room_need"].set_need(need)
+        return self.tools["room_need"]
+
+    def place_room_need(self, need, x, y):
+        """The Room-from-the-programme tool's click at (x, y): the room there (as a name dropped), then the next line of
+        the storey still to place — none left: Selecionar."""
+        guid = self.drop_room_need(need, x, y)
+        if guid is None:
+            return None
+        from ..model import room_program
+        ifc = self.doc.ifc
+        storeys = self.doc.storeys()
+        states = room_program.states(ifc.room_program(), ifc.spaces(), ifc.room_program_links(), storeys)
+        here = self.doc.active_storey
+        state = next((s for s in states if s.need.uid == need.uid), None)
+        if state is not None and state.made < need.count:
+            return guid                                   # (more of it to place: the same line)
+        following = [s.need for s in states if s.status == "todo"
+                     and room_program.storey_of(s.need, storeys) in (here, None)]
+        if following and self.tool.name == "room_need":
+            self.tools["room_need"].set_need(following[0])
+        elif self.tool.name == "room_need":
+            self.set_tool("select")
+            self.message(t("info.program_storey_done"))
+        return guid
+
+    def _said_room_need(self, need, guid, made):
+        """What a room placed from the programme says: made or named, its area against the one wanted — and, when it
+        opens into a room it should not, the conflicting zones (the Verifier's warning in the footer too)."""
+        from ..model import program_rules
+        info = self.doc.ifc.space_info(guid) or {}
+        area = float(info.get("area") or 0.0)
+        text = t("info.program_made" if made else "info.program_named", name=need.name)
+        if need.area:
+            m2 = "{:.2f} m²".format(area).replace(".", decimal_sep())
+            text += " " + (t("info.program_area_ok", a=m2) if area >= need.area - 0.005 else
+                           t("info.program_area_short", a=m2, w="{:.2f} m²".format(need.area).replace(
+                               ".", decimal_sep())))
+        try:
+            mine = [c for c in program_rules.conflicts(self.doc) if guid in c[:2]]
+        except Exception:                                 # noqa: BLE001 (the IFC still being read)
+            mine = []
+        if mine:                                          # (the footer's warning follows the model by itself)
+            self.message(t("info.program_conflict", name=need.name, why=mine[0][3][2]), warning=True)
+            return
+        self.message(text, warning=bool(need.area) and area < need.area - 0.005)
+
+    def copy_program_prompt(self, what=None):
+        """«Pedir à IA…»: the request for an AI — the programme of this type of building, as JSON this panel reads —
+        copied to paste in it (ChatGPT, Claude, Gemini…). Returns the text."""
+        from ..model import program_rules, room_program
+        building = program_rules.project_type(self.doc)
+        language = lang()
+        text = room_program.AI_PROMPT.format(
+            what=what or t("program.ai_what", type=program_rules.type_label(building, language).lower()),
+            type=building, uses=", ".join(program_rules.uses_for(building)),
+            types=", ".join(program_rules.BUILDING_TYPES))
+        QtWidgets.QApplication.clipboard().setText(text)
+        self.message(t("info.program_ai"))
+        return text
 
     def quick_edit(self):
         """(0.354) TAB with elements chosen (Select): their quick edit beside them, over the view (ui/quick_edit.py) —

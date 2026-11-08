@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.474.0
+# Guia das ferramentas — ArqSynth BIM 0.475.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.474.0.
+ArqSynth BIM 0.475.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -767,7 +767,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Porta 80×210: passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** Rato numa face: abre para esse lado · F: para o outro · Espaço: dobradiças no outro aro · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.472 «Folhas: comandos na barra, desenhos importados, carimbo da empresa»; 0.439 «Elevador com portas de patamar»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»
+- **Passos de teste (TESTAR.md):** 0.475 «Ambientes: o programa de necessidades no painel lateral»; 0.472 «Folhas: comandos na barra, desenhos importados, carimbo da empresa»; 0.439 «Elevador com portas de patamar»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»
 
 #### Janela  ·  tecla J
 
@@ -882,7 +882,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Ambiente: clique dentro das paredes para fazer o ambiente (o contorno aparece debaixo do rato). Ele acompanha as paredes. Esc: Selecionar.
 - **Teclas:** Clique dentro de paredes fechadas · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»; 0.357 «Ambientes e o programa de necessidades»
+- **Passos de teste (TESTAR.md):** 0.475 «Ambientes: o programa de necessidades no painel lateral»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»; 0.357 «Ambientes e o programa de necessidades»
 
 #### Separador
 
@@ -901,8 +901,8 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 #### Programa de necessidades
 
-- **O que faz:** A lista dos ambientes que o projeto pede, importada de um ficheiro (CSV ou texto: nome; área; quantidade; interior/exterior). Arraste um nome para dentro de um espaço da planta para fazer lá esse ambiente; ao lado, quantos já estão feitos e a sua área.
-- **Passos de teste (TESTAR.md):** 0.357 «Ambientes e o programa de necessidades»
+- **O que faz:** O programa de necessidades no painel lateral (Ambientes): a lista dos ambientes de cada piso, com o uso e a área pretendida. Clique num ambiente da lista e depois dentro das paredes para o colocar (ou arraste-o para lá): verde quando a área é atingida, laranja para verificar, vermelho nas zonas conflitantes.
+- **Passos de teste (TESTAR.md):** 0.475 «Ambientes: o programa de necessidades no painel lateral»; 0.357 «Ambientes e o programa de necessidades»
 
 #### Luminária
 
@@ -1809,4 +1809,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*244 comandos descritos, gerados do ArqSynth BIM 0.474.0.*
+*244 comandos descritos, gerados do ArqSynth BIM 0.475.0.*

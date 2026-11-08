@@ -39,6 +39,13 @@
       "subject": "room", "where": {"outside": false}, "measure": "partilha_regiao", "max": 0, "unit": "",
       "severity": "warning", "confirmed": true,
       "fix": "Separe-os com uma parede ou um separador de ambientes, ou apague um deles."
+    },
+    {
+      "id": "MOD-zonas-conflitantes", "topic": "modelo.zonas_conflitantes", "article": "modelo",
+      "title": "Zonas conflitantes — verifique",
+      "text": "Este ambiente abre diretamente, por uma porta, para outro de uso incompatível (por exemplo uma instalação sanitária para a cozinha, sujos para a esterilização, o cofre para a zona do público). As regras são as do tipo de edifício do Programa de necessidades (painel Ambientes).",
+      "subject": "room", "measure": "zona_conflitante", "max": 0, "unit": "", "severity": "warning", "confirmed": true,
+      "fix": "Leve a porta para uma antecâmara ou um corredor, ou mude o uso de um dos ambientes; se for intencional, aceite-o com Exceção…."
     }
   ]
 }

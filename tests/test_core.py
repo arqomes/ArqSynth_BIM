@@ -6104,10 +6104,11 @@ class Disciplines(unittest.TestCase):
         from arqbim.tools import ALL_TOOLS
         from arqbim.ui import ribbon
         navigation = {"orbit", "pan", "zoom", "zoom_window", "position_camera", "look_around", "walk"}
+        from_panels = {"room_need"}           # (0.475: a line of the Programme panel clicked — the panel starts it)
         tools = {cls.name for cls in ALL_TOOLS}
         tabs = list(ribbon.DISCIPLINES) + ["ctx:" + k for k in ribbon.CONTEXTS]
         placed = {name for d in tabs for name in ribbon.items_of(d)}
-        self.assertEqual(tools - navigation - placed, set())
+        self.assertEqual(tools - navigation - from_panels - placed, set())
         with open(os.path.join(os.path.dirname(__file__), "..", "arqbim", "ui", "main_window.py"),
                   encoding="utf-8") as f:
             source = f.read()

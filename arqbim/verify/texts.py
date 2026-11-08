@@ -194,6 +194,8 @@ STRINGS = {
     "verify.m.duplicado": ("outro igual no mesmo sítio", "another just like it in the same place"),
     "verify.m.fechado": ("fechado pelas paredes", "closed by the walls"),
     "verify.m.partilha_regiao": ("outros ambientes no mesmo espaço", "other rooms in the same space"),
+    "verify.m.zona_conflitante": ("ambientes de uso incompatível ligados por uma porta",            # (0.475)
+                                  "rooms of an incompatible use joined by a door"),
     "verify.model_message": ("{subject}: {title}{amount}", "{subject}: {title}{amount}"),
     "verify.settings.model_warnings": ("Avisos do modelo", "Model warnings"),
     "verify.settings.model_warnings_tip": ("Paredes sobrepostas, elementos repetidos no mesmo sítio, ambientes que as "
