@@ -139,6 +139,80 @@ _STRINGS = {
     "sheet.tidy": ("Arrumar", "Tidy up"),
     "sheet.tidy_tip": ("Todas as vistas de volta aos lugares automáticos (as que arrastou também).",
                        "Every view back to its automatic place (also the ones you dragged)."),
+    # (0.472) the sheet's commands on the parameters' bar; drawings imported; the company's title block
+    "ctx.sheet": ("Folha", "Sheet"),
+    "sheet.zoom_out_short": ("−", "−"),
+    "sheet.zoom_in_short": ("+", "+"),
+    "sheet.import": ("Importar desenho…", "Import drawing…"),
+    "sheet.import_tip": ("Pôr na folha um desenho de fora: DWG ou DXF (numa escala), uma imagem (PNG, JPG…) ou um "
+                         "SVG. Arraste-o para o pôr no sítio; Delete tira-o da folha.",
+                         "Put a drawing from outside on the sheet: a DWG or DXF (at a scale), a picture (PNG, JPG…) or "
+                         "an SVG. Drag it into place; Delete takes it off the sheet."),
+    "sheet.import_filter": ("Desenhos (*.dwg *.dxf *.svg *.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
+                            "DWG / DXF (*.dwg *.dxf);;Imagens (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
+                            "SVG (*.svg)",
+                            "Drawings (*.dwg *.dxf *.svg *.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
+                            "DWG / DXF (*.dwg *.dxf);;Pictures (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff *.webp);;"
+                            "SVG (*.svg)"),
+    "sheet.import_bad": ("Não consegui ler «{f}» (para DWG é preciso o ODA File Converter).",
+                         "Could not read “{f}” (a DWG needs the ODA File Converter)."),
+    "sheet.import_kind": ("Esse tipo de ficheiro não se põe na folha: use DWG, DXF, SVG ou uma imagem.",
+                          "That kind of file does not go on a sheet: use DWG, DXF, SVG or a picture."),
+    "info.sheet_import": ("«{name}» posto na folha. Arraste-o para o mudar de sítio. Ctrl+Z desfaz.",
+                          "“{name}” put on the sheet. Drag it to move it. Ctrl+Z undoes."),
+    "sheet.import_scale": ("Escala do desenho", "Drawing scale"),
+    "sheet.import_width": ("Largura", "Width"),
+    "sheet.pick_hint": ("Clique numa vista ou num desenho para lhe mudar a escala", "Click a view or a drawing to "
+                        "change its scale"),
+    "sheet.edit_title_block": ("Editar carimbo…", "Edit title block…"),
+    "sheet.edit_title_block_tip": ("O carimbo da sua empresa: logótipo, nome, contactos, as linhas e os campos, os "
+                                   "nomes dos campos. Fica no projeto e pode guardá-lo para todos os projetos.",
+                                   "Your company's title block: logo, name, contacts, its rows and fields, the fields' "
+                                   "names. Kept with the project, and it can be saved for every project."),
+    "cmd.sheet_import": ("Desenho na folha", "Drawing on the sheet"),
+    "cmd.company_title_block": ("Carimbo da empresa", "Company title block"),
+    "info.company_title_block": ("Carimbo da empresa em {n} folha(s). Ctrl+Z desfaz.",
+                                 "Company title block on {n} sheet(s). Ctrl+Z undoes."),
+    "ctb.title": ("Editar carimbo", "Edit title block"),
+    "ctb.preview": ("Assim fica o carimbo nas folhas:", "The title block on the sheets:"),
+    "ctb.intro": ("Cada linha tem a sua altura e as suas caixas; cada caixa mostra um campo e ocupa a sua parte da "
+                  "linha (por exemplo 1 e 2: a segunda é o dobro da primeira). Os dados da obra mudam-se em Editar "
+                  "tipo… da folha.",
+                  "Each row has its height and its boxes; each box shows a field and takes its share of the row (for "
+                  "example 1 and 2: the second is twice the first). The project's details change in the sheet's Edit "
+                  "type…."),
+    "ctb.company": ("Empresa", "Company"),
+    "ctb.name": ("Nome", "Name"),
+    "ctb.name_hint": ("Atelier de Arquitetura, Lda.", "Architecture studio Ltd."),
+    "ctb.contacts": ("Contactos", "Contacts"),
+    "ctb.contacts_hint": ("Rua …, Cidade\nTel. … · email@…", "Street …, Town\nTel. … · email@…"),
+    "ctb.logo": ("Logótipo", "Logo"),
+    "ctb.logo_choose": ("Escolher…", "Choose…"),
+    "ctb.logo_clear": ("Tirar", "Remove"),
+    "ctb.logo_filter": ("Imagens (*.png *.jpg *.jpeg *.bmp *.svg)", "Pictures (*.png *.jpg *.jpeg *.bmp *.svg)"),
+    "ctb.no_logo": ("(sem logótipo)", "(no logo)"),
+    "ctb.width": ("Largura do carimbo", "Title block width"),
+    "ctb.rows": ("Linhas do carimbo (de cima para baixo)", "Title block rows (top to bottom)"),
+    "ctb.row_h": ("Altura", "Height"),
+    "ctb.add_cell": ("Mais uma caixa nesta linha", "One more box in this row"),
+    "ctb.remove_cell": ("Tirar a última caixa", "Remove the last box"),
+    "ctb.row_up": ("Subir a linha", "Move the row up"),
+    "ctb.row_down": ("Descer a linha", "Move the row down"),
+    "ctb.remove_row": ("Tirar a linha", "Remove the row"),
+    "ctb.add_row": ("+ Linha", "+ Row"),
+    "ctb.share_tip": ("A parte da linha que a caixa ocupa", "The box's share of the row"),
+    "ctb.labels": ("Nomes dos campos (vazio: o do programa)", "The fields' names (empty: the program's)"),
+    "ctb.apply_to": ("Usar em:", "Use on:"),
+    "ctb.this_sheet": ("só «{name}»", "only “{name}”"),
+    "ctb.no_sheet": ("só esta folha", "only this sheet"),
+    "ctb.all_sheets": ("todas as folhas", "every sheet"),
+    "ctb.save_office": ("Guardar como carimbo da empresa", "Save as the company's title block"),
+    "ctb.save_office_tip": ("Guarda este carimbo para todos os projetos (e para os outros programas ArqSynth).",
+                            "Keeps this title block for every project (and the other ArqSynth programs)."),
+    "ctb.load_office": ("Usar o da empresa", "Use the company's"),
+    "ctb.reset": ("Repor as linhas de origem", "Reset the rows"),
+    "ctb.saved": ("Carimbo da empresa guardado em:\n{f}", "Company title block saved in:\n{f}"),
+    "ctb.save_failed": ("Não consegui guardar: {e}", "Could not save: {e}"),
     "sheet.refresh": ("Atualizar desenhos", "Update drawings"),
     "sheet.refresh_needed": ("Atualizar desenhos (o modelo mudou)", "Update drawings (the model changed)"),
     "sheet.export": ("Exportar PDF…", "Export PDF…"),
@@ -170,6 +244,11 @@ _STRINGS = {
     "tb.scale": ("Escala", "Scale"),
     "tb.date": ("Data", "Date"),
     "tb.number": ("Folha n.º", "Sheet no."),
+    # (0.472) the company's own title block: its boxes (Editar carimbo…)
+    "tb.company": ("Empresa", "Company"),
+    "tb.contacts": ("Contactos", "Contacts"),
+    "tb.logo": ("Logótipo", "Logo"),
+    "tb.blank": ("(vazio)", "(empty)"),
     "tb.number_auto": ("{n} (automático: a ordem das folhas)", "{n} (automatic: the order of the sheets)"),
     "tb.project_auto": ("{name} (o nome do ficheiro)", "{name} (the file's name)"),
     "tb.stages": ("Programa base|Estudo prévio|Anteprojeto|Licenciamento|Projeto de execução|Assistência técnica",
@@ -5234,6 +5313,7 @@ _STRINGS = {
     "sheet.template.full": ("Completo", "Full"),
     "sheet.template.compact": ("Compacto", "Compact"),
     "sheet.template.strip": ("Faixa lateral", "Side strip"),
+    "sheet.template.custom": ("Da empresa (personalizado)", "The company's (custom)"),                # (0.472)
     # DXF (0.129)
     "act.export_dxf": ("Exportar vista (DXF, DWG, SVG)…", "Export view (DXF, DWG, SVG)…"),
     "dxf.filter": ("Desenho DXF para CAD (*.dxf);;Desenho DWG do AutoCAD (*.dwg);;Desenho SVG (*.svg)",

@@ -10,6 +10,7 @@ main window until the model changes, and remade here with "Update drawings".
 """
 
 import copy
+import os
 
 import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -38,6 +39,8 @@ class SheetCanvas(QtWidgets.QWidget):
         self.zoom = 1.0
         self.pan = (0.0, 0.0)         # px: the paper moved so from the middle
         self._panning = None          # the mouse where the middle button last was
+        self._grab = None             # (0.472) a drawing from outside grabbed: (its uid, mouse mm, its centre)
+        self._moving = None           # …and where it is while dragged: (uid, centre)
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(640, 460)
 
@@ -87,11 +90,24 @@ class SheetCanvas(QtWidgets.QWidget):
         painter.fillRect(QtCore.QRectF(x0 + 3, y0 + 3, w * s, h * s), QtGui.QColor(0, 0, 0, 60))   # shadow
         painter.fillRect(QtCore.QRectF(x0, y0, w * s, h * s), QtGui.QColor("white"))
         painter.translate(x0, y0)
+        imports = list(sheet.imports)
+        if self._moving is not None:                         # (0.472) a drawing from outside being dragged
+            uid, at = self._moving
+            imports = [copy.copy(i) for i in imports]
+            for i in imports:
+                if i.uid == uid:
+                    i.at = at
         pdf.paint_sheet(painter, s, (w, h), self.owner.host.title_block(sheet), self.owner.placed,
-                        template=sheet.template)
+                        template=sheet.template, imports=imports)
         frame = self.owner.frame_of(self.selected)
-        if frame is not None:
-            left, top, fw, fh = frame.rect()
+        rect = frame.rect() if frame is not None else None
+        picked = next((i for i in imports if i.uid == self.owner.picked_import), None)
+        if rect is None and picked is not None:
+            size = pdf.import_size(picked)
+            if size is not None:
+                rect = (picked.at[0] - size[0] / 2, picked.at[1] - size[1] / 2, size[0], size[1])
+        if rect is not None:
+            left, top, fw, fh = rect
             pen = QtGui.QPen(PICKED, 1.5, QtCore.Qt.PenStyle.DashLine)
             painter.setPen(pen)
             painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
@@ -114,6 +130,14 @@ class SheetCanvas(QtWidgets.QWidget):
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         x, y = self.to_mm(event.position())
+        mine = self.owner.import_picked()               # (0.472) the drawing picked, under the mouse: it, not a view
+        size = pdf.import_size(mine) if mine is not None else None
+        if size is not None and abs(x - mine.at[0]) <= size[0] / 2 and abs(y - mine.at[1]) <= size[1] / 2:
+            self.selected, self._drag = None, None
+            self._grab = (mine.uid, (x, y), tuple(mine.at))
+            self.owner.picked(None, mine.uid)
+            self.update()
+            return
         self.selected = self.view_at(x, y)
         frame = self.owner.frame_of(self.selected)
         self._drag = (self.selected, (x, y), frame.centre) if frame is not None else None
@@ -122,7 +146,13 @@ class SheetCanvas(QtWidgets.QWidget):
             k, i, key = hit
             self.selected, self._drag = k, None
             self._label = (k, i, key, (x, y), np.array(self.owner._drawings[k].annotations[i][4], dtype=float))
-        self.owner.picked(self.selected)
+        uid = None
+        if self.selected is None:                        # (0.472) a drawing from outside, under the views
+            item = self.owner.import_at(x, y)
+            if item is not None:
+                uid = item.uid
+                self._grab = (uid, (x, y), tuple(item.at))
+        self.owner.picked(self.selected, uid)
         self.update()
 
     def mouseDoubleClickEvent(self, event):
@@ -161,6 +191,12 @@ class SheetCanvas(QtWidgets.QWidget):
             x, y = self.to_mm(event.position())
             self.owner.drag_label(k, i, spot + self.owner.to_metres(k, x - x0, y - y0))
             return
+        if self._grab is not None:                       # (0.472) the drawing from outside follows the mouse
+            uid, (x0, y0), (cx, cy) = self._grab
+            x, y = self.to_mm(event.position())
+            self._moving = (uid, (cx + x - x0, cy + y - y0))
+            self.update()
+            return
         if self._drag is None:
             return
         k, (x0, y0), (cx, cy) = self._drag
@@ -181,6 +217,14 @@ class SheetCanvas(QtWidgets.QWidget):
             else:
                 self.owner.refresh()                     # (a click is not a move: the drawing as it was)
             return
+        if self._grab is not None and event.button() == QtCore.Qt.MouseButton.LeftButton:   # (0.472)
+            uid, (x0, y0), (cx, cy) = self._grab
+            self._grab = self._moving = None
+            x, y = self.to_mm(event.position())
+            if abs(x - x0) + abs(y - y0) > 0.5:
+                self.owner.move_import(uid, (cx + x - x0, cy + y - y0))
+            self.update()
+            return
         if self._drag is None or event.button() != QtCore.Qt.MouseButton.LeftButton:
             return
         k, (x0, y0), (cx, cy) = self._drag
@@ -192,6 +236,10 @@ class SheetCanvas(QtWidgets.QWidget):
     def keyPressEvent(self, event):
         if event.key() in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace) and self.selected is not None:
             self.owner.take_off(self.selected)
+            return
+        if event.key() in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace) and \
+                self.owner.picked_import is not None:                               # (0.472)
+            self.owner.take_off_import(self.owner.picked_import)
             return
         super().keyPressEvent(event)
 
@@ -211,44 +259,149 @@ class SheetWindow(QtWidgets.QWidget):
         self._busy = self._later = False
 
         # (0.470, the owner: «A edição do tipo da folha e propriedades devem ficar na coluna de propriedade») its paper
-        # and title block are its type: in the Properties panel (Editar tipo…), no longer on this bar
-        self.scale = QtWidgets.QComboBox()
-        self.scale.addItem(t("sheet.scale_auto"), None)
-        for n in sheets_model.SCALES:
-            self.scale.addItem("1:{}".format(n), n)
-        self.scale.activated.connect(self._scale_chosen)
-        self.tidy = QtWidgets.QPushButton(t("sheet.tidy"))
-        self.tidy.setToolTip(t("sheet.tidy_tip"))
-        self.tidy.clicked.connect(self._tidy)
-        self.refresh_button = QtWidgets.QPushButton(t("sheet.refresh"))
-        self.refresh_button.clicked.connect(lambda: self.refresh(again=True))
-        self.export = QtWidgets.QPushButton(t("sheet.export"))
-        self.export.clicked.connect(lambda: self.host.export_sheets([self.sheet]))
+        # and title block are its type: in the Properties panel (Editar tipo…). (0.472, the owner: «Os parâmetros da
+        # folha também devem ficar na barra de parâmetros») its commands are on the window's parameters' bar, as a
+        # tool's (context_items): the zoom, the scale of what is picked, Arrumar, Importar desenho…, Editar carimbo…,
+        # Atualizar desenhos, Exportar PDF…
         self.canvas = SheetCanvas(self)
-        # (0.470, «permitir zoom na folha») nearer, farther, all of it — the wheel and the middle button too
-        self.zoom_out, self.zoom_in, self.zoom_all = (QtWidgets.QToolButton() for _k in range(3))
-        for button, text, tip, act in ((self.zoom_out, "−", "sheet.zoom_out", lambda: self.canvas.zoom_at(1 / 1.5)),
-                                       (self.zoom_in, "+", "sheet.zoom_in", lambda: self.canvas.zoom_at(1.5)),
-                                       (self.zoom_all, t("sheet.zoom_all"), "sheet.zoom_all_tip", self.canvas.fit_all)):
-            button.setText(text)
-            button.setToolTip(t(tip))
-            button.clicked.connect(act)
-        bar = QtWidgets.QHBoxLayout()
-        for button in (self.zoom_out, self.zoom_in, self.zoom_all):
-            bar.addWidget(button)
-        bar.addSpacing(16)
-        bar.addWidget(QtWidgets.QLabel(t("sheet.view_scale")))
-        bar.addWidget(self.scale)
-        bar.addWidget(self.tidy)
-        bar.addStretch(1)
-        bar.addWidget(self.refresh_button)
-        bar.addWidget(self.export)
+        self.picked_import = None     # (0.472) the uid of the drawing from outside picked on the sheet
+        self.act_zoom_out = self._act(t("sheet.zoom_out_short"), "sheet.zoom_out", lambda: self.canvas.zoom_at(1 / 1.5))
+        self.act_zoom_in = self._act(t("sheet.zoom_in_short"), "sheet.zoom_in", lambda: self.canvas.zoom_at(1.5))
+        self.act_zoom_all = self._act(t("sheet.zoom_all"), "sheet.zoom_all_tip", self.canvas.fit_all)
+        self.act_tidy = self._act(t("sheet.tidy"), "sheet.tidy_tip", self._tidy)
+        self.act_import = self._act(t("sheet.import"), "sheet.import_tip", lambda: self.import_drawing())
+        self.act_title_block = self._act(t("sheet.edit_title_block"), "sheet.edit_title_block_tip",
+                                         lambda: self.host.edit_company_title_block())
+        self.act_refresh = self._act(t("sheet.refresh"), None, lambda: self.refresh(again=True))
+        self.act_export = self._act(t("sheet.export"), None, lambda: self.host.export_sheets([self.sheet]))
         self.hint = QtWidgets.QLabel(t("sheet.hint"))
         self.hint.setWordWrap(True)
         layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(bar)
         layout.addWidget(self.canvas, 1)
         layout.addWidget(self.hint)
+
+    def _act(self, text, tip, slot):
+        act = QtGui.QAction(text, self)
+        if tip:
+            act.setToolTip(t(tip))
+        act.triggered.connect(lambda _on=False: slot())
+        return act
+
+    # ------------------------------------------------------------ (0.472) on the parameters' bar
+
+    def context_items(self):
+        """What the window's parameters' bar shows while the sheet is: its commands and the scale (or width) of the
+        view or drawing picked."""
+        from ..tools.base import Option
+        items = [("title", t("ctx.sheet")), ("action", self.act_zoom_out), ("action", self.act_zoom_in),
+                 ("action", self.act_zoom_all), ("separator",)]
+        k, item = self.canvas.selected, self.import_picked()
+        if k is not None and self.sheet is not None and k < len(self.sheet.views):
+            choices = ((None, t("sheet.scale_auto")),) + tuple((n, "1:{}".format(n)) for n in sheets_model.SCALES)
+            items.append(("option", Option("sheet_scale", t("sheet.view_scale").rstrip(":"), "choice",
+                                           self.sheet.views[k].scale, choices)))
+        elif item is not None and item.kind == "cad":
+            choices = tuple((n, "1:{}".format(n)) for n in sheets_model.IMPORT_SCALES)
+            items.append(("option", Option("sheet_import_scale", t("sheet.import_scale"), "choice", item.scale,
+                                           choices)))
+        elif item is not None:
+            widths = sorted(set(sheets_model.IMPORT_WIDTHS) | {int(round(item.width))})
+            items.append(("option", Option("sheet_import_width", t("sheet.import_width"), "choice",
+                                           int(round(item.width)), tuple((w, "{} mm".format(w)) for w in widths))))
+        else:
+            items.append(("hint", t("sheet.pick_hint")))
+        items += [("action", self.act_tidy), ("separator",), ("action", self.act_import),
+                  ("action", self.act_title_block), ("separator",), ("action", self.act_refresh),
+                  ("action", self.act_export)]
+        return items
+
+    def option(self, key, value):
+        """A setting of the parameters' bar changed (the sheet's)."""
+        if key == "sheet_scale" and self.canvas.selected is not None:
+            self._change(view=self.canvas.selected, scale=value)
+        elif key == "sheet_import_scale" and self.picked_import is not None:
+            self._import_change(scale=int(value))
+        elif key == "sheet_import_width" and self.picked_import is not None:
+            self._import_change(width=float(value))
+
+    def set_scale(self, value):
+        """(tests) The scale of the view picked."""
+        self.option("sheet_scale", value)
+
+    # ------------------------------------------------------------ (0.472) drawings from outside
+
+    def import_picked(self):
+        sheet = self.sheet
+        if sheet is None or self.picked_import is None:
+            return None
+        return next((i for i in sheet.imports if i.uid == self.picked_import), None)
+
+    def import_at(self, x, y):
+        """The drawing from outside under (x, y) mm (the one put last if they overlap), or None."""
+        sheet = self.sheet
+        for item in reversed(sheet.imports if sheet is not None else ()):
+            size = pdf.import_size(item)
+            if size is not None and abs(x - item.at[0]) <= size[0] / 2 and abs(y - item.at[1]) <= size[1] / 2:
+                return item
+        return None
+
+    def import_drawing(self, path=None):
+        """Importar desenho…: a DWG / DXF, a picture or an SVG put on the sheet, in the middle of where the views
+        go — a CAD drawing at the largest usual scale at which it fits there, a picture half as wide."""
+        sheet = self.sheet
+        if sheet is None:
+            return None
+        if path is None:
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, t("sheet.import"), self.host.documents_folder(),
+                                                            t("sheet.import_filter"))
+            if not path:
+                return None
+        kind = sheets_model.import_kind(path)
+        if kind is None:
+            self.host.message(t("sheet.import_kind"), warning=True)
+            return None
+        left, top, width, height = sheets_model.drawing_area(sheet.paper, sheet.template, sheet.portrait)
+        item = sheets_model.SheetImport(kind, os.path.abspath(path), os.path.basename(path),
+                                        (round(left + width / 2, 1), round(top + height / 2, 1)),
+                                        width=float(min(150, int(width / 2))))
+        if kind == "cad":
+            try:
+                from ..core import cad
+                item.units = float(cad.read_file(path).units)
+            except (OSError, ValueError):
+                self.host.message(t("sheet.import_bad", f=os.path.basename(path)), warning=True)
+                return None
+            item.scale = sheets_model.IMPORT_SCALES[-1]
+            for scale in sheets_model.IMPORT_SCALES:            # (the largest at which it fits)
+                item.scale = scale
+                size = pdf.import_size(item)
+                if size is not None and size[0] <= width and size[1] <= height:
+                    break
+        if pdf.import_size(item) is None:
+            self.host.message(t("sheet.import_bad", f=os.path.basename(path)), warning=True)
+            return None
+        self.host.doc.add_sheet_import(self.host.doc.sheets.index(sheet), item)
+        self.picked(None, item.uid)
+        self.host.message(t("info.sheet_import", name=item.name))
+        self.canvas.update()
+        return item
+
+    def _import_change(self, **changes):
+        sheet = self.sheet
+        if sheet is not None and self.picked_import is not None:
+            self.host.doc.change_sheet_import(self.host.doc.sheets.index(sheet), self.picked_import, **changes)
+
+    def move_import(self, uid, at):
+        sheet = self.sheet
+        if sheet is not None:
+            self.host.doc.change_sheet_import(self.host.doc.sheets.index(sheet), uid,
+                                              at=(round(at[0], 1), round(at[1], 1)))
+
+    def take_off_import(self, uid):
+        sheet = self.sheet
+        if sheet is not None:
+            self.picked(self.canvas.selected, None)
+            self.host.doc.change_sheet_import(self.host.doc.sheets.index(sheet), uid, remove=True)
 
     # ------------------------------------------------------------ content
 
@@ -278,6 +431,7 @@ class SheetWindow(QtWidgets.QWidget):
         sheet = self.sheet
         if sheet is None:             # (gone: its tab closes)
             return
+        sheets_model.use_company(self.host.doc.title_block.get(sheets_model.COMPANY_KEY))   # (0.472: its boxes)
         keys = [self.host.drawing_key(v.kind, v.ref) for v in sheet.views]
         need = [v for key, v in zip(keys, sheet.views) if again or key not in self._made]
         if need:
@@ -298,7 +452,8 @@ class SheetWindow(QtWidgets.QWidget):
                                           len(self.host.doc.title_block.get(sheets_model.EXTRA_KEY) or ()))
         self._relabel()
         self.picked(self.canvas.selected if self.canvas.selected is not None
-                    and self.canvas.selected < len(self.frames) else None)
+                    and self.canvas.selected < len(self.frames) else None,
+                    self.picked_import if any(i.uid == self.picked_import for i in sheet.imports) else None)
         self.canvas.update()
 
     def _relabel(self):
@@ -308,12 +463,10 @@ class SheetWindow(QtWidgets.QWidget):
     def model_changed(self):
         """The model changed: what is shown is out of date until updated (that takes a moment)."""
         self._stale = True
-        self.refresh_button.setText(t("sheet.refresh_needed"))
-        self.refresh_button.setStyleSheet("font-weight: bold")
+        self.act_refresh.setText(t("sheet.refresh_needed"))
 
     def _mark_up_to_date(self):
-        self.refresh_button.setText(t("sheet.refresh"))
-        self.refresh_button.setStyleSheet("")
+        self.act_refresh.setText(t("sheet.refresh"))
 
     def frame_of(self, k):
         return self.frames[k] if k is not None and 0 <= k < len(self.frames) else None
@@ -329,10 +482,14 @@ class SheetWindow(QtWidgets.QWidget):
 
     # ------------------------------------------------------------ user actions
 
-    def picked(self, k):
-        self.canvas.selected = k
-        self.scale.setEnabled(k is not None)
-        self.scale.setCurrentIndex(max(0, self.scale.findData(self.sheet.views[k].scale)) if k is not None else 0)
+    def picked(self, k, uid=None):
+        """A view (k) or (0.472) a drawing from outside (uid) picked on the sheet — or nothing: the parameters' bar
+        shows its scale."""
+        self.canvas.selected, self.picked_import = k, uid
+        if (k, uid) != getattr(self, "_shown_pick", (None, None)):
+            self._shown_pick = (k, uid)                  # (the bar made again only when what is picked changes)
+            if hasattr(self.host, "refresh_context_bar"):
+                self.host.refresh_context_bar()
 
     def drag(self, k, centre):
         """Show view k at `centre` while it is dragged (kept on release)."""
@@ -397,10 +554,6 @@ class SheetWindow(QtWidgets.QWidget):
     def take_off(self, k):
         self.canvas.selected = None
         self._change(view=k, remove=True)
-
-    def _scale_chosen(self, _index):
-        if self.canvas.selected is not None:
-            self._change(view=self.canvas.selected, scale=self.scale.currentData())
 
     def _tidy(self):
         """Every view back to its automatic place."""

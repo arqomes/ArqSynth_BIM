@@ -845,6 +845,7 @@ def bim_flow():
     gutter_downpipes_flow()           # (0.438)
     loose_furniture_flow()            # (0.440)
     ripado_screen_flow()              # (0.441)
+    sheet_bar_flow()                  # (0.472)
     profile_flow()
     wavy_flow()
     splat_flow()
@@ -1490,9 +1491,8 @@ def sheets_flow():
     pump(400)
     check("folha_desfazer_e_refazer", undone and doc.sheets[0].views[2].at == at and sw.frames[2].centre == at,
           "desfeito={} refeito={}".format(undone, doc.sheets[0].views[2].at))
-    sw.scale.setCurrentIndex(sw.scale.findData(100))  # (the elevation is still picked) its scale: 1:100
-    sw.scale.activated.emit(sw.scale.currentIndex())
-    pump(400)
+    win._context_option("sheet_scale", 100)           # (the elevation is still picked) its scale: 1:100 (0.472: on the
+    pump(400)                                         # parameters' bar)
     check("folha_escala_da_vista", sw.frames[2].scale == 100 and doc.sheets[0].views[2].scale == 100,
           "\n" + sw.text())
 
@@ -1501,19 +1501,19 @@ def sheets_flow():
     from arqbim.core.transform import translation
     bim_actions.transform_objects(doc, [wall.id], translation((0.0, 0.0, 0.0001)), "Mover")
     pump(300)
-    stale = "mudou" in sw.refresh_button.text()
+    stale = "mudou" in sw.act_refresh.text()
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(300)
-    QtTest.QTest.mouseClick(sw.refresh_button, Qt.MouseButton.LeftButton)
+    sw.act_refresh.trigger()                          # (0.472: on the parameters' bar)
     pump(800)
-    check("folha_desatualizada_e_atualizar", stale and "mudou" not in sw.refresh_button.text(),
-          sw.refresh_button.text())
+    check("folha_desatualizada_e_atualizar", stale and "mudou" not in sw.act_refresh.text(),
+          sw.act_refresh.text())
 
     path = os.path.join(OUT, "folha_1.pdf")
     if os.path.exists(path):
         os.remove(path)
     QtWidgets.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (path, ""))
-    QtTest.QTest.mouseClick(sw.export, Qt.MouseButton.LeftButton)
+    sw.act_export.trigger()                           # (0.472: on the parameters' bar)
     pump(600)
     pages = pdf.page_count(path) if os.path.exists(path) else 0
     check("folha_em_pdf", pages == 1 and os.path.getsize(path) > 5000, win.last_message)
@@ -1540,7 +1540,7 @@ def sheets_flow():
     block = win.title_block(doc.sheets[0])
     check("folha_legenda", (block["project"], block["client"], block["stage"], block["number"], block["title"])
           == ("Moradia T3", "J. Silva", "Licenciamento", "A.01", "Folha 1")
-          and "mudou" not in sw.refresh_button.text(), "{} | {}".format(block, sw.refresh_button.text()))
+          and "mudou" not in sw.act_refresh.text(), "{} | {}".format(block, sw.act_refresh.text()))
     sw.grab().save(os.path.join(OUT, "47b_legenda.png"))
 
     win.sheet_action("new")                           # Folhas ▸ right click ▸ New sheet: an empty sheet
@@ -10231,6 +10231,114 @@ def joins_flow():
     doc.modified = False
 
 
+def sheet_bar_flow():
+    """0.472 (the owner: «Os parâmetros da folha também devem ficar na barra de parâmetros… importação de desenhos em
+    cad, dxf, imagem, svg… um botão editar o carimbo»): a sheet with the ground floor's plan — on the parameters' bar
+    its commands (zoom, Arrumar, Importar desenho…, Editar carimbo…, Atualizar desenhos, Exportar PDF…), no own bar
+    over the paper; the plan clicked: its scale on the bar; a DXF imported: on the sheet, picked, its scale on the bar
+    (made 1:50), dragged, Delete takes it off, Ctrl+Z back; a picture imported too; Editar carimbo…: the company's name,
+    a row more — on every sheet, template «custom». Captured: 472_folha_barra.png, 472_carimbo.png."""
+    import tempfile
+    from arqbim.model import sheets as sm
+    from arqbim.ui import company_title_block_dialog as ctb
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as B
+    B.add_wall_loop(doc, [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 6.0, 0.0), (0.0, 6.0, 0.0))],
+                    catalog.BY_KEY["parede_alv_20"])
+    storey = doc.storeys()[0][0]
+    index, _k = doc.put_on_sheet(None, "plan", storey)
+    win.open_sheet(index)
+    pump(800)
+    sw = win.sheet_window
+    texts = [a.text() for a in win.context_bar.actions() if a.text()]
+    on_bar = all(any(w in x for x in texts) for w in ("Importar desenho", "Editar carimbo", "Exportar PDF",
+                                                      "Atualizar desenhos", "Arrumar"))
+    no_own_bar = not sw.findChildren(QtWidgets.QComboBox)
+    canvas_ = sw.canvas
+    s, x0, y0 = canvas_.fit()
+    frame = sw.frames[0]
+    QtTest.QTest.mouseClick(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                            QtCore.QPoint(int(x0 + frame.centre[0] * s), int(y0 + frame.centre[1] * s)))
+    pump(300)
+    scale_on_bar = "sheet_scale" in win.context_bar.fields
+    folder = tempfile.mkdtemp()
+    dxf = os.path.join(folder, "pormenor.dxf")
+    with open(dxf, "w") as f:
+        f.write("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n"
+                "0\nLINE\n8\n0\n10\n0\n20\n0\n11\n1500\n21\n0\n0\nLINE\n8\n0\n10\n1500\n20\n0\n11\n1500\n21\n900\n"
+                "0\nLINE\n8\n0\n10\n1500\n20\n900\n11\n0\n21\n900\n0\nLINE\n8\n0\n10\n0\n20\n900\n11\n0\n21\n0\n"
+                "0\nTEXT\n8\n0\n10\n100\n20\n400\n40\n80\n1\nPormenor do peitoril\n0\nENDSEC\n0\nEOF\n")
+    item = sw.import_drawing(dxf)
+    pump(400)
+    sheet = doc.sheets[index]
+    imported = item is not None and len(sheet.imports) == 1 and sw.picked_import == item.uid and \
+        "sheet_import_scale" in win.context_bar.fields
+    if item is not None:
+        win._context_option("sheet_import_scale", 50)
+        pump(300)
+    rescaled = bool(sheet.imports) and doc.sheets[index].imports[0].scale == 50
+    moved = False
+    if doc.sheets[index].imports:
+        at = doc.sheets[index].imports[0].at
+        s, x0, y0 = canvas_.fit()
+        start = QtCore.QPoint(int(x0 + at[0] * s), int(y0 + at[1] * s))
+        QtTest.QTest.mousePress(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        for k in range(1, 5):
+            move_event(canvas_, start + QtCore.QPoint(10 * k, 0), Qt.MouseButton.LeftButton)
+            pump(30)
+        QtTest.QTest.mouseRelease(canvas_, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                                  start + QtCore.QPoint(40, 0))
+        pump(400)
+        moved = abs(doc.sheets[index].imports[0].at[0] - (at[0] + 40 / s)) < 1.5
+    png = os.path.join(folder, "logotipo.png")
+    image = QtGui.QImage(300, 120, QtGui.QImage.Format.Format_RGB32)
+    image.fill(QtGui.QColor("#1f74d1"))
+    image.save(png)
+    picture = sw.import_drawing(png)
+    pump(300)
+    two = len(doc.sheets[index].imports) == 2 and "sheet_import_width" in win.context_bar.fields
+    canvas_.setFocus()
+    QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Delete)
+    pump(300)
+    deleted = len(doc.sheets[index].imports) == 1
+    _active()
+    QtTest.QTest.keyClick(canvas_, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    undone = len(doc.sheets[index].imports) == 2
+    seen = {}
+
+    def fill():
+        d = QtWidgets.QApplication.activeModalWidget()
+        if not isinstance(d, ctb.CompanyTitleBlockDialog):
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.name.setText("Atelier Teste, Lda.")
+        d.contacts.setPlainText("Rua do Farol, 1\nLisboa · 210 000 000")
+        d.set_logo(png)
+        d._add_row({"h": 6.0, "cells": [["blank", 1.0], ["date", 1.0]]})
+        d.changed()
+        pump(100)
+        if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+            d.grab().save(os.path.join(OUT, "472_carimbo.png"))
+        seen["rows"] = len(d.company()["rows"])
+        d.accept()
+
+    QtCore.QTimer.singleShot(100, fill)
+    sw.act_title_block.trigger()
+    pump(600)
+    block = doc.title_block.get(sm.COMPANY_KEY) or {}
+    company = block.get("name") == "Atelier Teste, Lda." and len(block.get("rows") or ()) == seen.get("rows") and \
+        all(s.template == "custom" for s in doc.sheets) and block.get("logo") == png
+    shot("472_folha_barra.png")
+    check("folha_barra_importar_carimbo", on_bar and no_own_bar and scale_on_bar and imported and rescaled and moved
+          and two and deleted and undone and company and picture is not None,
+          "barra={} sem_barra_propria={} escala_vista={} importado={} escala={} arrastado={} dois={} apagado={} "
+          "desfeito={} carimbo={} {}".format(on_bar, no_own_bar, scale_on_bar, imported, rescaled, moved, two, deleted,
+                                             undone, company, texts))
+
+
 def sheets_wizard_flow():
     """0.127: a house with two storeys; File ▸ Sheets by storey… — both plans and the elevations: 3 sheets; the
     first sheet's title block — prefix A-, a field of its own, a revision (A, today, "Licenciamento"): its
@@ -10506,11 +10614,9 @@ def title_templates_flow():
             image.save(os.path.join(OUT, "120_carimbo_faixa.png"))
         win.open_sheet(k)
         pump(600)
-        page = win.sheet_window if hasattr(win, "sheet_window") else None
-        if page is not None and hasattr(page, "template"):
-            page.template.setCurrentIndex(page.template.findData("compact"))
-            page.template.activated.emit(page.template.currentIndex())
-            pump(400)
+        sheet = doc.sheets[k]                         # (0.470: the template is the sheet's type — Editar tipo…)
+        doc.set_sheet_type([k], sheet.paper, sheet.portrait, "compact")
+        pump(400)
         shot("120b_folha_compacto.png")
         compact = doc.sheets[k].template == "compact"
     else:
@@ -14639,7 +14745,7 @@ def curved_curtain_flow():
     shot("252b_fachada_parede_curva_perto.png")
     check("fachada_em_parede_curva", "arco" in tip and made and cut and slid and follows,
           "dica={!r} feita={} vão={} deslizou={} acompanha={} raio={}".format(
-              tip[:50], made, cut, slid, follows, round(p["radius"], 3) if p else None))
+              tip[:50], made, cut, slid, follows, round(p["radius"], 3) if p and p["radius"] is not None else None))
 
 
 def keynote_table_flow():

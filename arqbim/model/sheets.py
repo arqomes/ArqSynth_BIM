@@ -6,6 +6,7 @@ made when the sheet is shown or printed, so a sheet is always the model as it is
 Sizes on the sheet in millimetres, from the sheet's top-left corner (y down, as on paper).
 """
 
+import os
 import uuid
 from dataclasses import dataclass, field
 
@@ -45,6 +46,37 @@ class Placed:
     at: tuple = None
 
 
+IMPORT_KINDS = ("cad", "image", "svg")     # (0.472) what a sheet takes from outside: a DWG/DXF, a picture, an SVG
+IMPORT_SCALES = (1, 2, 5, 10, 20, 25, 50, 75, 100, 200, 500, 1000)     # a CAD drawing's (a detail's to a site plan's)
+IMPORT_WIDTHS = (30, 50, 75, 100, 150, 200, 250, 300, 400)             # mm across: a picture's, an SVG's
+IMAGE_EXTENSIONS = ("png", "jpg", "jpeg", "bmp", "gif", "tif", "tiff", "webp")
+
+
+def import_kind(path):
+    """(0.472) "cad" / "image" / "svg" for a file by its extension, or None."""
+    ext = os.path.splitext(str(path))[1].lower().lstrip(".")
+    if ext in ("dwg", "dxf"):
+        return "cad"
+    if ext == "svg":
+        return "svg"
+    return "image" if ext in IMAGE_EXTENSIONS else None
+
+
+@dataclass
+class SheetImport:
+    """(0.472, the owner: «importação de desenhos em cad, dxf, imagem, svg») A drawing from outside put on a sheet: a
+    DWG / DXF at a scale (1:`scale`, `units` metres a drawing unit), a picture or an SVG `width` mm across; its centre
+    `at` (mm on the sheet). The file stays where it is (its path relative to the project too, as an image's)."""
+    kind: str
+    path: str
+    name: str = ""
+    at: tuple = (0.0, 0.0)
+    width: float = 100.0
+    scale: int = 50
+    units: float = 0.001
+    uid: str = field(default_factory=lambda: uuid.uuid4().hex)
+
+
 @dataclass
 class Sheet:
     name: str
@@ -56,6 +88,7 @@ class Sheet:
     sets: list = field(default_factory=list)        # (0.128) the sets it is in ("Licenciamento", "Execução"…)
     template: str = "full"                          # (0.129) its title block's template (TEMPLATES)
     portrait: bool = False                          # (0.470) its paper stood up
+    imports: list = field(default_factory=list)     # (0.472) SheetImport: drawings from outside
 
     def size(self):
         return paper_size(self.paper, self.portrait)
@@ -95,6 +128,9 @@ def title_texts(fields, title, number="", project="", revisions=()):
     out["title"], out["number"] = title, number
     out[EXTRA_KEY] = [tuple(pair) for pair in fields.get(EXTRA_KEY) or ()]
     out["revisions"] = [dict(r) for r in revisions]
+    company = use_company(fields.get(COMPANY_KEY))   # (0.472) the company's title block: its name, contacts, logo
+    out["company"], out["contacts"], out["logo"] = company["name"], company["contacts"], company["logo"]
+    out["labels"] = dict(company["labels"])
     return out
 
 
@@ -117,6 +153,9 @@ def read_title_fields(data):
         digits = 2
     if digits != 2:
         out["digits"] = str(max(1, min(digits, 4)))
+    company = clean_company(data.get(COMPANY_KEY))   # (0.472) the company's title block
+    if company is not None:
+        out[COMPANY_KEY] = company
     return out
 
 
@@ -173,9 +212,92 @@ CELLS = {
 }
 
 
+# (0.472, the owner: «um botão editar o carimbo… de forma personalizada de acordo com a sua empresa») the company's own
+# title block («custom»): rows of boxes across its width, each box a field and a share of the row; its company's name,
+# contacts and logo. The project keeps it (its title block's «company»); the suite's folder keeps the company's, for
+# every new project (carimbo.json).
+TEMPLATES = TEMPLATES + ("custom",)
+COMPANY_FIELDS = ("logo", "company", "contacts", "project", "client", "site", "author", "stage", "title", "scale",
+                  "date", "number", "blank")
+BIG = ("project", "title", "number", "company")      # (their text bold and larger)
+COMPANY_KEY = "company"
+DEFAULT_COMPANY = {
+    "name": "", "contacts": "", "logo": "", "width": 170.0,
+    "rows": [{"h": 16.0, "cells": [["logo", 1.0], ["company", 2.0], ["contacts", 2.0]]},
+             {"h": 10.0, "cells": [["project", 1.0]]},
+             {"h": 7.5, "cells": [["client", 1.0], ["site", 1.0]]},
+             {"h": 7.5, "cells": [["author", 1.0], ["stage", 1.0]]},
+             {"h": 9.0, "cells": [["title", 1.0]]},
+             {"h": 7.5, "cells": [["scale", 1.0], ["date", 1.0], ["number", 1.0]]}],
+    "labels": {}}
+_COMPANY = {"data": None}                             # the company title block in use (use_company)
+
+
+def clean_company(data):
+    """A company title block as typed or read ({name, contacts, logo, width, rows, labels}), or None."""
+    if not isinstance(data, dict):
+        return None
+    rows = []
+    for row in data.get("rows") or ():
+        try:
+            h = min(max(float(row.get("h", 7.0)), 3.0), 80.0)
+            cells = [[str(c[0]), min(max(float(c[1]), 0.1), 20.0)] for c in row.get("cells") or ()
+                     if isinstance(c, (list, tuple)) and len(c) == 2 and str(c[0]) in COMPANY_FIELDS]
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if cells:
+            rows.append({"h": h, "cells": cells})
+    if not rows:
+        return None
+    try:
+        width = min(max(float(data.get("width", 170.0)), 40.0), 400.0)
+    except (TypeError, ValueError):
+        width = 170.0
+    labels = {str(k): str(v).strip() for k, v in (data.get("labels") or {}).items()
+              if str(k) in COMPANY_FIELDS and str(v).strip()}
+    return {"name": str(data.get("name") or "").strip(), "contacts": str(data.get("contacts") or "").strip(),
+            "logo": str(data.get("logo") or ""), "width": width, "rows": rows, "labels": labels}
+
+
+def use_company(data):
+    """The company title block the «custom» template draws (the project's): CELLS["custom"] made of it."""
+    company = clean_company(data) or clean_company(DEFAULT_COMPANY)
+    _COMPANY["data"] = company
+    CELLS["custom"] = company_cells(company)
+    return company
+
+
+def company():
+    return _COMPANY["data"] or use_company(None)
+
+
+def company_cells(company):
+    """The boxes of a company title block: (x, y, w, h, field, text size (pt), bold), as CELLS' — row by row, each
+    box its share of the width."""
+    out, y, width = [], 0.0, float(company["width"])
+    for row in company["rows"]:
+        total = sum(share for _f, share in row["cells"]) or 1.0
+        x = 0.0
+        for key, share in row["cells"]:
+            w = width * share / total
+            big = key in BIG
+            size = max(5, min(14, int(row["h"] * (0.95 if big else 0.8))))
+            out.append((round(x, 3), round(y, 3), round(w, 3), row["h"], key, size, big))
+            x += w
+        y += row["h"]
+    return tuple(out)
+
+
+def cells_of(template):
+    """The boxes of a title block template (the company's for «custom»)."""
+    if template == "custom":
+        company()
+    return CELLS.get(template, CELLS["full"])
+
+
 def block_size(template):
     """(w, h) mm of a template's boxes."""
-    cells = CELLS.get(template, CELLS["full"])
+    cells = cells_of(template)
     return max(x + w for x, _y, w, _h, *_r in cells), max(y + h for _x, y, _w, h, *_r in cells)
 
 
@@ -298,10 +420,45 @@ def layout(sheet, extents, defaults=None, extra_rows=0):
     return frames
 
 
-def to_dict(sheet):
+def import_to_dict(item, base_dir=None):
+    data = {"kind": item.kind, "path": item.path, "name": item.name, "at": [float(c) for c in item.at],
+            "width": float(item.width), "scale": int(item.scale), "units": float(item.units), "uid": item.uid}
+    if base_dir:
+        try:
+            data["relative"] = os.path.relpath(item.path, base_dir)
+        except ValueError:                              # (another drive)
+            pass
+    return data
+
+
+def import_from_dict(data, base_dir=None):
+    """(0.472) A drawing put on a sheet, read back — its file looked for beside the project first (the folder may have
+    moved), then where it was. None if it makes no sense."""
+    try:
+        path = str(data["path"])
+        if base_dir and data.get("relative"):
+            near = os.path.normpath(os.path.join(base_dir, str(data["relative"])))
+            if os.path.exists(near) or not os.path.exists(path):
+                path = near
+        kind = str(data["kind"])
+        if kind not in IMPORT_KINDS:
+            return None
+        item = SheetImport(kind, path, str(data.get("name") or os.path.basename(path)),
+                           (float(data["at"][0]), float(data["at"][1])), float(data.get("width", 100.0)),
+                           int(data.get("scale", 50)), float(data.get("units", 0.001)))
+        if data.get("uid"):
+            item.uid = str(data["uid"])
+        return item
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
+def to_dict(sheet, base_dir=None):
     data = {"name": sheet.name, "paper": sheet.paper, "uid": sheet.uid,
             "views": [{"kind": v.kind, "ref": v.ref, "scale": v.scale,
                        "at": [float(c) for c in v.at] if v.at is not None else None} for v in sheet.views]}
+    if sheet.imports:                                 # (0.472)
+        data["imports"] = [import_to_dict(i, base_dir) for i in sheet.imports]
     if sheet.number:
         data["number"] = sheet.number
     if sheet.revisions:
@@ -315,7 +472,7 @@ def to_dict(sheet):
     return data
 
 
-def from_dict(data):
+def from_dict(data, base_dir=None):
     """A sheet read back from the .arqbim file (None if it makes no sense)."""
     try:
         views = []
@@ -335,6 +492,8 @@ def from_dict(data):
                       portrait=bool(data.get("portrait", False)))
         if isinstance(uid, str) and uid:
             sheet.uid = uid                          # (the same sheet when reopened: its tab finds it)
+        sheet.imports = [i for i in (import_from_dict(d, base_dir) for d in data.get("imports") or ()
+                                     if isinstance(d, dict)) if i is not None]       # (0.472)
         return sheet
     except (KeyError, TypeError, ValueError, IndexError, AttributeError):
         return None

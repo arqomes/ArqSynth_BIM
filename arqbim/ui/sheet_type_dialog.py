@@ -67,7 +67,7 @@ class SheetPicture(QtWidgets.QWidget):
         p.drawRect(rect(left, top, aw, ah))
         bx, by, _bw, _bh = sheets_model.title_box((w, h), template)
         p.setPen(QtGui.QPen(QtGui.QColor("#2b2f36"), 0.8))
-        for cx, cy, cw, ch, _what, _size, bold in sheets_model.CELLS.get(template, sheets_model.CELLS["full"]):
+        for cx, cy, cw, ch, _what, _size, bold in sheets_model.cells_of(template):
             box = rect(bx + cx, by + cy, cw, ch)
             if bold:
                 p.fillRect(box, QtGui.QColor("#e8ecf2"))

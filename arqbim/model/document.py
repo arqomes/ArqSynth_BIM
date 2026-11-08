@@ -1214,6 +1214,9 @@ class Document:
         indices = [k for k in indices if 0 <= k < len(self.sheets)]
         fields = sheets_model.read_title_fields({k: (v.strip() if isinstance(v, str) else v)
                                                  for k, v in fields.items()}) if fields is not None else None
+        if fields is not None and sheets_model.COMPANY_KEY not in fields and \
+                sheets_model.COMPANY_KEY in self.title_block:                       # (0.472: its company's kept)
+            fields[sheets_model.COMPANY_KEY] = copy.deepcopy(self.title_block[sheets_model.COMPANY_KEY])
         if all(self.sheets[k].kind == (paper, bool(portrait), template) for k in indices) and \
                 (fields is None or fields == self.title_block):
             return
@@ -1225,11 +1228,58 @@ class Document:
                 doc.title_block = copy.deepcopy(fields)
         self._views_command(_label("cmd.sheet_type"), change)
 
+    def add_sheet_import(self, index, item):
+        """(0.472) A drawing from outside (sheets.SheetImport) put on sheet `index`. One undo step."""
+        if not 0 <= index < len(self.sheets):
+            return
+
+        def change(doc):
+            doc.sheets[index].imports = list(doc.sheets[index].imports) + [copy.deepcopy(item)]
+        self._views_command(_label("cmd.sheet_import"), change)
+
+    def change_sheet_import(self, index, uid, remove=False, **changes):
+        """(0.472) A drawing put on a sheet moved (at), sized (width, scale, units) or taken off (remove). One undo
+        step; nothing if nothing changes."""
+        if not 0 <= index < len(self.sheets):
+            return
+        item = next((i for i in self.sheets[index].imports if i.uid == uid), None)
+        if item is None or (not remove and all(getattr(item, k) == v for k, v in changes.items())):
+            return
+
+        def change(doc):
+            sheet = doc.sheets[index]
+            if remove:
+                sheet.imports = [i for i in sheet.imports if i.uid != uid]
+                return
+            for i in sheet.imports:
+                if i.uid == uid:
+                    for key, value in changes.items():
+                        setattr(i, key, value)
+        self._views_command(_label("cmd.sheet_import"), change)
+
+    def set_company_title_block(self, company, indices=None):
+        """(0.472) The company's own title block (sheets.clean_company) kept with the project — and the sheets
+        `indices` given its template («custom»). One undo step."""
+        company = sheets_model.clean_company(company)
+        if company is None:
+            return
+        indices = [k for k in (indices or ()) if 0 <= k < len(self.sheets)]
+
+        def change(doc):
+            block = dict(doc.title_block)
+            block[sheets_model.COMPANY_KEY] = copy.deepcopy(company)
+            doc.title_block = block
+            for k in indices:
+                doc.sheets[k].template = "custom"
+        self._views_command(_label("cmd.company_title_block"), change)
+
     def set_title_block(self, fields, index=None, name=None, number=None, revisions=None):
         """The title block: the project's fields ({sheets.TITLE_FIELDS: text}, the same on every
         sheet; 0.127: its own fields and the numbering too) and, for sheet `index`, its name, number
         ("" = automatic) and revisions ([{code, date, text}]). One undo step; nothing if nothing changes."""
         fields = sheets_model.read_title_fields({k: (v.strip() if isinstance(v, str) else v) for k, v in fields.items()})
+        if sheets_model.COMPANY_KEY not in fields and sheets_model.COMPANY_KEY in self.title_block:
+            fields[sheets_model.COMPANY_KEY] = copy.deepcopy(self.title_block[sheets_model.COMPANY_KEY])   # (0.472)
         sheet = self.sheets[index] if index is not None and 0 <= index < len(self.sheets) else None
         name = name.strip() if sheet is not None and name is not None and name.strip() else None
         number = number.strip() if sheet is not None and number is not None else None
@@ -1885,7 +1935,7 @@ def _write_sketches(path, sketches, guides=(), origin=(0.0, 0.0, 0.0), sections=
                             for s in sections]
         data["last_section"] = last_section
     if sheets:
-        data["sheets"] = [sheets_model.to_dict(s) for s in sheets]
+        data["sheets"] = [sheets_model.to_dict(s, os.path.dirname(os.path.abspath(path))) for s in sheets]
     if dimensions:
         data["dimensions"] = [dims_model.to_dict(d) for d in dimensions]
     if annotations:
@@ -2256,7 +2306,8 @@ def _read_sheets(path):
         data = _sidecar_data(path)
     except (OSError, ValueError):
         return []
-    return [s for s in (sheets_model.from_dict(d) for d in data.get("sheets", ()) if isinstance(d, dict))
+    base_dir = os.path.dirname(os.path.abspath(path))                      # (0.472: its imports beside it)
+    return [s for s in (sheets_model.from_dict(d, base_dir) for d in data.get("sheets", ()) if isinstance(d, dict))
             if s is not None]
 
 

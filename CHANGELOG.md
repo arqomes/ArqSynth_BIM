@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.472.0 — 2026-11-08
+
+**Folhas: os comandos na barra de parâmetros, desenhos importados e o carimbo da empresa** (pedido do dono, com
+captura).
+
+- **Barra de parâmetros**: com uma folha aberta, a barra por baixo da fita mostra os comandos da folha, como os de uma
+  ferramenta: − e + (zoom), Ver tudo, a escala do que está escolhido, Arrumar, **Importar desenho…**, **Editar
+  carimbo…**, Atualizar desenhos e Exportar PDF…. A barra que havia por cima do papel saiu.
+  - Clique numa vista da folha: a **escala da vista** aparece na barra.
+- **Importar desenho…** põe na folha um desenho de fora:
+  - **DWG ou DXF** numa escala (1:1 a 1:1000). Ao entrar, fica na maior escala em que cabe; muda-se na barra. As linhas
+    e os textos saem a preto. Para DWG é preciso o ODA File Converter.
+  - **Imagem** (PNG, JPG, BMP, GIF, TIF, WEBP) ou **SVG**, com a largura em mm escolhida na barra.
+  - Arraste-o para o pôr no sítio. **Delete** tira-o da folha. Ctrl+Z desfaz.
+  - Sai no PDF, no PNG e no SVG das folhas. O ficheiro fica onde está; o projeto guarda também o caminho relativo, e
+    encontra-o se a pasta do projeto mudar de sítio.
+- **Editar carimbo…**: o carimbo da sua empresa, desenhado ao vivo enquanto se faz:
+  - o **nome**, os **contactos** (várias linhas) e o **logótipo** (uma imagem);
+  - a largura do carimbo e as suas **linhas**, de cima para baixo. Cada linha tem a sua altura e as suas caixas; cada
+    caixa mostra um campo (logótipo, empresa, contactos, obra, dono de obra, local, autor, fase, desenho, escala, data,
+    folha n.º, ou vazia) e ocupa a sua parte da linha. Linhas e caixas juntam-se, tiram-se e mudam de ordem;
+  - os **nomes dos campos** como a empresa os diz (por exemplo «Obra» → «Projeto»);
+  - **Usar em** esta folha ou em todas as folhas: o carimbo delas passa a «Da empresa (personalizado)», que também se
+    escolhe em Editar tipo….
+  - **Guardar como carimbo da empresa** guarda-o para todos os projetos (na pasta da suite ArqSynth, com uma cópia do
+    logótipo); **Usar o da empresa** traz esse carimbo para o projeto.
+- O carimbo da empresa fica gravado no projeto e não se perde ao mudar os dados da obra.
+
 ## 0.471.0 — 2026-11-08
 
 **Materiais ▸ Web: as texturas gratuitas da Poly Haven** (o dono: «Sim, liga»).

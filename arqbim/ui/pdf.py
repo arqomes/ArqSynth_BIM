@@ -850,10 +850,12 @@ def _text(painter, dpmm, x, y, w, h, text, size, bold=False, align=QtCore.Qt.Ali
                      align | QtCore.Qt.AlignmentFlag.AlignVCenter, text)
 
 
-def paint_sheet(painter, dpmm, size, block, placed, credit="", template="full"):
+def paint_sheet(painter, dpmm, size, block, placed, credit="", template="full", imports=()):
     """A sheet: its border, the views placed = [(drawing, Frame, label)], the title block (its
     texts: sheets.title_texts; the scale and the date are added here; 0.129: its template). size:
-    (w, h) mm of the paper; dpmm: painter units per mm. credit: small, under the title block."""
+    (w, h) mm of the paper; dpmm: painter units per mm. credit: small, under the title block. (0.472) imports: the
+    drawings from outside put on it (sheets.SheetImport)."""
+    paint_imports(painter, dpmm, imports)
     for drawing, frame, label in placed:
         if hasattr(drawing, "paper_size"):               # (a schedule's table, 0.132)
             paint_table(painter, drawing, frame.centre, dpmm, label)
@@ -913,7 +915,8 @@ def write_sheets(path, pages, credit=""):
         if k:
             _set_paper(writer, sheet.size())
             writer.newPage()
-        paint_sheet(painter, RESOLUTION / 25.4, sheet.size(), block, placed, credit, sheet.template)
+        paint_sheet(painter, RESOLUTION / 25.4, sheet.size(), block, placed, credit, sheet.template,
+                    imports=getattr(sheet, "imports", ()))
     painter.end()
 
 
@@ -1000,7 +1003,7 @@ def write_images(folder, pages, fmt="png", dpi=150, credit=""):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         if fmt == "svg":
             painter.fillRect(QtCore.QRectF(0.0, 0.0, w * dpmm, h * dpmm), WHITE)
-        paint_sheet(painter, dpmm, (w, h), block, placed, credit, sheet.template)
+        paint_sheet(painter, dpmm, (w, h), block, placed, credit, sheet.template, imports=getattr(sheet, "imports", ()))
         painter.end()
         if fmt != "svg":
             target.save(path)
@@ -1020,7 +1023,8 @@ def print_sheets(printer, pages, credit=""):
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         else:
             printer.newPage()
-        paint_sheet(painter, printer.resolution() / 25.4, sheet.size(), block, placed, credit, sheet.template)
+        paint_sheet(painter, printer.resolution() / 25.4, sheet.size(), block, placed, credit, sheet.template,
+                    imports=getattr(sheet, "imports", ()))
     if painter is not None:
         painter.end()
 
@@ -1041,18 +1045,138 @@ def _title_block(painter, dpmm, width, height, texts, credit, template="full"):
         painter.drawLine(QtCore.QPointF(x0 * dpmm, MARGIN * dpmm), QtCore.QPointF(x0 * dpmm, (height - MARGIN) * dpmm))
     painter.drawRect(QtCore.QRectF(x0 * dpmm, y0 * dpmm, bw * dpmm, bh * dpmm))
     label_h = CELL_LABEL * 0.3528 * 1.3                                           # points -> mm
-    for x, y, w, h, key, size, bold in sheets_model.CELLS.get(template, sheets_model.CELLS["full"]):
+    labels = texts.get("labels") or {}
+    for x, y, w, h, key, size, bold in sheets_model.cells_of(template):
         painter.setPen(QtGui.QPen(QtGui.QColor("black"), 0.18 * dpmm))
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
         painter.drawRect(QtCore.QRectF((x0 + x) * dpmm, (y0 + y) * dpmm, w * dpmm, h * dpmm))
-        _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, t("tb." + key), CELL_LABEL,
-              colour="#6b6b6b")
+        if key == "blank":                                                        # (0.472: an empty box)
+            continue
+        if key == "logo":                                                         # (0.472) the company's logo
+            _fit_picture(painter, dpmm, texts.get("logo") or "", x0 + x + 1.0, y0 + y + 1.0, w - 2.0, h - 2.0)
+            continue
+        if key == "contacts":                                                     # (0.472) a few lines, small
+            _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, labels.get(key) or t("tb." + key),
+                  CELL_LABEL, colour="#6b6b6b")
+            _lines(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5 + label_h, w - 2.4, h - 0.8 - label_h,
+                   texts.get(key, ""), min(size, 6))
+            continue
+        _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5, w - 2.4, label_h, labels.get(key) or t("tb." + key),
+              CELL_LABEL, colour="#6b6b6b")
         _text(painter, dpmm, x0 + x + 1.2, y0 + y + 0.5 + label_h, w - 2.4, h - 0.8 - label_h,
               texts.get(key, ""), size, bold, elide=True)
     _over_title_block(painter, dpmm, x0, y0, texts, bw)
     if credit:
         _text(painter, dpmm, x0 - 60.0, height - MARGIN + 0.8, bw + 60.0, 2.6, credit, 5, colour="#6b6b6b",
               align=QtCore.Qt.AlignmentFlag.AlignRight)
+
+
+_PICTURES = {}                  # (0.472) path -> (modified time, QImage)
+
+
+def picture_of(path):
+    """(0.472) A picture file, read once while it is unchanged (None when it cannot be read)."""
+    try:
+        stamp = os.path.getmtime(path)
+    except (OSError, TypeError):
+        return None
+    found = _PICTURES.get(path)
+    if found is None or found[0] != stamp:
+        image = QtGui.QImage(path)
+        found = _PICTURES[path] = (stamp, None if image.isNull() else image)
+    return found[1]
+
+
+def _fit_picture(painter, dpmm, path, x, y, w, h):
+    """(0.472) A picture fitted in the box (x, y, w, h mm), its proportions kept, in its middle."""
+    image = picture_of(path) if path else None
+    if image is None or w <= 0 or h <= 0:
+        return
+    k = min(w / image.width(), h / image.height())
+    pw, ph = image.width() * k, image.height() * k
+    painter.drawImage(QtCore.QRectF((x + (w - pw) / 2) * dpmm, (y + (h - ph) / 2) * dpmm, pw * dpmm, ph * dpmm), image)
+
+
+def _lines(painter, dpmm, x, y, w, h, text, size):
+    """(0.472) Text of several lines (a company's contacts) in the box, from its top."""
+    font = QtGui.QFont("Segoe UI")
+    font.setPixelSize(max(1, round(size * 0.3528 * dpmm)))
+    painter.setFont(font)
+    painter.setPen(QtGui.QColor("black"))
+    painter.drawText(QtCore.QRectF(x * dpmm, y * dpmm, w * dpmm, h * dpmm),
+                     QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.TextFlag.TextWordWrap,
+                     text)
+
+
+def import_size(item):
+    """(0.472) (w, h) mm a drawing put on a sheet takes (sheets.SheetImport), or None when its file cannot be read: a
+    picture or an SVG `width` across in its proportions; a CAD drawing its extent at its scale."""
+    if item.kind == "image":
+        image = picture_of(item.path)
+        return (item.width, item.width * image.height() / image.width()) if image is not None else None
+    if item.kind == "svg":
+        from PySide6 import QtSvg
+        renderer = QtSvg.QSvgRenderer(item.path)
+        size = renderer.defaultSize() if renderer.isValid() else None
+        return (item.width, item.width * size.height() / max(size.width(), 1)) if size and size.width() > 0 else None
+    found = cad_lines(item.path)
+    if found is None:
+        return None
+    lo, hi = found[2]
+    k = item.units * 1000.0 / max(int(item.scale), 1)
+    return float(hi[0] - lo[0]) * k, float(hi[1] - lo[1]) * k
+
+
+def cad_lines(path):
+    """(0.472) A DWG's / DXF's (segments (K, 2, 2), texts [(point, words, height)], (lo, hi)) in drawing units, or
+    None."""
+    from ..model import cad_links
+    found = cad_links.drawing_of(path)
+    if found is None:
+        return None
+    drawing, raw = found
+    segs = [s for s in raw.values() if len(s)]
+    segs = np.concatenate(segs) if segs else np.zeros((0, 2, 2))
+    words = [(np.asarray(e.points[0], dtype=float), e.text, float(e.radius or 0.0))
+             for e in drawing.entities if e.kind == "text" and e.text]
+    pts = [segs.reshape(-1, 2)] + ([np.array([p for p, _w, _h in words])] if words else [])
+    pts = np.concatenate(pts) if any(len(p) for p in pts) else np.zeros((0, 2))
+    if not len(pts):
+        return None
+    return segs, words, (pts.min(axis=0), pts.max(axis=0))
+
+
+def paint_imports(painter, dpmm, imports):
+    """(0.472) The drawings from outside put on a sheet (sheets.SheetImport), each round its centre: a picture, an
+    SVG, a DWG / DXF's lines and texts at its scale (thin, black)."""
+    for item in imports or ():
+        size = import_size(item)
+        if size is None:
+            continue
+        w, h = size
+        left, top = item.at[0] - w / 2, item.at[1] - h / 2
+        if item.kind == "image":
+            _fit_picture(painter, dpmm, item.path, left, top, w, h)
+        elif item.kind == "svg":
+            from PySide6 import QtSvg
+            QtSvg.QSvgRenderer(item.path).render(painter, QtCore.QRectF(left * dpmm, top * dpmm, w * dpmm, h * dpmm))
+        else:
+            segs, words, (lo, hi) = cad_lines(item.path)
+            k = item.units * 1000.0 / max(int(item.scale), 1)          # drawing units -> mm on the paper
+            mid = (lo + hi) / 2
+
+            def at(p):
+                return QtCore.QPointF((item.at[0] + (p[0] - mid[0]) * k) * dpmm, (item.at[1] - (p[1] - mid[1]) * k) * dpmm)
+
+            painter.setPen(QtGui.QPen(QtGui.QColor("black"), max(0.13 * dpmm, 0.5)))
+            painter.drawLines([QtCore.QLineF(at(a), at(b)) for a, b in segs])
+            for p, text, height in words:
+                size_mm = max(height * k, 1.0)
+                font = QtGui.QFont("Segoe UI")
+                font.setPixelSize(max(1, round(size_mm * dpmm)))
+                painter.setFont(font)
+                painter.setPen(QtGui.QColor("black"))
+                painter.drawText(at(p), text)
 
 
 def _over_title_block(painter, dpmm, x0, y0, texts, width=TITLE_W):

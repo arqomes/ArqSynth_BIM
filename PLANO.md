@@ -225,7 +225,9 @@ projeto. Os tamanhos são relativos: P (um ou dois dias de trabalho meu), M (alg
    as canetas; os tipos de linha no desenho 2D).
 6. ~~**Folhas:** modelos~~ (0.130.0: da legenda — completa, compacta, faixa lateral), ~~assistente de folhas
    por piso, revisões, campos próprios, numeração~~ (0.127.0), ~~conjuntos, publicação; exportar PNG, SVG~~
-   (0.128.0) ~~e DXF~~ (0.129.0: de uma vista) (o PDF já existe); ~~imprimir~~ (0.128.0).
+   (0.128.0) ~~e DXF~~ (0.129.0: de uma vista) (o PDF já existe); ~~imprimir~~ (0.128.0). ~~Os comandos da folha
+   na barra de parâmetros, importar DWG/DXF/imagem/SVG para a folha e editar o carimbo da empresa~~ (0.472.0, pedido
+   do dono com captura).
 7. ~~**Tabelas:** editor com campos, fórmulas, filtros e modelos~~ (0.131.0: tabelas próprias do projeto,
    guardadas com nome); ~~tabelas nas folhas~~ (0.132.0).
 8. ~~**Vistas:** alçados cardinais automáticos~~ (já existiam desde a 0.29.0), ~~vistas de detalhe~~

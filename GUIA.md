@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.441.0
+# Guia das ferramentas — ArqSynth BIM 0.472.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.441.0.
+ArqSynth BIM 0.472.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -107,7 +107,7 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 3. [Gerenciar](#3-gerenciar) — 21 comandos
 4. [Massa e Estudos](#4-massa-e-estudos) — 26 comandos
 5. [Terreno](#5-terreno) — 11 comandos
-6. [Arquitetura](#6-arquitetura) — 50 comandos
+6. [Arquitetura](#6-arquitetura) — 45 comandos
 7. [Estrutura](#7-estrutura) — 28 comandos
 8. [Instalações](#8-instalações) — 18 comandos
 9. [Colaborar](#9-colaborar) — 19 comandos
@@ -339,8 +339,8 @@ Operações gerais de criação e edição geométrica.
 
 #### Alinhar
 
-- **Como se usa:** Clique na referência: um eixo da grelha, uma aresta ou a face de uma parede. Esc: Selecionar.
-- **Teclas:** Clique: a referência, depois as faces — ou as linhas dos padrões — a alinhar · botão direito: outra referência · Esc: Selecionar
+- **Como se usa:** Clique na referência: um eixo da grelha, uma linha, uma aresta ou a face de qualquer elemento. Esc: Selecionar.
+- **Teclas:** Clique: a referência, depois as linhas, arestas e faces — ou as linhas dos padrões — a alinhar · botão direito: outra referência · Esc: Selecionar
 - **Passos de teste (TESTAR.md):** 0.332 «Alinhar os padrões numa face»
 
 #### Escala
@@ -484,9 +484,9 @@ Tipos, materiais, pavimentos, fases, componentes e grupos.
 
 - **O que faz:** Passa para o pavimento de baixo: as ferramentas desenham nele e a planta (F4) mostra-o. PgUp sobe.
 
-#### Ver só o pavimento ativo
+#### No 3D, ver só o pavimento ativo
 
-- **O que faz:** No 3D, mostra só o pavimento ativo (os outros escondem-se): para trabalhar num andar sem os de cima à frente.
+- **O que faz:** No 3D (e nos cortes e alçados), mostra só o pavimento ativo — o que está a negrito na lista — e esconde os outros: para trabalhar num andar sem os de cima à frente. A planta mostra sempre só o seu pavimento.
 
 #### Repetir nos pavimentos…
 
@@ -755,31 +755,6 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
 - **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.252 «A fachada de vidro numa parede curva»; 0.188 «Fachada de vidro embutida numa parede»; 0.181 «Painéis da fachada de vidro»
 
-#### Retangular
-
-- **O que faz:** Paredes à volta de um retângulo: dois cantos, ou as medidas digitadas (ex.: 5;4).
-- **Passos de teste (TESTAR.md):** 0.438 «Calha em meia-cana e tubos de queda»; 0.432 ««W + letra» e «Editar tipo…» no topo»; 0.424 «Alturas das fachadas e afastamentos da lei»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.391 «Pintura (como o balde do SketchUp)»
-
-#### Circular
-
-- **O que faz:** Paredes num círculo: o centro e o raio.
-- **Passos de teste (TESTAR.md):** 0.227 «Os pilares circulares, em L e em T»
-
-#### Arco
-
-- **O que faz:** Uma parede curva: o início, o fim e a flecha.
-- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»; 0.375 «Arcos e curvas de Bézier no perfil da parede»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»; 0.296 «Folhas de abrir dentro do arco»; 0.294 «Vãos em arco»
-
-#### Por face
-
-- **O que faz:** Paredes ao longo do contorno de uma laje ou de uma face de esboço (um clique).
-- **Passos de teste (TESTAR.md):** 0.436 «Fachada de vidro em arco e por face»
-
-#### Varinha mágica
-
-- **O que faz:** Arraste uma janela sobre as duas linhas de uma parede num desenho (DWG/DXF ligado ou linhas): a parede fica entre elas, com a espessura medida.
-- **Passos de teste (TESTAR.md):** 0.374 «Ferramentas de arquitetura do addon; os temas do estudo»; 0.179 «Cobertura de quatro águas numa casa em L»
-
 #### Painel de fachada
 
 - **Como se usa:** Painel opaco: clique numa célula de uma fachada de vidro (as portas só na fila de baixo).
@@ -792,7 +767,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Porta 80×210: passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** Rato numa face: abre para esse lado · F: para o outro · Espaço: dobradiças no outro aro · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.439 «Elevador com portas de patamar»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.366 «Os ambientes e o Passeio Virtual»
+- **Passos de teste (TESTAR.md):** 0.472 «Folhas: comandos na barra, desenhos importados, carimbo da empresa»; 0.439 «Elevador com portas de patamar»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»
 
 #### Janela  ·  tecla J
 
@@ -1834,4 +1809,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*249 comandos descritos, gerados do ArqSynth BIM 0.441.0.*
+*244 comandos descritos, gerados do ArqSynth BIM 0.472.0.*

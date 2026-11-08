@@ -1969,6 +1969,8 @@ class MainWindow(QtWidgets.QMainWindow):
         tool = self.tool
         if tool is None:
             return []
+        if self.sheet_shown():                      # (0.472, the owner) a sheet: its commands, as a tool's
+            return self.sheet_window.context_items()
         if tool.name != "select":
             title = t(tool.title) if tool.title else \
                 t("tool." + tool.name) if tool.name in self.tool_actions else t("ctx.placing")
@@ -2341,6 +2343,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_context_bar(self):
         self.context_bar.show_items(self._context_items())
 
+    def refresh_context_bar(self):
+        """(0.472) The parameters' bar shows again what is to be shown now (a sheet: what was picked on it)."""
+        if hasattr(self, "context_bar"):
+            self._refresh_context_bar()
+
+    def documents_folder(self):
+        """(0.472) Where a file dialog starts: the project's folder, else the user's Documents."""
+        return os.path.dirname(self.doc.path) if self.doc.path else _documents_dir()
+
     def _sync_context_bar(self):
         """The tool's settings changed some other way (Tab, typed, a menu): the bar shows them."""
         if self.tool is None or not hasattr(self, "context_bar"):
@@ -2351,6 +2362,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._refresh_context_bar()
 
     def _context_option(self, key, value):
+        if self.sheet_shown() and isinstance(key, str) and key.startswith("sheet_"):   # (0.472) the sheet's
+            self.sheet_window.option(key, value)
+            return
         if key == "storey":
             self.set_active_storey(value)
         else:
@@ -3597,10 +3611,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.sheet_window.show_sheet(sheet)
             self._tick_plan(False)
             self._refresh_properties()
+            self.refresh_context_bar()             # (0.472: the sheet's commands on the parameters' bar)
             return
         if self.sheet_shown():
             self.sheet_window.hide()
             self.canvas.show()
+            self.refresh_context_bar()
         self.canvas.setFocus()
         self.viewport.redraw()
         if kind == "plan":
@@ -3767,6 +3783,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.sheet_shown():
             if self.sheet_window.canvas.selected is not None:
                 self.sheet_window.take_off(self.sheet_window.canvas.selected)
+            elif self.sheet_window.picked_import is not None:                 # (0.472) a drawing from outside
+                self.sheet_window.take_off_import(self.sheet_window.picked_import)
             return
         if self.pick_request is not None:         # (0.325) Delete while a command waits: only its own (Apagar)
             if self.pick_request.title == self._delete_title():
@@ -8298,6 +8316,29 @@ class MainWindow(QtWidgets.QMainWindow):
                                         sheets_model.number_of(doc.sheets, sheet, doc.title_block), project,
                                         sheet.revisions)
 
+    def edit_company_title_block(self, index=None):
+        """(0.472, the owner: «um botão editar o carimbo… personalizada de acordo com a sua empresa») The company's own
+        title block made in its window (ui/company_title_block_dialog): kept with the project, given to this sheet or
+        to every sheet (their template «Da empresa»). One undo step on OK."""
+        from .company_title_block_dialog import CompanyTitleBlockDialog, start_company
+        doc = self.doc
+        if index is None and self.sheet_shown() and self.sheet_window.sheet is not None:
+            index = doc.sheets.index(self.sheet_window.sheet)
+        sheet = doc.sheets[index] if index is not None and 0 <= index < len(doc.sheets) else None
+        dialog = CompanyTitleBlockDialog(self, start_company(doc.title_block),
+                                         self.title_block(sheet) if sheet is not None else self.title_block(),
+                                         sheet.name if sheet is not None else "")
+        self._company_dialog = dialog                    # (tests fill it in)
+        try:
+            if dialog.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return None
+        finally:
+            self._company_dialog = None
+        targets = list(range(len(doc.sheets))) if dialog.everyone() or sheet is None else [index]
+        doc.set_company_title_block(dialog.company(), targets)
+        self.message(t("info.company_title_block", n=len(targets)))
+        return targets
+
     def edit_sheet_type(self, index):
         """(0.470) A sheet's «Editar tipo…», as Revit's Type Properties of a title block: its paper, how it stands, its
         title block's template — for every sheet of the type, or this one — and what the title block shows on every
@@ -8576,6 +8617,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _sheet_pages(self, sheets):
         """[(sheet, [(drawing, Frame, label)], title block texts)] of sheets with views, the model as it is now
         (their drawings made in a worker thread when needed)."""
+        sheets_model.use_company(self.doc.title_block.get(sheets_model.COMPANY_KEY))   # (0.472: its boxes)
         made = self.make_drawings([v for s in sheets for v in s.views])
         pages = []
         for sheet in sheets:
@@ -8591,7 +8633,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def export_sheets(self, sheets, fmt="pdf", name=None):
         """Sheets with the model as it is now: to one PDF, a page each; or (0.128) a PNG picture or an SVG
         drawing each, in a folder chosen. name: the PDF's (a set's)."""
-        sheets = [s for s in sheets if s is not None and s.views]
+        sheets = [s for s in sheets if s is not None and (s.views or s.imports)]     # (0.472: or drawings put on it)
         if not sheets:
             self.message(t("info.sheet_empty"), warning=True, action=self.act_sheets_by_storey)   # (0.324)
             return
@@ -8619,7 +8661,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def print_sheets(self, sheets):
         """Sheets ▸ Print… (0.128): the printer's dialog, then the sheets, a page each, on their paper."""
         from PySide6 import QtPrintSupport
-        sheets = [s for s in sheets if s is not None and s.views]
+        sheets = [s for s in sheets if s is not None and (s.views or s.imports)]     # (0.472: or drawings put on it)
         if not sheets:
             self.message(t("info.sheet_empty"), warning=True, action=self.act_sheets_by_storey)   # (0.324)
             return

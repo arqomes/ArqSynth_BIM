@@ -644,6 +644,33 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.472 — Folhas: comandos na barra, desenhos importados, carimbo da empresa
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.472.0**. Faça Ctrl+N e desenhe quatro paredes em
+   retângulo (**Arquitetura ▸ Paredes ▸ Retangular**).
+2. No **Navegador do Projeto**, botão direito em **Plantas ▸ Térreo ▸ Pôr na folha ▸ Nova folha**. Abre a folha.
+   - A barra por baixo da fita diz **Folha** e tem − , + , Ver tudo, Arrumar, **Importar desenho**, **Editar
+     carimbo**, Atualizar desenhos e Exportar PDF. Por cima do papel já não há outra barra.
+3. Clique na planta da folha: na barra aparece **Escala da vista**. Escolha 1:100: a planta fica nessa escala.
+4. Clique em **Importar desenho** e escolha um DXF (por exemplo `C:\BIM\tests\saida_gui\planta_cad.dxf`).
+   - O desenho aparece no meio da folha, escolhido (tracejado azul), e a barra mostra a **Escala do desenho**.
+   - Escolha outra escala na barra: o desenho muda de tamanho.
+   - Arraste o desenho para um canto livre da folha.
+5. Clique outra vez em **Importar desenho** e escolha uma imagem (PNG ou JPG). Na barra, escolha a **Largura** (por
+   exemplo 100 mm) e arraste-a para o sítio.
+6. Com a imagem escolhida, carregue em **Delete**: sai da folha. Carregue em Ctrl+Z: volta.
+7. Clique em **Editar carimbo**. Na janela:
+   - escreva o **Nome** da empresa e os **Contactos** (duas linhas);
+   - em **Logótipo**, clique em **Escolher…** e escolha uma imagem;
+   - nas **Linhas do carimbo**, mude a altura de uma linha, mude o campo de uma caixa e clique em **+** para juntar uma
+     caixa; clique em **+ Linha** para juntar uma linha;
+   - em **Nomes dos campos**, escreva «Projeto» no lugar de «Obra»;
+   - a imagem à esquerda mostra o carimbo como vai ficar. Deixe **todas as folhas** e clique em **OK**.
+8. O carimbo da folha passa a ser o da empresa (nas Propriedades: Carimbo «Da empresa (personalizado)»).
+9. Clique em **Exportar PDF** e abra o PDF: a planta, o DXF, a imagem e o carimbo da empresa estão lá.
+10. Abra **Editar carimbo** outra vez e clique em **Guardar como carimbo da empresa**. Faça Ctrl+N, ponha uma planta
+    numa folha, abra **Editar carimbo** e clique em **Usar o da empresa**: vem o carimbo guardado.
+
 ## 0.441 — Ripado solto
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.441.0**. Faça Ctrl+N e abra a planta do Térreo.
