@@ -36,12 +36,13 @@ def segments(obj):
     return [(i, j, world[i], world[j]) for i, j in obj.mesh.lines]
 
 
-def moved_lines(doc, moves):
+def moved_lines(doc, moves, also=()):
     """The loose lines' meshes after moving the ends at the points `moves` [(before, after)] â€”
-    {obj_id: (object, new mesh)} â€” and the segments touched, in world coordinates, for a preview."""
+    {obj_id: (object, new mesh)} â€” and the segments touched, in world coordinates, for a preview.
+    (0.459) also: sketches with faces — a polygon whose side is picked — whose corners there move too."""
     out, touched = {}, []
     for obj in doc.objects.values():
-        if not is_lines(obj):
+        if not (is_lines(obj) or (obj.id in also and not obj.is_bim)):
             continue
         inv = None
         mesh = None
@@ -58,17 +59,18 @@ def moved_lines(doc, moves):
         if mesh is None:
             continue
         out[obj.id] = (obj, mesh)
-        for i, j in mesh.lines:
+        sides = list(mesh.lines) + [(f[k], f[(k + 1) % len(f)]) for f in mesh.faces for k in range(len(f))]
+        for i, j in sides:
             if i in moved or j in moved:
                 touched.append((transform_point(obj.matrix, mesh.verts[i]), transform_point(obj.matrix, mesh.verts[j])))
     return out, touched
 
 
-def move_points(doc, moves, label=None):
+def move_points(doc, moves, label=None, also=()):
     """Move the loose lines' ends lying at `moves`' points [(before, after)]: the lines joined there
     follow. One undo step. Returns how many lines changed; LineRefused("too_short") if a segment
-    would vanish."""
-    found, touched = moved_lines(doc, moves)
+    would vanish. (0.459) also: as moved_lines'."""
+    found, touched = moved_lines(doc, moves, also)
     if not found:
         return 0
     if any(np.linalg.norm(b - a) < MIN_LENGTH for a, b in touched):
@@ -292,6 +294,103 @@ def fillet_radius(doc, arc_id, radius, label=None):
                              transform_point(inv, (float(f.tangents[0][0]), float(f.tangents[0][1]), z)), sweep)
     curve_edit.reshape(doc, arc_id, curve, label or t("cmd.fillet_radius"))
     return True
+
+
+# ---------------------------------------------------------------- (0.459) a polygon's sides and arcs, as Revit's sketch
+
+def face_loop(obj, face_k):
+    """A polygon's (a flat sketch face's) outline: (its corners' indices, their points in the sketch's own frame) —
+    None when the face is not flat in its frame (a volume's)."""
+    if obj is None or obj.is_bim or not 0 <= face_k < len(obj.mesh.faces):
+        return None
+    face = [int(i) for i in obj.mesh.faces[face_k]]
+    pts = [np.asarray(obj.mesh.verts[i], dtype=float) for i in face]
+    if len(pts) < 3 or max(abs(float(p[2] - pts[0][2])) for p in pts) > 1e-6:
+        return None
+    return face, pts
+
+
+def face_run(obj, face_k, k):
+    """(0.459, the owner: «não consigo selecionar linhas e arcos no polígono para ajustar») The side k of a polygon
+    (from its corner k to the next) as Revit's sketch picks it: an arc drawn in pieces — a fillet's, a circle's —
+    whole: (its corners' indices, the arc_runs.Run in the sketch's frame), else the side alone: (its two corners,
+    None)."""
+    from ..core import arc_runs
+    loop = face_loop(obj, face_k)
+    if loop is None:
+        face = list(obj.mesh.faces[face_k])
+        return [face[k], face[(k + 1) % len(face)]], None
+    face, pts = loop
+    run = arc_runs.run_around(pts, k, closed=True)
+    if run is None:
+        return [face[k], face[(k + 1) % len(face)]], None
+    return [face[i] for i in run.indices], run
+
+
+def set_face_side(doc, obj_id, i, j, length):
+    """(0.459) A polygon's side i → j `length` long: its corner j moves along it (the side after it follows, and the
+    loose lines there)."""
+    obj = doc.get(obj_id)
+    a, b = transform_point(obj.matrix, obj.mesh.verts[i]), transform_point(obj.matrix, obj.mesh.verts[j])
+    d = b - a
+    if length < MIN_LENGTH or np.linalg.norm(d) < MIN_LENGTH:
+        raise LineRefused("too_short")
+    return move_points(doc, [(b, a + d / np.linalg.norm(d) * length)], t("cmd.line_length"), also={obj_id})
+
+
+def face_arc_radius(doc, obj_id, face_k, run, radius, label=None):
+    """(0.459) A polygon's arc drawn in pieces — its corners `run` (indices, in the face's order) — given `radius`
+    (world), as Revit's sketch arc: a fillet's — the sides before and after it straight along its ends — made again
+    between them (they are trimmed or stretched); another about its centre (a circle: the whole). One undo step.
+    LineRefused("parallel" | "too_big" | "not_corner")."""
+    from ..core import arc_runs
+    from ..core.fillet import arc_points, fillet
+    from ..core.outline_shapes import crossing
+    from .document import ReplaceMesh
+    obj = doc.get(obj_id)
+    loop = face_loop(obj, face_k)
+    if loop is None or any(v not in loop[0] for v in run) or len(run) < 3:
+        raise LineRefused("not_corner")
+    face, pts = loop
+    n = len(face)
+    pos = [face.index(v) for v in run]
+    z = float(pts[0][2])
+    flat = [p[:2] for p in pts]
+    run_pts = [flat[p] for p in pos]
+    centre = arc_runs.centre_of(run_pts[0], run_pts[len(run_pts) // 2], run_pts[-1])
+    if centre is None:
+        raise LineRefused("not_corner")
+    old = float(np.linalg.norm(run_pts[0] - centre))
+    r = float(radius) / max(float(np.linalg.norm(obj.matrix[:3, 0])), 1e-12)
+    if r < MIN_LENGTH:
+        raise LineRefused("too_short")
+    mesh = obj.mesh.copy()
+    if len(run) >= n:                                          # a circle: the whole of it
+        for v, p in zip(run, run_pts):
+            mesh.verts[v] = np.array((*(centre + (p - centre) * r / old), z))
+        doc.execute(ReplaceMesh(obj.id, obj.mesh, mesh, label or t("cmd.fillet_radius")))
+        return
+    prev, nxt = flat[(pos[0] - 1) % n], flat[(pos[-1] + 1) % n]
+    t0, t1 = run_pts[0], run_pts[-1]
+    along = lambda far, p: abs(float((p - far) @ (p - centre))) <= 1e-2 * float(np.linalg.norm(p - far)) * old  # noqa
+    if along(prev, t0) and along(nxt, t1):                     # a fillet: made again between its two sides
+        corner = crossing(prev, t0 - prev, nxt, t1 - nxt)
+        f = fillet((prev, corner), prev, (nxt, corner), nxt, radius=r) if corner is not None else None
+        if f is None:
+            raise LineRefused("parallel")
+        reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+        if any(reach > room - MIN_LENGTH for room in f.room):
+            raise LineRefused("too_big")
+        new = [np.asarray(p, dtype=float) for p in arc_points(f)]
+    else:                                                      # an arc alone: about its centre
+        new = [centre + (p - centre) * r / old for p in run_pts]
+    order = face[pos[0]:] + face[:pos[0]]                      # (the face from the arc's first corner on)
+    rest = order[len(run):]
+    ids = list(run[:len(new)]) + [mesh.add_vert((0.0, 0.0, z)) for _ in range(len(new) - len(run))]
+    for v, p in zip(ids, new):
+        mesh.verts[v] = np.array((float(p[0]), float(p[1]), z))
+    mesh.faces[face_k] = ids + rest
+    doc.execute(ReplaceMesh(obj.id, obj.mesh, mesh, label or t("cmd.fillet_radius")))
 
 
 def set_length(doc, obj_id, i, j, length):

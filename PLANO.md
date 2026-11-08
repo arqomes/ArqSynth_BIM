@@ -1394,7 +1394,10 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
    de segmentos… tentei no polígono… também na região, máscara»): nas linhas um arco verdadeiro, escolhido inteiro, o
    raio na cota temporária e nas Propriedades (as linhas seguem, tangentes); no canto de um polígono; no Desenho 2D
    (região, máscara, polilinha, retângulo: o lado guardado como arco — «bulge»; duas linhas: um arco 2D). Teste na
-   janela real: `tests/gui_desenho_revit.py`. Por fazer: mudar depois o raio no polígono e na região.
+   janela real: `tests/gui_desenho_revit.py`. Por fazer: mudar depois o raio no polígono e na região. (0.459.0: no
+   polígono feito — um clique no contorno escolhe o lado ou o arco inteiro, `core/arc_runs.py`; na região ainda não.
+   Também a parede por «Escolher linhas» sobre um arco inteiro e a cota do raio da parede curva, uma concordância
+   continuando tangente.)
 7. ~~**Laje, Piso, Teto e Região com as mesmas opções**~~ (0.456.0, o dono, 2026-11-07: «Sim, põe»): polígono inscrito /
    circunscrito, elipse, Escolher linhas (o contorno das linhas clicadas), Afastamento e Raio dos cantos —
    `core/outline_shapes.py`, os contornos como `core/outline_loops` (arcos e Bézier). Falta: a Cobertura (as suas

@@ -427,6 +427,112 @@ def polygon_fillet():
           and not has(pts, (4.0, 0.0), 0.005), "faces={} msg={}".format(len(faces), win.last_message))
 
 
+def filleted_polygon(doc):
+    """A 4 × 3 polygon drawn with the Line, its corner (4, 0) rounded 1 m (the Line's fillet)."""
+    line_tool()
+    for p in ((0, 0, 0), (4, 0, 0), (4, 3, 0), (0, 3, 0), (0, 0, 0)):
+        click_at(p)
+    key(Qt.Key.Key_Escape)
+    line_tool()
+    bar_icon("draw", "fillet")
+    click_at((2, 0, 0))
+    click_at((4, 1.5, 0))
+    move_to((3.6, 0.4, 0))
+    type_value("1")
+    return next(o for o in sketches(doc) if o.mesh.faces)
+
+
+def face_ring(obj):
+    return [r3(transform_point(obj.matrix, obj.mesh.verts[i])) for i in obj.mesh.faces[0]]
+
+
+def polygon_sides():
+    """(0.459, the owner: «não consigo selecionar linhas e arcos no polígono para ajustar») A click on the polygon's
+    rounded corner picks the whole arc — its radius a temporary dimension, 0,5 typed —; a click on a side picks it —
+    its length typed."""
+    doc = fresh((2.0, 1.5, 0.0))
+    face = filleted_polygon(doc)
+    win.set_tool("select")
+    key(Qt.Key.Key_Escape)
+    click_at((3.0 + math.cos(math.radians(-45)), 1.0 + math.sin(math.radians(-45)), 0))
+    pump(300)
+    sel = win.tools["select"]
+    dims = [d for d, _a, _t in vp.temp_dims if d.key and d.key[0] == "face_arc"]
+    check("poligono_arco_escolhido", sel._side is not None and len(dims) == 1 and same(dims[0].value, 1.0),
+          "lado={} cotas={} msg={}".format(sel._side, [d.key[0] for d, _a, _t in vp.temp_dims], win.last_message))
+    if not dims or not click_dim(dims[0]):
+        check("poligono_arco_cota_clicavel", False, "sem cota")
+        return
+    type_value("0,5")
+    shot("poligono_arco_0_5")
+    ring = face_ring(doc.get(face.id))
+    check("poligono_arco_raio_mudado", has(ring, (3.5, 0.0)) and has(ring, (4.0, 0.5)) and not has(ring, (3.0, 0.0)),
+          "{} {}".format(ring, win.last_message))
+    key(Qt.Key.Key_Escape)
+    click_at((2, 3, 0))                                   # the top side
+    pump(300)
+    dims = [d for d, _a, _t in vp.temp_dims if d.key and d.key[0] == "face_side"]
+    check("poligono_lado_escolhido", len(dims) == 1 and same(dims[0].value, 4.0), "{} {}".format(
+        [d.key[0] for d, _a, _t in vp.temp_dims], win.last_message))
+    if not dims or not click_dim(dims[0]):
+        return
+    type_value("5")
+    shot("poligono_lado_5")
+    ring = face_ring(doc.get(face.id))
+    check("poligono_lado_mudado", has(ring, (5.0, 3.0)) or has(ring, (-1.0, 3.0)),
+          "{} {}".format(ring, win.last_message))
+
+
+def wall_on_arc():
+    """(0.459, the owner: «no arco ele só seleciona segmentos em vez de arco inteiro») Parede ▸ Escolher linhas on the
+    polygon's rounded corner: one curved wall, on the whole arc."""
+    doc = fresh((2.0, 1.5, 0.0))
+    filleted_polygon(doc)
+    win.set_tool("wall")
+    bar_icon("shape", "pick")
+    p = (3.0 + 1.05 * math.cos(math.radians(-50)), 1.0 + 1.05 * math.sin(math.radians(-50)), 0)
+    move_to(p)
+    click_at(p)
+    shot("parede_no_arco")
+    c = curved(doc)
+    check("parede_no_arco_inteiro", len(c) == 1 and same(c[0], [[3.0, 1.0], 1.0, 90.0], 0.02) and not walls(doc),
+          "{} retas={} {}".format(c, len(walls(doc)), win.last_message))
+    bar_icon("shape", "line")
+
+
+def curved_wall_radius():
+    """(0.459, the owner: «Selecionei um arco na parede, mas não tem cota temporária para ajustar») Two walls in an L,
+    their corner rounded 1 m; the curved wall clicked: its radius a temporary dimension; 2 typed — the walls trimmed,
+    still tangent."""
+    doc = fresh((2.5, 2.0, 0.0))
+    win.set_tool("wall")
+    for p in ((0, 0, 0), (5, 0, 0), (5, 4, 0)):
+        click_at(p)
+    key(Qt.Key.Key_Escape)
+    bar_icon("shape", "fillet")
+    click_at((2, 0, 0))
+    click_at((5, 2, 0))
+    move_to((4.6, 0.4, 0))
+    type_value("1")
+    bar_icon("shape", "line")
+    win.set_tool("select")
+    key(Qt.Key.Key_Escape)
+    click_at((4.0 + math.cos(math.radians(-45)), 1.0 + math.sin(math.radians(-45)), 0))
+    pump(300)
+    dims = [d for d, _a, _t in vp.temp_dims if d.key and d.key[0] == "curved_radius"]
+    check("parede_curva_cota_raio", len(dims) == 1 and same(dims[0].value, 1.0), "seleção={} cotas={}".format(
+        vp.selection, [d.key[0] for d, _a, _t in vp.temp_dims]))
+    if not dims or not click_dim(dims[0]):
+        return
+    type_value("2")
+    shot("parede_curva_raio_2")
+    c = curved(doc)
+    w = sorted((r3(s), r3(e)) for _g, s, e in walls(doc))
+    check("parede_curva_raio_mudado", same(c, [[[3.0, 2.0], 2.0, 90.0]], 0.02) and
+          has([p for s in w for p in s], (3.0, 0.0), 0.01) and has([p for s in w for p in s], (5.0, 2.0), 0.01),
+          "{} {} {}".format(c, w, win.last_message))
+
+
 def click_dim(dim):
     """A click on a temporary dimension's value (as the owner: the value, then a number typed)."""
     at = next(a for d, a, _t in vp.temp_dims if d is dim)
@@ -674,7 +780,8 @@ for name, fn in (("laje_formas", slab_shapes), ("piso_teto", coverings), ("regia
                  ("parede_arcos", wall_arcs), ("parede_concordancia", wall_fillet), ("parede_escolher", wall_pick),
                  ("parede_snaps", wall_snaps), ("parede_poligono", wall_polygon), ("linha_cadeia", line_chain_off), ("linha_concordancia", line_fillet),
                  ("poligono_concordancia", polygon_fillet), ("alinhar", align_line), ("mascara", draft_region_mask),
-                 ("linha_formas", line_shapes)):
+                 ("linha_formas", line_shapes), ("poligono_lados", polygon_sides), ("parede_no_arco", wall_on_arc),
+                 ("parede_curva_raio", curved_wall_radius)):
     run(name, fn)
 win.doc.modified = False
 print("RESUMO: {} de {} passaram".format(sum(ok for _n, ok in results), len(results)))

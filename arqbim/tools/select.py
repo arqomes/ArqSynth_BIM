@@ -382,6 +382,8 @@ def selection_dims(doc, ids, faces=False):
             kind = doc.ifc.kind_of(obj.id)
             if kind == "wall":
                 return _wall_dims(doc, obj.id, faces)
+            if kind == "curved_wall":                # (0.459) its radius, as Revit's arc wall
+                return _curved_wall_dims(doc, obj.id)
             if kind in ("door", "window") or kind == "curtain_wall" and doc.ifc.host_wall(obj.id):   # (0.188)
                 return _filling_dims(doc, obj.id)
             return []
@@ -437,6 +439,16 @@ def _wall_dims(doc, guid, faces=False):
     return dims
 
 
+def _curved_wall_dims(doc, guid):
+    """(0.459, the owner: «Selecionei um arco na parede, mas não tem cota temporária para ajustar») A curved wall's
+    radius (its axis'), from its centre to its middle: typed over, a fillet's stays tangent to its walls."""
+    centre, radius, start, sweep, _h, _t = doc.ifc.curved_wall_params(guid)
+    c = np.array((float(centre[0]), float(centre[1]), float(centre[2])))
+    middle = start + (sweep / 2 if abs(abs(sweep) - 2 * math.pi) > 1e-9 else math.pi / 4)
+    at = c + radius * np.array((math.cos(middle), math.sin(middle), 0.0))
+    return [temp_dims.TempDim(c, at, Z_UP, key=("curved_radius", guid), offset_px=0.0)]
+
+
 def _filling_dims(doc, guid):
     """A door's or window's distances to its wall's ends, along the face it opens to."""
     st = doc.ifc.filling_state(guid)
@@ -476,6 +488,12 @@ def apply_dim(doc, dim, value):
             obj = doc.get(target)
             scale = float(np.linalg.norm(obj.matrix[:3, 0]))
             curve_edit.reshape(doc, target, core_curves.arc_with(obj.curve, radius=value / scale))
+    elif kind == "curved_radius":                         # (0.459) a curved wall's: a fillet's still tangent
+        bim.set_curved_radius(doc, target, value)
+    elif kind == "face_side":                             # (0.459) a polygon's side: its far end along it
+        line_edit.set_face_side(doc, target, dim.key[2], dim.key[3], value)
+    elif kind == "face_arc":                              # (0.459) a polygon's arc: a fillet's still tangent
+        line_edit.face_arc_radius(doc, target, dim.key[2], dim.key[3], value)
     elif kind in ("ellipse_axis", "ellipse_minor"):       # (0.458) an ellipse's half-axis: about its centre
         obj = doc.get(target)
         scale = float(np.linalg.norm(obj.matrix[:3, 0]))
@@ -517,6 +535,9 @@ class SelectTool(Tool):
         self.drag_elements = True    # (0.427) a drag that starts on an element moves it («Arrastar elementos»)
         self._press_obj = None       # (0.427) the element the button was pressed on (to drag it), or None
         self._drag = None            # (0.427) the Move tool moving what is dragged, while the button is held
+        # (0.459) a polygon's side or arc picked alone, as Revit's sketch line: (obj_id, face index, its first two
+        # corners' indices — kept by an edit, as the corners' numbers are)
+        self._side = None
         host.viewport.selection_listeners.append(lambda _ids: self._refresh_dims(keep=False))
         host.viewport.axes_listeners.append(lambda _axes: self._refresh_dims(keep=False))
         host.viewport.annotation_listeners.append(lambda _anns: self._refresh_dims(keep=False))
@@ -586,6 +607,10 @@ class SelectTool(Tool):
             self.viewport.show_grips([np.asarray(a.points[k], dtype=float) for a, k in self._ann_grips], [])
             return
         self._ann_grips = []
+        if self._side is not None:                         # (0.459) a polygon's side or arc: its dimension, grips
+            if not self.viewport.selection and not self.viewport.line_selection and self._show_side():
+                return
+            self._drop_side()                              # (something else chosen since: let go)
         lines = self.viewport.line_selection
         if lines and not self.viewport.selection:          # (0.373) lines picked alone: their grips (one: its length)
             self._grip_segments, self._cab_grips, self._block_grips = [], None, None
@@ -1350,7 +1375,7 @@ class SelectTool(Tool):
 
     def _preview_move(self, tip="", marker=PREVIEW):
         move = self._move
-        _found, touched = line_edit.moved_lines(self.doc, self._moves())
+        _found, touched = line_edit.moved_lines(self.doc, self._moves(), self._side_ids())
         segs = [p for seg in touched for p in seg]
         self.viewport.show_polygon([], segments=segs, colors=[PREVIEW] * len(segs))
         self.viewport.show_temp_dims([temp_dims.TempDim(a, b, Z_UP) for a, b in touched[:8]])
@@ -1387,7 +1412,8 @@ class SelectTool(Tool):
         alone = dict(self.viewport.line_selection)       # (0.373: lines picked alone stay picked — their numbers hold)
         if move is not None and move.target is not None and np.linalg.norm(move.target - move.base) > 1e-9:
             try:
-                n = line_edit.move_points(self.doc, [(p, p + move.target - move.base) for p in move.points])
+                n = line_edit.move_points(self.doc, [(p, p + move.target - move.base) for p in move.points],
+                                          also=self._side_ids())
                 d = format_length(float(np.linalg.norm(move.target - move.base)), decimal_sep())
                 self.host.message(t("info.grip_moved_joined" if n > 1 else "info.grip_moved", d=d))
             except ValueError as exc:
@@ -1617,6 +1643,8 @@ class SelectTool(Tool):
             return t("hint.grip")
         if self._active is not None:
             return t("hint.temp_dim")
+        if self._side is not None and self._picking is None:      # (0.459) a polygon's side or arc picked
+            return t("hint.side_chosen")
         if self._picking is None and any(d.kind == "relation" for d in self._dims):     # (0.361) a wall's relations
             return t("hint.wall_dims_faces" if getattr(self.host, "dim_faces", False) else "hint.wall_dims_axes")
         if self._picking is not None:
@@ -1844,6 +1872,7 @@ class SelectTool(Tool):
         return set(picked)
 
     def _click_select(self, x, y, modifiers):
+        self._drop_side()                                 # (0.459: a polygon's side picked before, let go)
         if self.viewport.selected_dims:
             self.viewport.select_dimensions(set())
         if self.viewport.selected_annotations:
@@ -1875,6 +1904,10 @@ class SelectTool(Tool):
         line = self._line_part(x, y)
         if line is not None:                              # (0.373) a loose line: just it (its chain, all joined) —
             self._select_line(*line, modifiers)           # near it, before the face behind it, as SketchUp's edges
+            return
+        side = self._side_part(x, y) if not keep else None
+        if side is not None:                              # (0.459) a polygon's side or arc, as Revit's sketch line
+            self._select_side(*side)
             return
         part = self._face_part(x, y, obj_id) if obj_id is not None else None
         if part is not None and part[1] < 3:              # (0.310) a sketch's face: just it (with its edges)
@@ -1990,6 +2023,89 @@ class SelectTool(Tool):
         self.viewport.select_lines(lines)
         self._say_lines()
 
+    # ------------------------------------------------------------ (0.459) a polygon's sides and arcs, as Revit's sketch
+
+    def _side_part(self, x, y):
+        """A polygon's side near the click (viewport.face_edge_at): (obj_id, face index, its place) — or None (whole
+        objects asked for: a command waiting, a type to classify chosen)."""
+        if getattr(self.host, "pending_classify", None) is not None or self._asked() or \
+                not hasattr(self.viewport, "face_edge_at"):
+            return None
+        return self.viewport.face_edge_at(x, y, radius_px=LINE_PX)
+
+    def _select_side(self, obj_id, fi, k):
+        """(0.459, the owner: «não consigo selecionar linhas e arcos no polígono para ajustar») A click on a polygon's
+        outline: that side alone — an arc drawn in pieces (a fillet, a circle): the whole arc —, lit, its length (an
+        arc: its radius) a temporary dimension to type over, a straight side's grips."""
+        obj = self.doc.get(obj_id)
+        run, arc = line_edit.face_run(obj, fi, k)
+        self._side = (obj_id, fi, run[0], run[1])
+        self.viewport.set_selection(set())
+        self._refresh_dims(keep=False)
+        if self._side is None:
+            return
+        scale = float(np.linalg.norm(obj.matrix[:3, 0]))
+        if arc is None:
+            a, b = (transform_point(obj.matrix, obj.mesh.verts[i]) for i in run)
+            self.host.message(t("info.side_picked", l=format_length(float(np.linalg.norm(b - a)), decimal_sep())))
+        else:
+            self.host.message(t("info.side_arc_picked", r=format_length(arc.radius * scale, decimal_sep())))
+        self.host.set_hint(self.hint())
+
+    def _side_ids(self):
+        """The polygon whose side is picked: its corners move with the grips (as the loose lines' ends)."""
+        return {self._side[0]} if self._side is not None else set()
+
+    def _drop_side(self):
+        if self._side is not None:
+            self._side = None
+            self.viewport.show_polygon([])
+
+    def _side_now(self):
+        """The side picked as it is now: (the sketch, face index, its corners, the arc_runs.Run or None) — or None
+        (gone: undone, deleted, its corner taken away)."""
+        obj_id, fi, v0, v1 = self._side
+        obj = self.doc.get(obj_id)
+        if obj is None or obj.is_bim or fi >= len(obj.mesh.faces) or v0 not in obj.mesh.faces[fi]:
+            return None
+        face = list(obj.mesh.faces[fi])
+        k = face.index(v0)
+        if face[(k + 1) % len(face)] != v1 and v1 in face and face[(face.index(v1) + 1) % len(face)] == v0:
+            k = face.index(v1)                             # (the face turned round)
+        run, arc = line_edit.face_run(obj, fi, k)
+        return obj, fi, run, arc
+
+    def _show_side(self):
+        found = self._side_now()
+        if found is None:
+            self.viewport.show_polygon([])
+            return False
+        obj, fi, run, arc = found
+        pts = [transform_point(obj.matrix, obj.mesh.verts[i]) for i in run]
+        ring = pts + (pts[:1] if arc is not None and arc.whole else [])
+        segs = [q for a, b in zip(ring, ring[1:]) for q in (a, b)]
+        self.viewport.show_polygon([], segments=segs, colors=[PREVIEW] * len(segs))
+        normal = obj.matrix[:3, :3] @ obj.mesh.face_normal(fi)
+        normal = normal / max(float(np.linalg.norm(normal)), 1e-12)
+        if float(normal[2]) < 0:
+            normal = -normal
+        self._grip_segments, self._cab_grips, self._block_grips = [], None, None
+        self._wall_ends = self._door_flips = self._curve_grips = None
+        if arc is None:
+            a, b = pts
+            self._dims = [temp_dims.TempDim(a, b, normal, key=("face_side", obj.id, run[0], run[1]))]
+            self._grip_segments = [(a, b)]
+            self.viewport.show_temp_dims(self._dims, active=self._active)
+            self.viewport.show_grips([a, b], [(a + b) / 2])
+        else:
+            z = float(obj.mesh.verts[run[0]][2])
+            centre = transform_point(obj.matrix, np.array((float(arc.centre[0]), float(arc.centre[1]), z)))
+            self._dims = [temp_dims.TempDim(centre, pts[len(pts) // 2] if not arc.whole else pts[0], normal,
+                                            key=("face_arc", obj.id, fi, tuple(run)), offset_px=0.0)]
+            self.viewport.show_temp_dims(self._dims, active=self._active)
+            self.viewport.show_grips([], [])
+        return True
+
     def _say_lines(self):
         """What is picked, said: a line's length, a curve's kind, how many lines."""
         lines, ids = self.viewport.line_selection, self.viewport.selection
@@ -2047,6 +2163,7 @@ class SelectTool(Tool):
         return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], (rs.WINDOW if x1 >= x0 else rs.CROSSING)
 
     def _apply_region(self, region, mode, modifiers):
+        self._drop_side()                                 # (0.459)
         ids, axes = self.viewport.region_pick(region, mode)
         ids = self._with_groups(ids)
         if self.viewport.selected_dims:
@@ -2161,6 +2278,7 @@ class SelectTool(Tool):
         if getattr(self.host, "pending_classify", None) is not None:
             self.host.pending_classify = None
             self.host.set_hint(self.hint())
+        self._drop_side()                                 # (0.459)
         self.viewport.set_selection(set())
         if self.viewport.selected_dims:
             self.viewport.select_dimensions(set())

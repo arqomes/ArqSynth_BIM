@@ -189,8 +189,36 @@ class LineTool(Tool):
         self.viewport.clear_overlays()
         self.host.set_hint(self.hint())
 
+    def _picked_arc(self, x, y):
+        """(0.459) An arc drawn in pieces under the mouse — a polygon's rounded corner, a circle, a curved wall's face —
+        picked whole: (the arc, the radius of the one a click makes — moved by the offset to the mouse's side) or
+        None."""
+        arc = pick_lines.arc_at(self.viewport, self.doc, x, y)
+        if arc is None:
+            return None
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, arc.centre, np.array((0.0, 0.0, 1.0)))
+        radius, _side = pick_lines.arc_offset(arc, mouse, self.offset)
+        return (arc, radius) if radius > MIN_LENGTH else None
+
+    def _arc_curve(self, arc, radius):
+        from ..core import curves
+        start = arc.centre + radius * np.array((np.cos(arc.start), np.sin(arc.start), 0.0))
+        return curves.arc_curve(arc.centre, (0.0, 0.0, 1.0), start, float(np.degrees(arc.sweep)))
+
     def _pick_move(self, x, y):
         """(0.451) The line a click would make on the line or edge under the mouse, shown."""
+        arc = self._picked_arc(x, y)
+        if arc is not None:                                  # (0.459) a whole arc, as Revit's
+            from ..core import curves
+            pts = curves.curve_points(self._arc_curve(*arc))
+            ring = pts + (pts[:1] if abs(abs(arc[0].sweep) - 2 * np.pi) < 1e-9 else [])
+            segs = [q for a, b in zip(ring, ring[1:]) for q in (a, b)]
+            self.viewport.show_polygon([], segments=segs, colors=[PREVIEW] * len(segs))
+            if hasattr(self.viewport, "show_glyph"):
+                self.viewport.show_glyph()
+            self.host.set_vcb(_fmt(arc[1]))
+            return
         found = self._picked(x, y)
         if found is None:
             self.viewport.clear_overlays()
@@ -215,6 +243,20 @@ class LineTool(Tool):
         return a, b, edge
 
     def _pick_down(self, x, y):
+        arc = self._picked_arc(x, y)
+        if arc is not None:                                  # (0.459) a whole arc: an arc of its own, picked whole
+            from ..core import curves
+            curve = self._arc_curve(*arc)
+            pts = curves.curve_points(curve)
+            closed = curves.is_closed(curve)
+            pairs = [(k, k + 1) for k in range(len(pts) - 1)] + ([(len(pts) - 1, 0)] if closed else [])
+            obj = SketchObject(t("obj.arc", n=self.doc.next_number()), np.eye(4), PolyMesh(pts, lines=pairs),
+                               curve=curve)
+            self.doc.execute(AddObject(obj, t("cmd.line")))
+            self._reset()
+            self.viewport.clear_overlays()
+            self.host.message(t("info.arc_on_picked", r=_fmt(arc[1])))
+            return
         found = self._picked(x, y)
         if found is None:
             self.host.message(t("tip.wall_pick_none"), warning=True)

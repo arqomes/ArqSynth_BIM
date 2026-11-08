@@ -1721,6 +1721,19 @@ def set_curved_wall(doc, guid, radius=None, sweep=None, height=None):
           gs + [f for g in gs for f in _fillings(doc, g)])
 
 
+def set_curved_radius(doc, guid, radius):
+    """(0.459, Revit's radius of an arc wall typed over) A fillet's curved wall — tangent to the straight walls at its
+    two ends — made again with `radius`, still tangent to them (they are trimmed or extended); another curved wall's
+    radius changed about its centre. One undo step."""
+    ends = doc.ifc.fillet_ends(guid)
+    if ends is None:
+        set_curved_wall(doc, guid, radius=radius)
+        return
+    walls = [guid] + [g for g, _far in ends]
+    changed = sorted(set(walls) | set(doc.ifc.joined_walls(walls)) | {f for g in walls for f in _fillings(doc, g)})
+    _edit(doc, lambda ifc: ifc.refillet_wall(guid, radius), changed, label="cmd.fillet_radius")
+
+
 def face_outline(doc, obj_id, face_index, point):
     """The outline under a click for walls along it (0.102): a slab's (its corners, at its top) or a level face
     of a sketch volume (with the level faces beside it on the same plane). ([(x, y)] counter-clockwise, z) or

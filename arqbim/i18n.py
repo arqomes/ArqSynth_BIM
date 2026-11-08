@@ -2994,6 +2994,24 @@ _STRINGS = {
     "tip.wall_pick_none": ("Aponte para uma linha ou aresta", "Point at a line or an edge"),
     "info.wall_picked": ("Parede de {l} sobre a linha escolhida ({type}). Clique noutra, ou Esc. Ctrl+Z desfaz.",
                          "A {l} wall on the line picked ({type}). Click another one, or Esc. Ctrl+Z undoes."),
+    # (0.459) an arc drawn in pieces picked whole
+    "tip.wall_pick_arc": ("Parede curva de raio {r} ({l}) aqui (clique)", "A curved wall of radius {r} ({l}) here "
+                          "(click)"),
+    "info.wall_picked_arc": ("Parede curva de raio {r} ({l}) sobre o arco escolhido, inteiro ({type}). Clique noutro, "
+                             "ou Esc. Ctrl+Z desfaz.", "A curved wall of radius {r} ({l}) on the whole arc picked "
+                             "({type}). Click another one, or Esc. Ctrl+Z undoes."),
+    "info.arc_on_picked": ("Arco de raio {r} sobre o escolhido, inteiro. Clique noutro, ou Esc. Ctrl+Z desfaz.",
+                           "An arc of radius {r} on the whole one picked. Click another one, or Esc. Ctrl+Z undoes."),
+    "info.side_picked": ("Lado do polígono escolhido ({l}). Clique na cota e escreva outro comprimento, ou arraste as "
+                         "pegas; Esc larga-o.", "The polygon's side picked ({l}). Click its dimension and type another "
+                         "length, or drag its grips; Esc lets it go."),
+    "info.side_arc_picked": ("Arco do polígono escolhido, inteiro (raio {r}). Clique na cota e escreva outro raio; "
+                             "Esc larga-o.", "The polygon's arc picked whole (radius {r}). Click its dimension and type "
+                             "another radius; Esc lets it go."),
+    "hint.side_chosen": ("Lado do polígono escolhido: clique no valor da cota e escreva outro (um arco: o raio); "
+                         "arraste as pegas para o mover. Esc larga-o.",
+                         "A polygon's side picked: click the dimension's value and type another (an arc: its radius); "
+                         "drag its grips to move it. Esc lets it go."),
     "ctx.offset": ("Afastamento", "Offset"),
     # (0.452) Revit's «Fillet Arc»
     "cmd.fillet": ("Arco de concordância", "Fillet arc"),

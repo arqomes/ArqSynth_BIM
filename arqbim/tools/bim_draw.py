@@ -846,7 +846,52 @@ class WallTool(_PointTool):
         axis_a, axis_b = offset_axis(a, b, self.reference, self.spec.thickness)
         return axis_a, axis_b, edge
 
+    def _picked_arc(self, x, y):
+        """(0.459, the owner: «no arco ele só seleciona segmentos em vez de arco inteiro») The curved wall a click would
+        make on an arc drawn in pieces under the mouse — a polygon's rounded corner, a circle, an arc of lines, a curved
+        wall's face: (centre (x, y, level), its axis' radius, start, sweep, the arc) — moved by the offset to the
+        mouse's side, its body on that side when drawn by a face — or None (a straight edge there)."""
+        arc = pick_lines.arc_at(self.viewport, self.doc, x, y)
+        if arc is None:
+            return None
+        level = self.doc.work_level()
+        origin, direction = self.viewport.ray(x, y)
+        mouse = ray_plane(origin, direction, np.array((0.0, 0.0, level)), Z)
+        radius, side = pick_lines.arc_offset(arc, mouse, self.offset)
+        if self.reference != "axis":
+            radius += side * self.spec.thickness / 2
+        return np.array((arc.centre[0], arc.centre[1], level)), radius, arc.start, arc.sweep, arc
+
+    def _pick_arc_move(self, found):
+        centre, radius, start, sweep, arc = found
+        t_ = self.spec.thickness
+        if radius - t_ / 2 <= 0.05:
+            self.viewport.clear_overlays()
+            self.viewport.show_tip(t("err.wall_curve_small"), arc.points[len(arc.points) // 2])
+            return
+        z = float(centre[2])
+        full = arcs.is_full(sweep)
+        outer, inner = (arcs.arc_points(centre, r, start, sweep) for r in (radius + t_ / 2, radius - t_ / 2))
+        if revit_look() and self.viewport.plan:
+            loops = [outer, inner] if full else [list(outer) + list(inner[::-1])]
+            segs = [np.array((*p, z)) for loop in loops for k in range(len(loop))
+                    for p in (loop[k], loop[(k + 1) % len(loop)])]
+            self.viewport.show_drawn(segs)
+            self.viewport.show_glyph()
+        else:
+            tris, segs = band_solid.band_solid(outer, inner, z, self.height, closed=full,
+                                               verticals=() if full else None)
+            self.viewport.show_volume(tris, segs, [PREVIEW] * len(segs))
+        length = radius * abs(sweep)
+        self.viewport.show_tip(t("tip.wall_pick_arc", r=_fmt(radius), l=_fmt(length)),
+                               np.array((*arcs.point_at(centre, radius, start + sweep / 2), z)))
+        self.host.set_vcb(_fmt(radius))
+
     def _pick_move(self, x, y):
+        arc = self._picked_arc(x, y)
+        if arc is not None:                                  # (0.459) an arc drawn in pieces: a curved wall on it
+            self._pick_arc_move(arc)
+            return
         found = self._picked_wall(x, y)
         if found is None:
             self.viewport.clear_overlays()
@@ -870,6 +915,18 @@ class WallTool(_PointTool):
         self.host.set_vcb(_fmt(length))
 
     def _pick_down(self, x, y):
+        arc = self._picked_arc(x, y)
+        if arc is not None:                                  # (0.459) the whole arc: a curved wall
+            centre, radius, start, sweep, _arc = arc
+            if radius - self.spec.thickness / 2 < 0.05 or radius * abs(sweep) < MIN_LENGTH:
+                self.host.message(t("err.wall_curve_small"), warning=True)
+                return
+            bim.add_curved_wall(self.doc, centre, radius, start, sweep, self.spec, self.height,
+                                storey=self.doc.active_storey)
+            self.viewport.clear_overlays()
+            self.host.message(t("info.wall_picked_arc", r=_fmt(radius), l=_fmt(radius * abs(sweep)),
+                                type=_name(self.spec)))
+            return
         found = self._picked_wall(x, y)
         if found is None:
             self.host.message(t("tip.wall_pick_none"), warning=True)

@@ -3886,6 +3886,34 @@ class Viewport:
                 best = (float(dist[k]), obj.id, k)
         return (best[1], best[2]) if best is not None else None
 
+    def face_edge_at(self, x, y, radius_px=8):
+        """(0.459) The side of a polygon — a sketch's flat face: drawn with the Line, a rectangle, a circle… — nearest
+        the cursor on the screen, within radius_px: (obj_id, the face's index, the side's place in it: from that corner
+        to the next) — or None. A volume's faces (not flat in its frame) are not looked at: they are picked whole."""
+        best = None
+        for obj_id, view in self._views.items():
+            obj = self.doc.get(obj_id)
+            if obj is None or obj.is_bim or not obj.mesh.faces or not view.group.visible or not self.selectable(obj):
+                continue
+            local = np.asarray(obj.mesh.verts, dtype=float).reshape(-1, 3)
+            if not len(local) or float(np.ptp(local[:, 2])) > 1e-6:
+                continue
+            m = obj.matrix
+            xy = self.project_many(local @ m[:3, :3].T + m[:3, 3])
+            for fi, face in enumerate(obj.mesh.faces):
+                f = np.asarray(face, dtype=np.int64)
+                a, b = xy[f], xy[np.roll(f, -1)]
+                d = b - a
+                dd = np.einsum("ij,ij->i", d, d)
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    s = np.clip(((x - a[:, 0]) * d[:, 0] + (y - a[:, 1]) * d[:, 1]) / dd, 0.0, 1.0)
+                s = np.nan_to_num(s)
+                dist = np.nan_to_num(np.hypot(a[:, 0] + s * d[:, 0] - x, a[:, 1] + s * d[:, 1] - y), nan=np.inf)
+                k = int(np.argmin(dist))
+                if dist[k] <= radius_px and (best is None or dist[k] < best[0]):
+                    best = (float(dist[k]), obj.id, fi, k)
+        return best[1:] if best is not None else None
+
     def objects_picked(self):
         """(0.310) The objects selected and those whose faces are picked alone: what a command for whole objects
         takes (Classificar como, Fazer componente) — a click on a face of a sketch volume is enough for it."""

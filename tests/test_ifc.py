@@ -12846,6 +12846,108 @@ class DrawingAsRevit(unittest.TestCase):
         finally:
             doc.modified = False
 
+    def test_polygon_sides_and_arcs(self):
+        """0.459 — the owner: «não consigo selecionar linhas e arcos no polígono para ajustar»: an arc drawn in pieces
+        found again whole (a polygon's fillet, a circle — a straight side is not one); a polygon's side made longer by
+        its dimension; its fillet's radius changed, still tangent to its two sides; a circle's radius."""
+        from arqbim.core import arc_runs
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.core.sketch_geometry import circle_mesh
+        from arqbim.model import line_edit
+        from arqbim.tools.align import level_edges
+        from arqbim.tools.select import apply_dim
+        from types import SimpleNamespace
+        doc = Document()
+        try:
+            face = SketchObject("f", I4, PolyMesh([(0.0, 0.0, 0.0), (4.0, 0.0, 0.0), (4.0, 3.0, 0.0), (0.0, 3.0, 0.0)],
+                                                  [[0, 1, 2, 3]]))
+            doc.execute(AddObject(face))
+            obj = doc.get(face.id)
+            first = (face.id, *line_edit.face_edge_at(obj, (2.0, 0.0, 0.0))[0])
+            second = (face.id, *line_edit.face_edge_at(obj, (4.0, 1.5, 0.0))[0])
+            line_edit.fillet_face(doc, first, (2.0, 0.0, 0.0), second, (4.0, 1.5, 0.0), 1.0)
+            obj = doc.get(face.id)
+            ring = [obj.mesh.verts[i] for i in obj.mesh.faces[0]]
+            n = len(ring)
+            on_arc = next(k for k in range(n) if 3.2 < ring[k][0] < 3.9 and ring[k][1] < 0.5)
+            run = arc_runs.run_around(ring, on_arc, closed=True)
+            self.assertIsNotNone(run)
+            self.assertAlmostEqual(run.radius, 1.0, places=6)
+            np.testing.assert_allclose(run.centre, (3.0, 1.0), atol=1e-6)
+            self.assertAlmostEqual(abs(math.degrees(run.sweep)), 90.0, places=4)
+            ends = [tuple(np.round(ring[run.indices[i]][:2], 6) + 0.0) for i in (0, -1)]
+            self.assertEqual(sorted(ends), [(3.0, 0.0), (4.0, 1.0)])
+            straight = next(k for k in range(n) if np.allclose(ring[k][:2], (0, 0)))
+            self.assertIsNone(arc_runs.run_around(ring, straight, closed=True))        # (a side: straight)
+            corners, found = line_edit.face_run(obj, 0, on_arc)
+            self.assertEqual(len(corners), len(run.indices))
+            # the arc's radius typed over (its temporary dimension): 0,5 — the sides trimmed, still tangent
+            dim = SimpleNamespace(key=("face_arc", face.id, 0, tuple(corners)), value=1.0)
+            apply_dim(doc, dim, 0.5)
+            ring = [tuple(np.round(doc.get(face.id).mesh.verts[i][:2], 6) + 0.0) for i in doc.get(face.id).mesh.faces[0]]
+            self.assertIn((3.5, 0.0), ring)
+            self.assertIn((4.0, 0.5), ring)
+            self.assertAlmostEqual(doc.get(face.id).mesh.face_area(0), 12.0 - (0.25 - math.pi * 0.25 / 4), places=2)
+            doc.undo()                                                                 # (one step)
+            self.assertAlmostEqual(doc.get(face.id).mesh.face_area(0), 12.0 - (1.0 - math.pi / 4), places=2)
+            # a side's length typed over: its far corner moves along it
+            obj = doc.get(face.id)
+            i = next(v for v in obj.mesh.faces[0] if np.allclose(obj.mesh.verts[v][:2], (0, 3)))
+            j = next(v for v in obj.mesh.faces[0] if np.allclose(obj.mesh.verts[v][:2], (0, 0)))
+            apply_dim(doc, SimpleNamespace(key=("face_side", face.id, i, j), value=3.0), 5.0)
+            np.testing.assert_allclose(doc.get(face.id).mesh.verts[j][:2], (0.0, -2.0), atol=1e-9)
+            # a circle: its outline one arc, whole; its radius changed
+            circle = SketchObject("c", I4, circle_mesh(2.0, 24))
+            doc.execute(AddObject(circle))
+            run = arc_runs.run_around(circle.mesh.verts, 5, closed=True)
+            self.assertTrue(run.whole and abs(run.radius - 2.0) < 1e-9 and len(run.indices) == 24)
+            corners, _run = line_edit.face_run(doc.get(circle.id), 0, 5)
+            line_edit.face_arc_radius(doc, circle.id, 0, corners, 3.0)
+            np.testing.assert_allclose([np.linalg.norm(v[:2]) for v in doc.get(circle.id).mesh.verts], [3.0] * 24)
+            # its outline's edges as a chain (Pick Lines): the arc found from any of its pieces
+            edges = level_edges(doc.get(circle.id))
+            points, closed, k = arc_runs.chain_through(edges, edges[3][0], edges[3][1])
+            self.assertTrue(closed and len(points) == 24)
+            self.assertTrue(arc_runs.run_around(points, k, closed).whole)
+        finally:
+            doc.modified = False
+
+    def test_curved_wall_radius(self):
+        """0.459 — the owner: «Selecionei um arco na parede, mas não tem cota temporária para ajustar»: a curved wall's
+        radius as a temporary dimension; a fillet's typed over — the walls trimmed, the arc still tangent to both —;
+        another's about its centre."""
+        from arqbim.tools.select import apply_dim, selection_dims
+        doc = Document()
+        try:
+            w20 = catalog.BY_KEY["parede_alv_20"]
+            a = bim.add_wall(doc, (0.0, 0.0, 0.0), (5.0, 0.0, 0.0), w20)
+            b = bim.add_wall(doc, (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), w20, prev=(a, np.array((1.0, 0.0, 0.0))))
+            arc = bim.fillet_walls(doc, a, (2.0, 0.0), b, (5.0, 2.0), 1.0, w20)
+            self.assertEqual(len(doc.ifc.fillet_ends(arc)), 2)
+            dims = selection_dims(doc, {arc})
+            self.assertEqual([d.key for d in dims], [("curved_radius", arc)])
+            self.assertAlmostEqual(dims[0].value, 1.0, places=6)
+            apply_dim(doc, dims[0], 2.0)
+            centre, radius, _s, sweep, _h, _t = doc.ifc.curved_wall_params(arc)
+            self.assertAlmostEqual(radius, 2.0, places=6)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (3.0, 2.0), atol=1e-6)
+            self.assertAlmostEqual(abs(math.degrees(sweep)), 90.0, places=4)
+            _sa, ea, _t = doc.ifc.wall_axis(a)
+            sb, _eb, _t = doc.ifc.wall_axis(b)
+            np.testing.assert_allclose(ea[:2], (3.0, 0.0), atol=1e-6)                 # (trimmed: tangent)
+            np.testing.assert_allclose(sb[:2], (5.0, 2.0), atol=1e-6)
+            doc.undo()                                                                 # (one step)
+            self.assertAlmostEqual(doc.ifc.curved_wall_params(arc)[1], 1.0, places=6)
+            np.testing.assert_allclose(doc.ifc.wall_axis(a)[1][:2], (4.0, 0.0), atol=1e-6)
+            alone = bim.add_curved_wall(doc, (20.0, 0.0, 0.0), 3.0, 0.0, math.pi / 2, w20)
+            self.assertIsNone(doc.ifc.fillet_ends(alone))
+            apply_dim(doc, selection_dims(doc, {alone})[0], 4.0)                       # (alone: about its centre)
+            centre, radius, *_rest = doc.ifc.curved_wall_params(alone)
+            self.assertAlmostEqual(radius, 4.0, places=6)
+            np.testing.assert_allclose(np.asarray(centre)[:2], (20.0, 0.0), atol=1e-6)
+        finally:
+            doc.modified = False
+
     def test_temporary_dimension_made_permanent(self):
         from types import SimpleNamespace
         from arqbim.core import temp_dims

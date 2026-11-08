@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.459.0 — 2026-11-08
+
+**Lados e arcos do polígono, parede sobre um arco e raio da parede curva, como no Revit** (o dono: «não consigo
+selecionar linhas e arcos no polígono para ajustar. Ao desenhar a parede por seleção de aresta, no arco ele só seleciona
+segmentos em vez de arco inteiro. Selecionei um arco na parede, mas não tem cota temporária para ajustar»).
+
+- **Polígono** (uma face desenhada com a Linha, o Retângulo, o Círculo…): com Selecionar, um clique **no contorno**
+  escolhe só esse lado, realçado a azul; um clique no meio continua a escolher a face inteira.
+  - Um lado reto mostra o **comprimento como cota temporária**: clique no valor e escreva outro. Tem pegas nas pontas
+    e no meio para o arrastar.
+  - Um **arco** (canto arredondado, círculo) escolhe-se **inteiro** e mostra o **raio**. Se o arco for uma
+    concordância, mudar o raio mantém-no tangente aos dois lados, que encurtam ou alongam. Um círculo muda de tamanho.
+- **Parede ▸ Escolher linhas** (e **Linha ▸ Escolher linhas**): numa aresta que faz parte de um arco — canto
+  arredondado de um polígono, círculo, arco de linhas, face de uma parede curva —, o arco é escolhido **inteiro** e sai
+  **uma parede curva** (ou um arco) sobre ele, com o Afastamento para o lado do rato.
+- **Parede curva escolhida**: mostra o **raio como cota temporária**. Numa concordância entre duas paredes retas, o raio
+  novo mantém-na tangente: as duas paredes encurtam ou alongam e voltam a ligar-se. Uma parede curva sozinha muda de
+  raio à volta do centro.
+- Teste na janela real: 44 de 44 passos certos (7 novos para estes casos).
+
 ## 0.458.0 — 2026-11-08
 
 **Polígonos e elipses na Linha, como no Revit** (o dono: «Faço também os polígonos e a elipse na Linha? — Sim, faz»).

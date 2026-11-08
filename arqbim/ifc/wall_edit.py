@@ -419,6 +419,83 @@ class WallEditMixin:
         self.join_ends(wall.GlobalId)
         return wall
 
+    def fillet_ends(self, guid):
+        """(0.459) The straight walls going on from a curved wall's two ends along it — as a fillet's, tangent there:
+        [(their GlobalId, their other end (axis point)) at its start, the same at its end] — or None when it is not
+        so at both (a circle, an arc standing alone)."""
+        from ..core import arcs
+        centre, radius, start, sweep, _h, _t = self.curved_wall_params(guid)
+        if arcs.is_full(sweep):
+            return None
+        out = []
+        for angle in (start, start + sweep):
+            p = np.asarray(arcs.point_at(centre, radius, angle), dtype=float)
+            radial = (p - np.asarray(centre, dtype=float)[:2]) / radius
+            found = None
+            for w in self.file.by_type("IfcWall"):
+                g = w.GlobalId
+                if g == guid or self.kind_of(g) != "wall":
+                    continue
+                try:
+                    s, e, _th = self.wall_axis(g)
+                except (KeyError, ValueError, TypeError, AttributeError):
+                    continue
+                for near, far in ((s, e), (e, s)):
+                    d = (far - near)[:2]
+                    n = float(np.linalg.norm(d))
+                    if n > MIN_SIZE and float(np.linalg.norm(near[:2] - p)) <= 2e-3 and abs(float(d @ radial)) / n <= 5e-3:
+                        found = (g, far.copy())
+                        break
+                if found:
+                    break
+            if found is None:
+                return None
+            out.append(found)
+        return out if out[0][0] != out[1][0] else None
+
+    def refillet_wall(self, guid, radius):
+        """(0.459, the owner: «Selecionei um arco na parede, mas não tem cota temporária para ajustar») A fillet's
+        curved wall made again with `radius`, as Revit's: still tangent to the two straight walls at its ends — they are
+        trimmed or extended to where the new arc touches them, its centre along their corner's bisector —, joined to
+        them again; its doors and windows kept on it. False when it is not a fillet's (fillet_ends)."""
+        from ..core.fillet import fillet
+        ends = self.fillet_ends(guid)
+        if ends is None:
+            return False
+        wall, _ = self._require(guid, "curved_wall")
+        centre0, _r, _s, _sw, height, thickness = self.curved_wall_params(guid)
+        (a, far_a), (b, far_b) = ends
+        sa, ea, _ta = self.wall_axis(a)
+        sb, eb, _tb = self.wall_axis(b)
+        f = fillet((sa, ea), far_a, (sb, eb), far_b, radius=float(radius))
+        if f is None:
+            raise EditRefused("parallel")
+        reach = float(np.linalg.norm(f.tangents[0] - f.cross))
+        if any(reach > room - MIN_SIZE for room in f.room):
+            raise EditRefused("too_big")
+        if f.radius - thickness / 2 < MIN_SIZE:
+            raise EditRefused("too_small")
+        for rel, *_rest in self.wall_joints(guid):           # (its corners let go: made again at its new ends)
+            self.file.remove(rel)
+        for g, s, e, end, at in ((a, sa, ea, f.ends[0], f.tangents[0]), (b, sb, eb, f.ends[1], f.tangents[1])):
+            d = (e - s) * np.array((1.0, 1.0, 0.0))
+            length = float(np.linalg.norm(d))
+            pos = float((np.asarray(at, dtype=float) - s[:2]) @ (d[:2] / length))
+            change = pos - length if end == "end" else -pos
+            if abs(change) > 1e-9:
+                self.resize_wall(g, **({"at_end": change} if end == "end" else {"at_start": change}))
+        m = np.eye(4)
+        m[:3, 0] = (math.cos(f.start), math.sin(f.start), 0.0)
+        m[:3, 1] = (-math.sin(f.start), math.cos(f.start), 0.0)
+        m[:3, 3] = (float(f.centre[0]), float(f.centre[1]), float(centre0[2]))
+        self._place(wall, m)
+        self._set_params(wall, {"CorteInicio": 180.0, "CorteFim": 0.0})
+        self._set_curved_body(wall, float(f.radius), float(f.sweep), height, thickness)
+        self._set_params(wall, {"Raio": float(f.radius), "Abertura": math.degrees(f.sweep)})
+        self.follow_curved_openings(guid)
+        self.join_ends(guid)
+        return True
+
     def corner_walls(self, a, keep_a, b, keep_b):
         """Trim / extend walls a and b to the corner where their axes cross, keeping the side of each where
         the point clicked on it is (plan points). Their other joints at those ends are let go."""
