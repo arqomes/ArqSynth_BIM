@@ -10146,11 +10146,9 @@ def pattern_buttons_flow():
         QtCore.QTimer.singleShot(80, go)
 
     def work():
-        d = getattr(win, "_material_dialog", None)
-        if d is None or not d.isVisible():
-            QtCore.QTimer.singleShot(100, work)
-            return
+        d = win.materials_panel.editor                       # (0.468: the column's Materials panel)
         d.select("reboco")
+        d.tabs.setCurrentIndex(1)
         pump(150)
         fg = d.cut.combos[0]
 
@@ -10174,10 +10172,11 @@ def pattern_buttons_flow():
         if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
             d.grab().save(os.path.join(OUT, "340_materiais_botoes.png"))
         seen["saved"] = d.apply_changes()
-        d.reject()
 
-    QtCore.QTimer.singleShot(100, work)
     win.edit_materials()
+    pump(200)
+    work()
+    win.set_module("project")
     pump(300)
     plaster = catalog.MATERIALS.get("reboco")
     has = plaster is not None and plaster.cut_fg == ("sand", "#2b2f36") and plaster.cut_bg == ("solid", "#f4f1ea") \
@@ -15398,16 +15397,17 @@ def paint_flow():
     canvas.setFocus()
     key(Qt.Key.Key_B)
     pump(300)
-    tool_on = win.tool is not None and win.tool.name == "paint" and win.props.tabs.currentIndex() == 1
-    items = [win.props.materials.item(k) for k in range(win.props.materials.count())]
+    ed = win.materials_panel.editor                          # (0.468: the column's Materials panel)
+    tool_on = win.tool is not None and win.tool.name == "paint" and win.materials_panel.isVisible() and \
+        ed.tabs.currentIndex() == 0
+    items = [ed.list.item(k) for k in range(ed.list.count())]
     first_none = bool(items) and (items[0].data(Qt.ItemDataRole.UserRole) or "") == ""
     terracotta = next((i for i in items if i.data(Qt.ItemDataRole.UserRole) == "tinta_terracota"), None)
     if terracotta is not None:
-        rect = win.props.materials.visualItemRect(terracotta)
-        win.props.materials.scrollToItem(terracotta)
+        ed.list.scrollToItem(terracotta)
         pump(100)
-        rect = win.props.materials.visualItemRect(terracotta)
-        QtTest.QTest.mouseClick(win.props.materials.viewport(), Qt.MouseButton.LeftButton,
+        rect = ed.list.visualItemRect(terracotta)
+        QtTest.QTest.mouseClick(ed.list.viewport(), Qt.MouseButton.LeftButton,
                                 Qt.KeyboardModifier.NoModifier, rect.center())
         pump(200)
     chosen = win.tool.material == "tinta_terracota"
@@ -15468,7 +15468,8 @@ def paint_flow():
     key(Qt.Key.Key_Escape)
     win.set_tool("select")
     pump(300)
-    back = win.props.tabs.currentIndex() == 0
+    back = not ed.painting and (ed.list.item(0).data(Qt.ItemDataRole.UserRole) or "") != ""
+    win.set_module("project")
     check("pintura", tool_on and first_none and chosen and face_painted and seen and whole and picked and back,
           "balde={} sem_pintura={} escolhido={} face={} visto={} elemento={} conta_gotas={} volta={}".format(
               tool_on, first_none, chosen, face_painted, seen, whole, picked, back))
@@ -17153,10 +17154,7 @@ def materials_flow():
     seen = {}
 
     def work():
-        d = getattr(win, "_material_dialog", None)
-        if d is None or not d.isVisible():
-            QtCore.QTimer.singleShot(100, work)
-            return
+        d = win.materials_panel.editor                       # (0.468: the column's Materials panel)
         d.select("bloco")
         d.hatch.setCurrentIndex(d.hatch.findData("concrete"))
         d._set_colour((0.55, 0.35, 0.30))
@@ -17166,10 +17164,11 @@ def materials_flow():
         seen["new"] = d.new_material()
         if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
             d.grab().save(os.path.join(OUT, "80_materiais.png"))
-        d.reject()
 
-    QtCore.QTimer.singleShot(100, work)
     win.edit_materials()
+    pump(200)
+    work()
+    win.set_module("project")
     pump(200)
     block = catalog.MATERIALS.get("bloco")
     ifc_block = project_types.find_material(doc.ifc, block) if block else None
@@ -17523,23 +17522,18 @@ def properties_panel_flow():
     shot("185_propriedades.png")
     props.search.setText("")
     pump(100)
-    props.tabs.setCurrentIndex(1)
-    pump(200)
-    listed = props.materials.count() > 3
+    # (0.468: the materials in the column's Materials panel, no longer beside the properties — a double click edits)
     seen = {}
-
-    def close():
-        d = getattr(win, "_material_dialog", None)
-        if d is None or not d.isVisible():
-            QtCore.QTimer.singleShot(100, close)
-            return
-        seen["opened"] = True
-        d.reject()
-
-    QtCore.QTimer.singleShot(100, close)
-    props.materials.itemDoubleClicked.emit(props.materials.item(0))
-    pump(300)
-    props.tabs.setCurrentIndex(0)
+    ed = win.materials_panel.editor
+    win.set_module("materials")
+    pump(200)
+    listed = ed.list.count() > 3 and not hasattr(props, "tabs")
+    ed.list.itemDoubleClicked.emit(ed.list.item(0))
+    pump(200)
+    seen["opened"] = ed.tabs.currentIndex() == 1
+    ed.tabs.setCurrentIndex(0)
+    win.set_module("project")
+    pump(200)
     vp.set_selection(set())
     pump(300)
     # (0.414: the view's type — its view template — on top, first; then its rows)
@@ -19823,9 +19817,14 @@ def theme_dialogs_flow():
     QtCore.QTimer.singleShot(100, look("_studio", "studio", "339_caixilho_escuro.png"))
     win.act_caixilho.trigger()
     pump(300)
-    QtCore.QTimer.singleShot(100, look("_material_dialog", "materials", "339_materiais_escuro.png"))
-    win.edit_materials()
+    win.edit_materials()                                     # (0.468: a panel of the column, no longer a window)
     pump(300)
+    panel = win.materials_panel
+    seen["materials"] = (panel.palette().window().color().name(), low_contrast(panel), cs.BG)
+    if not os.environ.get("ARQBIM_GUI_NO_SHOTS"):
+        panel.grab().save(os.path.join(OUT, "339_materiais_escuro.png"))
+    win.set_module("project")
+    pump(200)
     QtCore.QTimer.singleShot(100, look("_type_dialog", "types", "339_tipos_escuro.png"))
     win.edit_types("wall")
     pump(300)
@@ -19837,7 +19836,7 @@ def theme_dialogs_flow():
     QtCore.QTimer.singleShot(100, look("_studio", "studio_light", "339_caixilho_claro.png"))
     win.act_caixilho.trigger()
     pump(300)
-    dark = all(seen.get(n, ("",))[0] == "#17191c" for n in ("materials", "types", "actions")) \
+    dark = all(seen.get(n, ("",))[0] == "#17191c" for n in ("types", "actions")) \
         and seen.get("studio", (None, None, ""))[2] == "#17191c"
     readable = all(not seen.get(n, (None, [None]))[1] for n in ("window", "studio", "materials", "types", "actions"))
     light = seen.get("studio_light", (None, None, ""))[2] == "#ffffff"
@@ -19930,18 +19929,19 @@ def render_setup_flow():
     seen = {}
 
     def materials():
-        d = getattr(win, "_material_dialog", None)
-        if d is None or not d.isVisible():
-            QtCore.QTimer.singleShot(100, materials)
-            return
+        from arqbim.core import pbr                          # (0.468: the Materials panel's realistic finish)
+        d = win.materials_panel.editor
         d.select("reboco")
-        seen["combo"] = d.finish.count() == 1 + len(render_scene.FINISHES) and d.finish.currentData() == ""
-        d.finish.setCurrentIndex(d.finish.findData("glossy"))
+        d.tabs.setCurrentIndex(1)
+        seen["combo"] = d.preset.count() == 1 + len(pbr.PRESETS) and d.kind.currentData() == "standard"
+        d.preset.setCurrentIndex(d.preset.findData("glossy"))
+        d._preset_chosen()
         seen["applied"] = d.apply_changes()
-        d.reject()
 
-    QtCore.QTimer.singleShot(100, materials)
     win.edit_materials()
+    pump(200)
+    materials()
+    win.set_module("project")
     pump(200)
     plaster = catalog.MATERIALS["reboco"]
     glossy = plaster.finish == "glossy" and \

@@ -21,6 +21,10 @@ from ..core import patterns as core_patterns
 PARAMS = "ArqSynth_Parametros"
 GRAPHICS = "Graficos"
 FINISH, FINISH_AUTO = "Acabamento", "auto"
+REAL = "Realista"                 # (0.468) its realistic look, core/pbr's JSON text
+# (0.468) each picture's IfcImageTexture.Mode (as Bonsai and glTF name them)
+MODES = {"base": "DIFFUSE", "normal": "NORMAL", "roughness": "ROUGHNESS", "metallic": "METALLIC",
+         "height": "DISPLACEMENT", "ao": "OCCLUSION", "opacity": "OPACITY", "emission": "EMISSIVE"}
 LAYERS = ("Foreground", "Background")
 FIELDS = ("surface_fg", "surface_bg", "cut_fg", "cut_bg")
 STYLE_NAMES = {"surface": "Surface", "cut": "Cut"}
@@ -217,6 +221,94 @@ def read_finish(material):
                     value = str(prop.NominalValue.wrappedValue or "")
                     return "" if value == FINISH_AUTO else value
     return None
+
+
+def read_look(material):
+    """(0.468) Its realistic look as kept in its parameter (core/pbr.Look), or None when not kept."""
+    from ..core import pbr
+    for rel in getattr(material, "HasProperties", None) or ():
+        if rel.is_a("IfcMaterialProperties") and rel.Name == PARAMS:
+            for prop in rel.Properties or ():
+                if prop.Name == REAL and getattr(prop, "NominalValue", None) is not None:
+                    return pbr.decode(prop.NominalValue.wrappedValue)
+    return None
+
+
+def _surface_style(material):
+    item = _styled_item(material)
+    return next((s for s in (item.Styles if item is not None else ()) if s.is_a("IfcSurfaceStyle")), None)
+
+
+def _physical(f):
+    """The reflectance method of a physically based look: PHYSICAL (IFC4X3), else NOTDEFINED (IFC4 has none: so Bonsai
+    keeps its looks there)."""
+    import ifcopenshell.ifcopenshell_wrapper as wrapper
+    try:
+        schema = wrapper.schema_by_name(getattr(f, "schema_identifier", None) or f.schema)
+        items = schema.declaration_by_name("IfcReflectanceMethodEnum").enumeration_items()
+    except (RuntimeError, AttributeError, KeyError):
+        return "NOTDEFINED"
+    return "PHYSICAL" if "PHYSICAL" in items else "NOTDEFINED"
+
+
+def write_look(f, material, look, unit):
+    """(0.468) A realistic look as other programs read it too: the surface style's shading as an
+    IfcSurfaceStyleRendering, physical (PHYSICAL, NOTDEFINED in IFC4) — its roughness the SpecularHighlight (IfcSpecularRoughness), its metallic the
+    SpecularColour (a ratio), its base colour the DiffuseColour (as Bonsai keeps them) —, and its pictures an
+    IfcSurfaceStyleWithTextures of IfcImageTexture (each its Mode, repeated, sized and turned by its TextureTransform;
+    unit: project units a metre). look None: a plain shading again, no pictures."""
+    style = _surface_style(material)
+    shading = _shading(material)
+    if style is None or shading is None:
+        return
+    styles = list(style.Styles or ())
+    method = _physical(f)
+    try:
+        if look is not None and not shading.is_a("IfcSurfaceStyleRendering"):
+            rendering = f.create_entity("IfcSurfaceStyleRendering", SurfaceColour=shading.SurfaceColour,
+                                        Transparency=getattr(shading, "Transparency", None),
+                                        ReflectanceMethod=method)
+            styles[styles.index(shading)] = rendering
+            style.Styles = styles
+            f.remove(shading)
+            shading = rendering
+        elif look is None and shading.is_a("IfcSurfaceStyleRendering"):
+            plain = f.create_entity("IfcSurfaceStyleShading", SurfaceColour=shading.SurfaceColour,
+                                    Transparency=getattr(shading, "Transparency", None))
+            styles[styles.index(shading)] = plain
+            style.Styles = styles
+            f.remove(shading)
+            shading = plain
+        if look is not None:
+            shading.ReflectanceMethod = method
+            shading.SpecularHighlight = f.create_entity("IfcSpecularRoughness", float(look.roughness))
+            shading.SpecularColour = f.create_entity("IfcNormalisedRatioMeasure", float(look.metallic))
+            shading.DiffuseColour = _colour(f, rgb_of(look.tint)) if look.tint else None
+    except (RuntimeError, ValueError, TypeError, AttributeError):  # (a schema without them: the parameter is enough)
+        pass
+    old = [s for s in styles if s.is_a("IfcSurfaceStyleWithTextures")]
+    styles = [s for s in styles if s not in old]
+    if look is not None and look.textured:
+        try:
+            textures = []
+            for slot, path, _inverted in look.maps:
+                a = math.radians(look.rotation)
+                transform = f.create_entity(
+                    "IfcCartesianTransformationOperator2DnonUniform",
+                    Axis1=f.create_entity("IfcDirection", DirectionRatios=(math.cos(a), math.sin(a))),
+                    Axis2=f.create_entity("IfcDirection", DirectionRatios=(-math.sin(a), math.cos(a))),
+                    LocalOrigin=f.create_entity("IfcCartesianPoint", Coordinates=(float(look.offset_x * unit),
+                                                                                  float(look.offset_y * unit))),
+                    Scale=float(look.width * unit), Scale2=float(look.height_m * unit))
+                textures.append(f.create_entity("IfcImageTexture", RepeatS=True, RepeatT=True, Mode=MODES[slot],
+                                                TextureTransform=transform, URLReference=str(path)))
+            styles.append(f.create_entity("IfcSurfaceStyleWithTextures", Textures=textures))
+        except (RuntimeError, ValueError, TypeError, AttributeError):
+            pass
+    style.Styles = styles
+    for s in old:
+        if not f.get_inverse(s):
+            _remove(f, s)
 
 
 def read_foreign(material):

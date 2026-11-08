@@ -84,6 +84,16 @@ def finish_of(category, alpha, own=""):
     return CATEGORY_FINISH.get(category or "", "matte")
 
 
+def look_of(spec):
+    """(0.468) A material's realistic look (core/pbr.Look): its own, else its finish's — the one chosen before 0.468,
+    else its category's."""
+    from ..core import pbr
+    if getattr(spec, "look", None) is not None:
+        return spec.look
+    alpha = 1.0 - float(getattr(spec, "transparency", 0.0) or 0.0)
+    return pbr.from_finish(finish_of(getattr(spec, "category", ""), alpha, getattr(spec, "finish", "") or ""))
+
+
 def light_flux(ifc, obj):
     """A light's flux (lm): by its kind (a panel, a downlight), another program's LUMENS_OTHER."""
     try:

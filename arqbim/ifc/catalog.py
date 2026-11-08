@@ -31,6 +31,8 @@ class MaterialSpec:
     # (0.343) its finish in the realistic render (model/render_scene.FINISHES: matte, satin, glossy, metal, glass,
     # frosted); "": its category's
     finish: str = ""
+    # (0.468) its realistic look (core/pbr.Look: its kind, roughness, metallic…, its pictures) — None: its finish's
+    look: object = None
 
     @property
     def own_cut(self):
@@ -39,8 +41,9 @@ class MaterialSpec:
 
     def graphics(self):
         """(0.314) Its graphics as one value (to compare two materials')."""
+        from ..core import pbr
         return (self.surface_fg, self.surface_bg, round(float(self.transparency or 0.0), 3), self.cut_fg, self.cut_bg,
-                self.finish or "")
+                self.finish or "", pbr.encode(self.look) if self.look is not None else "")
 
 
 @dataclass(frozen=True)

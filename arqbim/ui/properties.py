@@ -276,43 +276,13 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         if not quick:
             column.addWidget(self.search)
         column.addWidget(self.tree, 1)
-        self.materials = QtWidgets.QListWidget()               # (the materials' browser)
-        self.materials.setIconSize(QtCore.QSize(22, 22))
-        self.materials.setToolTip(t("props.mat_hint"))
-        self.materials.itemDoubleClicked.connect(
-            lambda item: self.on_material(item.data(QtCore.Qt.ItemDataRole.UserRole)) if self.on_material else None)
-        # (0.391) with the Paint bucket on: one click chooses the bucket's material (SketchUp's Materials panel)
-        self.on_pick = None
-        self.materials.itemClicked.connect(
-            lambda item: self.on_pick(item.data(QtCore.Qt.ItemDataRole.UserRole) or "") if self.on_pick else None)
-        # (0.397) over it the same family list and search as the materials window's: the same order in both
-        from .material_editor import family_combo
-        self.mat_family = family_combo()
-        self.mat_search = QtWidgets.QLineEdit()
-        self.mat_search.setPlaceholderText(t("mat.search"))
-        self.mat_search.setClearButtonEnabled(True)
-        self.mat_family.currentIndexChanged.connect(lambda _i: self._fill_materials())
-        self.mat_search.textChanged.connect(lambda _t: self._fill_materials())
-        browser = QtWidgets.QWidget()
-        mat_column = QtWidgets.QVBoxLayout(browser)
-        mat_column.setContentsMargins(0, 4, 0, 0)
-        mat_column.setSpacing(4)
-        for w in (self.mat_family, self.mat_search):
-            mat_column.addWidget(w)
-        mat_column.addWidget(self.materials, 1)
-        self.tabs = QtWidgets.QTabWidget()
-        if quick:
-            self.content = page
-        else:
-            self.tabs.addTab(page, t("props.tab_props"))
-            self.tabs.addTab(browser, t("props.tab_materials"))
-            self.tabs.currentChanged.connect(lambda i: self._fill_materials() if i == 1 else None)
-            self.content = self.tabs
+        # (0.468, the owner: «o navegador de material no lado direito deve ser removido») the materials are the
+        # column's Materials panel's (ui/material_editor.py) — the Paint bucket's too: here only the properties
+        self.content = page
         self.setWidget(self.content)
         self.setMinimumWidth(340)
         self.on_edit = None          # callable(action, guid, value)
         self.on_edit_many = None     # (0.187) callable(action, guids, value): a change made to several elements
-        self.on_material = None      # (0.185) callable(material key): a material double-clicked in the browser
         self.on_restyle = None       # (0.338) callable(): the theme changed — show again what is shown
         self.editors = _Editors()    # action -> widget (also used by tests)
         self._group = None           # (0.185) the group the rows go into now
@@ -624,27 +594,6 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 group.setExpanded(True)
                 self._fitting = False
 
-    def _fill_materials(self):
-        """The project's materials, each its colour and its name (a double click opens it). (0.391) With the Paint
-        bucket on: «Sem pintura» first — one click chooses. (0.397) As the materials window lists them: the family
-        and the words chosen on top, in alphabetical order (the paints under «Tintas»)."""
-        from .material_editor import listed
-        self.materials.clear()
-        name = lambda s: s.name_pt if lang() == "pt" else s.name_en          # noqa: E731
-        painting = self.on_pick is not None
-        if painting:
-            item = QtWidgets.QListWidgetItem(t("paint.none"))
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, "")
-            self.materials.addItem(item)
-        for spec in listed(self.mat_family.currentData(), self.mat_search.text()):
-            swatch = QtGui.QPixmap(22, 22)
-            swatch.fill(QtGui.QColor.fromRgbF(*[min(max(float(c), 0.0), 1.0) for c in spec.color]))
-            item = QtWidgets.QListWidgetItem(QtGui.QIcon(swatch), name(spec))
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, spec.key)
-            self.materials.addItem(item)
-        if painting and getattr(self, "_marked", None) is not None:
-            self.mark_material(self._marked)                # (the bucket's, still marked if listed)
-
     @staticmethod
     def _paint_text(doc, guid):
         """(0.391) «Tinta branca 12,30 m²; …» of an element's painted faces, or ""."""
@@ -660,27 +609,6 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         return "; ".join("{} {:.2f} m²".format(material_name(k), a).replace(".", decimal_sep())
                          for k, a in sorted(areas.items()))
 
-    def show_paint(self, on, key=None):
-        """(0.391) The Paint bucket on (the browser in front, one click chooses, its material marked) or off."""
-        self.on_pick = (self.on_pick or (lambda _k: None)) if on else None
-        if on:
-            self.show()
-            self.raise_()
-            self._fill_materials()
-            self.tabs.setCurrentIndex(1)
-            self.mark_material(key)
-        else:
-            self.tabs.setCurrentIndex(0)
-
-    def mark_material(self, key):
-        """(0.391) The bucket's material marked in the browser."""
-        self._marked = key
-        for k in range(self.materials.count()):
-            item = self.materials.item(k)
-            if (item.data(QtCore.Qt.ItemDataRole.UserRole) or "") == (key or ""):
-                self.materials.setCurrentItem(item)
-                self.materials.scrollToItem(item)
-                return
 
     # ------------------------------------------------------------ rows
 

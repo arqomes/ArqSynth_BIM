@@ -1680,13 +1680,20 @@ class EditMixin:
         material_graphics.set_transparency(material, spec.transparency)
         material_graphics.write_patterns(self.file, material, spec, 1.0 / self.unit_scale)
         text = material_graphics.encode(spec)
+        look = getattr(spec, "look", None)
+        if look is not None or always:                     # (0.468: its realistic look, as others read it too)
+            material_graphics.write_look(self.file, material, look, 1.0 / self.unit_scale)
         existing = ifcopenshell.util.element.get_psets(material).get(PARAM_PSET)
-        if existing is None and not always and not any(getattr(spec, k) for k in material_graphics.FIELDS):
+        if existing is None and not always and not any(getattr(spec, k) for k in material_graphics.FIELDS) and \
+                look is None:
             return                                         # (nothing to keep: no parameter made for it)
         pset = self.file.by_id(existing["id"]) if existing else api.pset.add_pset(self.file, product=material,
                                                                                     name=PARAM_PSET)
+        from ..core import pbr
         api.pset.edit_pset(self.file, pset=pset, properties={      # (0.343: its finish in the render)
-            material_graphics.GRAPHICS: text, material_graphics.FINISH: spec.finish or material_graphics.FINISH_AUTO})
+            material_graphics.GRAPHICS: text, material_graphics.FINISH: spec.finish or material_graphics.FINISH_AUTO,
+            material_graphics.REAL: self.file.create_entity("IfcText", pbr.encode(look))    # (0.468: long: a text)
+            if look is not None else None})
 
     def set_material_colour(self, material, colour):
         """The colour of a material's surface style (made if it has none)."""

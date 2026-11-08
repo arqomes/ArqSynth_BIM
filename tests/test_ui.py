@@ -152,6 +152,7 @@ class MaterialGraphics(unittest.TestCase):
         try:
             d = MaterialEditor(None, doc)
             d.select("azulejo")
+            d.tabs.setCurrentIndex(1)                                        # (0.468: the Edit tab)
             self.assertEqual(d.surface.combos[0].key(), "tile_15")
             self.assertTrue(d.cut_note.isVisibleTo(d))                       # (no cut of its own: its category's)
             d.select("bloco")
@@ -335,27 +336,24 @@ class MaterialLibrary(unittest.TestCase):
             self.assertEqual([d.list.item(k).text() for k in range(d.list.count())], ["Granito"])
             d.select("concreto")                                              # (asked for: shown, filter undone)
             self.assertEqual(d.current.key, "concreto")
-            # (0.397) the window and the Materials Browser beside the Properties: the same list, the same order —
-            # alphabetical, accents left out (Aço before Água) —, the same families and search
-            from arqbim.ui.properties import PropertiesPanel
-            panel = PropertiesPanel(None)
+            # (0.397) alphabetical, accents left out (Aço before Água); by family and searched
+            from arqbim.ui.material_editor import listed
             role = QtCore.Qt.ItemDataRole.UserRole
-
-            def keys(w):
-                return [w.item(k).data(role) for k in range(w.count())]
             for family, words in ((None, ""), ("metal", ""), ("paint", ""), (None, "aço")):
                 d.family.setCurrentIndex(d.family.findData(family))
                 d.search.setText(words)
-                panel.mat_family.setCurrentIndex(panel.mat_family.findData(family))
-                panel.mat_search.setText(words)
-                panel._fill_materials()
-                self.assertEqual(keys(d.list), keys(panel.materials), (family, words))
-                self.assertTrue(keys(d.list), (family, words))
+                shown = [d.list.item(k).data(role) for k in range(d.list.count())]
+                self.assertEqual(shown, [m.key for m in listed(family, words)], (family, words))
+                self.assertTrue(shown, (family, words))
             d.family.setCurrentIndex(0)
             d.search.setText("")
             names = [d.list.item(k).text() for k in range(d.list.count())]
             self.assertLess(names.index("Aço A400 NR"), names.index("Água (piscina, lago)"))
             self.assertLess(names.index("Água (piscina, lago)"), names.index("Azulejo cerâmico"))
+            # (0.468, the owner: «o navegador de material no lado direito deve ser removido»)
+            from arqbim.ui.properties import PropertiesPanel
+            panel = PropertiesPanel(None)
+            self.assertFalse(hasattr(panel, "materials") or hasattr(panel, "tabs"))
             panel.deleteLater()
         finally:
             doc.modified = False
@@ -1759,6 +1757,159 @@ class DarkTheme(unittest.TestCase):
         theme.retheme_icons(window)
         self.assertEqual(button.icon().cacheKey(), light.cacheKey())
         window.deleteLater()
+
+
+class MaterialsPanel(unittest.TestCase):
+    """0.468 — the owner: «A aba materiais eu quero que fique antes da aba biblioteca, e deve ser semelhante à
+    biblioteca… Vai ter a aba editar/criar… nada de janela flutuante… opção de como vai aparecer na vista, em corte, e na
+    vista realista, colocar suporte a textura, e todos os controlos de um material realista… inspirar no D5 Render»: the
+    realistic look (its text, its presets, the finish nearest it, the pictures' coordinates on the faces); a material's
+    picture lit, its texture seen; the Edit tab — a texture chosen, a preset, its size — saved in the IFC (the look's
+    text, a PHYSICAL rendering, an IfcImageTexture) and read back; the Paint bucket's «Sem pintura» first."""
+
+    def setUp(self):
+        import tempfile
+        from arqbim.core import pbr
+        self.folder = tempfile.mkdtemp(prefix="arqsynth_texturas_")
+        self._folder = pbr.folder
+        pbr.folder = lambda: self.folder                    # (the textures' folder: not the real one)
+
+    def tearDown(self):
+        from arqbim.core import pbr
+        pbr.folder = self._folder
+
+    def _picture(self, name="tijolo.png", colour="#b5532f", size=(64, 32)):
+        import tempfile
+        path = os.path.join(tempfile.mkdtemp(prefix="arqsynth_img_"), name)
+        image = QtGui.QImage(*size, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor(colour))
+        p = QtGui.QPainter(image)
+        p.fillRect(0, 0, size[0], 4, QtGui.QColor("#f0f0f0"))
+        p.end()
+        image.save(path)
+        return path
+
+    def test_look(self):
+        from arqbim.core import pbr
+        from arqbim.model import render_scene
+        look = pbr.preset("metal", pbr.Look(tint="#c0c0c0")).with_map("base", "/x/a.png").with_map("normal", "/x/n.png")
+        again = pbr.decode(pbr.encode(look))
+        self.assertEqual(again, look)
+        self.assertEqual([m[0] for m in again.maps], ["base", "normal"])          # (in the slots' order)
+        self.assertEqual(pbr.preset_of(look), "metal")
+        self.assertEqual(pbr.finish_of(look), "metal")
+        self.assertEqual(pbr.finish_of(pbr.preset("frosted")), "frosted")
+        self.assertEqual(pbr.finish_of(pbr.preset("matte")), "matte")
+        self.assertIsNone(pbr.decode("não é json"))
+        self.assertEqual(pbr.decode('{"roughness": 7, "kind": "x", "maps": [["base", ""]]}'),
+                         pbr.Look(roughness=1.0))                                   # (what is not understood: left)
+        self.assertEqual(pbr.encode(pbr.Look()), "{}")
+        # a material of before: the look of its finish, else its category's
+        self.assertEqual(render_scene.look_of(catalog.MATERIALS["vidro_fosco"]).kind, "glass")
+        self.assertGreater(render_scene.look_of(catalog.MATERIALS["aco"]).metallic, 0.5)
+        # the pictures on the faces: a wall's along it and up, a floor's in plan, the look's size and turn
+        uv = pbr.uv([(0.5, 0.0, 1.0), (2.0, 3.0, 0.0)], [(0.0, -1.0, 0.0), (0.0, 0.0, 1.0)],
+                    pbr.Look(width=0.5, height_m=2.0))
+        np.testing.assert_allclose(uv, [(1.0, 0.5), (4.0, 1.5)])
+        turned = pbr.uv([(1.0, 0.0, 0.0)], [(0.0, 0.0, 1.0)], pbr.Look(rotation=90.0))
+        np.testing.assert_allclose(turned, [(0.0, -1.0)], atol=1e-9)
+        # a picture kept in the textures' folder, once
+        path = self._picture()
+        kept = pbr.keep(path)
+        self.assertEqual(os.path.dirname(kept), self.folder)
+        self.assertEqual(pbr.keep(path), kept)
+        self.assertEqual(pbr.find(os.path.join("/lugar/que/nao/existe", "tijolo.png")), kept)
+
+    def test_pictures(self):
+        from arqbim.core import pbr
+        from arqbim.ui import material_thumbs
+        size = 64
+        plain = material_thumbs.render((0.8, 0.3, 0.2), pbr.Look(), size, "cube")
+        self.assertEqual((plain.width(), plain.height()), (size, size))
+        self.assertEqual(plain.pixelColor(1, 1).alpha(), 0)                         # (see-through round it)
+        centre = plain.pixelColor(size // 2, size // 2)
+        self.assertEqual(centre.alpha(), 255)
+        self.assertGreater(centre.red(), centre.blue())                              # (its colour)
+        path = pbr.keep(self._picture(colour="#2060d0"))
+        textured = material_thumbs.render((0.8, 0.3, 0.2), pbr.Look().with_map("base", path), size, "sphere")
+        c = textured.pixelColor(size // 2, size // 2 + 6)
+        self.assertGreater(c.blue(), c.red())                                        # (the picture's, not its colour)
+        glass = material_thumbs.render((0.9, 0.9, 0.9), pbr.preset("glass"), size, "cube")
+        self.assertNotEqual(glass.pixelColor(size // 2, size // 2), plain.pixelColor(size // 2, size // 2))
+        spec = catalog.MATERIALS["azulejo"]                                          # (its tiles' pattern drawn)
+        self.assertFalse(material_thumbs.material_image(spec, 48).isNull())
+        self.assertIs(material_thumbs.material_image(spec, 48), material_thumbs.material_image(spec, 48))
+
+    def test_edit_and_ifc(self):
+        from arqbim.core import pbr
+        from arqbim.ifc import material_graphics
+        from arqbim.model import project_types
+        from arqbim.ui.material_editor import MaterialEditor
+        doc = Document()
+        saved = []
+        try:
+            d = MaterialEditor(None, doc)
+
+            def save(spec, old):
+                bim.save_material(doc, spec, old)
+                catalog.set_project(project_types.read(doc.ifc), project_types.materials(doc.ifc))
+                saved.append(spec)
+                return spec.key
+            d.on_save = save
+            self.assertEqual(d.tabs.tabText(0), "Selecionar")
+            self.assertEqual(d.tabs.tabText(1), "Editar")
+            d.finish_pictures()
+            self.assertFalse(d.list.item(0).icon().isNull())
+            d.select("bloco")
+            d.tabs.setCurrentIndex(1)
+            self.assertFalse(d.apply.isEnabled())
+            path = self._picture(size=(64, 32))
+            self.assertTrue(d.slots["base"].take(path))
+            self.assertAlmostEqual(d.map_height.value(), d.map_width.value() / 2.0)  # (the picture's proportions)
+            d.preset.setCurrentIndex(d.preset.findData("satin"))
+            d._preset_chosen()
+            d.map_width.setValue(0.6)
+            self.assertAlmostEqual(d.map_height.value(), 0.3)                       # (kept in proportion)
+            self.assertTrue(d.apply.isEnabled())
+            spec = d.draft()
+            self.assertEqual((spec.look.kind, spec.look.roughness, spec.finish), ("standard", 0.5, "satin"))
+            self.assertEqual(spec.look.map("base")[0], os.path.join(self.folder, "tijolo.png"))
+            self.assertFalse(d.picture.pixmap().isNull())
+            self.assertEqual(d.apply_changes(), "bloco")
+            m = project_types.find_material(doc.ifc, catalog.MATERIALS["bloco"])
+            again = project_types.read_material(m)
+            self.assertEqual(again.look, spec.look)
+            self.assertEqual(material_graphics.read_look(m), spec.look)
+            shading = material_graphics._shading(m)
+            self.assertTrue(shading.is_a("IfcSurfaceStyleRendering"))
+            self.assertEqual(shading.ReflectanceMethod, "NOTDEFINED" if doc.ifc.file.schema == "IFC4" else "PHYSICAL")
+            self.assertAlmostEqual(shading.SpecularHighlight.wrappedValue, 0.5)
+            textures = [s for s in material_graphics._surface_style(m).Styles
+                        if s.is_a("IfcSurfaceStyleWithTextures")]
+            self.assertEqual([(x.Mode, x.URLReference) for x in textures[0].Textures],
+                             [("DIFFUSE", spec.look.map("base")[0])])
+            self.assertAlmostEqual(textures[0].Textures[0].TextureTransform.Scale, 0.6 / doc.ifc.unit_scale)
+            # the picture taken away: back to a plain colour in the IFC too
+            d.select("bloco")
+            d.slots["base"].clear()
+            d.apply_changes()
+            m = project_types.find_material(doc.ifc, catalog.MATERIALS["bloco"])
+            self.assertFalse(any(s.is_a("IfcSurfaceStyleWithTextures") for s in material_graphics._surface_style(m).Styles))
+            self.assertIsNone(catalog.MATERIALS["bloco"].look.map("base"))
+            # the Paint bucket's «Sem pintura» first; one click: the bucket's
+            picked = []
+            d.on_pick = picked.append
+            d.set_painting(True)
+            self.assertEqual((d.list.item(0).data(QtCore.Qt.ItemDataRole.UserRole), d.list.item(0).text()),
+                             ("", "Sem pintura"))
+            d.list.itemClicked.emit(d.list.item(2))
+            self.assertEqual(picked, [d.list.item(2).data(QtCore.Qt.ItemDataRole.UserRole)])
+            d.set_painting(False)
+            self.assertNotEqual(d.list.item(0).data(QtCore.Qt.ItemDataRole.UserRole), "")
+            d.deleteLater()
+        finally:
+            catalog.set_project([], [])                     # (the catalogue alone again)
+            doc.modified = False
 
 
 if __name__ == "__main__":

@@ -63,8 +63,10 @@ def read_material(m):
         {k: getattr(start, k) if start is not None else None for k in material_graphics.FIELDS}
     clear = material_graphics.transparency(m)
     finish = material_graphics.read_finish(m)                  # (0.343)
+    look = material_graphics.read_look(m)                      # (0.468)
     graphics = dict(patterns, transparency=clear if clear is not None else (start.transparency if start else 0.0),
-                    finish=finish if finish is not None else (start.finish if start else ""))
+                    finish=finish if finish is not None else (start.finish if start else ""),
+                    look=look if look is not None else (start.look if start else None))
     if start is not None:                          # (a catalogue material keeps its names in both languages)
         return catalog.MaterialSpec(key, start.name_pt, start.name_en, m.Category or "",
                                     _colour(m) or start.color, density, conductivity, **graphics)

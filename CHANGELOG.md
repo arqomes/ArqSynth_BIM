@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.468.0 — 2026-11-08
+
+**Painel Materiais na coluna, como a Biblioteca, com Selecionar e Editar** (o dono: «A aba materiais eu quero que fique
+antes da aba biblioteca, e deve ser semelhante à biblioteca. a janela flutuante de criação e configuração dos materiais
+deve ser redesenhada. Vai ter a aba editar/criar para esse efeito. tudo deve ser feito na coluna e nada de janela
+flutuante… opção de como vai aparecer na vista, em corte, e na vista realista, colocar suporte a textura, e todos os
+controlos de um material realista… inspirar no D5 Render»; e «o navegador de material no lado direito deve ser
+removido»).
+
+- O ícone **Materiais** da barra lateral passa para antes da Biblioteca e abre um painel na coluna (já não abre janela).
+- **Selecionar**: os materiais com miniaturas em **cubo**, como no SketchUp (ou em esfera), por família e com pesquisa;
+  miniaturas pequenas, médias, grandes ou lista. **Um clique pinta com o material** (ativa o balde de tinta, como no
+  SketchUp); duplo clique abre-o em Editar. Novo, Duplicar e Apagar estão no topo. Com o balde ligado, «Sem pintura»
+  aparece em primeiro.
+- **Editar**: a imagem do material iluminada (esfera ou cubo) segue cada alteração. Por baixo, partes que se dobram:
+  - **Na vista (3D, alçados)**: padrões de superfície, sombreamento e transparência, como antes;
+  - **Em corte (plantas, cortes)**: padrões de corte, como antes;
+  - **Realista (render)**, inspirado no D5: tipo (padrão, vidro, água, luz, tecido) e acabamentos prontos (baço,
+    acetinado, brilhante, lacado, metal polido ou escovado, vidro, vidro fosco, água, tecido, luz); cor base,
+    rugosidade, metálico, reflexão, verniz, brilho de tecido, refração (IOR), emissão e intensidade;
+  - **texturas**: cor base, mapa normal (relevo), rugosidade, metálico, altura, oclusão (AO), opacidade e emissão. Um
+    clique escolhe a imagem; o clique direito troca, inverte (branco por preto) ou tira;
+  - **Texturas no modelo**: tamanho em metros (mantém a proporção da imagem), rotação e deslocamento;
+  - **Dados**: massa volúmica e condutibilidade térmica.
+  - **Aplicar** grava (um passo de desfazer); **Repor** volta ao que está no projeto. Ao mudar de material com
+    alterações por gravar, o programa pergunta.
+- As imagens escolhidas são copiadas para Documentos/ArqSynth/Texturas, para não se perderem se o original mudar de
+  sítio. Uma imagem que não esteja onde estava é procurada ao lado do projeto (e na sua pasta «texturas»).
+- No IFC, o aspeto realista fica no material de três formas:
+  - o texto «Realista» nos ArqSynth_Parametros;
+  - um IfcSurfaceStyleRendering com rugosidade e metálico, como o Bonsai os guarda;
+  - as texturas como IfcImageTexture (com tamanho e rotação), que outros programas leem.
+- O «Navegador de Materiais» ao lado das Propriedades foi retirado: as Propriedades ficam só com as propriedades.
+- Por fazer a seguir: mostrar as texturas e o aspeto realista no estilo de vista Realista e no render.
+
 ## 0.467.0 — 2026-11-08
 
 **Biblioteca ▸ Web ligada a uma coleção gratuita: os modelos da Poly Haven** (o dono: «Sim, liga uma»).

@@ -328,7 +328,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.props = properties.dock(self)
         self.props.on_edit = self._on_property_edit
         self.props.on_edit_many = self._on_property_edit_many                  # (0.187) several at once
-        self.props.on_material = lambda key: self.edit_materials(key=key)      # (0.185) the materials' browser
         self.props.on_restyle = self._show_properties                          # (0.338) the theme changed
         # (0.354) TAB: the quick edit of what is chosen, over the view beside it (ui/quick_edit.py)
         self.quick = quick_edit.QuickEdit(self.notice.parentWidget(), self._on_property_edit,
@@ -363,6 +362,12 @@ class MainWindow(QtWidgets.QMainWindow):
         lp.on_place = lambda guid: self._library_action("place", "component", guid)
         lp.on_bring, lp.on_save = self.library_bring, self.library_save
         lp.on_select = lambda guid: self._library_action("select", "component", guid)
+        # (0.468) the Materials in the column, before the Library: their pictures («Selecionar») and the one chosen
+        # («Editar»: in view, cut, realistic) — no window apart
+        from . import material_editor
+        self.materials_panel = material_editor.dock(self, self.doc)
+        me = self.materials_panel.editor
+        me.on_save, me.on_delete, me.on_pick = self._save_material, self._delete_material, self.pick_material
         QtCore.QTimer.singleShot(0, self.dock_titles)    # (0.374: a study palette chosen last time — its panels' titles,
         QtCore.QTimer.singleShot(0, self._tint_views)    #  its drawing area)
         self.rules_panel.on_select = self._select_from_tree
@@ -1099,6 +1104,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._types_signature = signature
         catalog.set_project(specs, materials)
         catalog.set_project_openings(openings)
+        if hasattr(self, "materials_panel"):
+            self.materials_panel.materials_changed()        # (0.468: their pictures, again)
         if hasattr(self, "viewport"):
             self.viewport.materials_changed()               # (0.315: the elements seen by their materials)
         self._make_type_actions()
@@ -1400,17 +1407,36 @@ class MainWindow(QtWidgets.QMainWindow):
         return key
 
     def edit_materials(self, parent=None, key=None):
-        """BIM ▸ Materials… (0.89): the materials window — name, hatch where cut, colour, density, thermal
-        conductivity; new, duplicate, delete an unused one."""
-        from .material_editor import MaterialEditor
-        dialog = MaterialEditor(parent or self, self.doc)
+        """BIM ▸ Materials… (0.89; 0.468: the column's Materials panel — `key` shown on its Edit tab): name, category,
+        how it is seen in view, cut and realistic, its pictures, density, thermal conductivity; new, duplicate, delete
+        an unused one. Over another window (the type editor's «Materiais…»: the column out of reach) the same editor
+        in a window of its own."""
+        from .material_editor import MaterialsDialog
+        if parent is not None and parent is not self:
+            dialog = MaterialsDialog(parent, self.doc)
+            editor = dialog.editor
+            editor.on_save, editor.on_delete = self._save_material, self._delete_material
+            if key in catalog.MATERIALS:
+                editor.select(key)
+                editor.tabs.setCurrentIndex(1)
+            self._material_dialog = dialog                  # (tests)
+            dialog.exec()
+            self._material_dialog = None
+            return
+        panel = self.materials_panel
+        self._left_up(panel)
+        self.module = "materials"
+        self.module_actions["materials"].setChecked(True)
         if key in catalog.MATERIALS:
-            dialog.select(key)
-        dialog.on_save = self._save_material
-        dialog.on_delete = self._delete_material
-        self._material_dialog = dialog                      # (tests)
-        dialog.exec()
-        self._material_dialog = None
+            panel.editor.select(key)
+            panel.editor.tabs.setCurrentIndex(1)
+
+    def pick_material(self, key):
+        """(0.468) A material clicked in the Materials panel: the Paint bucket's (the bucket taken up, as SketchUp's)."""
+        if getattr(self.tool, "name", "") != "paint":
+            self.tools["paint"].material = key or ""
+            self.set_tool("paint")
+        self.tool.choose(key or "")
 
     def edit_patterns(self, parent=None, key=None, new=False):
         """Manage ▸ Fill patterns… (0.318): the program's patterns and the project's — made, named, duplicated,
@@ -1783,9 +1809,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ------------------------------------------------------------ the compact bar and its modules (0.184)
 
-    MODULES = ("project", "storeys", "library", "sheets", "rooms", "quantities", "materials", "rules", "settings")
+    # (0.468, the owner: «A aba materiais eu quero que fique antes da aba biblioteca»)
+    MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules", "settings")
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
-                    "storeys": "storeys_panel", "rules": "rules_panel"}
+                    "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel"}   # (0.468)
 
     def _build_modules(self):
         """(0.184) Panel 4, the compact bar at the far left — icons only — and panel 5 beside it: the Project
@@ -1794,7 +1821,8 @@ class MainWindow(QtWidgets.QMainWindow):
         rooms are the schedules panel's, the materials their window, the settings a menu. A click on the module in
         view folds the left panels away; another brings them back."""
         left = QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
-        self.left_panels = [self.tree_panel, self.storeys_panel, self.rules_panel, self.library_panel]
+        self.left_panels = [self.tree_panel, self.storeys_panel, self.rules_panel, self.library_panel,
+                            self.materials_panel]
         # (0.461, the owner: «remover essas abas atuais») one left panel in view at a time — no tabs at their foot
         # (those are the navigator's own now: what its tree shows); the module bar chooses — and a panel brought up
         # (raise_) shows alone
@@ -1881,7 +1909,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not panel.isVisible():
             panel.show()
         QtWidgets.QDockWidget.raise_(panel)
-        names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library"}
+        names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library",
+                 "materials_panel": "materials"}
         name = names.get(next((a for a in names if getattr(self, a, None) is panel), ""))
         if name and getattr(self, "module_actions", None) and \
                 not (name == "project" and self.module in ("library", "sheets")):
@@ -1912,8 +1941,6 @@ class MainWindow(QtWidgets.QMainWindow):
             sp.raise_()
             if name == "rooms":
                 sp.category.setCurrentIndex(max(0, sp.category.findData("rooms")))
-        elif name == "materials":
-            self.edit_materials()
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])
@@ -3648,13 +3675,17 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------ (0.391) the Paint bucket's browser
 
     def open_paint_browser(self, on, key):
-        """The Materials Browser in front while the Paint bucket is on: one click chooses its material."""
+        """While the Paint bucket is on (0.468: the column's Materials panel): its pictures in view, «Sem pintura»
+        first, the bucket's marked — one click chooses."""
+        editor = self.materials_panel.editor
+        editor.set_painting(on)
         if on:
-            self.props.on_pick = lambda k: self.tool.choose(k) if getattr(self.tool, "name", "") == "paint" else None
-        self.props.show_paint(on, key)
+            self._left_up(self.materials_panel)
+            editor.tabs.setCurrentIndex(0)
+            editor.mark(key)
 
     def show_paint_material(self, key):
-        self.props.mark_material(key)
+        self.materials_panel.editor.mark(key)
 
     def paint_bar_changed(self):
         self._sync_context_bar()
