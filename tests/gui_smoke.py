@@ -661,6 +661,7 @@ def bim_flow():
     steel_gusset_flow()
     purlin_cleat_flow()
     equal_nodes_flow()
+    beam_on_girder_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20389,6 +20390,38 @@ def equal_nodes_flow():
     doc.modified = False
     check("nos_iguais", shown and applied and back,
           "botao={} aplicado={} ({}) desfeito={}".format(shown, applied, thick, back))
+
+
+def beam_on_girder_flow():
+    """0.506 — A beam on a girder: an IPE 300 girder, an IPE 200 drawn with the Beam tool's two clicks from its axis
+    out (stopped at its web, coped); the IPE 200 selected, the selection bar offers «Cutelo»: clicked, a fin plate on
+    the girder's web with the beam bolted to it. Captured: 506_viga_viga.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    girder = bim_actions.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((0.0, 6.0, 3.0)),
+                                  catalog.BY_KEY["viga_ipe300"], 3.0)
+    beam = bim_actions.add_beam(doc, np.array((0.0, 3.0, 3.0)), np.array((4.0, 3.0, 3.0)),
+                                catalog.BY_KEY["viga_ipe200"], 3.0)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection({beam})
+    pump(300)
+    offered = win.act_fin_plate in win._selection_actions({"IfcBeam": 1})
+    win.act_fin_plate.trigger()
+    pump(400)
+    fins = [a for a in doc.ifc.connections_on([beam]) if doc.ifc.connection_params(a.GlobalId)[0] == "fin_plate"]
+    on_girder = len(fins) == 1 and doc.ifc.connection_params(fins[0].GlobalId)[1] == [beam, girder]
+    bolts = sum(1 for a in fins for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    vp.set_selection(set())
+    vp.zoom_box((np.array((-0.2, 2.7, 2.6)), np.array((0.4, 3.3, 3.1))))
+    pump(400)
+    shot("506_viga_viga.png")
+    doc.modified = False
+    check("viga_viga", offered and on_girder and bolts >= 2,
+          "oferecido={} na_principal={} parafusos={}".format(offered, on_girder, bolts))
 
 
 def steel_sheet_flow():

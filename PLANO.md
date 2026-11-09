@@ -1585,8 +1585,9 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    Pórtico de nave nas paredes. 0.504.0: **apoio de madre** — orelha soldada ao banzo da asna, madre C/Z/U aparafusada
    pela alma —, posto pelo Pórtico de nave em todas as madres (que passam 15 cm além das empenas). 0.505.0:
    **«Aplicar aos nós iguais»** nas Propriedades de cada ligação (as medidas para as iguais, a ligação posta nos nós
-   iguais sem ela). Faltam: o gousset dos tubos (ranhura) e no telhado (sobre as asnas, com a cantoneira rodada),
-   cantoneiras de alma, emenda, joelho com chapas, viga–viga.
+   iguais sem ela). 0.506.0: **viga–viga** — o cutelo também na alma de uma viga principal. Faltam: o gousset dos
+   tubos (ranhura) e no telhado (sobre as asnas, com a cantoneira rodada), cantoneiras de alma, emenda, joelho com
+   chapas, chapa de topo na alma de uma viga principal.
    Anotado: as duas diagonais de uma cruz ficam no mesmo plano — no real uma vai de cada lado do gousset/da outra.)
    Como as seis do DetailCraft, com os nomes daqui — chapa de base, chapa de topo (rente ou estendida),
    cutelo de alma, cantoneiras de alma (a mais), emenda com cobrejuntas, gousset de contraventamento, joelho com chapas —

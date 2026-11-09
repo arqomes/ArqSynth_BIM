@@ -351,6 +351,62 @@ class SteelConnectionMixin:
                 return col.GlobalId
         return None
 
+    def beam_end_girder(self, beam, end):
+        """(0.506) The steel girder (an I or a channel) a beam's end stops at — beside its web within a few
+        centimetres past the gap, within its span, coming onto it (not along it), at heights that overlap —, or None."""
+        from ..core import steel
+        try:
+            point, out, _across, _up = self._beam_end_frame(beam, end)
+        except Exception:
+            return None
+        bsec = steel.get(self.steel_section(beam) or "")
+        for g in self.file.by_type("IfcBeam"):
+            gid = g.GlobalId
+            if gid == beam:
+                continue
+            gsec = steel.get(self.steel_section(gid) or "")
+            if gsec is None or gsec.family not in steel.I_FAMILIES + steel.U_FAMILIES:
+                continue
+            try:
+                a, b = self._beam_line(gid)
+            except Exception:
+                continue
+            axis = np.asarray(b, dtype=float)[:2] - np.asarray(a, dtype=float)[:2]
+            span = float(np.linalg.norm(axis))
+            if span < 1e-9:
+                continue
+            axis /= span
+            normal = np.array((-axis[1], axis[0]))
+            rel = point[:2] - np.asarray(a, dtype=float)[:2]
+            along, across = float(rel @ axis), float(rel @ normal)
+            if not -1e-6 <= along <= span + 1e-6 or abs(float(out[:2] @ normal)) < 0.2:
+                continue
+            if abs(across) > gsec.tw / 2000.0 + 0.010 + 0.03:
+                continue
+            gz = float(a[2] + (b[2] - a[2]) * along / span)
+            if abs(float(point[2]) - gz) > (gsec.h + (bsec.h if bsec else 0.0)) / 2000.0:
+                continue
+            return gid
+        return None
+
+    def _support_face(self, support, point, out, width):
+        """(0.506) How far along `out` from `point` the face a beam's end connection is welded to is (m): a column's
+        (`_column_face`), or a girder's web on the beam's side."""
+        if not self.by_guid(support).is_a("IfcBeam"):
+            return self._column_face(support, point, out, width)
+        from ..core import steel
+        gsec = steel.get(self.steel_section(support))
+        a, b = self._beam_line(support)
+        axis = np.asarray(b, dtype=float)[:2] - np.asarray(a, dtype=float)[:2]
+        axis /= max(float(np.linalg.norm(axis)), 1e-12)
+        normal = np.array((-axis[1], axis[0]))
+        across = float((np.asarray(point, dtype=float)[:2] - np.asarray(a, dtype=float)[:2]) @ normal)
+        side = 1.0 if across >= 0.0 else -1.0
+        c = float(np.asarray(out, dtype=float)[:2] @ normal)
+        if abs(c) < 1e-9:
+            return 0.0
+        return (side * gsec.tw / 2000.0 - across) / c
+
     def _beam_line(self, beam):
         """(start, end) of a beam's line (its section's middle), m."""
         if self.kind_of(beam) == "steel_member":            # (its line by its insertion point: to its middle)
@@ -431,6 +487,13 @@ class SteelConnectionMixin:
             return end_plate_layout(params, secs[0], secs[1], self._onto_flange(members[1], frame[1]))[5]
         if kind == "gusset":
             return gusset_layout(params, secs[0])[2]
+        if kind == "fin_plate" and self.by_guid(members[1]).is_a("IfcBeam"):    # (0.506) on a girder's web: between
+            found = fin_plate_layout(params, secs[0])[2]                           # its flanges too
+            g = secs[1]
+            clear = g.h - 2.0 * g.tf - 2.0 * g.r
+            if fin_plate_layout(params, secs[0])[0] > clear:
+                found.append(("girder", round(clear, 1)))
+            return found
         if kind == "purlin_cleat":
             found = purlin_cleat_layout(params, secs[0])[2]
             if self.purlin_crossing(members[0], members[1]) is None:
@@ -636,7 +699,7 @@ class SteelConnectionMixin:
         point, out, across, up = self._beam_end_frame(beam, end)
         H, spots, _w = fin_plate_layout(params, bsec)
         tp, w = params["tp"], params["w"]
-        face = self._column_face(column, point, out, bsec.b)
+        face = self._support_face(column, point, out, bsec.b)        # (0.506: or a girder's web)
         inward = -out
         m = self._frame(point + out * face, inward, up, np.cross(inward, up))    # (x into the beam, z across)
         material = self._column_material(column, lang)

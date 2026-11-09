@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.506.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: viga apoiada noutra viga.**
+
+- O **Cutelo** (separador **Estrutura**, painel **Ligação**, na lista da seta de **Chapa de topo**; ou na barra da
+  seleção com uma viga de aço escolhida) já liga também uma viga à **alma de outra viga** (a principal): onde a viga
+  secundária pára junto à alma da principal (como a ferramenta Viga já a faz parar, a 10 mm, e recorta os banzos —
+  0.496), o cutelo fica soldado à face da alma da principal e a alma da secundária aparafusada a ele.
+- Aviso novo: o cutelo não cabe entre os banzos da viga principal.
+- O **Aplicar aos nós iguais** também serve aqui: põe o mesmo cutelo nas outras vigas iguais apoiadas em vigas iguais.
+
 ## 0.505.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: aplicar aos nós iguais.**

@@ -3365,14 +3365,20 @@ _STRINGS = {
                       "à viga e aparafusada ao pilar (ligação rígida).",
                       "On the steel beams selected, at each end reaching a steel column: an end plate welded to the "
                       "beam and bolted to the column (a rigid joint)."),
-    "tip.fin_plate": ("Nas vigas de aço escolhidas, em cada ponta que chega a um pilar de aço: um cutelo soldado ao pilar "
-                      "e aparafusado à alma da viga (ligação articulada).",
-                      "On the steel beams selected, at each end reaching a steel column: a fin plate welded to the "
-                      "column and bolted to the beam's web (a pinned joint)."),
-    "info.beam_connections": ("{n} ligação(ões) «{what}» nas pontas das vigas que chegam a pilares de aço.",
-                              "{n} «{what}» connection(s) at the beams' ends reaching steel columns."),
-    "info.beam_connections_none": ("Escolha vigas de aço cujas pontas cheguem a pilares de aço (e ainda sem ligação).",
-                                   "Select steel beams whose ends reach steel columns (with no connection yet)."),
+    "tip.fin_plate": ("Nas vigas de aço escolhidas, em cada ponta que chega a um pilar de aço ou à alma de outra viga de "
+                      "aço: um cutelo soldado ao pilar (ou à alma da viga principal) e aparafusado à alma da viga "
+                      "(ligação articulada).",
+                      "On the steel beams selected, at each end reaching a steel column or another steel beam's web: "
+                      "a fin plate welded to the column (or to the girder's web) and bolted to the beam's web (a "
+                      "pinned joint)."),
+    "info.beam_connections": ("{n} ligação(ões) «{what}» nas pontas das vigas que chegam a pilares (ou vigas) de aço.",
+                              "{n} «{what}» connection(s) at the beams' ends reaching steel columns (or beams)."),
+    "info.beam_connections_none": ("Escolha vigas de aço cujas pontas cheguem a pilares de aço — ou, para o cutelo, à "
+                                   "alma de outra viga de aço — e ainda sem ligação.",
+                                   "Select steel beams whose ends reach steel columns — or, for a fin plate, another "
+                                   "steel beam's web — with no connection yet."),
+    "connection.warn.girder": ("⚠ O cutelo não cabe entre os banzos da viga principal ({v} mm).",
+                               "⚠ The fin plate does not fit between the girder's flanges ({v} mm)."),     # (0.506)
     "connection.field.W": ("Largura da chapa (mm; 0: a da viga)", "Plate width (mm; 0: the beam's)"),
     "connection.field.top": ("Chapa acima da viga (mm)", "Plate over the beam (mm)"),
     "connection.field.bottom": ("Chapa abaixo da viga (mm)", "Plate under the beam (mm)"),

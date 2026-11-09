@@ -860,6 +860,48 @@ class EqualNodes(unittest.TestCase):
         self.assertEqual(doc.ifc.connections_on([b3]), [])
 
 
+class BeamOnGirder(unittest.TestCase):
+    """(0.506) A beam on a girder: the fin plate on the girder's web."""
+
+    def test_fin_plate_on_a_girder(self):
+        """An IPE 200 drawn to an IPE 300 girder's middle: stopped 10 mm from its web and coped (0.496); «Cutelo»: one
+        fin plate, members (the beam, the girder), welded to the girder's web face (3,55 mm from its axis) and 115
+        mm along the beam, beside the beam's web, 2 rows: no warnings — 3 rows: too tall for the IPE 200 —; the
+        other end (free) none; «Aplicar aos nós iguais» with a second alike beam: put there with its values; an end
+        plate is not put on a girder."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        girder = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((0.0, 6.0, 3.0)), catalog.BY_KEY["viga_ipe300"],
+                              3.0)
+        beam = bim.add_beam(doc, np.array((0.0, 2.0, 3.0)), np.array((4.0, 2.0, 3.0)), catalog.BY_KEY["viga_ipe200"],
+                            3.0)
+        self.assertEqual(doc.ifc.beam_end_girder(beam, 0), girder)
+        self.assertIsNone(doc.ifc.beam_end_girder(beam, 1))
+        self.assertEqual(bim.add_beam_connections(doc, "end_plate", [beam]), [])
+        made = bim.add_beam_connections(doc, "fin_plate", [beam], {"rows": 2})
+        self.assertEqual(len(made), 1)
+        kind, members, params = doc.ifc.connection_params(made[0])
+        self.assertEqual((kind, members, params["end"]), ("fin_plate", [beam, girder], 0))
+        self.assertEqual(doc.ifc.connection_warnings(made[0]), [])
+        a = doc.ifc.connection_of(made[0])
+        plate = next(p for p in doc.ifc.connection_parts(a) if p.is_a("IfcPlate"))
+        v = doc.get(plate.GlobalId).mesh.verts
+        self.assertAlmostEqual(float(v[:, 0].min()), 0.00355, places=5)
+        self.assertAlmostEqual(float(v[:, 0].max()), 0.00355 + 0.115, places=5)
+        self.assertAlmostEqual(float(v[:, 1].max()), 2.0 - 0.0056 / 2.0, places=5)     # (beside the IPE 200's web)
+        bim.set_connection(doc, made[0], rows=3)
+        self.assertIn("tall", [c for c, _v in doc.ifc.connection_warnings(made[0])])
+        second = bim.add_beam(doc, np.array((0.0, 4.0, 3.0)), np.array((4.0, 4.0, 3.0)), catalog.BY_KEY["viga_ipe200"],
+                              3.0)
+        self.assertEqual(bim.apply_to_equal(doc, made[0]), (0, 1))
+        fins = [c for c in doc.ifc.connections_on([second]) if doc.ifc.connection_params(c.GlobalId)[0] == "fin_plate"]
+        self.assertEqual(len(fins), 1)
+        self.assertEqual(doc.ifc.connection_params(fins[0].GlobalId)[2]["rows"], 3)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.506 — Viga apoiada noutra viga (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.506.0**.
+
+1. Faça Ctrl+N. No separador **Estrutura**, clique em **Viga** e escolha o tipo **Viga IPE 300** na barra de
+   parâmetros; desenhe uma viga com dois cliques, por exemplo de (0; 0) a (0; 6) (escreva as coordenadas ou use a
+   grelha).
+2. Escolha o tipo **Viga IPE 200** e desenhe outra, do meio da primeira para o lado: o primeiro clique **no eixo** da
+   IPE 300 (o snap mostra-o), o segundo 4 m ao lado. A IPE 200 pára 1 cm antes da alma da IPE 300 e fica com os
+   banzos recortados.
+3. Clique na IPE 200 e, na barra da seleção, em **Cutelo**: aparece uma chapa soldada à alma da IPE 300 com a alma
+   da IPE 200 aparafusada a ela (3 parafusos).
+4. Clique na chapa: nas Propriedades, em **Fiadas de parafusos**, escolha 2: o cutelo fica mais baixo e o aviso
+   desaparece (com 3 fiadas, numa IPE 200, aparece «⚠ O cutelo não cabe entre os banzos da viga»).
+5. Desenhe outra IPE 200 igual, mais à frente na IPE 300; clique de novo no cutelo da primeira e em **Aplicar aos nós
+   iguais**: a nova viga fica com o mesmo cutelo.
+
 ## 0.505 — Aplicar aos nós iguais (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.505.0**.

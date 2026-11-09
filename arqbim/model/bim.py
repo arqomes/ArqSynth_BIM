@@ -2766,7 +2766,8 @@ def number_steel(doc, renumber=False):
 
 def add_beam_connections(doc, kind, beams, params=None):
     """(0.498) An end plate or a fin plate at each end of the steel beams given that reaches a steel column (and has
-    no connection there yet). One undo step. The connections' GlobalIds."""
+    no connection there yet) — (0.506) a fin plate also where it stops at a steel girder's web. One undo step. The
+    connections' GlobalIds."""
     language = lang()
     todo = []
     for beam in beams:
@@ -2776,6 +2777,8 @@ def add_beam_connections(doc, kind, beams, params=None):
                  if doc.ifc.connection_params(a.GlobalId)[0] in ("end_plate", "fin_plate")}
         for end in (0, 1):
             column = doc.ifc.beam_end_column(beam, end)
+            if column is None and kind == "fin_plate":           # (0.506: a beam on a girder — its web's cutelo)
+                column = doc.ifc.beam_end_girder(beam, end)
             if column is not None and end not in taken:
                 todo.append((beam, column, end))
     if not todo:
@@ -2905,6 +2908,8 @@ def equal_nodes(doc, guid):
                      if doc.ifc.connection_params(a.GlobalId)[0] in ("end_plate", "fin_plate")}
             for end in (0, 1):
                 column = doc.ifc.beam_end_column(beam, end)
+                if column is None and kind == "fin_plate":       # (0.506: on a girder)
+                    column = doc.ifc.beam_end_girder(beam, end)
                 if column is not None and end not in taken and _node_key(doc, kind, [beam, column], end) == key:
                     free.append(([beam, column], end))
     elif kind == "gusset":
