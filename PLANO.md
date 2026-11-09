@@ -1003,8 +1003,11 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       rotação, poste/chamada, «Virar para a câmara», «Ocultar quando tapada»; o olho de cada uma guardado na cena; o
       importador do Presentation lê-as e, ao «Atualizar», muda as do BIM no lugar). Fica por fazer mover uma etiqueta
       no 3D (arrastar) e as cotas do separador (a secção «Cotas» por baixo das etiquetas no Presentation).
-   5. **Efeitos**: ver no BIM, antes de exportar, a construção peça a peça e a explosão como o Presentation as toca (o
-      sol do dia e o movimento de câmara já se veem).
+   5. ~~**Efeitos**: ver no BIM, antes de exportar, a construção peça a peça e a explosão como o Presentation as toca (o
+      sol do dia e o movimento de câmara já se veem)~~ (0.486.0: separador Efeitos com Modelo / Câmara como lá — tipo,
+      duração, reproduzir ao entrar, distância, sequência de construção com as peças tiradas —, «Pré-visualizar» no 3D
+      com as contas do Presentation, o ▶ das cenas toca-os; no Presentation a fase de obra já não lê o pavimento
+      «Piso 0» como estrutura). Fica por fazer arrastar a ordem de uma peça à mão (o Presentation também não o faz).
    6. **Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D
       (o importador do Presentation passa a lê-los).
    7. **Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o

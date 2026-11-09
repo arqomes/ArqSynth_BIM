@@ -463,14 +463,23 @@ def overview_eye(centre, radius):
     return np.asarray(centre, dtype=float) + eye * FRAME * max(float(radius), 1.0) / math.sin(math.radians(FOV) / 2.0)
 
 
-def _chosen(scene, thumbnails):
+def _chosen(scene, thumbnails, known=()):
     """What was chosen for a scene in the Presentation panel, as the description says it (seconds, not the
-    Presentation's milliseconds): {hidden, transition, effect?, narration?, thumbnail?}."""
+    Presentation's milliseconds): {hidden, transition, effect?, narration?, thumbnail?}. (0.486) Its effect also not
+    played when the scene is entered (autoPlay False), an explosion's distance, the layers (of `known`) left out of a
+    construction — each only when it is not the Presentation's usual."""
     out = {"hidden": scene.hidden, "transition": {"type": scene.transition, "seconds": scene.transition_s},
            "environment": {"sun": {"day": scene.sun_day, "minutes": scene.sun_minutes, "animate": scene.sun_animate},
                            "exposure": scene.exposure, "sky": scene.sky}}           # (0.365)
     if scene.effect != "none":
         out["effect"] = {"type": scene.effect, "seconds": scene.effect_s}
+        if not scene.effect_auto:
+            out["effect"]["autoPlay"] = False
+        if scene.effect == "explode" and abs(scene.effect_spread - 1.2) > 1e-9:
+            out["effect"]["spread"] = scene.effect_spread
+        static = [LAYER_ID + g for g in scene.effect_static if LAYER_ID + g in known]
+        if scene.effect == "construction" and static:
+            out["effect"]["excluded"] = static
     if scene.caption or scene.seconds:
         out["narration"] = {"caption": scene.caption, "seconds": scene.seconds}
     jpeg = thumbnails.get(scene.key)
@@ -571,7 +580,7 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
                             "style": _tuned_style(scene, style or {"mode": "material", "edges": True,
                                                                    "shadows": False})},
                            **({"hiddenLabels": labels} if labels else {}),
-                           **_chosen(scene, thumbnails), **_move(doc, scene, building, rooms, offset)))
+                           **_chosen(scene, thumbnails, known), **_move(doc, scene, building, rooms, offset)))
 
     for scene in chosen:
         ref = scene.key.split("_", 1)[1] if "_" in scene.key else ""

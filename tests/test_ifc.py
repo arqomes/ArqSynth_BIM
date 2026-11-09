@@ -10133,6 +10133,31 @@ class GltfExport(unittest.TestCase):
         self.assertEqual(model["scenes"][0]["hiddenLabels"], ["bim_tag_" + rua["id"]])  # (the one gone: left out)
         self.assertNotIn("hiddenLabels", model["scenes"][1])
 
+    def test_presentation_effect_settings(self):
+        """0.486: a scene's effect as the Presentation's Efeitos tab — not played when entered, an explosion's
+        distance (0,3–3,0×), the elements taken out of a construction; in the GLB only what is not the Presentation's
+        usual (an older file's description stays the same), the left-out ones as their layers (the gone ones not)."""
+        from arqbim.model import presentation as pm, presentation_export as pe
+        doc = Document()
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        walls = bim.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+        doc.set_presentation(pm.changed(doc.presentation, "geral", effect="construction", effect_s=8,
+                                        effect_static=[walls[1], walls[1], "gone"], effect_auto=False))
+        geral = pm.scenes(doc)[0]
+        self.assertEqual((geral.effect_static, geral.effect_auto, geral.effect_spread),
+                         (tuple(sorted((walls[1], "gone"))), False, 1.2))
+        self.assertEqual(pm.changed(doc.presentation, "geral", effect_spread=9)["scenes"]["geral"]["effect_spread"],
+                         3.0)
+        plan = next(s.key for s in pm.scenes(doc) if s.kind == "plan")
+        doc.set_presentation(pm.changed(doc.presentation, plan, effect="explode", effect_spread=2.0))
+        with tempfile.TemporaryDirectory() as tmp:
+            glb = os.path.join(tmp, "casa.glb")
+            pe.export(doc, glb, "Casa")
+            scenes = {s["id"]: s for s in pe.read(glb)["presentation"]["model3d"]["scenes"]}
+        self.assertEqual(scenes["bim_scene_geral"]["effect"], {"type": "construction", "seconds": 8.0,
+                                                               "autoPlay": False, "excluded": ["bim_" + walls[1]]})
+        self.assertEqual(scenes["bim_scene_" + plan]["effect"], {"type": "explode", "seconds": 6.0, "spread": 2.0})
+
     def test_presentation_tag_frames(self):
         """0.485: where a label is drawn, as the Presentation's — on a floor its top to the north, turned by its
         rotation; on a wall its top up; standing high on its posts (two, one for a circle), facing its normal or, when

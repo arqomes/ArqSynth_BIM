@@ -644,6 +644,37 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.486 — Efeitos na interface do Presentation
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.486.0**.
+
+1. Faça Ctrl+N e desenhe uma casa pequena: uma laje de piso, 4 paredes, uma porta, uma janela e, se quiser, uma
+   cobertura.
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
+3. Na barra de ícones da direita, clique no ícone da **câmara de filmar** (o 7.º): o título da coluna diz **EFEITOS**.
+   No topo há dois botões, **MODELO** e **CÂMARA**; está em **MODELO**.
+4. Clique no cartão **Vista geral** (coluna da esquerda) e depois em **Construção**: aparece a explicação, a
+   **Duração**, «Reproduzir ao entrar na cena» e, em baixo, a **Sequência de construção** com todas as peças numeradas
+   (a laje primeiro, depois as paredes, depois a porta e a janela, a cobertura no fim).
+5. Clique em **Pré-visualizar**: a casa constrói-se no 3D peça a peça — a laje, as paredes a descer do alto, a porta, a
+   janela, a cobertura. O botão diz **Parar**. Espere que acabe: a casa fica inteira e o botão volta a
+   «Pré-visualizar».
+6. Na Sequência, desmarque a laje e clique outra vez em **Pré-visualizar**: a laje fica parada desde o início e o
+   resto constrói-se por cima. Carregue **Esc** a meio: para logo e a casa aparece inteira.
+7. Clique em **Explosão**: aparece a **Distância**. Ponha `2,0` e clique em **Pré-visualizar**: as peças começam
+   espalhadas à volta e juntam-se até formar a casa.
+8. Clique em **Estudo solar** e em **Pré-visualizar**: se o terreno tiver lugar (Terreno ▸ Localização), o sol percorre
+   o dia com as sombras; se não, aparece o aviso a pedir o lugar.
+9. Clique em **CÂMARA** no topo: está lá o movimento de câmara de antes (Órbita, Voo…), com «Ver movimento».
+10. Clique no separador **Cenas 3D** (o 2.º ícone): o efeito já não está lá (só em Efeitos, como no Presentation).
+11. Crie uma segunda cena com **+ Criar cena**, dê-lhe a **Explosão** e deixe ligado «Reproduzir ao entrar na cena».
+    Clique na **Vista geral** e depois no **▶** por baixo do 3D: ao chegar à segunda cena, a explosão toca sozinha e o
+    leitor espera que ela acabe.
+12. Clique em **Exportar / atualizar**, grave o ZIP e importe-o no Presentation local (botão **ArqSynth BIM**): no
+    separador **Efeitos** do Presentation cada cena tem o mesmo efeito, a mesma duração e a mesma distância; na
+    construção, a laje está como «removida do efeito». Clique em **Pré-visualizar** lá: a ordem das peças é a mesma do
+    BIM.
+
 ## 0.485 — Etiquetas na interface do Presentation
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.485.0**.

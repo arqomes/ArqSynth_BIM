@@ -7377,6 +7377,68 @@ _STRINGS = {
                          "Add a plane and move it with the slider. The cut is non-destructive."),
     "pmode.cuts_saved": ("Os cortes guardam-se na cena ao Criar/Actualizar.",
                          "The cuts are kept in the scene on Create/Update."),
+    # (0.486) the Presentation's «Efeitos» (its EffectsTab, its words)
+    "pmode.effects_model": ("Modelo", "Model"),
+    "pmode.effects_camera": ("Câmara", "Camera"),
+    "pmode.effect_scene": ("Efeito da cena", "Scene effect"),
+    "pmode.effect_kind.none": ("Nenhum", "None"),
+    "pmode.effect_kind.sun": ("Estudo solar", "Sun study"),
+    "pmode.effect_kind.construction": ("Construção", "Construction"),
+    "pmode.effect_kind.explode": ("Explosão", "Explode"),
+    "pmode.effect_hint.none": ("A cena apresenta-se sem animação de efeito.",
+                               "The scene is shown with no effect animation."),
+    "pmode.effect_hint.sun": ("Anima o percurso do sol ao longo do dia — sombras em movimento para estudo solar. Usa o "
+                              "lugar do terreno e a data do separador Ambiente.",
+                              "Animates the sun's path through the day — moving shadows for a sun study. It uses the "
+                              "site's place and the date of the Environment tab."),
+    "pmode.effect_hint.construction": ("O edifício constrói-se por ordem lógica de obra: terreno e fundações, "
+                                       "estrutura, paredes, portas e janelas, escadas, cobertura, acabamentos e "
+                                       "mobiliário.",
+                                       "The building is built in the logical order of the works: terrain and "
+                                       "foundations, structure, walls, doors and windows, stairs, roof, finishes and "
+                                       "furniture."),
+    "pmode.effect_hint.explode": ("Os elementos começam afastados e montam-se aleatoriamente até formar o modelo.",
+                                  "The elements start apart and come together at random until they form the model."),
+    "pmode.effect_time": ("Duração", "Duration"),
+    "pmode.effect_auto": ("Reproduzir ao entrar na cena", "Play when the scene is entered"),
+    "pmode.effect_auto_tip": ("Na apresentação o efeito toca sozinho ao chegar a esta cena (aqui, com o ▶ das cenas).",
+                              "In the presentation the effect plays by itself when this scene is reached (here, with "
+                              "the scenes' ▶)."),
+    "pmode.effect_spread": ("Distância", "Distance"),
+    "pmode.effect_spread_tip": ("Quão longe as peças começam: vezes o raio do modelo.",
+                                "How far the pieces start: times the model's radius."),
+    "pmode.effect_sun_hint": ("Dica: escolha o lugar do terreno (Terreno ▸ Localização) e acerte a data no separador "
+                              "Ambiente para um estudo solar correto. A duração é o tempo do dia completo.",
+                              "Tip: choose the site's place (Site ▸ Location) and set the date in the Environment tab "
+                              "for a correct sun study. The duration is the whole day's time."),
+    "pmode.effect_preview": ("Pré-visualizar", "Preview"),
+    "pmode.effect_preview_tip": ("Tocar o efeito no 3D como o Presentation o toca. Esc para.",
+                                 "Play the effect in the 3D view as the Presentation plays it. Esc stops it."),
+    "pmode.effect_order": ("Sequência de construção · {n} elementos", "Construction sequence · {n} elements"),
+    "pmode.effect_order_tip": ("Desmarque um elemento para o remover do efeito: fica visível e estático.",
+                               "Untick an element to take it out of the effect: it stays visible and still."),
+    "pmode.effect_order_note": ("Elementos removidos do efeito ficam visíveis e estáticos (ex.: terreno). A ordem é a "
+                                "de obra e, dentro de cada fase, de baixo para cima.",
+                                "Elements taken out of the effect stay visible and still (e.g. the terrain). The order "
+                                "is the works' and, within each phase, from the bottom up."),
+    "pmode.effect_saved": ("O efeito grava-se nesta cena e reproduz-se na apresentação ao entrar na cena (Tour, "
+                           "Narração e Navegação Livre).",
+                           "The effect is kept in this scene and plays in the presentation when the scene is entered "
+                           "(Tour, Narration and Free Navigation)."),
+    "pmode.effect_restore": ("Repor no efeito", "Put back in the effect"),
+    "pmode.effect_exclude": ("Remover do efeito (fica estático)", "Take out of the effect (stays still)"),
+    "pmode.phase.site": ("Terreno", "Terrain"),
+    "pmode.phase.foundation": ("Fundações", "Foundations"),
+    "pmode.phase.structure": ("Estrutura", "Structure"),
+    "pmode.phase.walls": ("Paredes", "Walls"),
+    "pmode.phase.openings": ("Portas e Janelas", "Doors and Windows"),
+    "pmode.phase.stairs": ("Escadas", "Stairs"),
+    "pmode.phase.roof": ("Cobertura", "Roof"),
+    "pmode.phase.finishes": ("Acabamentos", "Finishes"),
+    "pmode.phase.fixtures": ("Equipamento e Mobiliário", "Fittings and Furniture"),
+    "pmode.phase.other": ("Outros", "Others"),
+    "info.effect_playing": ("{name}: {n} elementos em {s} s, como no Presentation. Esc para parar.",
+                            "{name}: {n} elements in {s} s, as in the Presentation. Esc stops it."),
     # (0.485) the Presentation's «Etiquetas» (its LabelsTab, its words)
     "tool.pres_label": ("Etiqueta", "Label"),
     "pmode.tag_add": ("Adicionar etiqueta", "Add label"),

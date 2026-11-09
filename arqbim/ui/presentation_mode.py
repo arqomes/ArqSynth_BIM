@@ -29,6 +29,7 @@ Presentation's own (its SlideSidebar, Model3DViewport, NaviCube, VisualModeMenu 
 
 import math
 
+import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..i18n import t
@@ -837,7 +838,7 @@ class LayersPage(QtWidgets.QWidget):
 
 class ScenesPage(_Form):
     """CENAS 3D: the scene chosen — its name, the first one, shown or left out, how it is reached (Suave / Corte, in
-    how long), its effect, its time and its caption."""
+    how long), its time and its caption (0.486: its effect in EFEITOS, as the Presentation's)."""
 
     def __init__(self, mode):
         super().__init__(mode)
@@ -860,14 +861,7 @@ class ScenesPage(_Form):
         self.transition_s = _seconds(0.0, 10.0, 0.1)
         self.transition_s.valueChanged.connect(lambda v: self.change(transition_s=v))
         self.form.addRow(t("pmode.arrival"), _pair(self.transition, self.transition_s))
-        self.effect = _narrow(QtWidgets.QComboBox())
-        for name in pm.EFFECTS:
-            self.effect.addItem(t("present.effect." + name), name)
-        self.effect.currentIndexChanged.connect(lambda _i: self.change(effect=self.effect.currentData()))
-        self.effect_s = _seconds(1.0, 60.0, 0.5)
-        self.effect_s.valueChanged.connect(lambda v: self.change(effect_s=v))
-        self.form.addRow(t("present.effect"), _pair(self.effect, self.effect_s))
-        self.seconds = _seconds(0.0, 600.0, 1.0)
+        self.seconds = _seconds(0.0, 600.0, 1.0)            # (0.486: the effect in the Efeitos tab, as there)
         self.seconds.setSpecialValueText(t("present.seconds_auto"))
         self.seconds.setToolTip(t("present.seconds_tip"))
         self.seconds.valueChanged.connect(lambda v: self.change(seconds=v))
@@ -876,8 +870,7 @@ class ScenesPage(_Form):
         self.caption.setToolTip(t("present.caption_tip"))
         self.caption.setFixedHeight(64)
         self.form.addRow(t("present.caption"), self.caption)
-        self.fields = (self.initial, self.shown, self.transition, self.transition_s, self.effect, self.effect_s,
-                       self.seconds, self.caption)
+        self.fields = (self.initial, self.shown, self.transition, self.transition_s, self.seconds, self.caption)
 
     def _again(self):
         if not self.showing:                    # (the first scene is not turned off: another one is chosen instead)
@@ -898,9 +891,6 @@ class ScenesPage(_Form):
             self.transition.setCurrentIndex(max(self.transition.findData(scene.transition), 0))
             self.transition_s.setValue(scene.transition_s)
             self.transition_s.setEnabled(scene.transition != "cut")
-            self.effect.setCurrentIndex(max(self.effect.findData(scene.effect), 0))
-            self.effect_s.setValue(scene.effect_s)
-            self.effect_s.setEnabled(scene.effect != "none")
             self.seconds.setValue(scene.seconds)
             if self.caption.toPlainText() != scene.caption:
                 self.caption.setPlainText(scene.caption)
@@ -1072,11 +1062,182 @@ class EnvironmentPage(_Form):
 
 
 class EffectsPage(_Form):
-    """EFEITOS: the scene's camera move (the Presentation's library, by its groups), how long, the room of an interior
-    one — «Ver movimento» plays it in the 3D view."""
+    """EFEITOS, as the Presentation's — its two kinds: MODELO (0.486: the scene's effect — Nenhum, Estudo solar,
+    Construção, Explosão —, how long, played when the scene is entered, an explosion's distance, the order of the works
+    with the elements taken out of it, «Pré-visualizar» in the 3D view) and CÂMARA (its camera move from the
+    Presentation's library, by its groups, how long, the room of an interior one — «Ver movimento»)."""
 
     def __init__(self, mode):
         super().__init__(mode)
+        seg = QtWidgets.QFrame()
+        seg.setObjectName("pm_segbox")
+        row = QtWidgets.QHBoxLayout(seg)
+        row.setContentsMargins(3, 3, 3, 3)
+        row.setSpacing(2)
+        self.categories = {}
+        group = QtWidgets.QButtonGroup(seg)
+        for name in ("model", "camera"):
+            button = QtWidgets.QToolButton()
+            button.setObjectName("pm_seg")
+            button.setCheckable(True)
+            button.setText(t("pmode.effects_" + name).upper())
+            button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _on=False, k=name: self.set_category(k))
+            group.addButton(button)
+            row.addWidget(button)
+            self.categories[name] = button
+        self.form.addRow(seg)
+        self.category = "model"
+        self.model_box = self._model_form()
+        self.form.addRow(self.model_box)
+        self.camera_box = QtWidgets.QWidget()
+        camera = QtWidgets.QFormLayout(self.camera_box)
+        camera.setContentsMargins(0, 0, 0, 0)
+        camera.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.WrapLongRows)
+        camera.setVerticalSpacing(8)
+        self.camera_form = camera
+        self.form.addRow(self.camera_box)
+        self._camera_rows(camera)
+        self.categories["model"].setChecked(True)
+        self.camera_box.hide()
+
+    def set_category(self, name):
+        """MODELO / CÂMARA (the Presentation's two kinds of effects)."""
+        self.category = name if name in self.categories else "model"
+        self.categories[self.category].setChecked(True)
+        self.model_box.setVisible(self.category == "model")
+        self.camera_box.setVisible(self.category == "camera")
+        self.show_scene(self.mode.scene())
+
+    def _model_form(self):
+        box = QtWidgets.QWidget()
+        form = QtWidgets.QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setVerticalSpacing(8)
+        self.model_rows = form
+        form.addRow(_label(t("pmode.effect_scene").upper(), "pm_head"))
+        tiles = QtWidgets.QGridLayout()
+        tiles.setSpacing(4)
+        self.kinds = {}
+        for k, name in enumerate(pm.EFFECTS):
+            button = QtWidgets.QToolButton()
+            button.setObjectName("pm_page")
+            button.setCheckable(True)
+            button.setText(t("pmode.effect_kind." + name))
+            button.setToolTip(t("pmode.effect_hint." + name))
+            button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _on=False, e=name: self._kind(e))
+            tiles.addWidget(button, k // 2, k % 2)
+            self.kinds[name] = button
+        form.addRow(tiles)
+        self.hint = _label("", "pm_note")
+        self.hint.setWordWrap(True)
+        form.addRow(self.hint)
+        self.effect_s = _seconds(2.0, 60.0, 1.0)
+        self.effect_s.setDecimals(0)
+        self.effect_s.valueChanged.connect(lambda v: self.change(effect_s=v))
+        form.addRow(t("pmode.effect_time"), self.effect_s)
+        self.auto = QtWidgets.QCheckBox(t("pmode.effect_auto"))
+        self.auto.setToolTip(t("pmode.effect_auto_tip"))
+        self.auto.toggled.connect(lambda on: self.change(effect_auto=on))
+        form.addRow(self.auto)
+        self.spread = QtWidgets.QDoubleSpinBox()
+        self.spread.setRange(0.3, 3.0)
+        self.spread.setDecimals(1)
+        self.spread.setSingleStep(0.1)
+        self.spread.setSuffix("×")
+        self.spread.setKeyboardTracking(False)
+        self.spread.setToolTip(t("pmode.effect_spread_tip"))
+        self.spread.valueChanged.connect(lambda v: self.change(effect_spread=v))
+        form.addRow(t("pmode.effect_spread"), self.spread)
+        self.sun_hint = _label(t("pmode.effect_sun_hint"), "pm_note")
+        self.sun_hint.setWordWrap(True)
+        form.addRow(self.sun_hint)
+        self.preview = QtWidgets.QPushButton(t("pmode.effect_preview"))
+        self.preview.setObjectName("pm_create")
+        self.preview.setToolTip(t("pmode.effect_preview_tip"))
+        self.preview.clicked.connect(lambda: self.mode.play_effect())
+        form.addRow(self.preview)
+        self.order_head = _label("", "pm_head")
+        form.addRow(self.order_head)
+        self.order = QtWidgets.QListWidget()
+        self.order.setMaximumHeight(240)
+        self.order.setToolTip(t("pmode.effect_order_tip"))
+        self.order.itemChanged.connect(self._order_changed)
+        form.addRow(self.order)
+        self.order_note = _label(t("pmode.effect_order_note"), "pm_note")
+        self.order_note.setWordWrap(True)
+        form.addRow(self.order_note)
+        note = _label(t("pmode.effect_saved"), "pm_note")
+        note.setWordWrap(True)
+        form.addRow(note)
+        return box
+
+    def _kind(self, name):
+        if self.showing:
+            return
+        if self.mode.playing == "effect":
+            self.mode.win.stop_scene_move()
+        self.change(effect=name)
+
+    def _order_changed(self, item):
+        """An element of the order of the works ticked (in the effect) or not (left out: still from the start)."""
+        if self.showing:
+            return
+        guid = item.data(KEY)
+        scene = self.mode.scene()
+        if scene is None or not guid:
+            return
+        static = set(scene.effect_static)
+        if item.checkState() == QtCore.Qt.CheckState.Checked:
+            static.discard(guid)
+        else:
+            static.add(guid)
+        self.change(effect_static=sorted(static))
+
+    def _show_model(self, scene):
+        effect = scene.effect
+        for name, button in self.kinds.items():
+            button.setChecked(name == effect)
+        self.hint.setText(t("pmode.effect_hint." + effect))
+        rows = self.model_rows
+        on = effect != "none"
+        for w in (self.effect_s, self.auto, self.preview):
+            rows.setRowVisible(w, on)
+        rows.setRowVisible(self.spread, effect == "explode")
+        rows.setRowVisible(self.sun_hint, effect == "sun")
+        self.effect_s.setValue(scene.effect_s)
+        self.auto.setChecked(scene.effect_auto)
+        self.spread.setValue(scene.effect_spread)
+        playing = self.mode.playing == "effect"
+        self.preview.setText(t("present.stop" if playing else "pmode.effect_preview"))
+        building = effect == "construction"
+        for w in (self.order_head, self.order, self.order_note):
+            rows.setRowVisible(w, building)
+        if building:
+            self._fill_order(scene)
+
+    def _fill_order(self, scene):
+        """The order of the works as the Presentation plays it: «1. Parede 3 — Paredes», each ticked unless it was
+        taken out of the effect."""
+        from ..model import presentation_effects
+        units, _centre, _radius = self.mode.effect_units()
+        static = set(scene.effect_static)
+        by_id = {u["id"]: u for u in units}
+        self.order.clear()
+        for k, guid in enumerate(presentation_effects.order(units)):
+            u = by_id[guid]
+            phase = presentation_effects.phase_name(presentation_effects.phase_of(u["name"], u["category"]))
+            item = QtWidgets.QListWidgetItem("{}. {}  —  {}".format(k + 1, u["name"], t("pmode.phase." + phase)))
+            item.setData(KEY, guid)
+            item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.CheckState.Unchecked if guid in static else QtCore.Qt.CheckState.Checked)
+            item.setToolTip(t("pmode.effect_restore" if guid in static else "pmode.effect_exclude"))
+            self.order.addItem(item)
+        self.order_head.setText(t("pmode.effect_order", n=len(units)).upper())
+
+    def _camera_rows(self, form):
         self.move_box = _narrow(QtWidgets.QComboBox())       # (not `move`: QWidget's own)
         box = self.move_box
         box.setToolTip(t("present.move_tip"))
@@ -1094,20 +1255,23 @@ class EffectsPage(_Form):
                     box.addItem("   " + t("move." + move), move)
         box.view().setMinimumWidth(box.view().sizeHintForColumn(0) + 24)
         box.currentIndexChanged.connect(lambda _i: self.change(move=self.move_box.currentData() or ""))
-        self.form.addRow(t("present.move"), box)
+        form.addRow(t("present.move"), box)
         self.move_s = _seconds(0.0, 120.0, 1.0)
         self.move_s.valueChanged.connect(lambda v: self.change(move_s=v))
-        self.form.addRow(t("pmode.move_time"), self.move_s)
+        form.addRow(t("pmode.move_time"), self.move_s)
         self.room = _narrow(QtWidgets.QComboBox())
         self.room.setToolTip(t("present.room_tip"))
         self.room.currentIndexChanged.connect(lambda _i: self.change(room=self.room.currentData() or ""))
-        self.form.addRow(t("present.room"), self.room)
+        form.addRow(t("present.room"), self.room)
         self.play = QtWidgets.QPushButton(t("present.play"))
         self.play.setToolTip(t("present.play_tip"))
         self.play.clicked.connect(lambda: self.mode.play_move())
-        self.form.addRow(self.play)
-        self.note("pmode.effects_note")
-        self.fields = (self.move_box, self.move_s, self.room, self.play)
+        form.addRow(self.play)
+        note = _label(t("pmode.effects_note"), "pm_note")
+        note.setWordWrap(True)
+        form.addRow(note)
+        self.fields = (self.move_box, self.move_s, self.room, self.play, *self.kinds.values(), self.effect_s,
+                       self.auto, self.spread, self.preview, self.order)
 
     def show_scene(self, scene):
         self.showing = True
@@ -1116,13 +1280,14 @@ class EffectsPage(_Form):
                 w.setEnabled(scene is not None)
             if scene is None:
                 return
+            self._show_model(scene)
             self.move_box.setCurrentIndex(max(self.move_box.findData(scene.move), 0))
             own = camera_moves.MOVES[scene.move][2] if scene.move else 0.0
             self.move_s.setSpecialValueText(t("present.move_own", s="{:.0f}".format(own)) if scene.move else "—")
             self.move_s.setValue(scene.move_s)
             self.move_s.setEnabled(bool(scene.move))
             inside = camera_moves.interior(scene.move)
-            self.form.setRowVisible(self.room, inside)
+            self.camera_form.setRowVisible(self.room, inside)
             if inside:
                 self.room.clear()
                 self.room.addItem(t("present.room_auto"), "")
@@ -1535,8 +1700,10 @@ class ScenePlayer(QtWidgets.QFrame):
         if scene is None:
             self.stop()
             return
-        self.timer.start(int(1000 * ((scene.seconds or self.STAY) + (scene.transition_s if scene.transition != "cut"
-                                                                       else 0.0))))
+        stay = scene.seconds or self.STAY
+        if scene.effect != "none" and scene.effect_auto:      # (0.486: its effect played to its end first)
+            stay = max(stay, scene.effect_s)
+        self.timer.start(int(1000 * (stay + (scene.transition_s if scene.transition != "cut" else 0.0))))
 
     def _on(self):
         if not self.playing or not self.mode.active:
@@ -1769,6 +1936,8 @@ class PresentationMode(QtCore.QObject):
             return
         if self.placing():                                # (0.485: a label being put: given up)
             self.win.set_tool("select")
+        if self.playing == "effect":                      # (0.486: the model whole again)
+            self.win.stop_scene_move()
         self.active = False
         self.player.stop()
         for w in (self.look_button, self.sun_button, self.player):
@@ -1832,6 +2001,8 @@ class PresentationMode(QtCore.QObject):
         if layers is None:
             layers = changed is None or bool(removed) or any(isinstance(i, str) and self.doc.get(i) is not None
                                                              for i in changed)
+        if layers and self.playing == "effect":           # (0.486: the model changed: its effect put away)
+            self.win.stop_scene_move()
         if layers or self._layers_stale:
             self._layers_stale = False
             rows = self.layer_rows()
@@ -1884,6 +2055,8 @@ class PresentationMode(QtCore.QObject):
         scene = self.scene(key)
         if scene is None:
             return False
+        if self.playing == "effect":                      # (0.486: another scene: its effect put away)
+            self.win.stop_scene_move()
         self.scene_key = key
         vp = self.vp
         self.live.update(hidden=set(scene.hidden_layers), style=scene.style, quality=scene.quality, ao=scene.ao,
@@ -1915,10 +2088,14 @@ class PresentationMode(QtCore.QObject):
             if scene.fov > 0 and not vp.is_ortho():
                 vp.camera.fov = pygfx_fov(scene.fov, self.aspect())
 
+        flight = 0.0
         if fly and scene.transition != "cut" and ortho == vp.is_ortho():
             vp.fly(place, scene.transition_s)             # (0.483: as the Presentation's — its time, its lens too)
+            flight = scene.transition_s
         else:
             vp.fly(place, 0)                              # (a cut: there at once)
+        if fly and self.player.playing and scene.effect != "none" and scene.effect_auto:     # (0.486: as entering it
+            QtCore.QTimer.singleShot(int(flight * 1000) + 50, lambda k=key: self._auto_effect(k))   # in the tour)
         self.live["ortho"] = ortho
         vp.set_axonometric(ortho)
         vp.camera_locked = self.live["locked"]
@@ -2308,6 +2485,55 @@ class PresentationMode(QtCore.QObject):
             del self.live["cuts"][k]
             self.apply_cuts()
             self.side.show_scene(self.scene())
+
+    # ------------------------------------------------------------ (0.486) the effects (the right column's «Efeitos»)
+
+    def effect_units(self):
+        """The model's elements as the Presentation's layers will be, in the order of the GLB's nodes (by storey, then
+        category, as gltf_export.build puts them): ([{id, name, category («Paredes · Piso 0»), low, high, centre}] —
+        those drawn here, their boxes from their pieces —, the whole model's middle, half its box's diagonal)."""
+        from ..model import gltf_export
+        bim = self.vp.bim
+        storeys = {g: n for g, n, _z in self.doc.storeys()}
+        tree, lows, highs = {}, [], []
+        for obj in self.doc.objects.values():
+            if not obj.is_bim or obj.mesh is None or obj.ifc_class in gltf_export.SKIP:
+                continue
+            batch = bim.where.get(obj.id)
+            piece = batch.pieces.get(obj.id) if batch is not None else None
+            if piece is None or not len(piece.positions):
+                continue
+            low, high = piece.positions.min(axis=0).astype(float), piece.positions.max(axis=0).astype(float)
+            lows.append(low)
+            highs.append(high)
+            storey = storeys.get(obj.storey) or t("gltf.no_storey")
+            category = gltf_export._category(obj.ifc_class)
+            tree.setdefault(storey, {}).setdefault(category, []).append(
+                {"id": obj.id, "name": obj.name or obj.id, "category": " · ".join(c for c in (category, storey) if c),
+                 "low": tuple(low), "high": tuple(high), "centre": tuple((low + high) / 2.0)})
+        units = [u for categories in tree.values() for members in categories.values() for u in members]
+        if not units:
+            return [], (0.0, 0.0, 0.0), 0.5
+        lo, hi = np.min(lows, axis=0), np.max(highs, axis=0)
+        return units, tuple((lo + hi) / 2.0), max(float(np.linalg.norm(hi - lo)) / 2.0, 0.5)
+
+    def effect_moves(self, scene):
+        """How each element moves in the scene's effect (model/presentation_effects.plan): those drawn now take part
+        — not those whose eye is off, nor (a construction) those taken out of it."""
+        from ..model import presentation_effects
+        units, centre, radius = self.effect_units()
+        left_out = set(self.live["hidden"]) | (set(scene.effect_static) if scene.effect == "construction" else set())
+        return presentation_effects.plan(scene.effect, [u for u in units if u["id"] not in left_out], centre, radius,
+                                         scene.effect_spread)
+
+    def play_effect(self, key=None):
+        """«Pré-visualizar»: the scene's effect played in the 3D view as the Presentation will play it (again: stopped)."""
+        return self.win.play_scene_effect(key or self.scene_key)
+
+    def _auto_effect(self, key):
+        """(the scenes' player) A scene reached with an effect played when it is entered: played, after its flight."""
+        if self.active and self.player.playing and self.scene_key == key:
+            self.win.play_scene_effect(key)
 
     # ------------------------------------------------------------ (0.485) the labels (the right column's «Etiquetas»)
 

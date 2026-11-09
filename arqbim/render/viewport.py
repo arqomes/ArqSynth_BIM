@@ -265,6 +265,12 @@ def _f32(a):
     return np.ascontiguousarray(np.asarray(a, dtype=np.float32).reshape(-1, 3))
 
 
+def _spread_colour(colour, n):
+    """(0.486) A piece's colour for its n vertices (one colour, or its own by vertex), as its batch has it."""
+    c = np.asarray(colour, dtype=np.float32)
+    return c.reshape(n, 4) if c.ndim == 2 else np.repeat(c.reshape(1, 4), n, axis=0)
+
+
 def _physical(hex_color):
     """RGBA in physical (linear) values for vertex colours (a few colours, worked out once each) — (0.341) in the
     canvas in use (render/canvas: a grey turned over on the dark one)."""
@@ -398,6 +404,7 @@ class Viewport:
         self._tag_lines = None
         self._tag_follow = None     # (the way to the viewer) -> [(corners, lines)]: those that face the camera
         self._tag_toward = None
+        self._effect = None         # (0.486) the Presentation's effect being played (play_effect)
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -567,6 +574,7 @@ class Viewport:
         self._step_animation()
         self._follow_view()
         self._follow_tags()                          # (0.485)
+        self._step_effect()                          # (0.486)
         if self.cube is not None and not self.cutting():
             self.renderer.render(self.scene, self.camera, flush=False)
             self.cube.follow(self.camera.local.rotation)       # the view cube in its corner (0.79)
@@ -2252,6 +2260,98 @@ class Viewport:
                 buf.data[:] = _f32(segments)
                 buf.update_range(0, len(segments))
 
+    # ------------------------------------------------------------ (0.486) the Presentation's scene effects
+
+    def play_effect(self, moves, seconds, done=None):
+        """The Presentation's «Construção» / «Explosão» played on the model, as it plays them
+        (model/presentation_effects.plan's moves: [{id, start, end, amplitude, way, hide}] — the elements that take
+        part; every other element drawn stays where it is). While it plays the batches are put away and the elements
+        drawn are drawn from their pieces in one mesh (one more for the see-through ones) and one line object, moved
+        at each image (only their positions written again): nothing of the model is built again. done(): called once
+        when it ends by itself (not after stop_effect). Returns how many elements move."""
+        self.stop_effect()
+        index = {m["id"]: k for k, m in enumerate(moves)}
+        parts = {"faces": [], "clear": [], "edges": []}
+        for batch in self.bim.batches:
+            if not batch.visible:
+                continue
+            for obj_id, piece in batch.pieces.items():
+                unit = index.get(obj_id, -1)
+                n, e = len(piece.positions), len(piece.edges)
+                if n:
+                    parts["clear" if batch.clear else "faces"].append(
+                        (piece.positions, piece.normals, _spread_colour(piece.face_color, n), np.full(n, unit)))
+                if e and self.bim.edges:
+                    parts["edges"].append((piece.edges, None, _spread_colour(piece.edge_color, e), np.full(e, unit)))
+        objects = []
+        for kind, items in parts.items():
+            if not items:
+                continue
+            base = np.concatenate([p for p, _n, _c, _u in items]).astype(np.float32)
+            data = {"positions": base.copy(), "colors": np.concatenate([c for _p, _n, c, _u in items])}
+            if kind == "edges":
+                wobj = gfx.Line(gfx.Geometry(**data), self.bim.line_material)
+            else:
+                data["normals"] = np.concatenate([nrm for _p, nrm, _c, _u in items]).astype(np.float32)
+                data["indices"] = np.arange(len(base), dtype=np.uint32).reshape(-1, 3)
+                material = self.bim.clear_materials[self.bim.style] if kind == "clear" else self.bim.face_material
+                wobj = gfx.Mesh(gfx.Geometry(**data), material)
+            self.scene.add(wobj)
+            objects.append((wobj, base, np.concatenate([u for _p, _n, _c, u in items])))
+        self._effect = {"moves": list(moves), "seconds": max(float(seconds), 0.1), "t0": time.monotonic(),
+                        "objects": objects, "done": done}
+        self._hide_batches()
+        self._step_effect()
+        self.redraw()
+        return sum(1 for m in moves if m["id"] in self.bim.where)
+
+    def effect_playing(self):
+        return self._effect is not None
+
+    def stop_effect(self):
+        """The effect put away: the model drawn by its batches again, as it was."""
+        effect, self._effect = self._effect, None
+        if effect is None:
+            return
+        for wobj, _base, _unit in effect["objects"]:
+            self.scene.remove(wobj)
+        self.apply_storey_view()
+        self.redraw()
+
+    def _hide_batches(self):
+        for batch in self.bim.batches:
+            for wobj in (batch.mesh, batch.lines, batch.poche, batch.patterns, *batch.texture_meshes.values()):
+                if wobj is not None:
+                    wobj.visible = False
+
+    def _step_effect(self):
+        """An image of the effect: each element where its time has it (model/presentation_effects.at); those not yet
+        seen far beyond the far plane (drawn nowhere); at its end, put away and done() called."""
+        effect = self._effect
+        if effect is None:
+            return
+        from ..model import presentation_effects
+        t = (time.monotonic() - effect["t0"]) / effect["seconds"]
+        if t >= 1.0:
+            done = effect["done"]
+            self.stop_effect()
+            if done is not None:
+                done()
+            return
+        self._hide_batches()                              # (whatever showed them meanwhile)
+        offsets, seen = presentation_effects.at(effect["moves"], t)
+        offsets = np.vstack((offsets, np.zeros((1, 3)))).astype(np.float32)     # (the last row: those that stay)
+        seen = np.append(seen, True)
+        far = (self.camera_position() + self.view_direction() * float(self.camera.depth_range[1]) * 10.0) \
+            if self.camera.depth_range else np.array((0.0, 0.0, -1e7))
+        for wobj, base, unit in effect["objects"]:
+            pos = base + offsets[unit]
+            pos[~seen[unit]] = far
+            buf = wobj.geometry.positions
+            buf.data[:] = pos
+            buf.update_range(0, len(pos))
+        self.redraw()
+
     def set_cuts(self, planes):
         """(0.484) Section planes over the 3D view — the Presentation tab's «Cortes»: [(normal, a point)], what is on
         each normal's side kept, what they go through filled as the section box's; [] none. Not in a plan or a section
@@ -2863,6 +2963,8 @@ class Viewport:
                     and (phase is None or phase not in self.hidden_phases))
 
         self.bim.set_visible(shown)
+        if self._effect is not None:                # (0.486: an effect playing draws the model itself)
+            self._hide_batches()
         self._show_plan_symbols()
         self._show_services_above()
         self._show_dimensions()

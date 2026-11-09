@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.486.0 — 2026-11-09
+
+**Efeitos na interface do Presentation** (o dono: «Sim, efeitos»; passo 5 da lista do PLANO).
+
+- O separador **Efeitos** da coluna da direita é agora o do Presentation, com os seus dois tipos no topo:
+  **Modelo** e **Câmara** (o movimento de câmara que já havia passou para Câmara).
+- Em **Modelo**, o **Efeito da cena**: **Nenhum**, **Estudo solar**, **Construção** ou **Explosão**, com a explicação
+  de cada um; a **Duração** (2 a 60 s); **Reproduzir ao entrar na cena**; na Explosão a **Distância** (0,3 a 3,0 × o
+  tamanho do modelo); no Estudo solar a dica do lugar e da data.
+- **Pré-visualizar** toca o efeito no 3D do BIM **como o Presentation o toca**, com as mesmas contas:
+  - **Construção**: as peças aparecem pela ordem de obra (terreno e fundações a subir do chão; estrutura, paredes,
+    portas e janelas, escadas, cobertura, acabamentos e mobiliário a assentar vindos de cima), de baixo para cima;
+  - **Explosão**: as peças começam afastadas do centro e montam-se numa ordem que parece ao acaso, mas é sempre a mesma;
+  - **Estudo solar**: o sol ao longo do dia, com as sombras, no tempo da duração.
+  O botão passa a **Parar**; Esc também para. O modelo não se refaz: no fim fica exatamente como estava.
+- Na Construção, a **Sequência de construção** lista todas as peças pela ordem em que vão aparecer, com a fase de cada
+  uma; desmarcar uma tira-a do efeito (fica parada e visível desde o início, como o terreno).
+- O **▶** das cenas, por baixo do 3D, toca o efeito de cada cena ao chegar a ela (se «Reproduzir ao entrar na cena»
+  estiver ligado) e espera que acabe antes de passar à seguinte.
+- O efeito saiu da página **Cenas 3D** (no Presentation também só está em Efeitos).
+- Tudo vai para o Presentation: o efeito, a duração, «reproduzir ao entrar», a distância e as peças tiradas do efeito.
+- **No Presentation** (ramo `integracao-arqsynth-bim`): o importador lê estes campos; e a ordem de obra deixou de
+  confundir o pavimento com a estrutura — as pastas do BIM são «Paredes · Piso 0» e a palavra «piso» fazia de cada
+  parede, porta ou cobertura «Estrutura». Agora conta primeiro o nome e a categoria, e só depois o resto da pasta.
+
 ## 0.485.0 — 2026-11-09
 
 **Etiquetas na interface do Presentation** (o dono: «Sim, etiquetas»; passo 4 da lista do PLANO).

@@ -646,6 +646,7 @@ def bim_flow():
     presentation_package_flow()
     panorama_flow()
     presentation_tab_flow()
+    scene_effects_flow()
     line_loops_flow()
     free_drawing_flow()
     work_plane_rotate_flow()
@@ -19108,8 +19109,13 @@ def presentation_panel_flow():
     page = mode.side.pages["scenes"]
     page.transition.setCurrentIndex(page.transition.findData("cut"))
     pump(100)
-    page.effect.setCurrentIndex(page.effect.findData("construction"))
-    pump(100)
+    QtTest.QTest.mouseClick(mode.side.buttons["effects"], Qt.MouseButton.LeftButton)     # (0.486: in Efeitos ▸ Modelo)
+    pump(150)
+    QtTest.QTest.mouseClick(mode.side.pages["effects"].kinds["construction"], Qt.MouseButton.LeftButton)
+    pump(150)
+    effect_rows = mode.side.pages["effects"].effect_s.isVisibleTo(mode.side.pages["effects"])
+    QtTest.QTest.mouseClick(mode.side.buttons["scenes"], Qt.MouseButton.LeftButton)
+    pump(150)
     _active()
     page.caption.setFocus()
     pump(50)
@@ -19118,7 +19124,7 @@ def presentation_panel_flow():
     pump(150)
     cut = next(s for s in pm.scenes(doc) if s.key == keys[3])
     chosen = (cut.transition, cut.effect, cut.caption) == ("cut", "construction", "O corte pela sala.") \
-        and not page.transition_s.isEnabled() and page.effect_s.isEnabled()
+        and not page.transition_s.isEnabled() and effect_rows
     QtTest.QTest.mouseClick(mode.pages.cards[keys[0]].buttons["visible"], Qt.MouseButton.LeftButton)
     pump(200)
     entry = pm.initial(doc) == "vista_" + view and pm.scenes(doc)[0].hidden \
@@ -19423,6 +19429,103 @@ def presentation_tab_flow():
                                                               win.views.keys))
 
 
+def scene_effects_flow():
+    """0.486 — The Presentation's scene effects in the BIM's interface (Efeitos ▸ Modelo): a room of four walls with a
+    door; the general view given «Construção» — its sequence lists the five elements, the walls before the door; the
+    first wall unticked (taken out: still); 2 s; «Pré-visualizar»: the model drawn by the effect (the batches put away,
+    the elements moving), the button «Parar»; Esc: the model whole again. A new scene given «Explosão», distance 2,0×,
+    not played when entered, 2 s: played to its end by itself. Exported: the construction with the wall left out, the
+    explosion with its distance and autoPlay off. Captured: 486_efeitos.png (mid-explosion)."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_export
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    door = bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"],
+                                   bim_actions.wall_frame(doc, walls[0]), 2.5, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.show_presentation_tab()
+    pump(600)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["effects"], Qt.MouseButton.LeftButton)
+    pump(150)
+    panel = mode.side.pages["effects"]
+    QtTest.QTest.mouseClick(panel.categories["model"], Qt.MouseButton.LeftButton)
+    pump(150)
+    mode.activate("geral")
+    pump(300)
+    QtTest.QTest.mouseClick(panel.kinds["construction"], Qt.MouseButton.LeftButton)
+    pump(300)
+    door_id = door if isinstance(door, str) else getattr(door, "id", None)
+    ids = [panel.order.item(k).data(Qt.ItemDataRole.UserRole) for k in range(panel.order.count())]
+    listed = len(ids) == 5 and set(ids[:4]) == set(walls) and (door_id is None or ids[4] == door_id) \
+        and panel.order.isVisible() and "Paredes" in panel.order.item(0).text()
+    panel.order.item(0).setCheckState(Qt.CheckState.Unchecked)
+    pump(200)
+    panel.effect_s.setValue(2.0)
+    pump(150)
+    geral = next(s for s in pm.scenes(doc) if s.key == "geral")
+    chosen = (geral.effect, geral.effect_s, geral.effect_static) == ("construction", 2.0, (ids[0],))
+    QtTest.QTest.mouseClick(panel.preview, Qt.MouseButton.LeftButton)
+    pump(400)
+    objects = (vp._effect or {}).get("objects", [])
+    moving = bool(objects) and any(not np.allclose(w.geometry.positions.data, base) for w, base, _u in objects)
+    playing = vp.effect_playing() and mode.playing == "effect" and panel.preview.text() == "Parar" and moving \
+        and all(not b.mesh.visible for b in vp.bim.batches if b.mesh is not None)
+    _active()
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    stopped = not vp.effect_playing() and mode.playing is None and panel.preview.text() == "Pré-visualizar" \
+        and any(b.mesh.visible for b in vp.bim.batches if b.mesh is not None)
+    check("efeito_construcao", listed and chosen and playing and stopped,
+          "lista={} ({}) escolhido={} ({}) a_tocar={} mexe={} parou={} balao={!r}".format(
+              listed, [panel.order.item(k).text() for k in range(panel.order.count())], chosen,
+              (geral.effect, geral.effect_s, geral.effect_static), playing, moving, stopped, win.last_message))
+    # a scene of its own: «Explosão», 2,0×, not played when entered — played to its end by itself
+    key_new = mode.create_scene()
+    pump(400)
+    mode.activate(key_new)
+    pump(300)
+    QtTest.QTest.mouseClick(panel.kinds["explode"], Qt.MouseButton.LeftButton)
+    pump(200)
+    panel.spread.setValue(2.0)
+    panel.effect_s.setValue(2.0)
+    panel.auto.setChecked(False)
+    pump(200)
+    cena = next(s for s in pm.scenes(doc) if s.key == key_new)
+    set_up = (cena.effect, cena.effect_spread, cena.effect_s, cena.effect_auto) == ("explode", 2.0, 2.0, False) \
+        and panel.spread.isVisible() and not panel.order.isVisible()
+    QtTest.QTest.mouseClick(panel.preview, Qt.MouseButton.LeftButton)
+    pump(700)
+    started = vp.effect_playing()
+    shot("486_efeitos.png")
+    pump(2200)
+    ended = started and not vp.effect_playing() and mode.playing is None \
+        and any(b.mesh.visible for b in vp.bim.batches if b.mesh is not None)
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_fx_"), "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    sent = {s["id"]: s for s in (found or {}).get("presentation", {}).get("model3d", {}).get("scenes", [])}
+    exported = sent.get("bim_scene_geral", {}).get("effect") == {"type": "construction", "seconds": 2.0,
+                                                                  "excluded": ["bim_" + ids[0]]} \
+        and sent.get("bim_scene_" + key_new, {}).get("effect") == {"type": "explode", "seconds": 2.0,
+                                                                    "autoPlay": False, "spread": 2.0}
+    doc.modified = False
+    win.close_presentation()
+    pump(300)
+    check("efeito_explosao_exportado", set_up and started and ended and exported,
+          "escolhido={} ({}) comecou={} acabou={} exportado={} ({} / {})".format(
+              set_up, cena, started, ended, exported, sent.get("bim_scene_geral", {}).get("effect"),
+              sent.get("bim_scene_" + key_new, {}).get("effect")))
+
+
 def camera_move_flow():
     """0.364 — A scene's camera move: a room of four walls with a room drawn in it, a named 3D view; in the
     Presentation panel the 3D view's scene given «Volta ao compartimento» (the Room row shown: the scene's, and the
@@ -19449,6 +19552,8 @@ def camera_move_flow():
     QtTest.QTest.mouseClick(mode.side.buttons["effects"], Qt.MouseButton.LeftButton)
     pump(150)
     panel = mode.side.pages["effects"]
+    QtTest.QTest.mouseClick(panel.categories["camera"], Qt.MouseButton.LeftButton)        # (0.486: Efeitos ▸ Câmara)
+    pump(150)
     mode.activate("vista_" + view)
     pump(200)
     panel.move_box.setCurrentIndex(panel.move_box.findData("int_orbit_full"))

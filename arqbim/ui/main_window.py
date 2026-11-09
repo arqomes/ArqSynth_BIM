@@ -8147,7 +8147,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.stop_scene_move()
             return
         if play["kind"] == "sun":                           # (0.365: the sun's frames spread over SUN_SECONDS)
-            k = int((time.monotonic() - play["started"]) / self.SUN_SECONDS * len(play["frames"]))
+            k = int((time.monotonic() - play["started"]) / play.get("seconds", self.SUN_SECONDS)
+                    * len(play["frames"]))
             if k >= len(play["frames"]):
                 self.stop_scene_move()
             else:
@@ -8160,6 +8161,46 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.viewport.look_at(*play["frames"][k])
 
+    def play_scene_effect(self, key):
+        """(0.486) The Efeitos tab's «Pré-visualizar»: the scene's effect played in the 3D view as the Presentation
+        will play it — Construção and Explosão (model/presentation_effects, Viewport.play_effect), Estudo solar the
+        sun through the day in the effect's time. Again, or Esc: stopped, the model whole. Returns whether it
+        started."""
+        from ..model import presentation as presentation_model
+        from ..model import presentation_effects
+        if self._move_play is not None:
+            kind = self._move_play["kind"]
+            self.stop_scene_move()
+            if kind == "effect":
+                return False
+        scene = next((s for s in presentation_model.scenes(self.doc) if s.key == key), None)
+        if scene is None or scene.effect == "none":
+            return False
+        if scene.effect == "sun":
+            return self.play_scene_sun(key, seconds=presentation_effects.seconds_of(scene.effect_s))
+        if self.tool is not None and self.tool.name not in QUIET_TOOLS:
+            self.set_tool("select")
+        if not self.presentation_shown():
+            self.open_view("3d", scene.view[1] if scene.kind == "view3d" else None)
+        moves = self.presentation_mode.effect_moves(scene)
+        if not moves:
+            self.message(t("info.presentation_empty"), warning=True)
+            return False
+        seconds = presentation_effects.seconds_of(scene.effect_s)
+        self.viewport.play_effect(moves, seconds, done=self._effect_done)
+        self._move_play = {"kind": "effect", "frames": None, "timer": None, "started": time.monotonic(),
+                           "view": self.views.current()}
+        self.presentation_mode.set_playing("effect")
+        self.message(t("info.effect_playing", name=t("pmode.effect_kind." + scene.effect), n=len(moves),
+                       s="{:.0f}".format(seconds)))
+        return True
+
+    def _effect_done(self):
+        """(0.486) The effect played to its end (the model is whole again)."""
+        if self._move_play is not None and self._move_play["kind"] == "effect":
+            self._move_play = None
+            self.presentation_mode.set_playing(None)
+
     def stop_scene_move(self):
         """(0.364) The camera move stopped, the camera where it was before it."""
         play, self._move_play = self._move_play, None
@@ -8167,6 +8208,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if play["timer"] is not None:
             play["timer"].stop()
+        if play["kind"] == "effect":                        # (0.486: the model drawn whole again)
+            self.viewport.stop_effect()
+            self.presentation_mode.set_playing(None)
+            return
         if play["kind"] == "sun":                           # (0.365: the view style's sun and shadows again)
             self.viewport.preview_sun(None)
             self.presentation_mode.set_playing(None)
@@ -8187,10 +8232,12 @@ class MainWindow(QtWidgets.QMainWindow):
         from ..model import presentation as presentation_model
         return presentation_model.site(self.doc)
 
-    def play_scene_sun(self, key):
+    def play_scene_sun(self, key, seconds=None):
         """(0.365) The panel's «Ver sol»: the scene's sun in its 3D view (its own named one, else the 3D view), with
         its shadows, where the Presentation will place it — the site's, on its day at its hour —; animated, through
-        that day or that year in SUN_SECONDS. Again, or Esc: the view style's sun again. Returns whether it shows."""
+        that day or that year in SUN_SECONDS. Again, or Esc: the view style's sun again. Returns whether it shows.
+        (0.486) seconds: the «Estudo solar» effect — through the day, in so long."""
+        import dataclasses
         from ..model import presentation as presentation_model
         from ..model import presentation_sun
         if self._move_play is not None:
@@ -8201,6 +8248,8 @@ class MainWindow(QtWidgets.QMainWindow):
         scene = next((s for s in presentation_model.scenes(self.doc) if s.key == key), None)
         if scene is None:
             return False
+        if seconds:
+            scene = dataclasses.replace(scene, sun_animate="day")
         frames = presentation_model.sun_frames(self.doc, scene, self.SUN_FRAMES)
         if not frames:
             self.message(t("info.no_site"), warning=True, action=getattr(self, "act_site_location", None))
@@ -8222,13 +8271,14 @@ class MainWindow(QtWidgets.QMainWindow):
             timer.setInterval(int(1000 / self.MOVE_FPS))
             timer.timeout.connect(self._move_step)
             timer.start()
-            self.message(t("info.sun_" + scene.sun_animate, date=date, time=hour, s="{:.0f}".format(self.SUN_SECONDS)))
+            self.message(t("info.sun_" + scene.sun_animate, date=date, time=hour,
+                           s="{:.0f}".format(seconds or self.SUN_SECONDS)))
         else:
             place = self._site_place()
             azimuth, altitude = presentation_sun.angles(place[0], place[1], scene.sun_day, scene.sun_minutes)
             self.message(t("info.sun_shown", date=date, time=hour, az=round(azimuth), alt=round(altitude)))
         self._move_play = {"kind": "sun", "frames": frames, "timer": timer, "started": time.monotonic(),
-                           "view": self.views.current()}
+                           "view": self.views.current(), "seconds": float(seconds or self.SUN_SECONDS)}
         self.presentation_mode.set_playing("sun")
         return True
 

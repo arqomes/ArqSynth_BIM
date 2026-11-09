@@ -40,10 +40,13 @@ DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effec
             "name": "", "projection": "", "fov": 0.0, "locked": False, "style": "", "quality": "auto", "ao": True,
             "ao_intensity": 1.0, "hidden_layers": (), "eye": (), "target": (), "omit": False,
             "cuts": (),                                   # (0.484) ((type, position, flipped), …)
-            "hidden_tags": ()}                            # (0.485) the labels it hides (their ids)
+            "hidden_tags": (),                            # (0.485) the labels it hides (their ids)
+            # (0.486) its effect as the Presentation's: played when the scene is entered, how far an explosion starts
+            # (× the model's radius), the elements left out of a construction (GlobalIds: they stay where they are)
+            "effect_auto": True, "effect_spread": 1.2, "effect_static": ()}
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
           "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
-          "ao_intensity": (0.0, 2.0)}
+          "ao_intensity": (0.0, 2.0), "effect_spread": (0.3, 3.0)}
 SUN_ANIMATIONS = ("none", "day", "year")
 OVERVIEW = "geral"
 # (0.479) a Presentation mode seen in the BIM's 3D view: the view style that looks most like it
@@ -95,6 +98,9 @@ class Scene:
     omit: bool = False
     cuts: tuple = ()            # (0.484) its section planes: ((type of CUT_TYPES, position m, side turned), …)
     hidden_tags: tuple = ()     # (0.485) the labels (model/presentation_tags) it hides: their ids
+    effect_auto: bool = True    # (0.486) its effect played when the scene is entered (the Presentation's autoPlay)…
+    effect_spread: float = 1.2  # …an explosion's distance (× the model's radius)…
+    effect_static: tuple = ()   # …the elements left out of a construction (GlobalIds): seen still from the start
 
 
 def empty():
@@ -153,7 +159,8 @@ def _value(name, value):
     """A setting as it may be kept: its kind and range — None when it is not one."""
     default = DEFAULTS[name]
     try:
-        if name in ("hidden_layers", "hidden_tags"):   # (0.479) GlobalIds, (0.485) labels' ids — each once, in order
+        if name in ("hidden_layers", "hidden_tags", "effect_static"):   # (0.479) GlobalIds, (0.485) labels' ids, (0.486)
+            # the elements left out of the effect — each once, sorted
             if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set, frozenset)):
                 return None
             return tuple(sorted({str(v) for v in value if str(v)}))
