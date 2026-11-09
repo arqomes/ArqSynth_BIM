@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.498.0 — 2026-11-09
+
+**Estrutura metálica, passo 3b: ligações viga–pilar — chapa de topo e cutelo.**
+
+- Comandos **Chapa de topo** e **Cutelo** (separador **Estrutura**, painel **Ligação**; e na barra da seleção quando há
+  vigas de aço escolhidas): em cada ponta das vigas de aço escolhidas que chega a um pilar de aço (e ainda sem
+  ligação).
+- **Chapa de topo** (ligação rígida): uma chapa soldada na ponta da viga, encostada à face do pilar (o banzo, ou a alma
+  entre os banzos quando a chapa cabe; senão as pontas dos banzos), com fiadas de 2 parafusos através da chapa e do
+  banzo (ou da alma), cabeça do lado da viga, anilha e porca do outro. A viga encurta o que for preciso para acabar na
+  chapa. Por omissão: 20 mm, da largura da viga, rente, 4 fiadas M20 a 75 mm.
+- **Cutelo** (ligação articulada): uma chapa de 10 mm soldada à face do pilar, ao lado da alma da viga, 115 mm ao longo
+  dela, com parafusos através do cutelo e da alma da viga (3 fiadas M20 a 75 mm, a 65 mm da face).
+- Nas **Propriedades** de qualquer peça da ligação: espessura, largura, quanto a chapa passa acima e abaixo da viga,
+  fiadas, passo, distância entre parafusos, diâmetro, distâncias aos bordos, garganta da soldadura (e, no cutelo, a
+  largura e a distância dos parafusos à face). **Avisos** pelo EN 1993-1-8: bordos (1,2·d0), passo (2,2·d0), distância
+  entre parafusos (2,4·d0), parafusos a baterem na alma do pilar, chapa mais larga que o pilar, cutelo que não cabe
+  entre os banzos da viga.
+- Como a chapa de base: a ligação segue a viga e o pilar; apagar uma peça da ligação apaga-a inteira e a viga volta ao
+  comprimento que tinha. No IFC: `IfcPlate` (ObjectType END_PLATE / FIN_PLATE), `IfcMechanicalFastener` BOLT com o
+  `Pset_MechanicalFastenerBolt`, `IfcFastener` WELD.
+
 ## 0.497.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: ligações — a primeira, a chapa de base.**

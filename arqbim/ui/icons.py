@@ -273,6 +273,39 @@ def base_plate_icon():
     return theme.icon(pm)
 
 
+def end_plate_icon():
+    """(0.498) Chapa de topo: a column's flange, the beam coming to it with a plate at its end, two bolts."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawRect(QtCore.QRectF(3, 2, 6, 28))                                        # (the column)
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawRect(QtCore.QRectF(9, 7, 3, 18))                                        # (the plate)
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawRect(QtCore.QRectF(12, 10, 17, 12))                                     # (the beam)
+    p.setBrush(QtGui.QColor(INK))
+    for y in (8.5, 23.5):
+        p.drawEllipse(QtCore.QPointF(10.5, y), 1.4, 1.4)
+    p.end()
+    return theme.icon(pm)
+
+
+def fin_plate_icon():
+    """(0.498) Cutelo: a column, a plate standing out of it, the beam's web bolted to it."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawRect(QtCore.QRectF(3, 2, 6, 28))                                        # (the column)
+    p.drawRect(QtCore.QRectF(12, 9, 17, 14))                                      # (the beam)
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawRect(QtCore.QRectF(9, 11, 9, 10))                                       # (the fin plate)
+    p.setBrush(QtGui.QColor(INK))
+    for y in (13.5, 18.5):
+        p.drawEllipse(QtCore.QPointF(14.5, y), 1.3, 1.3)
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()

@@ -2702,6 +2702,30 @@ def add_base_plates(doc, columns=None, params=None):
     return doc.execute(IfcCommand(t("cmd.base_plate"), action)).result
 
 
+def add_beam_connections(doc, kind, beams, params=None):
+    """(0.498) An end plate or a fin plate at each end of the steel beams given that reaches a steel column (and has
+    no connection there yet). One undo step. The connections' GlobalIds."""
+    language = lang()
+    todo = []
+    for beam in beams:
+        if doc.ifc.steel_section(beam) is None or doc.ifc.kind_of(beam) not in ("beam", "steel_member"):
+            continue
+        taken = {int(doc.ifc.connection_params(a.GlobalId)[2].get("end", -1)) for a in doc.ifc.connections_on([beam])
+                 if doc.ifc.connection_params(a.GlobalId)[0] in ("end_plate", "fin_plate")}
+        for end in (0, 1):
+            column = doc.ifc.beam_end_column(beam, end)
+            if column is not None and end not in taken:
+                todo.append((beam, column, end))
+    if not todo:
+        return []
+
+    def action(ifc):
+        return [ifc.add_connection(kind, [b, c], dict(params or {}, end=end), language).GlobalId
+                for b, c, end in todo]
+
+    return doc.execute(IfcCommand(t("cmd." + kind), action, changed=list({b for b, _c, _e in todo}))).result
+
+
 def set_connection(doc, guid, **values):
     """(0.497) A connection's parameters changed (mm), from it or any of its parts: made again. One undo step."""
     language = lang()
@@ -2709,8 +2733,9 @@ def set_connection(doc, guid, **values):
     if assembly is None:
         return None
     parts = [p.GlobalId for p in doc.ifc.connection_parts(assembly)]
+    members = doc.ifc.connection_params(assembly.GlobalId)[1]          # (0.498: an end plate's beam changes too)
     return doc.execute(IfcCommand(t("cmd.connection"), lambda ifc: ifc.set_connection(guid, language, **values),
-                                  changed=parts)).result
+                                  changed=parts + members)).result
 
 
 def x_brace(doc, a, b, spec, shape="x"):
@@ -4999,8 +5024,11 @@ def delete(doc, obj_ids):
     restack = sorted({c for g in guids if doc.ifc.kind_of(g) == "cladding" for c in doc.ifc.face_claddings(g)}
                      - set(guids))
     if guids:
-        doc.execute(IfcCommand(t("cmd.delete"), lambda ifc: (ifc.remove(guids), ifc.restack_claddings(restack)),
-                               remove_sketches=sketches, changed=doc.ifc.affected_walls(guids) + restack))
+        held = [m for g in guids if doc.ifc.kind_of(g) == "steel_connection"          # (0.498: an end plate's beam
+                for m in doc.ifc.connection_params(g)[1][:1] if m not in guids]      # lengthened back)
+        doc.execute(IfcCommand(t("cmd.delete"), lambda ifc: (ifc.release_connections(guids), ifc.remove(guids),
+                                                             ifc.restack_claddings(restack)),
+                               remove_sketches=sketches, changed=doc.ifc.affected_walls(guids) + restack + held))
     elif sketches:
         doc.execute(RemoveObjects(sketches, t("cmd.delete")))
 

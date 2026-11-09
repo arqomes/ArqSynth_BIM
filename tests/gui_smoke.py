@@ -654,6 +654,7 @@ def bim_flow():
     steel_member_flow()
     steel_cuts_flow()
     base_plate_flow()
+    beam_connections_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20097,6 +20098,45 @@ def base_plate_flow():
     check("chapa_de_base", offered and made and shown and thicker and win.ribbon_item("base_plate") is not None,
           "oferecida={} feitas={} ({} chapas, {} chumbadouros) propriedades={} 30mm={}".format(
               offered, made, len(plates), bolts, shown, thicker))
+
+
+def beam_connections_flow():
+    """0.498 — Beam to column: an IPE 300 between two HEB 200 columns (their flanges to it); the beam selected, the
+    selection bar offers «Chapa de topo» and «Cutelo»: «Chapa de topo» — a plate at each end with 8 bolts; a plate
+    chosen: its rows in the Properties. Captured: 498_chapa_de_topo.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    for x in (0.0, 6.0):
+        bim_actions.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.5,
+                               x_dir=(0.0, 1.0, 0.0))
+    beam = bim_actions.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)),
+                                catalog.BY_KEY["viga_ipe300"], 3.0)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection({beam})
+    pump(300)
+    acts = win._selection_actions({"IfcBeam": 1})
+    offered = win.act_end_plate in acts and win.act_fin_plate in acts
+    win.act_end_plate.trigger()
+    pump(400)
+    assemblies = [a for a in doc.ifc.connections_on([beam]) if doc.ifc.connection_params(a.GlobalId)[0] == "end_plate"]
+    bolts = sum(1 for a in assemblies for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    made = len(assemblies) == 2 and bolts == 16
+    plate = next((p.GlobalId for p in doc.ifc.connection_parts(assemblies[0]) if p.is_a("IfcPlate")), None) \
+        if assemblies else None
+    vp.set_selection({plate} if plate else set())
+    pump(300)
+    shown = "connection.rows" in win.props.editors and "connection.g" in win.props.editors
+    vp.set_selection(set())
+    vp.zoom_box((np.array((-0.3, -0.3, 2.5)), np.array((0.5, 0.3, 3.2))))
+    pump(400)
+    shot("498_chapa_de_topo.png")
+    doc.modified = False
+    check("chapa_de_topo_e_cutelo", offered and made and shown and win.ribbon_item("fin_plate") is not None,
+          "oferecidas={} feitas={} ({} parafusos) propriedades={}".format(offered, made, bolts, shown))
 
 
 def camera_move_flow():

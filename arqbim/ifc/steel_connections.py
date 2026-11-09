@@ -24,15 +24,26 @@ import ifcopenshell.util.element
 from .edit import EditRefused
 
 api = ifcopenshell.api
-KINDS = ("base_plate",)
-NAMES = {"base_plate": ("Chapa de base", "Base plate")}
+KINDS = ("base_plate", "end_plate", "fin_plate")
+NAMES = {"base_plate": ("Chapa de base", "Base plate"), "end_plate": ("Chapa de topo", "End plate"),
+         "fin_plate": ("Cutelo", "Fin plate")}
 # (mm) A × B its plate (0: the column's size + 2 × MARGIN), tp its thickness, n its anchor bolts (2, 4, 6, 8), d their
 # diameter, e their distance to the plate's edges, proj how far they stand over the plate, embed how deep in the
 # concrete, grout under the plate, a the weld's throat
 DEFAULTS = {"base_plate": {"A": 0.0, "B": 0.0, "tp": 20.0, "n": 4, "d": 20.0, "e": 50.0, "proj": 80.0, "embed": 400.0,
-                           "grout": 30.0, "a": 6.0}}
+                           "grout": 30.0, "a": 6.0},
+            # (0.498) the beam's end plate, bolted to the column: its width (0: the beam's), how far it goes over and
+            # under the beam (flush: 0), rows of two bolts, their pitch and gauge (0: the beam's width − 2 e)
+            "end_plate": {"end": 1, "tp": 20.0, "W": 0.0, "top": 0.0, "bottom": 0.0, "rows": 4, "p": 75.0, "g": 0.0,
+                          "d": 20.0, "e": 40.0, "a": 6.0},
+            # …the fin plate welded to the column, the beam's web bolted to it: its width along the beam, its rows,
+            # their pitch, the edges, the bolts' distance from the column
+            "fin_plate": {"end": 1, "tp": 10.0, "w": 115.0, "rows": 3, "p": 75.0, "e": 38.0, "eh": 65.0, "d": 20.0,
+                          "a": 6.0}}
 LIMITS = {"A": (100.0, 3000.0), "B": (100.0, 3000.0), "tp": (5.0, 100.0), "n": (2, 8), "d": (12.0, 48.0),
-          "e": (20.0, 300.0), "proj": (20.0, 300.0), "embed": (100.0, 2000.0), "grout": (0.0, 100.0), "a": (3.0, 20.0)}
+          "e": (20.0, 300.0), "proj": (20.0, 300.0), "embed": (100.0, 2000.0), "grout": (0.0, 100.0), "a": (3.0, 20.0),
+          "end": (0, 1), "W": (0.0, 1000.0), "top": (0.0, 300.0), "bottom": (0.0, 300.0), "rows": (1, 12),
+          "p": (40.0, 300.0), "g": (0.0, 600.0), "w": (60.0, 400.0), "eh": (30.0, 300.0)}
 MARGIN = 100.0                # mm round the column, its plate's default
 BOLT_SIZES = (12.0, 16.0, 20.0, 24.0, 27.0, 30.0, 36.0, 42.0, 48.0)
 
@@ -67,12 +78,58 @@ def clean(kind, params):
         except (TypeError, ValueError):
             continue
         lo, hi = LIMITS[k]
-        if k in ("A", "B") and v == 0.0:
+        if k in ("A", "B", "W", "g") and v == 0.0:
             out[k] = 0.0
             continue
         v = min(max(v, lo), hi)
-        out[k] = int(round(v)) if k == "n" else round(v, 1)
+        out[k] = int(round(v)) if k in ("n", "rows", "end") else round(v, 1)
     return out
+
+
+def end_plate_layout(params, beam, column, onto_flange):
+    """A beam's end plate on a column (sections, mm): (W, H, middle of its height from the beam's, bolt spots [(x, y)],
+    the column's thickness the bolts go through, warnings)."""
+    W = params["W"] or beam.b
+    H = beam.h + params["top"] + params["bottom"]
+    middle = (params["top"] - params["bottom"]) / 2.0
+    e, d = params["e"], params["d"]
+    g = params["g"] or W - 2 * e
+    rows, p = int(params["rows"]), params["p"]
+    spots = [(sx * g / 2, middle + (j - (rows - 1) / 2.0) * p) for j in range(rows) for sx in (-1, 1)]
+    d0 = hole(d)
+    warnings = []
+    if (W - g) / 2 < 1.2 * d0 or H / 2 - (rows - 1) * p / 2 < 1.2 * d0:
+        warnings.append(("edge", round(1.2 * d0, 1)))
+    if rows > 1 and p < 2.2 * d0:
+        warnings.append(("pitch", round(2.2 * d0, 1)))
+    if g < 2.4 * d0:
+        warnings.append(("gauge", round(2.4 * d0, 1)))
+    from ..core import steel
+    i_column = column.family in steel.I_FAMILIES
+    if i_column and onto_flange and g / 2 - d0 / 2 < column.tw / 2 + column.r:
+        warnings.append(("web", round(column.tw + 2 * column.r + d0, 1)))
+    if onto_flange and W > steel.size(column)[0]:
+        warnings.append(("wide", steel.size(column)[0]))
+    thickness = column.tf if onto_flange else column.tw
+    return W, H, middle, spots, thickness, warnings
+
+
+def fin_plate_layout(params, beam):
+    """A fin plate on a beam's web (sections, mm): (its height, bolt spots [(along the beam from the column, up)],
+    warnings)."""
+    rows, p, e, d = int(params["rows"]), params["p"], params["e"], params["d"]
+    H = (rows - 1) * p + 2 * e
+    spots = [(params["eh"], (j - (rows - 1) / 2.0) * p) for j in range(rows)]
+    d0 = hole(d)
+    warnings = []
+    if e < 1.2 * d0 or params["w"] - params["eh"] < 1.2 * d0:
+        warnings.append(("edge", round(1.2 * d0, 1)))
+    if rows > 1 and p < 2.2 * d0:
+        warnings.append(("pitch", round(2.2 * d0, 1)))
+    clear = beam.h - 2 * beam.tf - 2 * beam.r
+    if H > clear:
+        warnings.append(("tall", round(clear, 1)))
+    return H, spots, warnings
 
 
 def base_plate_layout(params, b, h):
@@ -148,13 +205,14 @@ class SteelConnectionMixin:
         its defaults). Returns the assembly."""
         if kind not in KINDS:
             raise EditRefused("connection_kind")
-        if kind == "base_plate" and self.steel_section(members[0]) is None:
+        if any(self.steel_section(m) is None for m in members):
             raise EditRefused("connection_not_steel")
         f = self.file
         label = NAMES[kind][0 if lang == "pt" else 1]
         column = self.by_guid(members[0])
         assembly = api.root.create_entity(f, ifc_class="IfcElementAssembly", predefined_type="USERDEFINED",
-                                          name="{} — {}".format(label, column.Name or ""))
+                                          name="{} — {}".format(label, " / ".join(self.by_guid(m).Name or ""
+                                                                                for m in members)))
         assembly.ObjectType = "Ligação"
         storey = self.storey_of(members[0])
         if storey:
@@ -182,10 +240,67 @@ class SteelConnectionMixin:
         assembly = self.connection_of(guid)
         if assembly is None:
             return False
+        self.release_connection(assembly)
         for part in self.connection_parts(assembly):
             api.root.remove_product(self.file, product=part)
         api.root.remove_product(self.file, product=assembly)
         return True
+
+    def release_connection(self, assembly):
+        """What a connection did to its pieces undone, before it goes: an end plate's beam back to its line's end."""
+        kind, members, params = self.connection_params(assembly.GlobalId)
+        if kind == "end_plate" and self.by_guid(members[0]) is not None:
+            self._beam_end_drawn(members[0], int(params["end"]), 0.0)
+
+    def release_connections(self, guids):
+        """The connections among elements about to be deleted released (an end plate's beam lengthened back)."""
+        for g in guids:
+            if self.by_guid(g) is not None and self.kind_of(g) == "steel_connection":
+                self.release_connection(self.by_guid(g))
+
+    def beam_end_column(self, beam, end):
+        """(0.498) The steel column a beam's end reaches (its line's end over the column, seen from above, within
+        its faces and a few centimetres), or None."""
+        p = self._beam_line(beam)[end]
+        for col in self.file.by_type("IfcColumn"):
+            if self.steel_section(col.GlobalId) is None:
+                continue
+            try:
+                centre, x_dir, (a, b), base, top = self.column_box(col.GlobalId)
+            except Exception:
+                continue
+            rel = np.asarray(p[:2], dtype=float) - centre
+            x = np.asarray(x_dir, dtype=float)
+            y = np.array((-x[1], x[0]))
+            reach = 0.05
+            if abs(float(rel @ x)) <= a + reach and abs(float(rel @ y)) <= b + reach and base - 1e-6 <= p[2] <= top + 0.05:
+                return col.GlobalId
+        return None
+
+    def _beam_line(self, beam):
+        """(start, end) of a beam's line (its section's middle), m."""
+        if self.kind_of(beam) == "steel_member":            # (its line by its insertion point: to its middle)
+            q = self.steel_member_params(beam)
+            m = self.placement(beam)
+            cx, cy = self.section_middle(self.by_guid(beam))
+            shift = m[:3, 0] / np.linalg.norm(m[:3, 0]) * cx + m[:3, 1] / np.linalg.norm(m[:3, 1]) * cy
+            return q["start"] + shift, q["end"] + shift
+        start, end, _top, _w, _h = self.beam_params(beam)
+        return np.asarray(start, dtype=float), np.asarray(end, dtype=float)
+
+    def _beam_end_drawn(self, beam, end, amount):
+        """A beam drawn out (+) or held back (−) `amount` m past its line's end `end`, made again."""
+        e = self.by_guid(beam)
+        cuts, copes, ext = self.steel_cuts(e)
+        ext = list(ext)
+        if abs(ext[end] - amount) < 1e-9:
+            return
+        ext[end] = amount
+        self.set_steel_cuts(e, ext=ext)
+        if self.kind_of(beam) == "steel_member":
+            self.set_steel_member(beam)
+        else:
+            self.rebuild_beam(beam)
 
     def connections_to_remove(self, guids):
         """What goes with elements being deleted: the whole connection of a part of one, and the connections of a
@@ -218,6 +333,8 @@ class SteelConnectionMixin:
                 continue
             self._build_connection(assembly)
             out += [p.GlobalId for p in self.connection_parts(assembly)]
+            if _kind == "end_plate":                     # (its beam held back to the plate: drawn again too)
+                out.append(members[0])
         return out
 
     def connection_warnings(self, guid):
@@ -227,11 +344,16 @@ class SteelConnectionMixin:
             return []
         kind, members, params = found
         from ..core import steel
-        sec = steel.get(self.steel_section(members[0]) or "")
-        if sec is None:
+        secs = [steel.get(self.steel_section(m) or "") for m in members]
+        if any(s is None for s in secs):
             return []
-        b, h = steel.size(sec)
-        return base_plate_layout(params, b, h)[3]
+        if kind == "base_plate":
+            b, h = steel.size(secs[0])
+            return base_plate_layout(params, b, h)[3]
+        if kind == "end_plate":
+            frame = self._beam_end_frame(members[0], int(params["end"]))
+            return end_plate_layout(params, secs[0], secs[1], self._onto_flange(members[1], frame[1]))[5]
+        return fin_plate_layout(params, secs[0])[2]
 
     # ------------------------------------------------------------ its parts
 
@@ -256,6 +378,10 @@ class SteelConnectionMixin:
             api.root.remove_product(self.file, product=part)
         if kind == "base_plate":
             parts = self._base_plate_parts(members[0], params, lang)
+        elif kind == "end_plate":
+            parts = self._end_plate_parts(members[0], members[1], params, lang)
+        elif kind == "fin_plate":
+            parts = self._fin_plate_parts(members[0], members[1], params, lang)
         else:
             parts = []
         if parts:
@@ -328,6 +454,154 @@ class SteelConnectionMixin:
             api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
         return parts
 
+    # ------------------------------------------------------------ (0.498) beam to column
+
+    def _beam_end_frame(self, beam, end):
+        """At a beam's end: (its line's end point, out — the way along the beam out of it, level —, across, up)."""
+        start, stop = self._beam_line(beam)
+        d = np.asarray(stop, dtype=float) - np.asarray(start, dtype=float)
+        d[2] = 0.0
+        d /= max(float(np.linalg.norm(d)), 1e-12)
+        out = d if end == 1 else -d
+        up = np.array((0.0, 0.0, 1.0))
+        across = np.cross(up, out)
+        return (np.asarray(stop if end == 1 else start, dtype=float), out, across, up)
+
+    def _onto_flange(self, column, out):
+        """Whether a beam coming along `out` meets an I column's flange (else its web)."""
+        _c, x_dir, _half, _b, _t = self.column_box(column)
+        x = np.asarray(x_dir, dtype=float)
+        y = np.array((-x[1], x[0]))
+        return abs(float(out[:2] @ y)) >= abs(float(out[:2] @ x))
+
+    def _column_face(self, column, point, out, width=0.0):
+        """How far along `out` from `point` the face of the column the beam meets is (m): its flange's outside, or
+        its web (between the flanges, when what comes — `width` mm — fits between them; else its flanges' tips), or a
+        tube's side."""
+        from ..core import steel
+        centre, x_dir, (a, b), _base, _top = self.column_box(column)
+        sec = steel.get(self.steel_section(column) or "")
+        x = np.asarray(x_dir, dtype=float)
+        y = np.array((-x[1], x[0]))
+        u = np.asarray(out[:2], dtype=float)
+        fits = sec is not None and width <= sec.h - 2.0 * sec.tf - 2.0 * sec.r
+        if sec is not None and sec.family in steel.I_FAMILIES and not self._onto_flange(column, out) and fits:
+            half = sec.tw / 2000.0 / max(abs(float(u @ x)), 1e-9)
+        else:
+            ux, uy = abs(float(u @ x)), abs(float(u @ y))
+            half = min(a / ux if ux > 1e-9 else np.inf, b / uy if uy > 1e-9 else np.inf)
+        along = float((centre - np.asarray(point[:2], dtype=float)) @ u)    # (the column's middle, from the point)
+        return along - half
+
+    def _frame(self, origin, x, y, z):
+        m = np.eye(4)
+        m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, y, z, origin
+        return m
+
+    def _end_plate_parts(self, beam, column, params, lang):
+        from ..core import steel
+        f = self.file
+        end = int(params["end"])
+        bsec, csec = steel.get(self.steel_section(beam)), steel.get(self.steel_section(column))
+        point, out, across, up = self._beam_end_frame(beam, end)
+        onto_flange = self._onto_flange(column, out)
+        W, H, middle, spots, through, _w = end_plate_layout(params, bsec, csec, onto_flange)
+        tp = params["tp"]
+        face = self._column_face(column, point, out, max(W, bsec.b))
+        back = face - tp / 1000.0                              # (the plate's beam side, from the line's end)
+        self._beam_end_drawn(beam, end, back)                  # (the beam ends against the plate)
+        m = self._frame(point + out * back, across, up, out)
+        material = self._column_material(beam, lang)
+        parts = []
+        plate = api.root.create_entity(f, ifc_class="IfcPlate", name="{} {}×{}×{}".format(
+            "Chapa de topo" if lang == "pt" else "End plate", _mm(W), _mm(H), _mm(tp)), predefined_type="USERDEFINED")
+        plate.ObjectType = "END_PLATE"
+        self._place(plate, m)
+        d0 = hole(params["d"])
+        self._extrusion_body(plate, [self._plate_profile(W, H, spots, d0, centre=(0.0, middle))], [(0.0, 0.0, 0.0)],
+                             [tp / 1000.0])
+        net = (W * H - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9
+        self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
+                                                         "NetWeight": net * steel.DENSITY, "GrossArea": W * H * 1e-6})
+        parts.append(plate)
+        for k, (x, y) in enumerate(spots, 1):
+            parts.append(self._bolt(m, x, y, 0.0, tp + through, params["d"], k, lang))
+        parts.append(self._weld(m, params["a"], steel.properties(bsec.name)["paint"], lang))
+        api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
+        storey = self.storey_of(beam)
+        if storey:
+            api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
+        return parts
+
+    def _fin_plate_parts(self, beam, column, params, lang):
+        from ..core import steel
+        f = self.file
+        end = int(params["end"])
+        bsec = steel.get(self.steel_section(beam))
+        point, out, across, up = self._beam_end_frame(beam, end)
+        H, spots, _w = fin_plate_layout(params, bsec)
+        tp, w = params["tp"], params["w"]
+        face = self._column_face(column, point, out, bsec.b)
+        inward = -out
+        m = self._frame(point + out * face, inward, up, np.cross(inward, up))    # (x into the beam, z across)
+        material = self._column_material(column, lang)
+        parts = []
+        plate = api.root.create_entity(f, ifc_class="IfcPlate", name="{} {}×{}×{}".format(
+            "Cutelo" if lang == "pt" else "Fin plate", _mm(w), _mm(H), _mm(tp)), predefined_type="USERDEFINED")
+        plate.ObjectType = "FIN_PLATE"
+        self._place(plate, m)
+        d0 = hole(params["d"])
+        z0 = bsec.tw / 2.0                                       # (beside the beam's web)
+        self._extrusion_body(plate, [self._plate_profile(w, H, spots, d0, centre=(w / 2.0, 0.0))],
+                             [(0.0, 0.0, z0 / 1000.0)], [tp / 1000.0])
+        net = (w * H - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9
+        self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
+                                                         "NetWeight": net * steel.DENSITY, "GrossArea": w * H * 1e-6})
+        parts.append(plate)
+        for k, (x, y) in enumerate(spots, 1):
+            parts.append(self._bolt(m, x, y, z0 + tp, -z0, params["d"], k, lang))
+        parts.append(self._weld(m, params["a"], 2.0 * H / 1000.0, lang))
+        api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
+        storey = self.storey_of(beam)
+        if storey:
+            api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
+        return parts
+
+    def _bolt(self, m, x, y, head_face, nut_face, d, k, lang):
+        """A bolt (IfcMechanicalFastener BOLT) along the frame's z at (x, y) mm: its head against `head_face`, its
+        washer and nut against `nut_face` (mm), its rod a little past the nut."""
+        f = self.file
+        s = 1.0 if nut_face >= head_face else -1.0
+        kh, wt, nh = 0.65 * d, max(3.0, round(0.15 * d)), 0.8 * d
+        ranges = [(head_face, nut_face + s * (wt + nh + 3.0)),          # (its rod)
+                  (head_face - s * kh, head_face),                       # (its head)
+                  (nut_face, nut_face + s * wt),                         # (its washer)
+                  (nut_face + s * wt, nut_face + s * (wt + nh))]         # (its nut)
+        profiles = [f.createIfcCircleProfileDef("AREA", None, self._axis2d(x, y), d / 2000.0 / self.unit_scale),
+                    self._hexagon(x, y, 1.5 * d),
+                    f.createIfcCircleProfileDef("AREA", None, self._axis2d(x, y), 1.0 * d / self.unit_scale / 1000.0),
+                    self._hexagon(x, y, 1.5 * d)]
+        bolt = api.root.create_entity(f, ifc_class="IfcMechanicalFastener", predefined_type="BOLT",
+                                      name="{} M{} {}".format("Parafuso" if lang == "pt" else "Bolt", _mm(d), k))
+        self._place(bolt, m)
+        self._extrusion_body(bolt, profiles, [(0.0, 0.0, min(a, b) / 1000.0) for a, b in ranges],
+                             [abs(b - a) / 1000.0 for a, b in ranges])
+        pset = api.pset.add_pset(f, product=bolt, name="Pset_MechanicalFastenerBolt")
+        api.pset.edit_pset(f, pset=pset, properties={"ThreadDiameter": d / 1000.0 / self.unit_scale,
+                                                     "ThreadLength": abs(ranges[0][1] - ranges[0][0]) / 1000.0
+                                                     / self.unit_scale})
+        return bolt
+
+    def _weld(self, m, a, length, lang):
+        """A fillet weld (IfcFastener WELD, no body): its throat a (mm), its length (m)."""
+        f = self.file
+        weld = api.root.create_entity(f, ifc_class="IfcFastener", predefined_type="WELD",
+                                      name="{} a{}".format("Soldadura" if lang == "pt" else "Weld", _mm(a)))
+        self._place(weld, m)
+        pset = api.pset.add_pset(f, product=weld, name="Pset_FastenerWeld")
+        api.pset.edit_pset(f, pset=pset, properties={"a": a / 1000.0 / self.unit_scale, "l": length / self.unit_scale})
+        return weld
+
     def _column_material(self, column, lang):
         material = ifcopenshell.util.element.get_material(self.by_guid(column), should_skip_usage=True)
         if material is not None and material.is_a("IfcMaterialProfileSet") and material.MaterialProfiles:
@@ -350,11 +624,13 @@ class SteelConnectionMixin:
                                                   float((y + r * math.sin(math.pi / 3 * k)) * u))) for k in range(7)]
         return self.file.createIfcArbitraryClosedProfileDef("AREA", None, self.file.createIfcPolyline(pts))
 
-    def _plate_profile(self, A, B, spots, d0):
-        """A plate's outline A × B mm round its middle, with its holes."""
+    def _plate_profile(self, A, B, spots, d0, centre=(0.0, 0.0)):
+        """A plate's outline A × B mm round `centre`, with its holes."""
         f = self.file
         u = 0.001 / self.unit_scale
-        corners = [(-A / 2, -B / 2), (A / 2, -B / 2), (A / 2, B / 2), (-A / 2, B / 2), (-A / 2, -B / 2)]
+        cx, cy = centre
+        corners = [(cx - A / 2, cy - B / 2), (cx + A / 2, cy - B / 2), (cx + A / 2, cy + B / 2),
+                   (cx - A / 2, cy + B / 2), (cx - A / 2, cy - B / 2)]
         outer = f.createIfcPolyline([f.createIfcCartesianPoint((float(x * u), float(y * u))) for x, y in corners])
         holes = [f.createIfcCircle(self._axis2d(x, y), float(d0 / 2 * u)) for x, y in spots]
         if not holes:

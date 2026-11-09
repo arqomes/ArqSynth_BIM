@@ -349,6 +349,78 @@ class Connections(unittest.TestCase):
         self.assertIsNotNone(concrete)
 
 
+class BeamConnections(unittest.TestCase):
+    """(0.498) Beam to column: the end plate and the fin plate."""
+
+    def test_end_plate(self):
+        """An IPE 300 between two HEB 200 columns turned to meet it with their flanges, 6 m apart: an end plate at each
+        end — the beam held back 10 mm (to the plate: 20 mm, against the flange's face, the beam had stopped 10 mm
+        short), the plate 150 × 300 × 20 on the flange, 4 rows of 2 bolts M20 through the plate and the flange (35 mm),
+        nuts beyond; no warnings; deleting a plate gives the beam its end back."""
+        import ifcopenshell.util.element as ue
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        for x in (0.0, 6.0):
+            bim.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.5, x_dir=(0.0, 1.0, 0.0))
+        beam = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe300"],
+                            3.0)
+        v = doc.get(beam).mesh.verts
+        self.assertAlmostEqual(float(v[:, 0].min()), 0.11, places=6)                 # (stopped at the flange + 10)
+        made = bim.add_beam_connections(doc, "end_plate", [beam])
+        self.assertEqual(len(made), 2)
+        v = doc.get(beam).mesh.verts
+        np.testing.assert_allclose((v[:, 0].min(), v[:, 0].max()), (0.12, 5.88), atol=1e-6)   # (held back to its
+        a = doc.ifc.by_guid(made[0])                                                           # plates)
+        parts = doc.ifc.connection_parts(a)
+        plate = next(p for p in parts if p.is_a("IfcPlate"))
+        bolts = [p for p in parts if p.is_a("IfcMechanicalFastener")]
+        self.assertEqual((len(bolts), ue.get_predefined_type(bolts[0])), (8, "BOLT"))
+        pv = doc.get(plate.GlobalId).mesh.verts
+        np.testing.assert_allclose((pv.min(axis=0), pv.max(axis=0)), ((0.10, -0.075, 2.70), (0.12, 0.075, 3.0)),
+                                   atol=1e-6)
+        bv = doc.get(bolts[0].GlobalId).mesh.verts                       # (through the plate and the flange, 35 mm,
+        self.assertLess(float(bv[:, 0].min()), 0.085 - 0.010)                  # its washer and nut beyond)
+        self.assertGreater(float(bv[:, 0].max()), 0.12 + 0.010)                # (its head on the beam's side)
+        self.assertEqual(doc.ifc.connection_warnings(made[0]), [])
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        bim.set_connection(doc, made[0], tp=30.0)                                             # (thicker: the beam
+        self.assertAlmostEqual(float(doc.get(beam).mesh.verts[:, 0].min()), 0.13, places=6)  # shorter)
+        plate = next(p for p in doc.ifc.connection_parts(doc.ifc.by_guid(made[0])) if p.is_a("IfcPlate"))  # (made
+        bim.delete(doc, [plate.GlobalId])                                                              # again)
+        self.assertIsNone(doc.ifc.by_guid(made[0]))
+        self.assertAlmostEqual(float(doc.get(beam).mesh.verts[:, 0].min()), 0.11, places=6)  # (its end back)
+
+    def test_fin_plate(self):
+        """An IPE 200 onto the webs of two HEB 200 (it fits between their flanges): a fin plate at each end — welded
+        to the web's face, 115 mm along the beam, beside the beam's web, 2 rows of bolts through plate and web; 3 rows
+        would not fit between the IPE 200's flanges: warned."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        for x in (0.0, 6.0):
+            bim.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.5)
+        beam = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe200"],
+                            3.0)
+        made = bim.add_beam_connections(doc, "fin_plate", [beam], params={"rows": 2})
+        self.assertEqual(len(made), 2)
+        parts = doc.ifc.connection_parts(doc.ifc.by_guid(made[0]))
+        plate = next(p for p in parts if p.is_a("IfcPlate"))
+        pv = doc.get(plate.GlobalId).mesh.verts
+        np.testing.assert_allclose((pv[:, 0].min(), pv[:, 0].max()), (0.0045, 0.0045 + 0.115), atol=1e-6)
+        self.assertAlmostEqual(float(pv[:, 1].max() - pv[:, 1].min()), 0.010, places=6)   # (10 mm thick, beside the
+        self.assertAlmostEqual(float(min(abs(pv[:, 1]))), 0.0028, places=6)               # web: 5,6 / 2 off the axis)
+        self.assertEqual(sum(1 for p in parts if p.is_a("IfcMechanicalFastener")), 2)
+        self.assertEqual(doc.ifc.connection_warnings(made[0]), [])
+        bim.set_connection(doc, made[0], rows=3)
+        self.assertEqual([c for c, _v in doc.ifc.connection_warnings(made[0])], ["tall"])
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

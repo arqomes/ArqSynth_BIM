@@ -78,7 +78,7 @@ PANELS = {
                   ("structure", ("beam", "wall", "column", "slab", "steel_member", ("beam_system", "param_surface",
                                                                                      "steel_mitre"))),
                   ("foundation", ("footing", ("combined_footing", "footings_under"))),
-                  ("connection", ("base_plate",)),                         # (0.497: Revit's Connection panel)
+                  ("connection", ("base_plate", ("end_plate", "fin_plate"))),     # (0.497–0.498: Revit's Connection)
                   ("automatic", ("propose_structure", ("beams_between", "walls_under_beams", "slabs_in_bays"),
                                  ("columns_on_grid", "remove_proposal"))),
                   ("datum", ("grid", ("grid_generate", "grid_settings", "storey_new"))),

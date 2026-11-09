@@ -812,6 +812,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_base_plate = self._action(t("act.base_plate"), lambda: self.base_plates(),
                                            icon=icons.base_plate_icon())                                # (0.497)
         self.act_base_plate.setToolTip(t("tip.base_plate"))
+        self.act_end_plate = self._action(t("act.end_plate"), lambda: self.beam_connections("end_plate"),
+                                          icon=icons.end_plate_icon())                                  # (0.498)
+        self.act_end_plate.setToolTip(t("tip.end_plate"))
+        self.act_fin_plate = self._action(t("act.fin_plate"), lambda: self.beam_connections("fin_plate"),
+                                          icon=icons.fin_plate_icon())
+        self.act_fin_plate.setToolTip(t("tip.fin_plate"))
         self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
                                             icon=icons.steel_mitre_icon())                              # (0.496)
         self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
@@ -2089,6 +2095,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if "IfcColumn" in counts and any(isinstance(g, str) and self.doc.ifc.steel_section(g) is not None
                                          for g in list(self.viewport.selection)[:20]):     # (0.497) steel columns
             acts.append(self.act_base_plate)
+        if any(isinstance(g, str) and self.doc.ifc.kind_of(g) in ("beam", "steel_member")
+               and self.doc.ifc.steel_section(g) is not None for g in list(self.viewport.selection)[:20]):
+            acts += [self.act_end_plate, self.act_fin_plate]          # (0.498) steel beams: their ends' connections
         if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
                 counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
                     isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
@@ -5075,6 +5084,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.base_plates", n=len(made)))
         else:
             self.message(t("info.base_plates_none"), warning=True)
+        return made
+
+    def beam_connections(self, kind):
+        """(0.498) Estrutura ▸ Ligação ▸ Chapa de topo / Cutelo: at the ends of the steel beams selected that reach
+        steel columns."""
+        beams = [g for g in self.viewport.selection if isinstance(g, str) and self.doc.ifc.steel_section(g)
+                 and self.doc.ifc.kind_of(g) in ("beam", "steel_member")]
+        made = bim.add_beam_connections(self.doc, kind, beams)
+        if made:
+            self.message(t("info.beam_connections", n=len(made), what=t("connection." + kind)))
+        else:
+            self.message(t("info.beam_connections_none"), warning=True)
         return made
 
     def steel_mitre(self):

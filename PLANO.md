@@ -1579,7 +1579,9 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    (BRACE, PURLIN), peso nas Propriedades e nas Tabelas (categoria nova «Estrutura metálica»).
 3. **Ligações.** (0.497.0: o motor das ligações — `ifc/steel_connections.py`, {tipo, peças, parâmetros} num
    `IfcElementAssembly`, refeitas no fim de cada comando que muda as peças, apagadas inteiras — e a **chapa de base**
-   com os chumbadouros e a soldadura, medidas nas Propriedades, avisos do EC3-1-8. Faltam as outras.)
+   com os chumbadouros e a soldadura, medidas nas Propriedades, avisos do EC3-1-8. 0.498.0: **chapa de topo** e
+   **cutelo** nas pontas das vigas que chegam a pilares de aço. Faltam: cantoneiras de alma, emenda, gousset dos
+   contraventamentos, joelho com chapas, madre–asna, viga–viga, e «aplicar a todos os nós iguais».)
    Como as seis do DetailCraft, com os nomes daqui — chapa de base, chapa de topo (rente ou estendida),
    cutelo de alma, cantoneiras de alma (a mais), emenda com cobrejuntas, gousset de contraventamento, joelho com chapas —
    e a ligação madre–asna (cantoneira de apoio). Guardadas como {tipo, peças, parâmetros} e refeitas quando as peças

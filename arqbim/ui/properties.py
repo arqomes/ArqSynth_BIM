@@ -1942,7 +1942,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         for role, (n, metres) in (p.get("framing_summary") or {}).items():
             self._row(t("framing.role." + role), t("framing.count", n=n, m=_len(metres)))
 
-    CONNECTION_FIELDS = {"base_plate": ("A", "B", "tp", "n", "d", "e", "proj", "embed", "grout", "a")}
+    CONNECTION_FIELDS = {"base_plate": ("A", "B", "tp", "n", "d", "e", "proj", "embed", "grout", "a"),
+                         "end_plate": ("tp", "W", "top", "bottom", "rows", "p", "g", "d", "e", "a"),      # (0.498)
+                         "fin_plate": ("tp", "w", "rows", "p", "e", "eh", "d", "a")}
 
     def _connection_rows(self, guid, p):
         """(0.497) A steel connection's values (mm; a plate's 0: from the column), each changed here — the whole
@@ -1961,7 +1963,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                     v = float(text.replace(",", ".").replace("mm", "").strip())
                 except ValueError:
                     return None
-                if k in ("A", "B") and v == 0.0:
+                if k in ("A", "B", "W", "g") and v == 0.0:
                     return 0.0
                 return v if lo <= v <= hi else None
             return parse
@@ -1970,6 +1972,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             if k == "n":
                 self._choice_combo(t("connection.field.n"), "connection.n", guid,
                                    [(str(n), n) for n in (2, 4, 6, 8)], int(p.get("n") or 4))
+            elif k == "rows":                              # (0.498) rows of bolts
+                self._choice_combo(t("connection.field.rows"), "connection.rows", guid,
+                                   [(str(n), n) for n in range(1, 11)], int(p.get("rows") or 3))
             elif k == "d":
                 self._choice_combo(t("connection.field.d"), "connection.d", guid,
                                    [("M{:g}".format(d), d) for d in sc.BOLT_SIZES], float(p.get("d") or 20.0))

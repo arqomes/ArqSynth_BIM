@@ -644,6 +644,28 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.498 — Chapa de topo e cutelo (estrutura metálica, passo 3b)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.498.0**.
+
+1. Faça Ctrl+N. Com a ferramenta **Pilar**, tipo **Pilar HEB 200 — S275**, ponha dois pilares a 6 m um do outro (na
+   barra, carregue em **R** antes de clicar para rodar o pilar 90°, de modo que os banzos fiquem virados um para o
+   outro).
+2. Com a ferramenta **Viga**, tipo **Viga IPE 300 — S275**, desenhe uma viga do meio de um pilar ao meio do outro: para
+   a 1 cm dos banzos.
+3. Com **Selecionar**, clique na viga: na barra da seleção aparecem **Chapa de topo** e **Cutelo**. Clique em **Chapa de
+   topo**: em cada ponta aparece uma chapa com 8 parafusos através do banzo do pilar (veja de perto no 3D, F8). A viga
+   encurtou para acabar nas chapas.
+4. Clique numa chapa: nas **Propriedades**, o grupo **Ligação — Chapa de topo**. Mude **Chapa acima da viga** para `80`:
+   a chapa passa a sair por cima da viga (chapa estendida). Mude **Fiadas de parafusos** para `3`.
+5. Mude **Distância entre parafusos** para `60`: aparecem os avisos de que os parafusos estão perto demais e batem na
+   alma do pilar. Volte a pôr `0` (automática).
+6. Carregue em **Delete** com a chapa escolhida: sai a ligação e a viga volta a chegar a 1 cm do pilar. Ctrl+Z volta.
+7. Desenhe outra viga, **Viga IPE 200**, entre dois pilares HEB 200 **sem os rodar** (a viga chega às almas, entre os
+   banzos). Escolha-a e clique em **Cutelo**: em cada ponta, uma chapa ao lado da alma da viga, soldada à alma do pilar,
+   com 3 parafusos. Aparece o aviso de que o cutelo não cabe entre os banzos da viga; mude **Fiadas de parafusos** para
+   `2`: o aviso sai.
+
 ## 0.497 — Chapa de base (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.497.0**.
