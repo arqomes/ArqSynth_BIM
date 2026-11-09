@@ -1194,6 +1194,41 @@ class KneePlate(unittest.TestCase):
         self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
 
 
+class Erection(unittest.TestCase):
+    """(0.514) The erection list."""
+
+    def test_rows(self):
+        """A shed: an assembly a piece (26: 4 columns, 4 rafters, 8 braces, 10 purlins), in the order they go up —
+        the columns first (phase 1), then the rafters, the braces, the purlins; a column with its base plate and its 2
+        gussets welded to it (Ch1, Ch2), heavier than the column alone by them; a rafter with its 5 cleats; the
+        centres of gravity inside the shed; all the plates in some assembly: the total weight that of the bill of
+        materials."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, schedules
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        rows = schedules.rows(doc, "erection")
+        self.assertEqual(len(rows), 26)
+        self.assertEqual([r["order"] for r in rows], list(range(1, 27)))
+        self.assertEqual([r["phase_n"] for r in rows], sorted(r["phase_n"] for r in rows))
+        self.assertEqual([r["mark"] for r in rows[:4]], ["P1"] * 4)
+        self.assertEqual(rows[0]["parts"], "Ch1, Ch2")
+        self.assertEqual(rows[0]["parts_n"], 3)
+        rafter = next(r for r in rows if r["mark"] == "V1")
+        self.assertEqual((rafter["parts"], rafter["parts_n"]), ("Ch3", 5))
+        steel = {r["mark"]: r for r in schedules.rows(doc, "steel")}
+        column_alone = steel["P1"]["weight"] / 4
+        self.assertGreater(rows[0]["weight"], column_alone + 20.0)
+        total = sum(r["weight"] for r in rows)
+        self.assertAlmostEqual(total, sum(r["weight"] for r in steel.values()), delta=total * 0.002)
+        for r in rows:
+            x, y, z = (float(c.replace(",", ".")) for c in r["cog"].split("; "))
+            self.assertTrue(-0.5 <= x <= 6.5 and -0.5 <= y <= 12.5 and 0.0 <= z <= 7.5, r["cog"])
+        self.assertEqual(schedules.counts(doc)["erection"], 26)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

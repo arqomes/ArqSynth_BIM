@@ -1645,7 +1645,9 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    livre) com o código de forma BS 8666 (o que o ArqSynth já usa), malhas eletrossoldadas (`IfcReinforcingMesh`, as
    designações comerciais portuguesas), verificação de recobrimento, espaçamento livre e congestionamento (EC2 4.4.1.2,
    8.2), no mapa de armaduras que já existe.
-10. **Montagem e construtibilidade** (depois): fases de montagem, peso e centro de gravidade de cada conjunto, ordem
+10. **Montagem e construtibilidade** (0.514.0: a tabela **Estrutura metálica: montagem** — cada conjunto, peça com
+    as chapas soldadas, pela ordem de montagem por fases, com o peso a içar e o centro de gravidade. Faltam: as fases
+    escolhidas à mão, a ordem pelos apoios, a construtibilidade.) Fases de montagem, peso e centro de gravidade de cada conjunto, ordem
     pelos apoios; espaço para a chave, furos de escoamento e respiro para a galvanização, peças maiores que o transporte
     ou que a tina de galvanização, choques entre peças.
 

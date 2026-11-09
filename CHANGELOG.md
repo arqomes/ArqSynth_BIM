@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.514.0 — 2026-11-09
+
+**Estrutura metálica, passo 10 (primeira parte): a montagem.**
+
+- Tabela nova **Estrutura metálica: montagem** (painel Tabelas): uma linha por **conjunto** — cada peça com as chapas
+  soldadas a ela (um pilar com a chapa de base e os gousset, uma viga com as chapas de topo, uma asna com as orelhas
+  das madres…) — pela **ordem de montagem**: primeiro os pilares, depois as vigas e asnas, os contraventamentos e as
+  madres, e em cada fase a partir do primeiro canto. Para cada conjunto: a fase, a marca, o nome, as chapas soldadas,
+  o **peso a içar** e o **centro de gravidade** (x; y; z) — o que a grua precisa de saber.
+- Exporta-se em Excel/CSV como as outras tabelas; o total do peso é o da lista de material.
+
 ## 0.513.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: o joelho aparafusado.**

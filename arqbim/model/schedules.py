@@ -35,6 +35,9 @@ CATEGORIES = {
     "bolts": ((), ("bolt", "bolt_kind", "count")),
     # (0.501) the bars to buy: a line a section (bars of 12 m, metres bought, metres of pieces, waste)
     "cutting": ((), ("section", "grade", "bars", "bought", "used", "waste")),
+    # (0.514) the erection: a line an assembly (a piece and the plates welded to it), in the order it goes up — its
+    # phase, its mark, what it is, its plates, its weight to lift, its centre of gravity
+    "erection": ((), ("order", "phase", "mark", "piece", "parts", "weight", "cog")),
     "doors": (("IfcDoor",), ("name", "type", "storey", "width", "height", "host")),
     "windows": (("IfcWindow",), ("name", "type", "storey", "width", "height", "host")),
     # (0.125) the rooms: their areas, their finishes (read from the IFC's spaces, not from the shapes on screen)
@@ -49,7 +52,8 @@ CATEGORIES = {
     "keynotes": ((), ("code", "keynote_text", "count")),
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
-ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "doors", "windows",
+ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "erection", "doors",
+         "windows",
          "rooms", "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
@@ -104,6 +108,7 @@ def counts(doc):
     out["steel"] = len(steel_rows(doc))                # (0.500)
     out["bolts"] = len(bolt_rows(doc))
     out["cutting"] = len(cutting_rows(doc))            # (0.501)
+    out["erection"] = len(erection_rows(doc))          # (0.514)
     out["electrical"] = len(electrical_rows(doc))
     out["keynotes"] = len(keynote_rows(doc))
     return out
@@ -240,6 +245,80 @@ def cutting_rows(doc):
              **{k: r[k] for k in ("section", "grade", "bars", "bought", "used", "waste")}} for r in found]
 
 
+PHASES = {"P": 1, "V": 2, "CV": 3, "M": 4, "E": 5}     # (0.514) the erection's order: columns, beams, bracing, purlins
+
+
+def _solid(mesh):
+    """(volume m³, centre of gravity (3,)) of a closed mesh — its tetrahedra from the origin, signed."""
+    import numpy as np
+    v = np.asarray(mesh.verts, dtype=float)
+    t = np.asarray(mesh.tris, dtype=int)
+    if not len(t):
+        return 0.0, v.mean(axis=0) if len(v) else np.zeros(3)
+    a, b, c = v[t[:, 0]], v[t[:, 1]], v[t[:, 2]]
+    vols = np.einsum("ij,ij->i", a, np.cross(b, c)) / 6.0
+    total = float(vols.sum())
+    if abs(total) < 1e-12:
+        return 0.0, v.mean(axis=0)
+    centre = ((a + b + c) / 4.0 * vols[:, None]).sum(axis=0) / total
+    return abs(total), centre
+
+
+def erection_rows(doc):
+    """(0.514) The steel's erection — the plan's step 10: a line an assembly (each steel piece with the plates welded to
+    it: a column's base plate and gussets, a beam's end plates, a rafter's cleats…) — dicts with "guid" (the piece's),
+    "kind" "erection", "order" (1, 2…), "phase" («1 — Pilares»…), "mark", "piece" (its name), "parts" (its plates'
+    marks), "weight" (kg, to lift), "cog" («x; y; z» m) — in the order they go up: by phase, then from the first
+    corner on (x, then y)."""
+    import json
+    import numpy as np
+    from ..core import steel
+    from ..i18n import decimal_sep, t
+    try:
+        marks, pieces = doc.ifc.steel_marks()
+    except Exception:                                  # (the IFC still being read)
+        return []
+    welded = {}
+    for p in pieces:
+        if p["prefix"] != "Ch":
+            continue
+        record = json.loads(doc.ifc._params(doc.ifc.by_guid(p["guid"])).get("Chapa") or "{}")
+        if record.get("peca"):
+            welded.setdefault(record["peca"], []).append(p)
+    out = []
+    for p in pieces:
+        if p["prefix"] == "Ch":
+            continue
+        obj = doc.get(p["guid"])
+        if obj is None or obj.mesh is None or not len(obj.mesh.verts):
+            continue
+        volume, centre = _solid(obj.mesh)
+        weight = volume * steel.DENSITY if obj.mesh.is_closed() and volume > 0 else p["weight"]
+        moment = centre * weight
+        names = []
+        for q in welded.get(p["guid"], []):
+            plate = doc.get(q["guid"])
+            if plate is None or plate.mesh is None or not len(plate.mesh.verts):
+                continue
+            _v, c = _solid(plate.mesh)
+            weight += q["weight"]
+            moment = moment + c * q["weight"]
+            names.append(marks.get(q["guid"], ""))
+        cog = moment / weight if weight > 0 else centre
+        phase = PHASES.get(p["prefix"], 5)
+        sep = decimal_sep()
+        out.append({"guid": p["guid"], "guids": [p["guid"]] + [q["guid"] for q in welded.get(p["guid"], [])],
+                    "kind": "erection", "phase_n": phase, "phase": t("erection.phase{}".format(phase)),
+                    "mark": marks.get(p["guid"], ""), "piece": obj.name, "name": obj.name, "type": p["section"],
+                    "storey": "", "parts": ", ".join(sorted(n for n in set(names) if n)) or "—",
+                    "parts_n": len(names), "weight": weight, "x": float(cog[0]), "y": float(cog[1]),
+                    "cog": "; ".join("{:.2f}".format(float(c)).replace(".", sep) for c in cog)})
+    out.sort(key=lambda r: (r["phase_n"], round(r["x"], 1), round(r["y"], 1)))
+    for k, r in enumerate(out, 1):
+        r["order"] = k
+    return out
+
+
 def tiles_rows(doc):
     """(0.279) The roofs' tiles: dicts with "guid" (the roof's), "kind" "tiles", "roof", "tile", "tiles", "cut",
     "caps", "weight" (kg), "area" (m², along the slope) — a roof each."""
@@ -318,6 +397,8 @@ def rows(doc, category):
         return bolt_rows(doc)
     if category == "cutting":                          # (0.501)
         return cutting_rows(doc)
+    if category == "erection":                         # (0.514)
+        return erection_rows(doc)
     objs =[o for o in doc.objects.values() if o.is_bim and category_of(o.ifc_class) == category]
     info = doc.ifc.schedule_info([o.id for o in objs])
     levels = {name: z for _g, name, z in doc.storeys()}

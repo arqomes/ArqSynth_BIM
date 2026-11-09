@@ -20223,6 +20223,11 @@ def steel_lists_flow():
     win.open_table("cutting")                                            # (0.501) the bars to buy
     pump(300)
     cutting = panel.table.rowCount() >= 3 and "HEB 200" in panel.text()
+    win.open_table("erection")                                           # (0.514) the erection's order
+    pump(300)
+    erection = panel.table.rowCount() >= 26 and "1 — Pilares" in panel.text() and "Ordem" in panel.text()
+    shot("514_montagem.png")
+    cutting = cutting and erection
     import tempfile
     folder = tempfile.mkdtemp(prefix="arqsynth_dstv_")
     paths = win.export_steel_nc(folder)                                  # (0.501) the NC1 files

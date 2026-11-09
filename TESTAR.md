@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.514 — Montagem (estrutura metálica, passo 10)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.514.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (dois cliques, por exemplo 6 m).
+2. Abra as **Tabelas** (barra da esquerda, ou Ctrl+T) e clique em **Estrutura metálica: montagem**.
+3. Confira: a coluna **Ordem** de 1 em diante; primeiro os 4 pilares («1 — Pilares», com «Ch1, Ch2» — a chapa de base
+   e os gousset soldados), depois as asnas («2 — Vigas e asnas», com «Ch3» — as orelhas das madres), os
+   contraventamentos e as madres.
+4. A coluna **Peso** é o que a grua levanta (um pilar com as chapas pesa mais do que na lista de material, onde as
+   chapas aparecem à parte); o **Centro de gravidade** está em x; y; z (metros).
+5. Em baixo, o total do peso é igual ao total da **lista de material**.
+6. **Exportar** a tabela para Excel: abre com as mesmas colunas.
+
 ## 0.513 — Joelho aparafusado (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.513.0**.

@@ -313,6 +313,16 @@ _STRINGS = {
     "sched.cat.bolts": ("Estrutura metálica: parafusos", "Steel structure: bolts"),
     "sched.cat.cutting": ("Estrutura metálica: corte das barras", "Steel structure: bar cutting"),      # (0.501)
     "sched.col.bars": ("Barras de 12 m", "12 m bars"),
+    "sched.cat.erection": ("Estrutura metálica: montagem", "Steel structure: erection"),          # (0.514)
+    "sched.col.order": ("Ordem", "Order"),
+    "sched.col.phase": ("Fase", "Phase"),
+    "sched.col.parts": ("Chapas soldadas", "Welded plates"),
+    "sched.col.cog": ("Centro de gravidade (x; y; z m)", "Centre of gravity (x; y; z m)"),
+    "erection.phase1": ("1 — Pilares", "1 — Columns"),
+    "erection.phase2": ("2 — Vigas e asnas", "2 — Beams and rafters"),
+    "erection.phase3": ("3 — Contraventamentos", "3 — Bracing"),
+    "erection.phase4": ("4 — Madres", "4 — Purlins"),
+    "erection.phase5": ("5 — Outros", "5 — Others"),
     "sched.col.bought": ("Comprados", "Bought"),
     "sched.col.used": ("Nas peças", "In pieces"),
     "sched.col.waste": ("Desperdício", "Waste"),

@@ -1201,7 +1201,8 @@ class SteelConnectionMixin:
             material.is_a("IfcMaterialProfileSet") and material.MaterialProfiles[0].Material else ""
         found = re.search(r"S\d{3}", name or "")
         record = {"L": float(length), "W": float(width), "t": float(thickness), "grade": found.group(0) if found else "",
-                  "furos": [[float(x), float(y), float(d)] for x, y, d in holes]}
+                  "furos": [[float(x), float(y), float(d)] for x, y, d in holes],
+                  "peca": piece}                       # (0.514: the piece it is welded to — its assembly's)
         if contour:
             record["contorno"] = [[round(float(x), 1), round(float(y), 1)] for x, y in contour]
         self._set_params(plate, {"Chapa": json.dumps(record)})
