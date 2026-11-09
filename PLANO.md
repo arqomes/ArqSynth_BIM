@@ -997,8 +997,12 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       com a posição exata, inverter e remover; guardados ao Criar/Atualizar). Ficam por fazer o plano inclinado e a
       caixa de corte própria da cena (hoje vai a da vista 3D com nome), e o aspeto do corte do Presentation (cor,
       padrão, «Sólido / Poché / Categoria»).
-   4. **Etiquetas** (o separador «Etiquetas»): texto num ponto do modelo — além das dos ambientes, que já vão —, vistas
-      no 3D; vão como etiquetas da página 3D (o importador do Presentation passa a lê-las).
+   4. ~~**Etiquetas** (o separador «Etiquetas»): texto num ponto do modelo — além das dos ambientes, que já vão —, vistas
+      no 3D; vão como etiquetas da página 3D (o importador do Presentation passa a lê-las)~~ (0.485.0: Piso, Parede, Em
+      pé e Chamada com um clique no modelo; nome, nota, número, retângulo ou círculo, cores, opacidade, tamanho,
+      rotação, poste/chamada, «Virar para a câmara», «Ocultar quando tapada»; o olho de cada uma guardado na cena; o
+      importador do Presentation lê-as e, ao «Atualizar», muda as do BIM no lugar). Fica por fazer mover uma etiqueta
+      no 3D (arrastar) e as cotas do separador (a secção «Cotas» por baixo das etiquetas no Presentation).
    5. **Efeitos**: ver no BIM, antes de exportar, a construção peça a peça e a explosão como o Presentation as toca (o
       sol do dia e o movimento de câmara já se veem).
    6. **Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D

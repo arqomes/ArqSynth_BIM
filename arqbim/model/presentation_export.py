@@ -231,6 +231,11 @@ def package(doc, name=None, thumbnails=None):
     first = presentation_model.initial(doc, [s for s in chosen if SCENE_ID + s.key in sent])
     model3d["initialSceneId"] = SCENE_ID + first if first else None
     model3d["sun"] = _sun(doc)
+    tags = presentation_model.tags(doc)                     # (0.485) the labels put in the Presentation tab
+    if tags:
+        from . import presentation_tags
+        model3d["labels"] = [presentation_tags.to_presentation(tag, lambda p: _gl(p, offset), _gl_dir)
+                             for tag in tags]
     model3d["materials"] = _materials(gltf)                 # (0.365) the glass, the water…
     model3d["lights"] = _lights(doc, gltf)                  # …and the lights, by their finishes and fixtures
     options = getattr(doc, "presentation", None) or presentation_model.empty()
@@ -553,16 +558,19 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     rooms = presentation_model.spaces(doc) if any(camera_moves.interior(s.move) for s in chosen) else []
     scenes = []
     known = {l["id"] for l in layers}
+    tag_ids = {t["id"] for t in presentation_model.tags(doc)}
 
     def add(scene, camera, hidden=(), planes=(), style=None):
         hidden = list(hidden)
         hidden += [i for i in (LAYER_ID + g for g in scene.hidden_layers) if i in known and i not in hidden]   # (0.479)
         planes = list(planes) + _cut_planes(scene, offset)                                                 # (0.484)
+        labels = ["bim_tag_" + i for i in scene.hidden_tags if i in tag_ids]                                # (0.485)
         scenes.append(dict({"id": SCENE_ID + scene.key, "name": scene.name, "order": len(scenes), "kind": scene.kind,
                             "camera": _tuned_camera(scene, camera, offset), "hiddenLayers": hidden,
                             "section": {"planes": list(planes)} if planes else None,
                             "style": _tuned_style(scene, style or {"mode": "material", "edges": True,
                                                                    "shadows": False})},
+                           **({"hiddenLabels": labels} if labels else {}),
                            **_chosen(scene, thumbnails), **_move(doc, scene, building, rooms, offset)))
 
     for scene in chosen:

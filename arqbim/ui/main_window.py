@@ -46,6 +46,7 @@ from ..tools.image import CropImageTool, FacadeImageTool
 from ..tools.platform import PlatformOutlineTool
 from ..tools.slab import SlabOutlineTool
 from ..tools.roof_blocks import RoofBlocksTool
+from ..tools.presentation_label import LabelPlaceTool
 from ..tools.wall_profile import WallProfileTool
 from ..tools.base import MIDDLE
 from ..tools.base import Option
@@ -325,6 +326,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tools["crop_image"] = CropImageTool(self)         # (no button: a part of an image kept, 0.209)
         self.tools["wall_profile"] = WallProfileTool(self)     # (no button: Editar perfil of a wall, 0.109)
         self.tools["roof_blocks"] = RoofBlocksTool(self)       # (no button: a roof's blocks in the 3D view, 0.385)
+        self.tools["pres_label"] = LabelPlaceTool(self)        # (no button: the Presentation tab's labels, 0.485)
         self._build_menus()
         self._build_toolbar()
         self._load_mouse_scheme()                  # (the middle button as chosen last time, 0.78)

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.485.0 — 2026-11-09
+
+**Etiquetas na interface do Presentation** (o dono: «Sim, etiquetas»; passo 4 da lista do PLANO).
+
+- O separador **Etiquetas** da coluna da direita é agora o do Presentation:
+  - **Adicionar etiqueta**: **Piso** (deitada no chão), **Parede** (colada à parede), **Em pé** (com poste) e
+    **Chamada** (afastada da parede por uma linha). Escolhe-se uma e clica-se no modelo: enquanto se aponta, vê-se o
+    contorno da etiqueta no sítio; o clique põe-na lá, com o nome «Ambiente 1», «Ambiente 2»… Fora do modelo vai para o
+    chão. Esc cancela.
+  - A **lista** das etiquetas, cada uma com a sua cor, onde está e o **olho** (oculta-a nesta cena).
+  - A etiqueta escolhida edita-se por baixo: **Nome** e **Nota** (ex.: «24 m²»), cada um com o tamanho da letra;
+    **Retângulo** ou **Círculo** (com o número); **Fundo** e **Texto** (cores); **Opacidade**; **Tamanho**; **Rotação**
+    (oito botões de 45 em 45° e um deslizador que se prende a eles); o comprimento do **Poste** ou da **Chamada**;
+    **Virar para a câmara** (as em pé); **Ocultar quando tapada**; **Apagar**.
+  - Uma etiqueta nova herda o aspeto da escolhida (ou da última posta), como no Presentation.
+  - Por baixo continua a opção dos ambientes como etiquetas.
+- As etiquetas veem-se no 3D do BIM, desenhadas como no Presentation (caixa de cantos redondos com o nome em maiúsculas
+  e a nota, ou círculo com o número); só dentro da interface do Presentation.
+- As etiquetas são do modelo (gravam-se com o projeto); o **olho** de cada uma guarda-se na cena ao **Criar cena /
+  Atualizar**, como as camadas e os cortes. Cada mudança é um passo de desfazer.
+- Vão para o Presentation como etiquetas da página 3D, com todos os campos; cada cena leva as que esconde.
+- **No Presentation** (o importador, ramo `integracao-arqsynth-bim`): lê as etiquetas do BIM e as escondidas de cada
+  cena; ao **Atualizar** a página, as do BIM mudam no lugar, as apagadas no BIM saem e as feitas no Presentation ficam.
+
 ## 0.484.0 — 2026-11-09
 
 **Cortes na interface do Presentation** (o dono: «é importante criar cortes…»; passo 3 da lista do PLANO).

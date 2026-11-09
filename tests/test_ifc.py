@@ -10091,6 +10091,87 @@ class GltfExport(unittest.TestCase):
         self.assertGreater(np.dot(flat["normal"], under) + flat["constant"], 0.0)
         self.assertIsNone(model["scenes"][1]["section"]["planes"][1:] or None)      # (the plan: its own cut only)
 
+    def test_presentation_tags(self):
+        """0.485: the labels put in the Presentation tab — the model's (kept with the file), each scene with those it
+        hides (labels gone left out); in the GLB as the Presentation's SpaceLabels (its fields, «bim_tag_<id>», the
+        point and the normal in its axes) and each scene's hiddenLabels."""
+        from arqbim.model import gltf_export, presentation as pm, presentation_export as pe, presentation_tags as pt
+        doc = Document()
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        bim.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+        sala = pt.new_tag("floor", (2.0, 1.5, 0.0), (0.0, 0.0, 1.0))
+        rua = pt.new_tag("wall_leader", (0.0, 2.0, 1.4), (-1.0, 0.0, 0.0), [sala], style={"background": "#ffcc00"})
+        self.assertEqual([sala["title"], sala["number"], rua["title"], rua["number"]],
+                         ["Ambiente 1", "01", "Ambiente 2", "02"])
+        self.assertEqual(rua["background"], "#ffcc00")
+        doc.set_presentation(pm.with_tags(doc.presentation, [sala, rua]))
+        doc.set_presentation(pm.changed(doc.presentation, "geral", hidden_tags=[rua["id"], rua["id"], "gone"]))
+        self.assertEqual([t["id"] for t in pm.tags(doc)], [sala["id"], rua["id"]])
+        self.assertEqual(pm.scenes(doc)[0].hidden_tags, tuple(sorted((rua["id"], "gone"))))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "casa.ifc")
+            doc.save(path)
+            again = Document()
+            again.open(path)
+            self.assertEqual(pm.tags(again), pm.tags(doc))
+            glb = os.path.join(tmp, "casa.glb")
+            pe.export(again, glb, "Casa")
+            model = pe.read(glb)["presentation"]["model3d"]
+        offset = np.asarray(model["offset"])
+        labels = {label["id"]: label for label in model["labels"]}
+        self.assertEqual(sorted(labels), sorted(["bim_tag_" + sala["id"], "bim_tag_" + rua["id"]]))
+        put = labels["bim_tag_" + sala["id"]]
+        self.assertEqual({k: put[k] for k in ("title", "number", "shape", "placement", "background", "textColor",
+                                              "leaderLength", "faceCamera", "hideWhenOccluded")},
+                         {"title": "Ambiente 1", "number": "01", "shape": "rect", "placement": "floor",
+                          "background": "#9ec8a0", "textColor": "#111111", "leaderLength": 0.8, "faceCamera": False,
+                          "hideWhenOccluded": True})
+        np.testing.assert_allclose(put["position"], gltf_export._y_up(np.array((2.0, 1.5, 0.0)) - offset)[0],
+                                   atol=1e-4)
+        self.assertEqual(put["normal"], [0.0, 1.0, 0.0])                                # (up, in its axes)
+        self.assertEqual(labels["bim_tag_" + rua["id"]]["normal"], [-1.0, 0.0, 0.0])
+        self.assertEqual(model["scenes"][0]["hiddenLabels"], ["bim_tag_" + rua["id"]])  # (the one gone: left out)
+        self.assertNotIn("hiddenLabels", model["scenes"][1])
+
+    def test_presentation_tag_frames(self):
+        """0.485: where a label is drawn, as the Presentation's — on a floor its top to the north, turned by its
+        rotation; on a wall its top up; standing high on its posts (two, one for a circle), facing its normal or, when
+        it faces the camera, the viewer; beside a wall at the end of its leader. Its quad as big as the Presentation's
+        (0,55 m high a rectangle, 0,95 m a circle, by its scale); a turn near a multiple of 45° put on it."""
+        from arqbim.model import presentation_tags as pt
+        floor = pt.new_tag("floor", (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        f = pt.frame(floor, 2.0)
+        bl, br, tr, tl = (np.array(p) for p in f["corners"])
+        np.testing.assert_allclose(br - bl, (1.1, 0.0, 0.0), atol=1e-9)                # (2 × 0,55 m wide, east)
+        np.testing.assert_allclose(tl - bl, (0.0, 0.55, 0.0), atol=1e-9)               # (its top to the north)
+        self.assertAlmostEqual(bl[2], pt.LIFT)
+        turned = pt.frame(dict(floor, rotation=90.0), 2.0)
+        np.testing.assert_allclose(np.array(turned["corners"][1]) - turned["corners"][0], (0.0, 1.1, 0.0), atol=1e-9)
+        wall = pt.frame(pt.new_tag("wall", (0.0, 0.0, 1.5), (0.0, -1.0, 0.0)), 1.0)
+        bl, br, tr, tl = (np.array(p) for p in wall["corners"])
+        np.testing.assert_allclose(tl - bl, (0.0, 0.0, 0.55), atol=1e-9)               # (its top up)
+        self.assertAlmostEqual(abs(br[0] - bl[0]), 0.55)
+        stand = pt.new_tag("standing", (1.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+        s = pt.frame(stand, 1.0)
+        self.assertEqual(len(s["lines"]), 2)
+        self.assertAlmostEqual(min(p[2] for p in s["corners"]), 1.1)                   # (on its posts of 1,1 m)
+        circle = pt.frame(dict(stand, shape="circle"), 1.0)
+        self.assertEqual(len(circle["lines"]), 1)
+        self.assertAlmostEqual(circle["corners"][3][2] - circle["corners"][0][2], 0.95)
+        facing = pt.frame(dict(stand, face_camera=True), 1.0, toward=(1.0, 0.0, 0.2))
+        a, b = np.array(facing["corners"][0]), np.array(facing["corners"][1])
+        self.assertAlmostEqual(float((b - a) @ np.array((1.0, 0.0, 0.0))), 0.0)        # (square to the viewer)
+        lead = pt.frame(pt.new_tag("wall_leader", (0.0, 0.0, 1.5), (-1.0, 0.0, 0.0)), 1.0)
+        (start, end), = lead["lines"]
+        self.assertAlmostEqual(math.dist(start, end), 0.8)
+        self.assertEqual([pt.snap_angle(v) for v in (2.0, 47.0, 52.0, 357.0, 120.0)], [0.0, 45.0, 52.0, 0.0, 120.0])
+        self.assertIsNone(pt.clean_tag({"title": "sem id"}))
+        kept = pt.clean_tag(dict(floor, scale=99, background="verde", placement="tecto", normal=(0, 0, 0)))
+        self.assertEqual([kept["scale"], kept["background"], kept["placement"], kept["normal"]],
+                         [5.0, "#9ec8a0", "floor", (0.0, 0.0, 1.0)])
+        self.assertEqual(pt.free_number([dict(floor, title="Ambiente 1"), dict(floor, title="Ambiente 3")], "Ambiente"),
+                         2)
+
     def test_presentation_camera_moves(self):
         """0.364: a scene's camera move (one of the Presentation's) — chosen with its time, a name it does not know
         not kept; in the GLB: its name, its time (the move's own when none was given), the building's measures (the

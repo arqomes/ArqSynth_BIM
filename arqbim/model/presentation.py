@@ -39,7 +39,8 @@ DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effec
             # (0.479) the ArqSynth Presentation tab: what «Criar cena» / «Atualizar» keep of the view
             "name": "", "projection": "", "fov": 0.0, "locked": False, "style": "", "quality": "auto", "ao": True,
             "ao_intensity": 1.0, "hidden_layers": (), "eye": (), "target": (), "omit": False,
-            "cuts": ()}                                   # (0.484) ((type, position, flipped), …)
+            "cuts": (),                                   # (0.484) ((type, position, flipped), …)
+            "hidden_tags": ()}                            # (0.485) the labels it hides (their ids)
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
           "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
           "ao_intensity": (0.0, 2.0)}
@@ -93,11 +94,26 @@ class Scene:
     target: tuple = ()
     omit: bool = False
     cuts: tuple = ()            # (0.484) its section planes: ((type of CUT_TYPES, position m, side turned), …)
+    hidden_tags: tuple = ()     # (0.485) the labels (model/presentation_tags) it hides: their ids
 
 
 def empty():
-    """(0.366) labels / walk: the rooms go as labels and as the Virtual Walk's zones (linked by their doors)."""
-    return {"order": [], "initial": None, "scenes": {}, "labels": True, "walk": True}
+    """(0.366) labels / walk: the rooms go as labels and as the Virtual Walk's zones (linked by their doors).
+    (0.485) tags: the labels put on the model in the Presentation tab (model/presentation_tags)."""
+    return {"order": [], "initial": None, "scenes": {}, "labels": True, "walk": True, "tags": []}
+
+
+def with_tags(data, tags):
+    """(0.485) The presentation with the model's labels these (presentation_tags' dicts)."""
+    from . import presentation_tags
+    out = clean(copy.deepcopy(data))
+    out["tags"] = presentation_tags.clean_tags(tags)
+    return out
+
+
+def tags(doc):
+    """(0.485) The model's labels (presentation_tags' dicts), [] without any."""
+    return list((getattr(doc, "presentation", None) or empty()).get("tags") or [])
 
 
 # (0.366) a room's kind for the Presentation's Virtual Walk, by the words of its name (Portuguese and English)
@@ -137,7 +153,7 @@ def _value(name, value):
     """A setting as it may be kept: its kind and range — None when it is not one."""
     default = DEFAULTS[name]
     try:
-        if name == "hidden_layers":                    # (0.479) GlobalIds, each once, in order
+        if name in ("hidden_layers", "hidden_tags"):   # (0.479) GlobalIds, (0.485) labels' ids — each once, in order
             if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set, frozenset)):
                 return None
             return tuple(sorted({str(v) for v in value if str(v)}))
@@ -205,6 +221,9 @@ def clean(data):
     for name in ("labels", "walk"):                    # (0.366)
         if isinstance(data.get(name), bool):
             out[name] = data[name]
+    if data.get("tags"):                               # (0.485) the labels put on the model
+        from . import presentation_tags
+        out["tags"] = presentation_tags.clean_tags(data["tags"])
     scenes = data.get("scenes")
     if isinstance(scenes, dict):
         for key, fields in scenes.items():

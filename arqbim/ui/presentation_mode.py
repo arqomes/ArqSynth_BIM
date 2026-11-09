@@ -35,7 +35,9 @@ from ..i18n import t
 from ..model import camera_moves
 from ..model import presentation as pm
 from ..model import presentation_sun
+from ..model import presentation_tags
 from . import presentation_glyphs as glyphs
+from . import presentation_labels
 from . import theme
 
 KEY = QtCore.Qt.ItemDataRole.UserRole
@@ -1135,7 +1137,8 @@ class EffectsPage(_Form):
 
 
 class _OptionPage(_Form):
-    """ETIQUETAS / PASSEIO: the rooms as labels on their floors, as the Virtual Walk (its zones linked by the doors)."""
+    """PASSEIO: the rooms as the Virtual Walk's zones, linked by the doors (0.485: ETIQUETAS has a page of its own,
+    ui/presentation_labels.py)."""
 
     def __init__(self, mode, option, text, note):
         super().__init__(mode)
@@ -1216,7 +1219,7 @@ class SidePanel(QtWidgets.QDockWidget):
         self.stack = QtWidgets.QStackedWidget()
         self.pages = {"layers": LayersPage(mode), "scenes": ScenesPage(mode), "cuts": CutsPage(mode),
                       "environment": EnvironmentPage(mode),
-                      "labels": _OptionPage(mode, "labels", "present.labels", "pmode.labels_note"),
+                      "labels": presentation_labels.LabelsPage(mode),                 # (0.485)
                       "images": ImagesPage(mode), "effects": EffectsPage(mode),
                       "walk": _OptionPage(mode, "walk", "present.walk", "pmode.walk_note")}
         self.buttons = {}
@@ -1561,7 +1564,11 @@ class PresentationMode(QtCore.QObject):
         self.playing = None                 # "move" | "sun" while one is played in the 3D view
         self.apply_all = False              # «Aplicar a todas as cenas» (the look menu)
         self.live = {"hidden": set(), "style": "", "quality": "auto", "ao": True, "ao_intensity": 1.0,
-                     "locked": False, "ortho": False, "cuts": []}      # (0.484: [[type, position, flipped]])
+                     "locked": False, "ortho": False, "cuts": [],      # (0.484: [[type, position, flipped]])
+                     "hidden_tags": set()}                             # (0.485: the labels' eyes)
+        self.tag_key = None                 # (0.485) the label chosen (its editor open in «Etiquetas»)
+        self.label_placement = None         # (0.485) how the next one is put (Piso, Parede, Em pé, Chamada)
+        self._tags_drawn = None             # (what the 3D view shows of them: drawn again only when it changed)
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
         self._layers_stale = True
         self._entered_once = False
@@ -1743,6 +1750,7 @@ class PresentationMode(QtCore.QObject):
         self.vp.camera_locked = self.live["locked"]
         self.vp.set_hidden_elements(self.live["hidden"])
         self.apply_cuts()
+        self.apply_tags()                                  # (0.485)
         if self.scene_key is None or self.scene(self.scene_key) is None:
             self.scene_key = pm.initial(self.doc)
         for w in (self.look_button, self.sun_button, self.player):
@@ -1759,12 +1767,15 @@ class PresentationMode(QtCore.QObject):
         """Another tab: the BIM's columns again as they were, every element drawn, the mouse free."""
         if not self.active:
             return
+        if self.placing():                                # (0.485: a label being put: given up)
+            self.win.set_tool("select")
         self.active = False
         self.player.stop()
         for w in (self.look_button, self.sun_button, self.player):
             w.hide()
         self.vp.set_hidden_elements(set())
         self.vp.set_cuts([])                              # (0.484: the BIM's 3D view whole)
+        self.apply_tags()                                 # (0.485: none)
         self.vp.camera_locked = False
         self.pages.hide()
         self.side.hide()
@@ -1778,7 +1789,10 @@ class PresentationMode(QtCore.QObject):
     def reset(self):
         """Another project: nothing chosen, nothing hidden."""
         self.scene_key = None
-        self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False, cuts=[])
+        self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False, cuts=[],
+                         hidden_tags=set())
+        self.tag_key = None
+        self._tags_drawn = None
         self._entered_once = False
         self.came_from = None
         self._layers_stale = True
@@ -1786,6 +1800,7 @@ class PresentationMode(QtCore.QObject):
             self.vp.set_hidden_elements(set())
             self.vp.set_cuts([])
             self.vp.camera_locked = False
+            self.apply_tags()
 
     def restyle(self):
         self.pages.restyle()
@@ -1809,6 +1824,11 @@ class PresentationMode(QtCore.QObject):
             return
         if self.scene(self.scene_key) is None:
             self.scene_key = pm.initial(self.doc)
+        known = {g["id"] for g in self.tags()}            # (0.485: an undo may take a label back)
+        self.live["hidden_tags"] &= known
+        if self.tag_key not in known:
+            self.tag_key = None
+        self.apply_tags()
         if layers is None:
             layers = changed is None or bool(removed) or any(isinstance(i, str) and self.doc.get(i) is not None
                                                              for i in changed)
@@ -1868,10 +1888,12 @@ class PresentationMode(QtCore.QObject):
         vp = self.vp
         self.live.update(hidden=set(scene.hidden_layers), style=scene.style, quality=scene.quality, ao=scene.ao,
                          ao_intensity=scene.ao_intensity, locked=scene.locked,
-                         cuts=[list(c) for c in scene.cuts])                   # (0.484)
+                         cuts=[list(c) for c in scene.cuts],                   # (0.484)
+                         hidden_tags=set(scene.hidden_tags))                   # (0.485)
         ortho = self.ortho_of(scene)
         vp.camera_locked = False                          # (placed by the program, not the mouse)
         self.apply_cuts()
+        self.apply_tags()
 
         def place():
             if scene.kind == "view3d":
@@ -1951,7 +1973,8 @@ class PresentationMode(QtCore.QObject):
                   "fov": 0.0 if ortho else round(self.current_fov(), 2), "locked": self.live["locked"],
                   "style": self.live["style"], "quality": self.live["quality"], "ao": self.live["ao"],
                   "ao_intensity": self.live["ao_intensity"], "hidden_layers": sorted(self.live["hidden"]),
-                  "cuts": [tuple(c) for c in self.live["cuts"]]}                # (0.484)
+                  "cuts": [tuple(c) for c in self.live["cuts"]],                # (0.484)
+                  "hidden_tags": [g["id"] for g in self.tags() if g["id"] in self.live["hidden_tags"]]}   # (0.485)
         if scene is None or scene.kind != "view3d":
             fields.update(eye=tuple(float(c) for c in vp.camera_position()), target=tuple(float(c) for c in vp._focus))
         return fields
@@ -2285,6 +2308,138 @@ class PresentationMode(QtCore.QObject):
             del self.live["cuts"][k]
             self.apply_cuts()
             self.side.show_scene(self.scene())
+
+    # ------------------------------------------------------------ (0.485) the labels (the right column's «Etiquetas»)
+
+    def tags(self):
+        return pm.tags(self.doc)
+
+    def tag(self, tag_id):
+        return next((g for g in self.tags() if g["id"] == tag_id), None) if tag_id else None
+
+    def placing(self):
+        """How a label is being put (the label tool in use), or None."""
+        tool = getattr(self.win, "tool", None)
+        return self.label_placement if tool is not None and tool.name == "pres_label" else None
+
+    def show_placing(self, on=True):
+        """The tile of the placement being put pressed, the step said (on False: the tool is being put away)."""
+        self.side.pages["labels"].show_placing(self.placing() if on else None)
+
+    def start_label(self, placement):
+        """Piso / Parede / Em pé / Chamada: the next click on the model puts a label so (the same again: none)."""
+        if self.placing() == placement:
+            self.win.set_tool("select")
+            return
+        self.label_placement = placement if placement in presentation_tags.PLACEMENTS else "floor"
+        if self.side.tab != "labels":
+            self.side.show_tab("labels")
+        if self.placing():
+            self.show_placing()
+        else:
+            self.win.set_tool("pres_label")
+
+    def _new_look(self):
+        """The look a new label takes: the one chosen's, else the last one put's (as the Presentation's)."""
+        tags = self.tags()
+        return presentation_tags.look_of(self.tag(self.tag_key) or (tags[-1] if tags else None))
+
+    def _new_tag(self, point, normal):
+        return presentation_tags.new_tag(self.label_placement or "floor", tuple(float(c) for c in point),
+                                         tuple(float(c) for c in normal), self.tags(), base=t("pmode.tag_word"),
+                                         style=self._new_look())
+
+    def label_preview(self, point, normal):
+        """Where a label put at that point would be: {"corners", "lines"} (the tool's outline under the cursor)."""
+        tag = self._new_tag(point, normal)
+        _pixels, aspect = presentation_labels.tag_pixels(tag)
+        return presentation_tags.frame(tag, aspect, toward=-self.vp.view_direction())
+
+    def place_label(self, point, normal):
+        """A label put on the model at that point of a surface (its normal): «Ambiente N», chosen. One undo step."""
+        tags = self.tags()
+        if len(tags) >= presentation_tags.MAX_TAGS:
+            self.win.message(t("pmode.tag_full", n=presentation_tags.MAX_TAGS), warning=True)
+            return None
+        tag = self._new_tag(point, normal)
+        self.doc.set_presentation(pm.with_tags(self.doc.presentation, tags + [tag]), t("pmode.cmd_tag_add"))
+        self.tag_key = tag["id"]
+        if self.side.tab != "labels":
+            self.side.show_tab("labels")
+        self.refresh(layers=False)
+        self.win.message(t("pmode.tag_put", name=tag["title"]))
+        return tag["id"]
+
+    def update_tag(self, tag_id, **fields):
+        """The label's fields changed (its editor). One undo step."""
+        tag = self.tag(tag_id)
+        if tag is None:
+            return False
+        changed = presentation_tags.clean_tag(dict(tag, **fields))
+        if changed == tag:
+            return False
+        self.doc.set_presentation(pm.with_tags(self.doc.presentation,
+                                               presentation_tags.with_tag(self.tags(), changed)), t("pmode.cmd_tag"))
+        self.refresh(layers=False)
+        return True
+
+    def remove_tag(self, tag_id):
+        """«Apagar»: the label gone from the model (and from what the scenes hide). One undo step."""
+        tag = self.tag(tag_id)
+        if tag is None:
+            return False
+        self.live["hidden_tags"].discard(tag_id)
+        if self.tag_key == tag_id:
+            self.tag_key = None
+        self.doc.set_presentation(pm.with_tags(self.doc.presentation, presentation_tags.without(self.tags(), tag_id)),
+                                  t("pmode.cmd_tag_remove"))
+        self.refresh(layers=False)
+        self.win.message(t("pmode.tag_removed", name=tag["title"] or t("pmode.tag_unnamed")))
+        return True
+
+    def toggle_tag(self, tag_id):
+        """The label's eye (live, as the layers': kept in the scene with «Criar cena» / «Atualizar»)."""
+        if self.tag(tag_id) is None:
+            return
+        hidden = self.live["hidden_tags"]
+        if tag_id in hidden:
+            hidden.discard(tag_id)
+        else:
+            hidden.add(tag_id)
+        self.apply_tags()
+        self.side.show_scene(self.scene())
+
+    def choose_tag(self, tag_id):
+        """A label chosen in the list (its editor), or none."""
+        self.tag_key = tag_id if self.tag(tag_id) is not None else None
+        self.side.show_scene(self.scene())
+
+    def apply_tags(self):
+        """The labels seen now on the 3D view — all but those turned off; none when the tab is put away. Drawn again
+        only when they changed."""
+        if not self.active:
+            if self._tags_drawn is not None:
+                self._tags_drawn = None
+                self.vp.set_tags([])
+            return
+        shown = [g for g in self.tags() if g["id"] not in self.live["hidden_tags"]]
+        key = repr(shown)
+        if key == self._tags_drawn:
+            return
+        self._tags_drawn = key
+        toward = -self.vp.view_direction()
+        items, looks = [], []
+        for tag in shown:
+            pixels, aspect = presentation_labels.tag_pixels(tag)
+            frame = presentation_tags.frame(tag, aspect, toward)
+            items.append((pixels, frame["corners"], frame["lines"], not tag["hide_occluded"]))
+            looks.append((tag, aspect))
+        follow = None
+        if any(g["placement"] == "standing" and g["face_camera"] for g in shown):
+            def follow(way):
+                frames = (presentation_tags.frame(g, a, way) for g, a in looks)
+                return [(f["corners"], f["lines"]) for f in frames]
+        self.vp.set_tags(items, follow)
 
     def set_layers_hidden(self, ids, hide):
         """The eyes of the layers: these elements not seen (live, as in the Presentation: kept in a scene when it is

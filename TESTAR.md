@@ -644,6 +644,35 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.485 — Etiquetas na interface do Presentation
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.485.0**.
+
+1. Faça Ctrl+N e desenhe uma casa: 4 paredes, uma porta, uma janela e, de preferência, uma laje de piso.
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
+3. Na barra de ícones da direita, clique no ícone da **etiqueta** (o 5.º, por baixo do sol): o título da coluna diz
+   **ETIQUETAS** e aparece «Sem etiquetas…».
+4. Em **ADICIONAR ETIQUETA**, clique em **Piso**: o botão fica aceso e aparece «Clique numa superfície do modelo…».
+5. Passe o rato pelo chão da casa, sem clicar: vê-se o contorno da etiqueta a acompanhar o rato.
+6. Clique no meio de uma divisão: a etiqueta verde «AMBIENTE 1» fica deitada no chão. Na coluna aparece na lista e,
+   por baixo, os campos dela.
+7. Em **Nome**, escreva `Sala` e carregue Enter; em **Nota**, escreva `24 m²` e carregue Enter: a etiqueta no 3D muda.
+8. Clique em **Círculo**: a etiqueta fica redonda, com o número «01» em cima. Experimente **Fundo** (escolha outra cor),
+   **Tamanho** `2,0` e os botões de **Rotação** (90°, 180°…).
+9. Clique em **Parede** e depois numa parede, do lado de dentro: a etiqueta «Ambiente 1» fica colada à parede, redonda
+   e com a cor da anterior (herda o aspeto).
+10. Clique em **Em pé** e depois no chão: a etiqueta fica de pé, num poste. Ligue **Virar para a câmara** e rode a
+    vista com o rato: ela acompanha a câmara.
+11. Clique em **Chamada** e depois numa parede: a etiqueta fica afastada da parede, com uma linha até ela.
+12. Na lista, clique no **olho** de uma etiqueta: desaparece do 3D. Em baixo, à esquerda, clique em **+ Criar cena**: a
+    cena «Cena 1» guarda essa etiqueta escondida. Clique no cartão **Vista geral**: a etiqueta volta (essa cena mostra
+    todas); clique em **Cena 1**: volta a desaparecer.
+13. Selecione uma etiqueta na lista e clique em **Apagar**: sai. Faça Ctrl+Z: volta.
+14. Clique em **Exportar / atualizar**, grave o ZIP e importe-o no Presentation local (botão **ArqSynth BIM**): no
+    separador **Etiquetas** do Presentation estão as mesmas etiquetas; na «Cena 1» a escondida está com o olho fechado.
+15. Clique no ícone **ArqSynth Presentation** da barra da esquerda para voltar ao BIM: as etiquetas já não se veem no
+    3D do BIM (só existem na interface do Presentation).
+
 ## 0.484 — Cortes na interface do Presentation
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.484.0**.

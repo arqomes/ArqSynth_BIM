@@ -19173,9 +19173,12 @@ def presentation_tab_flow():
     with the nine modes); «Atualizar» keeps them in the scene; the FOV in perspective; the player: the next scene and
     back, ▶ / ❚❚; TRANSIÇÃO 2,5 s for every scene; duplicated, renamed, the first scene, hidden, the copy deleted (Ctrl+Z
     brings it back); the Ambiente tab: the sun's hour on the reading; exported: the scene with its camera
-    (orthographic, locked), mode, the wall hidden, the transition. The icon again: its tab closed, the 3D view's tab,
-    the BIM's columns as they were, every element drawn, the window and the 3D view as wide as before. Captured:
-    479_presentation.png."""
+    (orthographic, locked), mode, the wall hidden, the transition. (0.484) Cortes: a horizontal plane at 1 m. (0.485)
+    Etiquetas: «Piso» and a click on the floor — «Ambiente 1» put, chosen, drawn (its outline under the cursor first);
+    named «Sala», a note, a circle; «Parede» and Esc: none; one on a wall taking its look, its eye off — kept by
+    «Atualizar», exported (the labels, the scene's hiddenLabels). The icon again: its tab closed, the 3D view's tab,
+    the BIM's columns as they were, every element drawn (no label), the window and the 3D view as wide as before.
+    Captured: 479_presentation.png, 484_cortes.png, 485_etiquetas.png."""
     import tempfile
     from arqbim.ifc import catalog
     from arqbim.model import bim as bim_actions
@@ -19255,12 +19258,66 @@ def presentation_tab_flow():
     planes = [tuple(round(c, 6) for c in p) for p in vp.clipping_planes()]
     cut_live = len(vp.extra_cuts) == 1 and (0.0, 0.0, -1.0, -1.0) in planes and mode.side.windowTitle() == "CORTES"
     shot("484_cortes.png")
+    # (0.485) Etiquetas: «Piso», a click on the floor of the room — «Ambiente 1» put there, chosen, drawn; its name, note
+    # and shape; «Parede», Esc: none; one on a wall (it takes the first one's look), its eye off
+    QtTest.QTest.mouseClick(mode.side.buttons["labels"], Qt.MouseButton.LeftButton)
+    pump(150)
+    tags_page = mode.side.pages["labels"]
+    empty_list = tags_page.empty.isVisible() and not tags_page.editor.isVisible()
+    QtTest.QTest.mouseClick(tags_page.place_buttons["floor"], Qt.MouseButton.LeftButton)
+    pump(200)
+    placing = win.tool.name == "pres_label" and tags_page.place_buttons["floor"].isChecked() \
+        and tags_page.placing.isVisible() and mode.placing() == "floor"
+    move(vp.project((3.0, 2.0, 0.0)), 2)
+    pump(150)
+    previewed = vp._fill.visible
+    click()
+    pump(400)
+    tags = pm.tags(doc)
+    first_tag = tags[0] if tags else {}
+    put = len(tags) == 1 and first_tag["title"] == "Ambiente 1" and first_tag["placement"] == "floor" \
+        and np.allclose(first_tag["position"][:2], (3.0, 2.0), atol=0.05) and first_tag["normal"] == (0.0, 0.0, 1.0) \
+        and mode.tag_key == first_tag["id"] and win.tool.name == "select" and vp.tags_shown() == 1 \
+        and tags_page.editor.isVisible() and not tags_page.placing.isVisible() and mode.side.windowTitle() == "ETIQUETAS"
+    tags_page.title.setText("Sala")
+    tags_page.title.editingFinished.emit()
+    tags_page.note.setText("24 m²")
+    tags_page.note.editingFinished.emit()
+    QtTest.QTest.mouseClick(tags_page.shapes["circle"], Qt.MouseButton.LeftButton)
+    pump(300)
+    edited = pm.tags(doc)[0]
+    edited_ok = (edited["title"], edited["note"], edited["shape"]) == ("Sala", "24 m²", "circle") \
+        and tags_page.number.isVisible() and vp.tags_shown() == 1
+    QtTest.QTest.mouseClick(tags_page.place_buttons["wall"], Qt.MouseButton.LeftButton)
+    pump(150)
+    _active()
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    cancelled = win.tool.name == "select" and len(pm.tags(doc)) == 1 and not tags_page.placing.isVisible()
+    mode.label_placement = "wall"
+    second = mode.place_label((3.0, 3.9, 0.5), (0.0, -1.0, 0.0))
+    pump(300)
+    wall_tag = mode.tag(second) or {}
+    inherited = wall_tag.get("shape") == "circle" and wall_tag.get("title") == "Ambiente 1" \
+        and wall_tag.get("placement") == "wall" and vp.tags_shown() == 2
+    row = next(tags_page.rows.itemAt(k).widget() for k in range(tags_page.rows.count())
+               if getattr(tags_page.rows.itemAt(k).widget(), "tag_id", None) == second)
+    QtTest.QTest.mouseClick(row.eye, Qt.MouseButton.LeftButton)
+    pump(300)
+    eye_off = second in mode.live["hidden_tags"] and vp.tags_shown() == 1
+    shot("485_etiquetas.png")
+    check("aba_presentation_etiquetas", empty_list and placing and previewed and put and edited_ok and cancelled
+          and inherited and eye_off,
+          "vazia={} a_colocar={} contorno={} posta={} ({}) editada={} ({}) esc={} herdou={} ({}) olho={}".format(
+              empty_list, placing, previewed, put, first_tag, edited_ok, edited, cancelled, inherited, wall_tag,
+              eye_off))
     card = mode.pages.cards[scene.key]
     QtTest.QTest.mouseClick(card.buttons["update"], Qt.MouseButton.LeftButton)
     pump(500)
     kept = next(s for s in pm.scenes(doc) if s.key == scene.key)
     updated = kept.projection == "orthographic" and kept.locked and kept.style == "white_concept" \
-        and kept.hidden_layers == (walls[1],) and cut_live and kept.cuts == (("horizontal", 1.0, False),)
+        and kept.hidden_layers == (walls[1],) and cut_live and kept.cuts == (("horizontal", 1.0, False),) \
+        and kept.hidden_tags == (second,)                                         # (0.485: the label turned off)
     QtTest.QTest.mouseClick(mode.camera.lock, Qt.MouseButton.LeftButton)        # (unlocked, in perspective)
     QtTest.QTest.mouseClick(mode.camera.persp, Qt.MouseButton.LeftButton)
     pump(300)
@@ -19342,7 +19399,10 @@ def presentation_tab_flow():
         and mine["camera"].get("locked") is True and mine.get("style", {}).get("mode") == "white_concept" \
         and "bim_" + walls[1] in mine.get("hiddenLayers", ()) and mine.get("transition", {}).get("seconds") == 2.5 \
         and mode.active and any(p["id"] == "cut_{}_1".format(scene.key) and p["type"] == "horizontal"
-                                for p in (mine.get("section") or {}).get("planes", ()))       # (0.484: its cut)
+                                for p in (mine.get("section") or {}).get("planes", ())) \
+        and mine.get("hiddenLabels") == ["bim_tag_" + second] \
+        and [(g["title"], g["shape"]) for g in (found or {}).get("presentation", {}).get("model3d", {}).get(
+            "labels", [])] == [("Sala", "circle"), ("Ambiente 1", "circle")]          # (0.484: its cut; 0.485 labels)
     check("aba_presentation_exporta_as_configuracoes", timed and exported,
           "sol={} ({!r}) exportado={} cena={}".format(timed, mode.sun_button.text(), exported,
                                                        {k: mine.get(k) for k in ("name", "camera", "style")}))
@@ -19354,7 +19414,8 @@ def presentation_tab_flow():
         and not win.module_actions["presentation"].isChecked() \
         and win.props.isVisible() == props_before and all(d.isVisible() for d in left_before) \
         and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.camera_locked and not vp.extra_cuts \
-        and not mode.player.isVisible() and not mode.look_button.isVisible() and not mode.sun_button.isVisible()
+        and not mode.player.isVisible() and not mode.look_button.isVisible() and not mode.sun_button.isVisible() \
+        and vp.tags_shown() == 0                                                      # (0.485: the labels too)
     same = abs(canvas.width() - width) <= 2 and win.size() == size
     doc.modified = False
     check("aba_presentation_volta_ao_bim", restored and same,
@@ -19531,7 +19592,7 @@ def rooms_walk_flow():
     mode = win.presentation_mode
     QtTest.QTest.mouseClick(mode.side.buttons["labels"], Qt.MouseButton.LeftButton)        # Etiquetas
     pump(150)
-    labels = mode.side.pages["labels"].box
+    labels = mode.side.pages["labels"].rooms             # (0.485: under the labels put on the model)
     labelled = labels.isChecked() and labels.text().endswith("(2)")
     QtTest.QTest.mouseClick(mode.side.buttons["walk"], Qt.MouseButton.LeftButton)          # Passeio
     pump(150)

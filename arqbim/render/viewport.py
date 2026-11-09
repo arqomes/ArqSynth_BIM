@@ -393,6 +393,11 @@ class Viewport:
         self.hidden_ids = set()     # (0.479) elements hidden one by one (the Presentation tab's layers: their eyes)
         self.camera_locked = False  # (0.479) the mouse does not move the camera (the Presentation tab's lock)
         self.extra_cuts = []        # (0.484) [(normal, offset)]: the Presentation tab's section planes (3D only)
+        self._tag_objects = []      # (0.485) the Presentation tab's labels: their quads and their lines on screen
+        self._tag_quads = []
+        self._tag_lines = None
+        self._tag_follow = None     # (the way to the viewer) -> [(corners, lines)]: those that face the camera
+        self._tag_toward = None
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -561,6 +566,7 @@ class Viewport:
         more = self.bim.flush(FLUSH_BUDGET)          # rebuild only the batches that changed (0.328: many — some)
         self._step_animation()
         self._follow_view()
+        self._follow_tags()                          # (0.485)
         if self.cube is not None and not self.cutting():
             self.renderer.render(self.scene, self.camera, flush=False)
             self.cube.follow(self.camera.local.rotation)       # the view cube in its corner (0.79)
@@ -2189,6 +2195,63 @@ class Viewport:
             planes += [(axes[k], float(lo[k])) for k in range(3)] + [(-axes[k], -float(hi[k])) for k in range(3)]
         return planes or None
 
+    def set_tags(self, items, follow=None):
+        """(0.485) The labels of the Presentation tab drawn on the model: [(pixels (H, W, 4) RGBA — row 0 at the top —,
+        its four corners (bottom left, bottom right, top right, top left), its lines [(a, b)])] — the picture on its
+        quad over the surface it was put on, its posts / leader in dark grey; [] none. follow: (the way to the viewer)
+        -> [(corners, lines)] of the same labels, as they are with the camera there — called as the camera turns (those
+        «Virar para a câmara»); None: none turns."""
+        for wobj in self._tag_objects:
+            self.scene.remove(wobj)
+        self._tag_objects, self._tag_quads, self._tag_lines = [], [], None
+        self._tag_follow, self._tag_toward = follow, None
+        segments = []
+        for item in items:                                # (a 4th: True — seen through what is in front of it)
+            pixels, corners, lines = item[:3]
+            texture = gfx.Texture(np.ascontiguousarray(pixels), dim=2, generate_mipmaps=True)
+            geometry = gfx.Geometry(positions=_f32(corners), indices=np.array([[0, 1, 2], [0, 2, 3]], np.uint32),
+                                    texcoords=np.array(((0, 1), (1, 1), (1, 0), (0, 0)), np.float32))
+            material = _mat(gfx.MeshBasicMaterial, map=gfx.TextureMap(texture, filter="linear",
+                                                                       mipmap_filter="linear", wrap="clamp"),
+                            alpha_mode="blend", depth_write=False, depth_test=not (len(item) > 3 and item[3]),
+                            side="both", pick_write=False)
+            wobj = gfx.Mesh(geometry, material)
+            self._tag_objects.append(wobj)
+            self._tag_quads.append(wobj)
+            segments += [p for line in lines for p in line]
+        if segments:                                      # (the Presentation's posts and leaders: dark, as drawn)
+            self._tag_lines = gfx.Line(gfx.Geometry(positions=_f32(segments)),
+                                       _mat(gfx.LineSegmentMaterial, thickness=2.0, color="#2a2a2a", aa=True))
+            self._tag_objects.append(self._tag_lines)
+        for wobj in self._tag_objects:
+            self.scene.add(wobj)
+        self._clip(*[w.material for w in self._tag_objects])
+        self.redraw()
+
+    def tags_shown(self):
+        """(0.485) How many labels are drawn."""
+        return len(self._tag_quads)
+
+    def _follow_tags(self):
+        """(0.485) The labels that face the camera turned to it (only when it turned)."""
+        if self._tag_follow is None or not self._tag_quads:
+            return
+        toward = tuple(round(float(c), 3) for c in -self.view_direction())
+        if toward == self._tag_toward:
+            return
+        self._tag_toward = toward
+        frames = self._tag_follow(np.array(toward))
+        for wobj, (corners, _lines) in zip(self._tag_quads, frames):
+            buf = wobj.geometry.positions
+            buf.data[:] = _f32(corners)
+            buf.update_range(0, 4)
+        if self._tag_lines is not None:
+            segments = [p for _corners, lines in frames for line in lines for p in line]
+            buf = self._tag_lines.geometry.positions
+            if len(segments) == buf.nitems:
+                buf.data[:] = _f32(segments)
+                buf.update_range(0, len(segments))
+
     def set_cuts(self, planes):
         """(0.484) Section planes over the 3D view — the Presentation tab's «Cortes»: [(normal, a point)], what is on
         each normal's side kept, what they go through filled as the section box's; [] none. Not in a plan or a section
@@ -2284,6 +2347,7 @@ class Viewport:
         dimensions and underlay too: its crop region)."""
         for view in self._views.values():
             self._clip(*[w.material for w in (view.faces, view.edges) if w is not None])
+        self._clip(*[w.material for w in self._tag_objects])      # (0.485: the labels cut as the model, as there)
         extras = ([w for w in (self._symbols, self._underlay) if w is not None] + list(self._dim_objects)
                   + list(self._grid_objects))
         if self.plan:
