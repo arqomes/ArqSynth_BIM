@@ -514,11 +514,13 @@ class EditMixin:
     def _set_column_body(self, column, profile, height):
         self._set_profile_body(column, profile, height, "Qto_ColumnBaseQuantities")
 
-    def _set_profile_body(self, element, profile, length, qto):
-        """A column's, beam's, pipe's or duct's body: its section extruded `length` (m) along its placement's Z."""
+    def _set_profile_body(self, element, profile, length, qto, cardinal=5):
+        """A column's, beam's, pipe's or duct's body: its section extruded `length` (m) along its placement's Z —
+        (0.495) by one of IFC's cardinal points of the section (5: its middle, on the placement's Z)."""
         u, s = 1.0 / self.unit_scale, self.unit_scale
         self._clear_representations(element)
-        body = api.geometry.add_profile_representation(self.file, context=self.body, profile=profile, depth=length)
+        body = api.geometry.add_profile_representation(self.file, context=self.body, profile=profile, depth=length,
+                                                        cardinal_point=int(cardinal))
         api.geometry.assign_representation(self.file, product=element, representation=body)
         _w, _d, area, perimeter = profile_size(profile)
         area, perimeter = area * s * s, perimeter * s
@@ -1637,7 +1639,10 @@ class EditMixin:
         if old_type is not None:
             changed = [e.GlobalId for e in ifcopenshell.util.element.get_types(old_type)]
             for g in changed:
-                if self.kind_of(g) == spec.kind:
+                if self.kind_of(g) == "steel_member" and spec.section:      # (0.495) a steel piece: its new section
+                    api.type.assign_type(self.file, related_objects=[self.by_guid(g)], relating_type=type_)
+                    self.set_steel_member(g, lang=lang)
+                elif self.kind_of(g) == spec.kind:
                     self.set_element_type(g, spec, lang)
                 else:                                     # (one from another program: only its type changes)
                     api.type.assign_type(self.file, related_objects=[self.by_guid(g)], relating_type=type_)
@@ -1785,6 +1790,9 @@ class EditMixin:
         and the doors, windows and voids in it are rebuilt to fit. (0.278) A roof: its layers and thickness."""
         if spec.kind == "roof":
             self.set_roof_type(guid, spec, lang)
+            return
+        if self.kind_of(guid) == "steel_member":            # (0.495) a steel piece: another section, as it is drawn
+            self.set_steel_member(guid, spec=spec, lang=lang)
             return
         element, kind = self._require(guid, *((spec.kind, "curved_wall") if spec.kind == "wall" else (spec.kind,)))
         u = 1.0 / self.unit_scale

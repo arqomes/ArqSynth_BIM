@@ -910,7 +910,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
                 "work_plane": "",                                     # (0.412)
                 "lot": "",                                            # (0.423)
-                "room_need": ""}                                      # (0.475: a programme line placed)
+                "room_need": "",                                      # (0.475: a programme line placed)
+                "steel_member": ""}                                   # (0.495)
         for name in self.tools:
             key = keys[name]
             shown = ("Espaço" if lang() == "pt" else "Space") if key == "Space" else key

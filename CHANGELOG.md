@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.495.0 — 2026-11-09
+
+**Estrutura metálica, passo 2: peças metálicas** (o PLANO, «Estrutura metálica e pormenores de fabrico»).
+
+- Ferramenta nova **Peça metálica** (separador **Estrutura**, painel **Estrutura**, a seguir à Laje), como o «Beam» do Tekla: um perfil de
+  aço entre dois pontos quaisquer — horizontal, inclinado ou de pé.
+  - **Função**: Viga (`IfcBeam`), Pilar (`IfcColumn`), Contraventamento (`IfcMember` BRACE), Madre (`IfcMember`
+    PURLIN) ou Elemento (`IfcMember`). Qualquer perfil serve para qualquer função: o tipo da função faz-se sozinho
+    («Contraventamento L 80×8 — S275», «Madre C 160…»).
+  - **Inserção**: um dos nove pontos da secção na linha desenhada (automática: o topo ao meio numa viga ou madre — o
+    topo na cota, como a Viga —, o centro num contraventamento).
+  - **Rotação** do perfil à volta da linha (0°, 90°, 180°, 270°).
+  - **Alturas**: «pelas cotas» — a cota no início e a cota no fim (diferentes: uma asna inclinada) —, ou «pelos pontos
+    (3D)» — onde os pontos se apanham no 3D (o topo de um pilar).
+  - Ponto a ponto: cada peça começa onde a anterior acabou; Esc acaba. O comprimento pode escrever-se.
+- **Contraventamento entre dois pilares**: no «Desenhar» da barra, «Contraventamento em X» (ou uma diagonal ╱ ou ╲) e
+  um clique em cada pilar — as diagonais vão do pé de um ao topo do outro.
+- As **vigas de aço** desenhadas com a ferramenta Viga **param na face dos pilares** onde chegam, a 10 mm: na alma de
+  um pilar em I, entre os banzos, quando cabem; senão na face do banzo ou nas pontas dos banzos; num tubo, na sua face.
+  As vigas de betão ficam como estavam.
+- Tipos novos: Contraventamento L 80×8 e CHS Ø76,1×4, Madre C 160×60×20×2,5; no Editar tipo, a lista
+  **Contraventamentos e madres**.
+- Mudar o tipo de uma peça metálica (Propriedades ou Editar tipo) refaz a peça com o perfil novo, na mesma linha.
+
 ## 0.494.0 — 2026-11-09
 
 **Estrutura metálica, passo 1: catálogo de perfis e classes de aço** (o dono: «faça plano para inserir a parte metálica e

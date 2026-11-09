@@ -227,6 +227,20 @@ def beam_icon():
     return theme.icon(pm)
 
 
+def steel_member_icon():
+    """(0.495) Peça metálica: an I section in front, its piece going off sloped behind it."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((12, 10), (29, 3), (29, 7), (12, 14))]))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((12, 26), (29, 19), (29, 23), (12, 30))]))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    for x0, y0, x1, y1 in ((3, 10, 15, 13), (8, 13, 10, 26), (3, 26, 15, 29)):       # (the I: flanges, web)
+        p.drawRect(QtCore.QRectF(x0, y0, x1 - x0, y1 - y0))
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()
@@ -2743,6 +2757,7 @@ def paste_storeys_icon():
 TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_icon, "push_pull": push_pull_icon,
               "move": move_icon, "rotate": rotate_icon, "tape": tape_icon, "wall": wall_icon, "slab": slab_icon,
               "column": column_icon, "beam": beam_icon, "footing": footing_icon, "pipe": pipe_icon, "duct": duct_icon,
+              "steel_member": steel_member_icon,                                              # (0.495)
               "grid": grid_icon,
               "door": door_icon, "window": window_icon, "section": section_icon, "dimension": dimension_icon,
               "orbit": orbit_icon, "pan": pan_icon, "zoom": zoom_icon, "zoom_window": zoom_window_icon,

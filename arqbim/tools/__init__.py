@@ -46,6 +46,7 @@ from .section import SectionTool
 from .select import SelectTool
 from .slab import CeilingTool, FlooringTool, RoofTool, SlabOutlineTool, SlabTool
 from .stair import StairTool
+from .steel_member import SteelMemberTool          # (0.495)
 from .tape import TapeTool
 from .transform import ArrayTool, CopyTool, MoveTool, RotateTool
 from .wall_edit import CornerWallsTool, SplitGapTool, SplitWallTool, TrimExtendTool, WallJoinsTool
@@ -64,4 +65,4 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              CopyTool, ArrayTool, JoinGeometryTool, UnjoinGeometryTool, ArcTool, FreehandTool, BezierTool,
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
              PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool, RipadoTool,
-             LooseFurnitureTool, RipadoScreenTool, RoomNeedTool)
+             LooseFurnitureTool, RipadoScreenTool, RoomNeedTool, SteelMemberTool)

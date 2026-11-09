@@ -20,7 +20,7 @@ from .layer_section import LayerSection
 from . import theme
 
 KIND_LABELS = {"wall": "types.walls", "slab": "types.slabs", "roof": "types.roofs", "column": "types.columns",
-               "beam": "types.beams",
+               "beam": "types.beams", "member": "types.members",
                "footing": "types.footings", "pile": "types.piles", "pipe": "types.pipes", "duct": "types.ducts",
                "door": "types.doors", "window": "types.windows", "conduit": "types.conduits"}
 KINDS = catalog.KINDS + ("door", "window")
@@ -378,7 +378,7 @@ class TypeEditor(QtWidgets.QDialog):
             self.width.setText(_len(width))
             self.depth.setText(_len(depth))
             self.web.setText(_len(spec.web or 0.15))
-            shaped = spec.kind in ("column", "beam")
+            shaped = spec.kind in ("column", "beam", "member")
             self.shape.setVisible(shaped)
             self.shape_label.setVisible(shaped)
             blocker = QtCore.QSignalBlocker(self.shape)
@@ -427,7 +427,7 @@ class TypeEditor(QtWidgets.QDialog):
 
     def _shape(self):
         spec = self.current
-        return self.shape.currentData() if spec is not None and spec.kind in ("column", "beam") else None
+        return self.shape.currentData() if spec is not None and spec.kind in ("column", "beam", "member") else None
 
     def _show_shape(self, chosen=False):
         """The section's fields for its shape: a circle its diameter only; an L or a T their legs' thickness; (0.494)
@@ -448,7 +448,7 @@ class TypeEditor(QtWidgets.QDialog):
         self.web_label.setVisible(shape in ("L", "T"))
         for w in (self.steel_family, self.steel_size, self.steel_grade, self.steel_info, *self.steel_labels):
             w.setVisible(steel_)
-        if spec.kind in ("column", "beam"):
+        if spec.kind in ("column", "beam", "member"):
             self.material.setVisible(not steel_)
             self.material_label.setVisible(not steel_)
         if steel_ and chosen:
@@ -508,7 +508,7 @@ class TypeEditor(QtWidgets.QDialog):
         if steel.STANDARD.get(sec.family):
             lines.append(t("types.steel_standard", std=steel.STANDARD[sec.family]))
         self.steel_info.setText("\n".join(lines))
-        auto = catalog.steel_name(self.current.kind, sec.name, grade, lang())
+        auto = catalog.steel_name(catalog.steel_word(self.current), sec.name, grade, lang())
         if rename and self._shape() == "steel" and (self.name.text().strip() in (self._steel_auto, _name(self.current))
                                                     or not self.name.text().strip()):
             self.name.setText(auto)
@@ -692,13 +692,13 @@ class TypeEditor(QtWidgets.QDialog):
             layers = tuple(layers)
             functions = self._layer_functions()                     # (0.334)
         shape, web = spec.shape, spec.web
-        if spec.kind in ("column", "beam") and self._shape() == "steel":       # (0.494) a steel section
+        if spec.kind in ("column", "beam", "member") and self._shape() == "steel":       # (0.494) a steel section
             section, grade = self.steel_size.currentData(), self.steel_grade.currentData()
             if not section:
                 return t("types.err_size")
             return dataclasses.replace(catalog.steel_spec(spec, section, grade, name=name), masonry=spec.masonry)
         if spec.kind not in catalog.LAYERED or spec.kind == "footing":
-            shape = self._shape() if spec.kind in ("column", "beam") else spec.shape
+            shape = self._shape() if spec.kind in ("column", "beam", "member") else spec.shape
             round_ = spec.kind in ("pipe", "pile") or shape == "circle"
             width = parse_length(self.width.text())
             depth = width if round_ else 0.0 if spec.strip else parse_length(self.depth.text())

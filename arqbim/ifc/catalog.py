@@ -388,6 +388,13 @@ TYPES = (
              material="aco_s275", shape="steel", section="IPE300"),
     TypeSpec("viga_heb240", "beam", "Viga HEB 240 — S275", "Beam HEB 240 — S275", profile=(0.24, 0.24),
              material="aco_s275", shape="steel", section="HEB240"),
+    # (0.495) braces and purlins (IfcMemberType, BRACE / PURLIN)
+    TypeSpec("contrav_l80", "member", "Contraventamento L 80×8 — S275", "Brace L 80×8 — S275", profile=(0.08, 0.08),
+             material="aco_s275", shape="steel", section="L80x8", predefined="BRACE"),
+    TypeSpec("contrav_chs76", "member", "Contraventamento CHS Ø76,1×4 — S275", "Brace CHS Ø76,1×4 — S275",
+             profile=(0.0761, 0.0761), material="aco_s275", shape="steel", section="CHS76.1x4", predefined="BRACE"),
+    TypeSpec("madre_c160", "member", "Madre C 160×60×20×2,5 — S275", "Purlin C 160×60×20×2,5 — S275",
+             profile=(0.06, 0.16), material="aco_s275", shape="steel", section="C160x60x20x2.5", predefined="PURLIN"),
     # footings (0.68): layers = their depth; profile = the plan size of a pad (x, y), of a strip (its width, 0)
     TypeSpec("sapata_80", "footing", "Sapata 80×80×40", "Pad footing 80×80×40",
              layers=(("concreto", 0.40),), profile=(0.80, 0.80)),
@@ -462,7 +469,8 @@ _STARTER_MATERIALS = dict(MATERIALS)
 _PROJECT = []
 GENERATION = 0                 # (0.315) counts each set_project: what was made from the materials is made again
 LAYERED = ("wall", "slab", "footing", "roof")          # made of layers; the others of a section (a profile)
-KINDS = ("wall", "slab", "roof", "column", "beam", "footing", "pile", "pipe", "duct", "conduit")
+KINDS = ("wall", "slab", "roof", "column", "beam", "member", "footing", "pile", "pipe", "duct", "conduit")
+# (0.495: member — a brace, a purlin, another steel member)
 
 
 def types():
@@ -470,7 +478,14 @@ def types():
     return tuple(BY_KEY[t.key] for t in TYPES) + tuple(_PROJECT)
 
 
-STEEL_WORDS = {"column": ("Pilar", "Column"), "beam": ("Viga", "Beam"), "member": ("Elemento", "Member")}
+STEEL_WORDS = {"column": ("Pilar", "Column"), "beam": ("Viga", "Beam"), "member": ("Elemento", "Member"),
+               "brace": ("Contraventamento", "Brace"), "purlin": ("Madre", "Purlin")}           # (0.495)
+
+
+def steel_word(spec):
+    """(0.495) What a steel type is called by: its kind's word, a member's by its PredefinedType (a brace, a purlin)."""
+    return {"BRACE": "brace", "PURLIN": "purlin"}.get(spec.predefined, spec.kind) if spec.kind == "member" \
+        else spec.kind
 
 
 def steel_name(kind, section, grade, lang="pt"):
@@ -486,8 +501,8 @@ def steel_spec(spec, section, grade, name=None):
     from ..core import steel
     sec = steel.get(section)
     w, h = steel.size(sec)
-    pt, en = (name, name) if name else (steel_name(spec.kind, sec.name, grade), steel_name(spec.kind, sec.name, grade,
-                                                                                            "en"))
+    word = steel_word(spec)
+    pt, en = (name, name) if name else (steel_name(word, sec.name, grade), steel_name(word, sec.name, grade, "en"))
     return replace(spec, name_pt=pt, name_en=en, layers=(), profile=(w / 1000.0, h / 1000.0),
                    material=steel.GRADE_MATERIAL[grade], shape="steel", web=None, section=sec.name)
 

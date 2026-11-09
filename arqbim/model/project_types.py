@@ -20,8 +20,10 @@ CLASSES = {"wall": "IfcWallType", "slab": "IfcSlabType", "column": "IfcColumnTyp
            "footing": "IfcFootingType", "pipe": "IfcPipeSegmentType", "duct": "IfcDuctSegmentType",
            "pile": "IfcPileType", "door": "IfcDoorType", "window": "IfcWindowType",
            "conduit": "IfcCableCarrierSegmentType",                       # (0.146)
-           "roof": "IfcRoofType"}                                         # (0.278)
-SPECIAL = ("PILE_CAP", "BASESLAB", "BORED", "DRIVEN")    # PredefinedTypes kept with a type (0.94)
+           "roof": "IfcRoofType",                                         # (0.278)
+           "member": "IfcMemberType"}                                     # (0.495: braces, purlins)
+SPECIAL = ("PILE_CAP", "BASESLAB", "BORED", "DRIVEN",    # PredefinedTypes kept with a type (0.94)
+           "BRACE", "PURLIN")                            # (0.495)
 GREY = (0.75, 0.75, 0.75)
 
 
@@ -161,7 +163,7 @@ def read_type(ifc, type_, kind):
     shape, web = None, None
     material = material_key(entry.Material.Name) if entry.Material else None
     from ..core import steel
-    if kind in ("column", "beam") and steel.is_steel_profile(profile):      # (0.494) a steel section
+    if kind in ("column", "beam", "member") and steel.is_steel_profile(profile):      # (0.494) a steel section
         from ifcopenshell.util import unit as ifc_unit
         angle = ifc_unit.calculate_unit_scale(ifc.file, "PLANEANGLEUNIT") or 1.0
         sec = steel.from_ifc(profile, ifc.unit_scale, angle)

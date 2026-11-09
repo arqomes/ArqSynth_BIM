@@ -103,18 +103,18 @@ class SteelTypes(unittest.TestCase):
         column = bim.add_column(doc, np.array((0.0, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
         beam = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((5.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe300"],
                             3.0)
-        v = doc.get(beam).mesh.verts
-        np.testing.assert_allclose((v.min(axis=0), v.max(axis=0)), ((0.0, -0.075, 2.7), (5.0, 0.075, 3.0)), atol=1e-6)
-        self.assertAlmostEqual(doc.get(beam).mesh.volume(), 5.0 * steel.properties("IPE300")["A"] * 1e-4, places=4)
+        v = doc.get(beam).mesh.verts                    # ((0.495) from the column's flange tips, + 10 mm: 4,89 m)
+        np.testing.assert_allclose((v.min(axis=0), v.max(axis=0)), ((0.11, -0.075, 2.7), (5.0, 0.075, 3.0)), atol=1e-6)
+        self.assertAlmostEqual(doc.get(beam).mesh.volume(), 4.89 * steel.properties("IPE300")["A"] * 1e-4, places=4)
         c = doc.get(column).mesh.verts
         np.testing.assert_allclose((c.min(axis=0), c.max(axis=0)), ((-0.1, -0.1, 0.0), (0.1, 0.1, 3.0)), atol=1e-6)
         e = doc.ifc.by_guid(beam)
         profile = ue.get_material(ue.get_type(e)).MaterialProfiles[0].Profile
         self.assertEqual((profile.is_a(), profile.ProfileName), ("IfcIShapeProfileDef", "IPE300"))
-        self.assertAlmostEqual(ue.get_psets(e)["Qto_BeamBaseQuantities"]["NetWeight"], 5.0 * 42.2, places=6)
+        self.assertAlmostEqual(ue.get_psets(e)["Qto_BeamBaseQuantities"]["NetWeight"], 4.89 * 42.2, places=6)
         shown = doc.ifc.describe(beam)["steel"]                         # (what the Properties show)
         self.assertEqual((shown[0], shown[1], shown[2]), ("IPE 300", "Aço estrutural S275", 42.2))
-        self.assertAlmostEqual(shown[3], 211.0, places=6)
+        self.assertAlmostEqual(shown[3], 4.89 * 42.2, places=6)
         self.assertEqual(doc.ifc.steel_section(column), "HEB200")
         read = project_types.read_type(doc.ifc, ue.get_type(e), "beam")
         self.assertEqual((read.section, read.shape, read.material, read.profile), ("IPE300", "steel", "aco_s275",
@@ -133,6 +133,94 @@ class SteelTypes(unittest.TestCase):
                       catalog.BY_KEY["viga_ipe300"])
         v = doc.get(beam).mesh.verts
         self.assertAlmostEqual(float(v.max(axis=0)[2] - v.min(axis=0)[2]), 0.40, places=6)     # (now an IPE 400)
+
+
+class SteelMembers(unittest.TestCase):
+    """(0.495) Steel pieces between two points: a sloped rafter by its top, a brace, X bracing between two columns."""
+
+    def test_pieces_between_two_points(self):
+        """A rafter IPE 300 from (0, 0, 6) to (6, 0, 7) as a beam, by its top middle: its top on the line, sloped, 1
+        undo step; its line read back (start, end, length) and its section; turned 90° it lies on its side; the same
+        L 80×8 brace type as a purlin makes a purlin type; X bracing between two HEB columns 5 m apart, 4 m tall: two
+        IfcMember BRACE from foot to top, crossing; a type change follows; the file valid."""
+        import ifcopenshell.util.element as ue
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        rafter = bim.add_steel_member(doc, (0.0, 0.0, 6.0), (6.0, 0.0, 7.0), catalog.BY_KEY["viga_ipe300"])
+        e = doc.ifc.by_guid(rafter)
+        self.assertEqual((e.is_a(), doc.ifc.kind_of(rafter)), ("IfcBeam", "steel_member"))
+        p = doc.ifc.steel_member_params(rafter)
+        np.testing.assert_allclose((p["start"], p["end"]), ((0, 0, 6), (6, 0, 7)), atol=1e-6)
+        self.assertAlmostEqual(p["length"], math.hypot(6.0, 1.0))
+        self.assertEqual((p["function"], p["cardinal"], p["section"]), ("beam", 8, "IPE300"))
+        v = doc.get(rafter).mesh.verts
+        self.assertAlmostEqual(float(v[:, 2].max()), 7.0, places=4)                         # (its top on the line,
+        self.assertAlmostEqual(float(v[:, 2].min()), 6.0 - 0.30 * 6.0 / math.hypot(6.0, 1.0), places=3)  # its ends square)
+        doc.undo()
+        self.assertIsNone(doc.ifc.by_guid(rafter))
+        doc.redo()
+        side = bim.add_steel_member(doc, (0.0, 3.0, 3.0), (5.0, 3.0, 3.0), catalog.BY_KEY["viga_ipe300"], rotation=90.0,
+                                    cardinal=5)
+        v = doc.get(side).mesh.verts
+        self.assertAlmostEqual(float(v[:, 2].max() - v[:, 2].min()), 0.15, places=4)          # (on its side)
+        purlin = bim.add_steel_member(doc, (0.0, 6.0, 3.0), (5.0, 6.0, 3.0), catalog.BY_KEY["contrav_l80"],
+                                      function="purlin")
+        t_ = ue.get_type(doc.ifc.by_guid(purlin))
+        self.assertEqual((ue.get_predefined_type(doc.ifc.by_guid(purlin)), t_.is_a(), t_.PredefinedType, t_.Name),
+                         ("PURLIN", "IfcMemberType", "PURLIN", "Madre L 80×8 — S275"))
+        a = bim.add_column(doc, np.array((0.0, 10.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 4.0)
+        b = bim.add_column(doc, np.array((5.0, 10.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 4.0)
+        braces = bim.x_brace(doc, a, b, catalog.BY_KEY["contrav_l80"])
+        self.assertEqual(len(braces), 2)
+        for g in braces:
+            m = doc.ifc.by_guid(g)
+            self.assertEqual((m.is_a(), ue.get_predefined_type(m), ue.get_type(m).Name),
+                             ("IfcMember", "BRACE", "Contraventamento L 80×8 — S275"))
+            q = doc.ifc.steel_member_params(g)
+            self.assertAlmostEqual(q["length"], math.hypot(5.0, 4.0))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        bim.set_type(doc, braces[0], catalog.BY_KEY["contrav_chs76"])
+        self.assertEqual(doc.ifc.steel_section(braces[0]), "CHS76.1x4")
+        self.assertAlmostEqual(doc.ifc.steel_member_params(braces[0])["length"], math.hypot(5.0, 4.0))
+        info = doc.ifc.describe(braces[0])
+        self.assertEqual((info["kind"], info["params"]["function"]), ("steel_member", "brace"))
+
+    def test_steel_beams_stop_at_the_columns(self):
+        """An IPE 300 beam drawn from the middle of an HEB 300 column to another's, 6 m apart: along the columns'
+        webs (their own y) it stops 10 mm short of their flanges; turned, it reaches their webs between the flanges
+        (an IPE 200, 100 mm wide, fits the HEB 300's 208 mm); a concrete beam goes on to the middles as before."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        for x in (0.0, 6.0):
+            bim.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+        flange = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe300"],
+                              3.0)
+        v = doc.get(flange).mesh.verts
+        # (an HEB column made with x_dir along X: its flanges across X? its depth along its own y — the beam along X
+        # meets its web side: an IPE 300 is 150 wide, the HEB 200's clear web 200 − 30 − 36 = 134: it does not fit,
+        # so it stops at the flanges' tips, 100 + 10 mm from the middle)
+        np.testing.assert_allclose((v[:, 0].min(), v[:, 0].max()), (0.11, 5.89), atol=1e-6)
+        small = bim.add_beam(doc, np.array((0.0, 0.0, 2.5)), np.array((6.0, 0.0, 2.5)), catalog.BY_KEY["viga_ipe200"],
+                             2.5)
+        v = doc.get(small).mesh.verts                  # (an IPE 200, 100 wide, fits: onto the web, 4,5 + 10 mm)
+        np.testing.assert_allclose((v[:, 0].min(), v[:, 0].max()), (0.0145, 5.9855), atol=1e-6)
+        a = bim.add_column(doc, np.array((0.0, 10.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+        bim.add_column(doc, np.array((0.0, 16.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+        along = bim.add_beam(doc, np.array((0.0, 10.0, 3.0)), np.array((0.0, 16.0, 3.0)),
+                             catalog.BY_KEY["viga_ipe300"], 3.0)
+        v = doc.get(along).mesh.verts                  # (along their depth: onto the flanges' faces, 100 + 10 mm)
+        np.testing.assert_allclose((v[:, 1].min(), v[:, 1].max()), (10.11, 15.89), atol=1e-6)
+        self.assertIsNotNone(a)
+        concrete = bim.add_beam(doc, np.array((0.0, 0.0, 2.0)), np.array((6.0, 0.0, 2.0)), catalog.BY_KEY["viga_20x40"],
+                                2.0)
+        v = doc.get(concrete).mesh.verts
+        np.testing.assert_allclose((v[:, 0].min(), v[:, 0].max()), (0.0, 6.0), atol=1e-6)
 
 
 def dataclasses_replace(spec, **fields):

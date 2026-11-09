@@ -644,6 +644,27 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.495 — Peças metálicas e contraventamentos (estrutura metálica, passo 2)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.495.0**.
+
+1. Faça Ctrl+N. No separador **Arquitetura**, **Pilar**, tipo **Pilar HEB 200 — S275**, e ponha dois pilares a 6 m um
+   do outro (clique, depois escreva `6` e Enter depois de apontar para o lado — ou clique a olho).
+2. No separador **Estrutura** da fita, painel **Estrutura**, clique em **Peça metálica** (a seguir à Laje). Na barra de cima: Tipo **Viga IPE
+   300 — S275**, Desenhar **Entre dois pontos**, Função **Viga**, Alturas **Pelas cotas**, **Cota no início** `2,8`,
+   **Cota no fim** `3,8`.
+3. Abra o 3D (F8). Clique num ponto e depois noutro a uns 5 m: aparece uma viga inclinada, a subir 1 m. Carregue em Esc.
+4. Mude **Desenhar** para **Contraventamento em X** e o Tipo para **Contraventamento L 80×8 — S275**. Clique no
+   primeiro pilar e depois no segundo: aparecem as duas diagonais em X, do pé de um ao topo do outro.
+5. Com **Selecionar**, clique numa diagonal: nas Propriedades, o tipo é «Contraventamento L 80×8 — S275», com o peso.
+   Mude o tipo para **Contraventamento CHS Ø76,1×4**: a diagonal passa a tubo redondo, no mesmo sítio. Ctrl+Z volta.
+6. Escolha a ferramenta **Viga** (painel Estrutura), tipo **Viga IPE 200 — S275**, e desenhe uma viga do meio de um
+   pilar ao meio do outro: a viga **para nas faces dos pilares** (entra entre os banzos até à alma, a 1 cm), em vez de
+   atravessar os pilares.
+7. Repita com **Viga IPE 300**: é mais larga do que o espaço entre os banzos do HEB 200, por isso para nas pontas dos
+   banzos.
+8. No Navegador, os contraventamentos aparecem em **Peças lineares (contraventamentos, madres…)**.
+
 ## 0.494 — Perfis de aço (estrutura metálica, passo 1)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.494.0**.

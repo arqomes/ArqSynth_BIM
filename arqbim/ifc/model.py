@@ -78,6 +78,7 @@ from .lot import LotMixin  # noqa: E402
 from .wall_framing import WallFramingMixin  # noqa: E402
 from .loose_furniture import LooseFurnitureMixin  # noqa: E402
 from .ripado_screen import RipadoScreenMixin  # noqa: E402
+from .steel_members import SteelMemberMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -389,7 +390,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
                ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
-               LooseFurnitureMixin, RipadoScreenMixin):
+               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -1032,7 +1033,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
         ifc_class = {"wall": "IfcWallType", "slab": "IfcSlabType", "column": "IfcColumnType",
                      "beam": "IfcBeamType", "footing": "IfcFootingType", "pipe": "IfcPipeSegmentType",
                      "duct": "IfcDuctSegmentType", "pile": "IfcPileType",
-                     "conduit": "IfcCableCarrierSegmentType", "roof": "IfcRoofType"}[spec.kind]
+                     "conduit": "IfcCableCarrierSegmentType", "roof": "IfcRoofType",
+                     "member": "IfcMemberType"}[spec.kind]                       # (0.495: braces, purlins)
         name = spec.name_pt if lang == "pt" else spec.name_en
         for t in self.file.by_type(ifc_class):
             if t.Name == name:
@@ -1042,7 +1044,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                                          "pipe": "RIGIDSEGMENT", "duct": "RIGIDSEGMENT", "pile": "BORED",
                                          "conduit": "CONDUITSEGMENT",
                                          # (0.278) a roof's form is its own (HIP_ROOF…), not its type's
-                                         "roof": "NOTDEFINED"}[spec.kind]
+                                         "roof": "NOTDEFINED", "member": "MEMBER"}[spec.kind]
         type_ = api.root.create_entity(self.file, ifc_class=ifc_class, name=name, predefined_type=predefined)
         to_units = 1.0 / self.unit_scale
         if spec.kind in catalog.LAYERED:
@@ -2438,6 +2440,11 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             elif kind == "param_surface":                               # (0.395) its definition and what it made
                 info["params"] = {"definition": self.surface_definition(guid), "usage": self.surface_usage(guid),
                                   "summary": self.surface_summary(guid)}
+            elif kind == "steel_member":                                # (0.495) a steel piece between two points
+                sp = self.steel_member_params(guid)
+                info["params"] = {"length": sp["length"], "function": sp["function"], "cardinal": sp["cardinal"],
+                                  "rotation": sp["rotation"], "start_z": float(sp["start"][2]),
+                                  "end_z": float(sp["end"][2])}
             elif kind == "light":                                       # (0.119)
                 info["params"] = {"light": self._params(e).get("Luminaria") or "panel"}
             elif kind == "profile":                                     # (0.174) a skirting, a cornice…

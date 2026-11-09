@@ -2637,9 +2637,50 @@ def add_beam(doc, start, end, spec, top, storey=None):
 
     def action(ifc):
         name = "{} {}".format(prefix, ifc.count("IfcBeam") + 1)
-        return ifc.add_beam(spec, start, end, top, name, language, storey=storey).GlobalId
+        a, b = (ifc.beam_to_faces(start, end, top, spec) if getattr(spec, "section", None)    # (0.495: a steel beam
+                else (start, end))                                                           # stops at the columns)
+        return ifc.add_beam(spec, a, b, top, name, language, storey=storey).GlobalId
 
     return doc.execute(IfcCommand(t("cmd.beam"), action)).result
+
+
+def add_steel_member(doc, start, end, spec, function="beam", cardinal=None, rotation=0.0, storey=None):
+    """(0.495) A steel piece (the section of `spec`) from `start` to `end` (3D), as a beam, column, brace, purlin or
+    member, by its cardinal point (None: the function's), turned about its line. One undo step. Its GlobalId."""
+    language = lang()
+    word = {"beam": "elem.beam", "column": "elem.column", "brace": "elem.brace", "purlin": "elem.purlin",
+            "member": "elem.member"}[function]
+    cls = {"beam": "IfcBeam", "column": "IfcColumn"}.get(function, "IfcMember")
+
+    def action(ifc):
+        name = "{} {}".format(t(word), ifc.count(cls) + 1)
+        return ifc.add_steel_member(spec, np.asarray(start, dtype=float), np.asarray(end, dtype=float), name, language,
+                                    storey=storey, function=function, cardinal=cardinal, rotation=rotation).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.steel_member"), action)).result
+
+
+def x_brace(doc, a, b, spec, shape="x"):
+    """(0.495) Bracing between two columns (GlobalIds): «x» both diagonals, «/» from a's foot to b's top, «\\» from a's
+    top to b's foot — along their axes, from their feet to the lower of their tops. One undo step. The GlobalIds."""
+    language = lang()
+    ca, _xa, _ha, base_a, top_a = doc.ifc.column_box(a)
+    cb, _xb, _hb, base_b, top_b = doc.ifc.column_box(b)
+    top = min(top_a, top_b)
+    foot_a = np.array((ca[0], ca[1], base_a))
+    foot_b = np.array((cb[0], cb[1], base_b))
+    head_a, head_b = np.array((ca[0], ca[1], top)), np.array((cb[0], cb[1], top))
+    lines = {"x": [(foot_a, head_b), (head_a, foot_b)], "/": [(foot_a, head_b)], "\\": [(head_a, foot_b)]}[shape]
+    storey = doc.ifc.storey_of(a)
+
+    def action(ifc):
+        made = []
+        for p, q in lines:
+            name = "{} {}".format(t("elem.brace"), ifc.count("IfcMember") + 1)
+            made.append(ifc.add_steel_member(spec, p, q, name, language, storey=storey, function="brace").GlobalId)
+        return made
+
+    return doc.execute(IfcCommand(t("cmd.x_brace"), action)).result
 
 
 _PORT_SYSTEM = {"pipe": "PIPE", "duct": "DUCT", "conduit": "CABLE"}   # (a conduit to a point's cable port, 0.146)
@@ -3702,7 +3743,8 @@ def set_type(doc, guid, spec):
     else:
         neighbours = doc.ifc.joined_walls(gs)               # their corners follow the new thickness
         fillings = [f for g in gs for f in _fillings(doc, g)]
-        beams = _followers(doc, gs) if spec.kind == "column" else []     # (from the new faces, 0.94)
+        beams = _followers(doc, gs) if spec.kind == "column" and doc.ifc.kind_of(guid) == "column" else []
+        # (from the new faces, 0.94; (0.495) not a steel piece given a column's section)
 
         def action(ifc):
             for g in gs:

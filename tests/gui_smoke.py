@@ -651,6 +651,7 @@ def bim_flow():
     diagram_editing_flow()
     diagram_boolean_flow()
     steel_types_flow()
+    steel_member_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -19940,6 +19941,78 @@ def steel_types_flow():
           and doc.ifc.steel_section(column) == "HEB200",
           "visto={} nome={!r} aplicado={} alto={} perfil={} peso={} etiquetas={}".format(
               seen.get("shown"), seen.get("name"), seen.get("applied"), deep, section, weight, texts[:6]))
+
+
+def steel_member_flow():
+    """0.495 — The «Peça metálica» tool (Estrutura ▸ Estrutura, after the floor): two HEB 200 columns 6 m apart, 4 m tall; a rafter IPE 300
+    drawn with two clicks, from 4 m at its start to 5 m at its end («pelas cotas»): an IfcBeam sloped 1 m; «Em X»:
+    a click on each column — two braces L 80×8 (IfcMember BRACE) from foot to top; a steel beam drawn across the two
+    columns stops at their faces. Captured: 495_pecas_metalicas.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    a = bim_actions.add_column(doc, np.array((0.0, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 4.0)
+    b = bim_actions.add_column(doc, np.array((6.0, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 4.0)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_box((np.array((-1.0, -1.0, 0.0)), np.array((7.0, 5.0, 5.0))))
+    pump(300)
+    in_ribbon = win.ribbon_item("steel_member") is not None
+    win.set_tool("steel_member")
+    pump(100)
+    tool = win.tool
+    tool.set_option("type", "viga_ipe300")
+    tool.set_option("z0", 4.0)
+    tool.set_option("z1", 5.0)
+    pump(100)
+    before = {o.id for o in doc.objects.values() if o.is_bim}
+    for p in ((1.5, 3.0, 4.0), (5.0, 3.0, 5.0)):
+        move(vp.project(np.array(p)), 3)
+        click()
+        pump(150)
+    key(Qt.Key.Key_Escape)
+    pump(200)
+    made = [g for g in (o.id for o in doc.objects.values() if o.is_bim) if g not in before]
+    rafter = made[0] if len(made) == 1 else None
+    rp = doc.ifc.steel_member_params(rafter) if rafter else None
+    sloped = rp is not None and abs(rp["start"][2] - 4.0) < 1e-6 and abs(rp["end"][2] - 5.0) < 1e-6 \
+        and doc.ifc.by_guid(rafter).is_a() == "IfcBeam" and rp["section"] == "IPE300"
+    tool.set_option("mode", "x")
+    tool.set_option("type", "contrav_l80")
+    pump(100)
+    before = {o.id for o in doc.objects.values() if o.is_bim}
+    for g in (a, b):
+        centre = doc.ifc.column_box(g)[0]
+        move(vp.project(np.array((centre[0], centre[1], 2.0))), 3)
+        click()
+        pump(200)
+    made = [g for g in (o.id for o in doc.objects.values() if o.is_bim) if g not in before]
+    braces = len(made) == 2 and all(doc.ifc.by_guid(g).is_a() == "IfcMember" for g in made)
+    shot("495_pecas_metalicas.png")
+    # its type in the Properties: the steel types listed; another chosen — a round tube, on the same line
+    win.set_tool("select")
+    pump(100)
+    vp.set_selection({made[0]} if made else set())
+    pump(300)
+    combo = win.props.editors.get("type")
+    listed = combo is not None and combo.findData("contrav_chs76") >= 0 and combo.findData("viga_ipe300") >= 0
+    if combo is not None and made:
+        combo.setCurrentIndex(combo.findData("contrav_chs76"))
+        combo.activated.emit(combo.currentIndex())
+        pump(300)
+    retyped = bool(made) and doc.ifc.steel_section(made[0]) == "CHS76.1x4"
+    win.set_tool("select")
+    pump(100)
+    beam = bim_actions.add_beam(doc, np.array((0.0, 0.0, 4.0)), np.array((6.0, 0.0, 4.0)),
+                                catalog.BY_KEY["viga_ipe200"], 4.0)
+    v = doc.get(beam).mesh.verts
+    faces = abs(float(v[:, 0].min()) - 0.0145) < 1e-6 and abs(float(v[:, 0].max()) - 5.9855) < 1e-6
+    doc.modified = False
+    check("peca_metalica_e_contraventamento", in_ribbon and sloped and braces and faces and listed and retyped,
+          "fita={} asna={} ({}) contraventamentos={} ({}) faces={} tipos={} mudou={}".format(
+              in_ribbon, sloped, rp and (rp["start"], rp["end"]), braces, len(made), faces, listed, retyped))
 
 
 def camera_move_flow():

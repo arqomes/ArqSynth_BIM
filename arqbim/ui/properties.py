@@ -1762,6 +1762,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         kind = "wall" if info["kind"] == "curved_wall" else info["kind"]      # (0.103: a wall type)
         if kind in ("door", "window"):
             specs = [s for s in catalog.openings() if s.kind == kind]    # (the project's too, 0.88)
+        elif kind == "steel_member":                    # (0.495) a steel piece: any steel section
+            specs = [s for s in catalog.types() if getattr(s, "section", None)]
         else:
             specs = [s for s in catalog.types() if s.kind == kind]       # (the project's too, 0.87)
         names = [_type_name(s) for s in specs]

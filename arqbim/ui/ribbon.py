@@ -74,7 +74,8 @@ PANELS = {
     # (0.482) as Revit's Structure: Structure (Beam, Wall, Column, Floor, Beam System), Foundation, then ours — the
     # structure proposed at once —, Datum, Work Plane (its analysis went to Analyze, as Revit's)
     "structure": (("select", ("select",)),
-                  ("structure", ("beam", "wall", "column", "slab", ("beam_system", "param_surface"))),
+                  # (0.495) the steel pieces after the floor, as Revit's Truss and Brace in its Structure panel
+                  ("structure", ("beam", "wall", "column", "slab", "steel_member", ("beam_system", "param_surface"))),
                   ("foundation", ("footing", ("combined_footing", "footings_under"))),
                   ("automatic", ("propose_structure", ("beams_between", "walls_under_beams", "slabs_in_bays"),
                                  ("columns_on_grid", "remove_proposal"))),
