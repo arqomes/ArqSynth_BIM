@@ -257,6 +257,22 @@ def steel_mitre_icon():
     return theme.icon(pm)
 
 
+def base_plate_icon():
+    """(0.497) Chapa de base: an I column standing on a plate, two anchor bolts going down."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    for x0, y0, x1, y1 in ((9, 3, 23, 6), (14, 6, 18, 19), (9, 19, 23, 22)):      # (the column: an I, seen from aside)
+        p.drawRect(QtCore.QRectF(x0, y0, x1 - x0, y1 - y0))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawRect(QtCore.QRectF(3, 22, 26, 3))                                       # (the plate)
+    p.setPen(_pen(INK, 1.6))
+    for x in (6, 26):                                                             # (its anchor bolts)
+        p.drawLine(QtCore.QPointF(x, 19), QtCore.QPointF(x, 30))
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()

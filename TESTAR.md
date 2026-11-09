@@ -644,6 +644,27 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.497 — Chapa de base (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.497.0**.
+
+1. Faça Ctrl+N. Com a ferramenta **Pilar**, tipo **Pilar HEB 200 — S275**, ponha dois pilares na planta. Abra o 3D (F8).
+2. Com **Selecionar**, clique num pilar e, com Shift, no outro. Na barra da seleção aparece **Chapa de base**: clique.
+   Debaixo de cada pilar aparece uma chapa 400 × 400 × 20 com 4 chumbadouros (com anilha e porca por cima) a descerem
+   para o betão.
+3. Aproxime a vista do pé de um pilar e clique na chapa. Nas **Propriedades**, o grupo **Ligação — Chapa de base** mostra
+   as medidas. Mude a **Espessura da chapa** para `30` e Enter: a chapa fica mais grossa. Mude **Chumbadouros** para
+   `6`: aparecem mais dois.
+4. Mude a **Distância ao bordo** para `20`: aparece o aviso «⚠ Distância ao bordo menor que 1,2·d0…». Volte a pôr `50`.
+5. Escolha o pilar e, nas Propriedades, mude o tipo para outro perfil (por exemplo **Pilar SHS 150×150×8**): a chapa
+   faz-se de novo à medida do perfil novo.
+6. Clique num chumbadouro e carregue em **Delete**: sai a ligação inteira (chapa, chumbadouros e soldadura). Ctrl+Z
+   volta.
+7. No separador **Estrutura**, painel **Ligação**, clique em **Chapa de base** sem nada escolhido: põe chapas debaixo de
+   todos os pilares de aço que ainda não têm (os de betão ficam sem).
+8. No Navegador aparecem **Chapas** e **Parafusos e chumbadouros**. Exporte o IFC: a ligação vem como um conjunto
+   «Ligação» com a chapa, os chumbadouros e a soldadura.
+
 ## 0.496 — Meia-esquadria e recortes (estrutura metálica, passo 2b)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.496.0**.

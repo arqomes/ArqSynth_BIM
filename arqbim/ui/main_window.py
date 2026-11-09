@@ -809,6 +809,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_beams_between = self._action(t("act.beams_between"), lambda: self.beams_between(),
                                               icon=icons.beams_between_icon())                         # (0.94)
         self.act_beams_between.setToolTip(t("tip.beams_between"))
+        self.act_base_plate = self._action(t("act.base_plate"), lambda: self.base_plates(),
+                                           icon=icons.base_plate_icon())                                # (0.497)
+        self.act_base_plate.setToolTip(t("tip.base_plate"))
         self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
                                             icon=icons.steel_mitre_icon())                              # (0.496)
         self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
@@ -2083,6 +2086,9 @@ class MainWindow(QtWidgets.QMainWindow):
             acts += [self.act_slabs_in_bays, self.act_beam_system]
         if sum(counts.values()) == 2 and len(self._steel_pieces()) == 2:      # (0.496) two steel pieces: a mitre
             acts.append(self.act_steel_mitre)
+        if "IfcColumn" in counts and any(isinstance(g, str) and self.doc.ifc.steel_section(g) is not None
+                                         for g in list(self.viewport.selection)[:20]):     # (0.497) steel columns
+            acts.append(self.act_base_plate)
         if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
                 counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
                     isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
@@ -5059,6 +5065,18 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.496) The steel pieces selected (their GlobalIds)."""
         return [g for g in self.viewport.selection if isinstance(g, str) and self.doc.ifc.kind_of(g) == "steel_member"]
 
+    def base_plates(self):
+        """(0.497) Estrutura ▸ Ligação ▸ Chapa de base: under the steel columns selected — none selected: under every
+        steel column without one —, each with its anchor bolts and its weld."""
+        chosen = [g for g in self.viewport.selection if isinstance(g, str)
+                  and self.doc.get(g) is not None and self.doc.get(g).ifc_class == "IfcColumn"]
+        made = bim.add_base_plates(self.doc, chosen or None)
+        if made:
+            self.message(t("info.base_plates", n=len(made)))
+        else:
+            self.message(t("info.base_plates_none"), warning=True)
+        return made
+
     def steel_mitre(self):
         """(0.496) Estrutura ▸ Meia-esquadria: the two steel pieces selected cut to a mitre where their lines meet."""
         pieces = self._steel_pieces()
@@ -7093,6 +7111,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_loose(doc, guid, **{action[6:]: value})
             elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes
                 bim.set_gutter(doc, guid, **{action[7:]: value})
+            elif action.startswith("connection."):        # (0.497) a steel connection's value: made again
+                bim.set_connection(doc, guid, **{action[len("connection."):]: value})
             elif action in ("wall_framing", "wall_framing_spacing", "wall_framing_blocking"):   # (0.437)
                 if action == "wall_framing":
                     bim.set_wall_framing(doc, guid, kind=value or "")

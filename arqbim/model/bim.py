@@ -2677,6 +2677,42 @@ def mitre(doc, a, b):
     return True
 
 
+def steel_columns(doc):
+    """(0.497) The steel columns: columns of a steel section, and steel pieces standing up as columns."""
+    out = []
+    for g in [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcColumn"]:
+        if doc.ifc.steel_section(g) is not None:
+            out.append(g)
+    return out
+
+
+def add_base_plates(doc, columns=None, params=None):
+    """(0.497) A base plate under each steel column given (None: every steel column without one), its anchor bolts
+    and its weld (parameters: mm; missing ones its defaults). One undo step. The connections' GlobalIds."""
+    language = lang()
+    columns = steel_columns(doc) if columns is None else [c for c in columns if doc.ifc.steel_section(c) is not None]
+    columns = [c for c in columns if not any(doc.ifc.connection_params(a.GlobalId)[0] == "base_plate"
+                                             for a in doc.ifc.connections_on([c]))]
+    if not columns:
+        return []
+
+    def action(ifc):
+        return [ifc.add_connection("base_plate", [c], params, language).GlobalId for c in columns]
+
+    return doc.execute(IfcCommand(t("cmd.base_plate"), action)).result
+
+
+def set_connection(doc, guid, **values):
+    """(0.497) A connection's parameters changed (mm), from it or any of its parts: made again. One undo step."""
+    language = lang()
+    assembly = doc.ifc.connection_of(guid)
+    if assembly is None:
+        return None
+    parts = [p.GlobalId for p in doc.ifc.connection_parts(assembly)]
+    return doc.execute(IfcCommand(t("cmd.connection"), lambda ifc: ifc.set_connection(guid, language, **values),
+                                  changed=parts)).result
+
+
 def x_brace(doc, a, b, spec, shape="x"):
     """(0.495) Bracing between two columns (GlobalIds): «x» both diagonals, «/» from a's foot to b's top, «\\» from a's
     top to b's foot — along their axes, from their feet to the lower of their tops. One undo step. The GlobalIds."""
@@ -4958,6 +4994,7 @@ def delete(doc, obj_ids):
     for under in doc.ifc.supports_of(caps).values():
         guids += [p for p in under if p not in guids and doc.ifc.kind_of(p) == "pile"]
     guids += [c for c in doc.ifc.claddings_of(guids) if c not in guids]      # (a wall takes its finishes, 0.119)
+    guids += doc.ifc.connections_to_remove(guids)     # (0.497: a connection whole; a piece takes its connections)
     # (0.178) a finish going: those over it on its face come down onto what is left
     restack = sorted({c for g in guids if doc.ifc.kind_of(g) == "cladding" for c in doc.ifc.face_claddings(g)}
                      - set(guids))

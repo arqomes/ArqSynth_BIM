@@ -284,6 +284,71 @@ class SteelCuts(unittest.TestCase):
         self.assertEqual(doc.ifc.validate(express_rules=True), [])
 
 
+class Connections(unittest.TestCase):
+    """(0.497) Steel connections: the base plate."""
+
+    def test_base_plate(self):
+        """Under an HEB 200 column: one connection (an IfcElementAssembly) of a plate 400 × 400 × 20 (the column + 100
+        each side) with its four holes, four anchor bolts M20 (down 20 + 30 + 400 mm, standing 80 over the plate) and
+        the weld all round; its values changed (6 bolts, 500 wide): made again; the column given an HEB 300: the plate
+        follows (500 × 500); too short an edge: warned (EN 1993-1-8); a bolt deleted: the whole connection goes; the
+        column deleted: its connection with it; the file valid; undo."""
+        import ifcopenshell.util.element as ue
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        column = bim.add_column(doc, np.array((2.0, 1.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+        concrete = bim.add_column(doc, np.array((8.0, 1.0, 0.0)), catalog.BY_KEY["pilar_30"], 3.0)
+        made = bim.add_base_plates(doc)                               # (every steel column: not the concrete one)
+        self.assertEqual(len(made), 1)
+        self.assertEqual(bim.add_base_plates(doc), [])                # (it has one already)
+        assembly = doc.ifc.by_guid(made[0])
+
+        def parts():
+            return {p.is_a(): [q for q in doc.ifc.connection_parts(assembly) if q.is_a() == p.is_a()]
+                    for p in doc.ifc.connection_parts(assembly)}
+
+        found = parts()
+        self.assertEqual({k: len(v) for k, v in found.items()},
+                         {"IfcPlate": 1, "IfcMechanicalFastener": 4, "IfcFastener": 1})
+        plate = found["IfcPlate"][0]
+        v = doc.get(plate.GlobalId).mesh.verts
+        np.testing.assert_allclose((v.min(axis=0), v.max(axis=0)), ((1.8, 0.8, -0.02), (2.2, 1.2, 0.0)), atol=1e-6)
+        bolt = found["IfcMechanicalFastener"][0]
+        b = doc.get(bolt.GlobalId).mesh.verts
+        self.assertAlmostEqual(float(b[:, 2].min()), -0.45, places=6)
+        self.assertAlmostEqual(float(b[:, 2].max()), 0.08, places=6)
+        self.assertEqual(ue.get_predefined_type(bolt), "ANCHORBOLT")
+        weld = found["IfcFastener"][0]
+        self.assertAlmostEqual(ue.get_psets(weld)["Pset_FastenerWeld"]["a"] * doc.ifc.unit_scale, 0.006)   # (6 mm)
+        self.assertEqual(doc.ifc.kind_of(plate.GlobalId), "steel_part")
+        info = doc.ifc.describe(plate.GlobalId)
+        self.assertEqual((info["params"]["connection"], info["params"]["n"], info["params"]["warnings"]),
+                         ("base_plate", 4, []))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        bim.set_connection(doc, plate.GlobalId, n=6, A=500.0)
+        found = parts()
+        self.assertEqual(len(found["IfcMechanicalFastener"]), 6)
+        v = doc.get(found["IfcPlate"][0].GlobalId).mesh.verts
+        self.assertAlmostEqual(float(v[:, 0].max() - v[:, 0].min()), 0.5, places=6)
+        bim.set_connection(doc, plate.GlobalId, A=0.0)
+        bim.set_type(doc, column, catalog.steel_spec(catalog.BY_KEY["pilar_heb200"], "HEB300", "S275"))
+        v = doc.get(parts()["IfcPlate"][0].GlobalId).mesh.verts       # (it follows the column: 300 + 200)
+        self.assertAlmostEqual(float(v[:, 0].max() - v[:, 0].min()), 0.5, places=6)
+        bim.set_connection(doc, made[0], e=20.0)
+        self.assertEqual([c for c, _v in doc.ifc.connection_warnings(made[0])], ["edge"])
+        bim.delete(doc, [parts()["IfcMechanicalFastener"][0].GlobalId])
+        self.assertIsNone(doc.ifc.by_guid(made[0]))
+        doc.undo()
+        self.assertIsNotNone(doc.ifc.by_guid(made[0]))
+        bim.delete(doc, [column])
+        self.assertIsNone(doc.ifc.by_guid(made[0]))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        self.assertIsNotNone(concrete)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

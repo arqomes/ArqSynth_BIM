@@ -653,6 +653,7 @@ def bim_flow():
     steel_types_flow()
     steel_member_flow()
     steel_cuts_flow()
+    base_plate_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20051,6 +20052,51 @@ def steel_cuts_flow():
     doc.modified = False
     check("cortes_nas_pontas", offered and cut and coped and win.ribbon_item("steel_mitre") is not None,
           "oferecido={} cortado={} recorte={}".format(offered, cut, coped))
+
+
+def base_plate_flow():
+    """0.497 — Base plates: two HEB 200 columns selected, the selection bar offers «Chapa de base»: clicked, a plate
+    under each with four anchor bolts; a plate chosen: the Properties show its connection's values — its thickness
+    typed 30: made again 30 mm thick. Captured: 497_chapa_de_base.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    cols = [bim_actions.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+            for x in (0.0, 5.0)]
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection(set(cols))
+    pump(300)
+    offered = win.act_base_plate in win._selection_actions({"IfcColumn": 2})
+    win.act_base_plate.trigger()
+    pump(400)
+    assemblies = [a for a in doc.ifc.file.by_type("IfcElementAssembly") if doc.ifc.kind_of(a.GlobalId) ==
+                  "steel_connection"]
+    plates = [p.GlobalId for a in assemblies for p in doc.ifc.connection_parts(a) if p.is_a("IfcPlate")]
+    bolts = sum(1 for a in assemblies for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    made = len(assemblies) == 2 and len(plates) == 2 and bolts == 8
+    vp.set_selection({plates[0]} if plates else set())
+    pump(300)
+    edit = win.props.editors.get("connection.tp")
+    shown = edit is not None and "connection.e" in win.props.editors and "connection.n" in win.props.editors
+    if edit is not None:
+        edit.setText("30")
+        edit.editingFinished.emit()
+        pump(400)
+    plate = next((p.GlobalId for p in doc.ifc.connection_parts(assemblies[0]) if p.is_a("IfcPlate")), None) \
+        if assemblies else None
+    v = doc.get(plate).mesh.verts if plate else None
+    thicker = v is not None and abs(float(v[:, 2].max() - v[:, 2].min()) - 0.03) < 1e-6
+    vp.set_selection(set())
+    vp.zoom_box((np.array((-0.4, -0.4, -0.5)), np.array((0.4, 0.4, 0.4))))
+    pump(400)
+    shot("497_chapa_de_base.png")
+    doc.modified = False
+    check("chapa_de_base", offered and made and shown and thicker and win.ribbon_item("base_plate") is not None,
+          "oferecida={} feitas={} ({} chapas, {} chumbadouros) propriedades={} 30mm={}".format(
+              offered, made, len(plates), bolts, shown, thicker))
 
 
 def camera_move_flow():

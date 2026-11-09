@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.497.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: ligações — a primeira, a chapa de base.**
+
+- Comando **Chapa de base** (separador **Estrutura**, painel novo **Ligação**; e na barra da seleção quando há pilares
+  de aço escolhidos): debaixo de cada pilar de aço escolhido — sem nenhum escolhido, de todos os que ainda não têm —
+  uma chapa com os **chumbadouros** (varão, anilha e porca), e a **soldadura** do pilar à chapa à volta do perfil.
+- Medidas automáticas: a chapa com 100 mm à volta do pilar (400 × 400 × 20 num HEB 200), 4 chumbadouros M20 a 50 mm dos
+  bordos, 80 mm acima da chapa, 400 mm de amarração no betão, 30 mm de argamassa, soldadura a = 6 mm.
+- Escolhida a chapa (ou um chumbadouro), as **Propriedades** mostram a ligação, e cada medida muda-se ali: largura e
+  comprimento da chapa (0 = automáticos), espessura, número de chumbadouros (2, 4, 6, 8), diâmetro (M12 a M48),
+  distância ao bordo, saliência, amarração, argamassa, garganta da soldadura. A ligação faz-se de novo a cada mudança.
+- **Avisos** pelo EN 1993-1-8 (Quadro 3.3): distância ao bordo menor que 1,2·d0, chumbadouros mais perto do que
+  2,2·d0; e se a chapa não é maior que o pilar ou um chumbadouro bate nele.
+- A ligação **segue o pilar**: muda-se o perfil do pilar (ou move-se) e a chapa faz-se de novo à medida. Apagar uma peça
+  da ligação apaga a ligação inteira; apagar o pilar apaga a sua ligação.
+- No IFC, como o Tekla e o Revit as leem: um `IfcElementAssembly` «Ligação» com a `IfcPlate` (os furos no contorno),
+  os `IfcMechanicalFastener` ANCHORBOLT (com o `Pset_MechanicalFastenerAnchorBolt`) e o `IfcFastener` WELD (com o
+  `Pset_FastenerWeld`: garganta e comprimento), no aço do pilar. No Navegador: «Chapas», «Parafusos e chumbadouros».
+
 ## 0.496.0 — 2026-11-09
 
 **Estrutura metálica, passo 2b: as pontas das peças cortadas.**

@@ -846,6 +846,7 @@ _STRINGS = {
     "rpanel.work_plane": ("Plano de trabalho", "Work Plane"),
     "rpanel.structure": ("Estrutura", "Structure"),
     "rpanel.foundation": ("Fundação", "Foundation"),
+    "rpanel.connection": ("Ligação", "Connection"),                  # (0.497)
     "rpanel.link": ("Vincular", "Link"),
     "rpanel.symbols": ("Símbolo", "Symbol"),
     # (0.374) the study's ribbon: the Wall's shapes as buttons, the rooms found at once, their areas
@@ -2600,6 +2601,9 @@ _STRINGS = {
     "tree.cat.IfcRoof": ("Coberturas", "Roofs"),
     "tree.cat.IfcMember": ("Peças lineares (contraventamentos, madres, madeiramento…)",  # (0.276; 0.437; 0.495)
                            "Members (braces, purlins, carpentry…)"),
+    "tree.cat.IfcPlate": ("Chapas", "Plates"),                                         # (0.497)
+    "tree.cat.IfcMechanicalFastener": ("Parafusos e chumbadouros", "Bolts and anchor bolts"),
+    "tree.cat.IfcFastener": ("Soldaduras", "Welds"),
     "tree.cat.IfcElementAssembly": ("Conjuntos (madeiramento, estrutura leve…)",
                                     "Assemblies (carpentry, light frames…)"),
     "tree.cat.IfcStair": ("Escadas", "Stairs"),
@@ -3290,6 +3294,41 @@ _STRINGS = {
     "cmd.beam": ("Viga", "Beam"),
     "cmd.steel_member": ("Peça metálica", "Steel member"),          # (0.495)
     "cmd.steel_mitre": ("Meia-esquadria", "Mitre"),                 # (0.496)
+    # (0.497) steel connections
+    "cmd.base_plate": ("Chapa de base", "Base plate"),
+    "cmd.connection": ("Ligação metálica", "Steel connection"),
+    "act.base_plate": ("Chapa de base", "Base plate"),
+    "tip.base_plate": ("Põe uma chapa de base, com os chumbadouros e a soldadura, debaixo dos pilares de aço escolhidos "
+                       "— sem nenhum escolhido, debaixo de todos os que ainda não têm.",
+                       "Puts a base plate, with its anchor bolts and weld, under the steel columns selected — none "
+                       "selected: under every one that has none yet."),
+    "info.base_plates": ("{n} chapa(s) de base com os chumbadouros e a soldadura. Escolha uma para mudar as medidas "
+                         "nas Propriedades.",
+                         "{n} base plate(s) with their anchor bolts and weld. Select one to change its sizes in the "
+                         "Properties."),
+    "info.base_plates_none": ("Não há pilares de aço sem chapa de base (escolha pilares com um perfil de aço).",
+                              "No steel columns without a base plate (select columns of a steel section)."),
+    "props.connection": ("Ligação", "Connection"),
+    "props.g.connection": ("Ligação — {what}", "Connection — {what}"),
+    "props.connection_joins": ("Liga", "Joins"),
+    "connection.base_plate": ("Chapa de base", "Base plate"),
+    "connection.field.A": ("Largura da chapa (mm; 0: automática)", "Plate width (mm; 0: automatic)"),
+    "connection.field.B": ("Comprimento da chapa (mm; 0: automático)", "Plate length (mm; 0: automatic)"),
+    "connection.field.tp": ("Espessura da chapa (mm)", "Plate thickness (mm)"),
+    "connection.field.n": ("Chumbadouros", "Anchor bolts"),
+    "connection.field.d": ("Diâmetro", "Diameter"),
+    "connection.field.e": ("Distância ao bordo (mm)", "Edge distance (mm)"),
+    "connection.field.proj": ("Saliência acima da chapa (mm)", "Projection over the plate (mm)"),
+    "connection.field.embed": ("Amarração no betão (mm)", "Embedment (mm)"),
+    "connection.field.grout": ("Argamassa de selagem (mm)", "Grout (mm)"),
+    "connection.field.a": ("Garganta da soldadura a (mm)", "Weld throat a (mm)"),
+    "connection.warn.edge": ("⚠ Distância ao bordo menor que 1,2·d0 = {v} mm (EN 1993-1-8, Quadro 3.3).",
+                             "⚠ Edge distance under 1.2·d0 = {v} mm (EN 1993-1-8, Table 3.3)."),
+    "connection.warn.pitch": ("⚠ Chumbadouros mais perto do que 2,2·d0 = {v} mm (EN 1993-1-8, Quadro 3.3).",
+                              "⚠ Anchor bolts closer than 2.2·d0 = {v} mm (EN 1993-1-8, Table 3.3)."),
+    "connection.warn.small": ("⚠ A chapa não é maior do que o pilar.", "⚠ The plate is not bigger than the column."),
+    "connection.warn.clash": ("⚠ Um chumbadouro bate no pilar: aumente a chapa ou a distância.",
+                              "⚠ An anchor bolt clashes with the column: make the plate bigger or move it."),
     "act.steel_mitre": ("Meia-esquadria", "Mitre"),
     "tip.steel_mitre": ("Corta duas peças metálicas escolhidas em meia-esquadria onde as linhas se encontram (o "
                         "joelho de um pórtico).",

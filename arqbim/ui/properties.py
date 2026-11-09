@@ -1942,6 +1942,46 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         for role, (n, metres) in (p.get("framing_summary") or {}).items():
             self._row(t("framing.role." + role), t("framing.count", n=n, m=_len(metres)))
 
+    CONNECTION_FIELDS = {"base_plate": ("A", "B", "tp", "n", "d", "e", "proj", "embed", "grout", "a")}
+
+    def _connection_rows(self, guid, p):
+        """(0.497) A steel connection's values (mm; a plate's 0: from the column), each changed here — the whole
+        connection made again —, and what its checks find (EN 1993-1-8, Table 3.3)."""
+        from ..ifc import steel_connections as sc
+        kind = p["connection"]
+        self._begin(t("props.g.connection", what=t("connection." + kind)))
+        self._row(t("props.connection_joins"), ", ".join(p.get("members") or ()))
+        sep = decimal_sep()
+
+        def number(k):
+            lo, hi = sc.LIMITS[k]
+
+            def parse(text):
+                try:
+                    v = float(text.replace(",", ".").replace("mm", "").strip())
+                except ValueError:
+                    return None
+                if k in ("A", "B") and v == 0.0:
+                    return 0.0
+                return v if lo <= v <= hi else None
+            return parse
+
+        for k in self.CONNECTION_FIELDS.get(kind, ()):
+            if k == "n":
+                self._choice_combo(t("connection.field.n"), "connection.n", guid,
+                                   [(str(n), n) for n in (2, 4, 6, 8)], int(p.get("n") or 4))
+            elif k == "d":
+                self._choice_combo(t("connection.field.d"), "connection.d", guid,
+                                   [("M{:g}".format(d), d) for d in sc.BOLT_SIZES], float(p.get("d") or 20.0))
+            else:
+                value = float(p.get(k) or 0.0)
+                self._text_editor(t("connection.field." + k), "{:g}".format(value).replace(".", sep), "connection." + k,
+                                  guid, parse=number(k), least=0.0)
+        for code, value in p.get("warnings") or ():
+            warn = self._row(t("connection.warn." + code, v="{:g}".format(value).replace(".", sep)))
+            warn.setFirstColumnSpanned(True)
+            warn.setForeground(0, QtGui.QBrush(theme.colour("warning")))
+
     CORNER_ROWS = 12            # (0.433) a slab's corners listed one by one, at most
 
     def _slab_slope_rows(self, guid, p):
@@ -2033,6 +2073,9 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         elif kind == "roof":                       # (0.278) a roof type; made before: its slab type's name, listed
             spec = p.get("spec")
             self._type_editor(dict(info, type=info["type"] or (_type_name(spec) if spec is not None else "")), guid)
+        elif kind in ("steel_part", "steel_connection"):      # (0.497) a part of a connection: its connection's
+            if p.get("connection"):
+                self._row(t("props.connection"), t("connection." + p["connection"]))
         elif kind and kind != "fitting":                # (a bend's type follows its pipe's: shown only)
             self._type_editor(info, guid)
         else:
@@ -2055,6 +2098,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self.tree.setItemWidget(item, 1, button)
             self.editors["edit_profile"] = button
             self._framing_rows(guid, p)                    # (0.437) its light frame
+        elif kind in ("steel_part", "steel_connection") and p.get("connection"):   # (0.497) its connection's values
+            self._connection_rows(guid, p)
         elif kind == "slab":
             shape = p.get("shape") or "retangulo"
             if shape == "retangulo":

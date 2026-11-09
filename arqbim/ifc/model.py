@@ -79,6 +79,7 @@ from .wall_framing import WallFramingMixin  # noqa: E402
 from .loose_furniture import LooseFurnitureMixin  # noqa: E402
 from .ripado_screen import RipadoScreenMixin  # noqa: E402
 from .steel_members import SteelMemberMixin  # noqa: E402
+from .steel_connections import SteelConnectionMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -390,7 +391,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
                ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
-               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin):
+               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin, SteelConnectionMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -2440,6 +2441,13 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             elif kind == "param_surface":                               # (0.395) its definition and what it made
                 info["params"] = {"definition": self.surface_definition(guid), "usage": self.surface_usage(guid),
                                   "summary": self.surface_summary(guid)}
+            elif kind in ("steel_part", "steel_connection"):            # (0.497) a part of a steel connection
+                found = self.connection_params(guid)
+                if found is not None:
+                    connection, members, values = found
+                    info["params"] = dict(values, connection=connection,
+                                          members=[self.by_guid(m).Name if self.by_guid(m) else "?" for m in members],
+                                          warnings=self.connection_warnings(guid))
             elif kind == "steel_member":                                # (0.495) a steel piece between two points
                 sp = self.steel_member_params(guid)
                 info["params"] = {"length": sp["length"], "function": sp["function"], "cardinal": sp["cardinal"],
