@@ -218,6 +218,7 @@ ORTHO_MIN, ORTHO_MAX = 0.05, 1e5   # m: the least / most a plan or section shows
 CUT_HEIGHT = 1.20                  # m above the storey level: where a plan cuts (walls, doors, windows)
 SYMBOL = "symbol"                  # batch key mark: doors drawn in a plan by their symbol, not their cut
 SYMBOL_DEPTH = 0.05                # m under the cut: where plan symbols are drawn (over all that is below)
+HIDDEN = "hidden"                  # (0.479) batch key mark: elements hidden one by one (Viewport.set_hidden_elements)
 SYMBOL_PICK_PX = 6                 # clicking this near a door's symbol picks the door
 DIM_DEPTH = 0.04                   # m towards the viewer from the cut: where dimensions are drawn
 BOX_COLOR = "#1f74d1"              # the section box: its outline and its handles
@@ -389,6 +390,8 @@ class Viewport:
         self.colours = {}           # GlobalId -> colour of the graphic rule shown (see set_colours)
         self.hidden_classes = set() # IFC classes the view shown hides (its view template)
         self.hidden_phases = set()  # phases it hides ("NEW"…; "" for the elements without one)
+        self.hidden_ids = set()     # (0.479) elements hidden one by one (the Presentation tab's layers: their eyes)
+        self.camera_locked = False  # (0.479) the mouse does not move the camera (the Presentation tab's lock)
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -471,6 +474,7 @@ class Viewport:
         self._last_middle = (0.0, 0.0, 0.0)   # (when, x, y) of the last middle-button press: double click
         self.middle_drag = "orbit"            # what the middle button does: "orbit" (SketchUp) | "pan" (Revit)
         self.cube = None                      # the view cube (0.79; set by the window: its faces' pictures)
+        self.cube_hidden = False              # (0.479) not drawn (the Presentation tab: its own keys of the views)
         self._anim = None                     # a smooth turn in progress: (start time, from, to) camera snapshots
         self._cube_press = None               # [x, y, part, dragged] of the left button pressed on the cube
         self.on_cube_menu = None              # (x, y) -> None: the cube's ▾ (the window's menu)
@@ -557,7 +561,7 @@ class Viewport:
         more = self.bim.flush(FLUSH_BUDGET)          # rebuild only the batches that changed (0.328: many — some)
         self._step_animation()
         self._follow_view()
-        if self.cube is not None and not self.cutting():
+        if self.cube is not None and not self.cutting() and not self.cube_hidden:
             self.renderer.render(self.scene, self.camera, flush=False)
             self.cube.follow(self.camera.local.rotation)       # the view cube in its corner (0.79)
             self.cube.render(self.renderer, self.logical_size())
@@ -734,7 +738,7 @@ class Viewport:
         """The mouse on the view cube (3D only): "down" / "move" / "up". True if the cube took it (the tool does
         not get it): a click there, a drag that started there, the mouse over it."""
         cube = self.cube
-        if cube is None:
+        if cube is None or self.cube_hidden:
             return False
         size = self.logical_size()
         if self.cutting():
@@ -868,6 +872,27 @@ class Viewport:
             return
         level = math.sqrt(max(1.0 - eye[2] ** 2, 0.0))
         self.look_from((sx * level, sy * level, eye[2]))
+
+    def turn_about(self, angle):
+        """(0.479) The camera taken round the focus `angle` radians about the vertical (the Presentation's «Girar vista
+        90°»), smoothly."""
+        focus = self._focus.copy()
+        q = la.quat_from_axis_angle((0.0, 0.0, 1.0), float(angle))
+
+        def change():
+            self.camera.local.rotation = la.quat_mul(q, np.asarray(self.camera.local.rotation, dtype=float))
+            self.camera.local.position = tuple(focus + la.vec_transform_quat(self.camera_position() - focus, q))
+            self._set_focus(focus)
+
+        self._animate(change)
+
+    def set_axonometric(self, on):
+        """(0.479) Seen without perspective or with it (the Presentation tab's ORTO / PERSP), what is in view staying
+        about the same — the 3D view's own look is not changed (its property: set_look)."""
+        self.look = tuple(self.look[:3]) + (bool(on),)    # (what the 3D view's own look is set against later)
+        if bool(on) != self.is_ortho() and not self.cutting():
+            self._set_axonometric(bool(on))
+            self.redraw()
 
     def roll(self, angle):
         """The view turned `angle` radians round the line of sight (the roll arrows: 90°)."""
@@ -1114,6 +1139,8 @@ class Viewport:
         return origin + direction * np.linalg.norm(self._focus - origin)
 
     def orbit(self, dx, dy, pivot):
+        if self.camera_locked:                     # (0.479: the Presentation tab's «Bloquear câmara da cena»)
+            return
         cam = self.camera
         rot = np.asarray(cam.local.rotation, dtype=float)
         right = la.vec_transform_quat((1, 0, 0), rot)
@@ -1128,6 +1155,8 @@ class Viewport:
         self.redraw()
 
     def pan(self, dx, dy):
+        if self.camera_locked:
+            return
         cam = self.camera
         wpp = self.world_per_pixel(self._focus)
         move = (-dx * np.asarray(cam.world.right) + dy * np.asarray(cam.world.up)) * wpp
@@ -1136,6 +1165,8 @@ class Viewport:
         self.redraw()
 
     def zoom_at(self, x, y, wheel_dy):
+        if self.camera_locked:
+            return
         p = self.point_under(x, y)
         f = 2.0 ** (wheel_dy * ZOOM_SPEED)
         pos = self.camera_position()
@@ -1376,6 +1407,8 @@ class Viewport:
         in a plan), and for elements of the classes the view hides (its view template).
         Sketches belong to the storey band their lowest point is in."""
         if obj is not None and obj.is_bim and obj.ifc_class in self.hidden_classes:
+            return False
+        if obj is not None and obj.is_bim and obj.id in self.hidden_ids:       # (0.479)
             return False
         if obj is not None and obj.is_bim and self.hidden_phases and obj.ifc_class != "CAD" and \
                 (self.doc.status_of(obj.id) or "") in self.hidden_phases:
@@ -2742,7 +2775,7 @@ class Viewport:
         def shown(key):
             storey, cls, mark, phase = key[:4] if isinstance(key, tuple) else (key, None, None, None)
             return ((not only or storey is None or storey == active or storey in deep)
-                    and not (mark == SYMBOL and self.plan)
+                    and not (mark == SYMBOL and self.plan) and mark != HIDDEN
                     and (cls is None or cls not in self.hidden_classes)
                     and (phase is None or phase not in self.hidden_phases))
 
@@ -2771,6 +2804,21 @@ class Viewport:
         self.only_active_storey = bool(on)
         self.apply_storey_view()
 
+    def set_hidden_elements(self, ids):
+        """(0.479) These elements (GlobalIds) not drawn — the Presentation tab's layers turned off with their eyes —,
+        the others drawn again. Only the elements whose state changed move (to a batch of their own, not drawn): the
+        rest of the model is not built again. Returns how many changed."""
+        ids = {i for i in ids if isinstance(i, str)}
+        changed = ids ^ self.hidden_ids
+        self.hidden_ids = ids
+        for obj_id in changed:
+            obj = self.doc.get(obj_id)
+            if obj is not None and obj.is_bim and obj_id in self.bim and obj.mesh is not None:
+                self.show_object(obj_id, obj.mesh)
+        if changed:
+            self.apply_storey_view()
+        return len(changed)
+
     def _split_classes(self):
         """The IFC classes some view template or view hides: their elements get batches of their own."""
         return ({cls for tpl in self.doc.templates for cls in tpl.hidden}
@@ -2788,6 +2836,8 @@ class Viewport:
         cls = obj.ifc_class if obj.ifc_class in self._split else None
         phase = (self.doc.status_of(obj.id) or "") if self._split_phases else None
         mark = SYMBOL if symbol else (GROUND if obj.ifc_class == TERRAIN_CLASS else None)   # (its earth: 0.156)
+        if obj.id in self.hidden_ids:                   # (0.479: hidden one by one — a batch of their own, not drawn)
+            mark = HIDDEN
         dressed = self._dress(obj) if self._dressing[2] else None
         if dressed is not None and dressed[2]:          # (0.315: with glass, drawn after the others)
             return (obj.storey, cls, mark, phase, CLEAR)

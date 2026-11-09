@@ -800,14 +800,21 @@ class Document:
     def view3d(self, uid):
         return next((v for v in self.views3d if v.uid == uid), None)
 
-    def add_view3d(self, camera, props=None):
+    def add_view3d(self, camera, props=None, name=None):
         """A named 3D view ("3D 2": one more than the highest number) seen from `camera`, with the look and
-        section box `props` (the view properties it starts from). One undo step. Returns its key."""
+        section box `props` (the view properties it starts from). One undo step. Returns its key. (0.479) name: its
+        own (a scene made in the Presentation tab: «Cena 2») — one another view has gets a number after it."""
         uid = uuid.uuid4().hex
 
         def change(doc):
             numbers = [int(m.group(1)) for v in doc.views3d for m in [re.search(r"(\d+)$", v.name)] if m]
-            doc.views3d.append(View3D(view3d_name(max(numbers, default=0) + 1), uid, copy.deepcopy(camera)))
+            own = (name or "").strip()
+            if own:
+                taken, base, n = {v.name for v in doc.views3d}, own, 1
+                while own in taken:
+                    n += 1
+                    own = "{} ({})".format(base, n)
+            doc.views3d.append(View3D(own or view3d_name(max(numbers, default=0) + 1), uid, copy.deepcopy(camera)))
             if props:
                 doc.view_props[("3d", uid)] = copy.deepcopy(dict(props))
             return ("3d", uid)

@@ -174,6 +174,10 @@ def shot(name):
             painter.drawPixmap(win.notice.mapTo(win, QtCore.QPoint(0, 0)), win.notice.grab())
         if win.quick.isVisible():                    # (0.354) the quick edit over the view
             painter.drawPixmap(win.quick.mapTo(win, QtCore.QPoint(0, 0)), win.quick.grab())
+        mode = getattr(win, "presentation_mode", None)
+        for w in (mode.overlay.widgets if mode is not None and mode.active else ()):    # (0.479) its commands
+            if w.isVisible():
+                painter.drawPixmap(w.mapTo(win, QtCore.QPoint(0, 0)), w.grab())
         strip = getattr(getattr(win, "verifier", None), "strip", None)
         if strip is not None and strip.isVisible():  # (0.417) the Verifier's strip at the foot of the view
             painter.drawPixmap(strip.mapTo(win, QtCore.QPoint(0, 0)), strip.grab())
@@ -605,6 +609,7 @@ def bim_flow():
     rooms_walk_flow()
     presentation_package_flow()
     panorama_flow()
+    presentation_tab_flow()
     line_loops_flow()
     free_drawing_flow()
     work_plane_rotate_flow()
@@ -1909,7 +1914,7 @@ def view_tabs_flow():
         bar.tabButton(0, QtWidgets.QTabBar.ButtonPosition.LeftSide) is None and win.views.keys[1] == ("3d",)
     win.views.close(0)
     pump(100)
-    kept_home = win.views.keys[0] == ("start",) and bar.count() == 3
+    kept_home = win.views.keys[0] == ("start",) and bar.count() == 4     # (0.479: and the Presentation's, last)
     bar.moveTab(2, 0)                                  # (a tab dragged before the house…)
     win.views._pin()                                   # (…and let go: it goes back after it)
     pump(100)
@@ -1926,27 +1931,29 @@ def view_tabs_flow():
     pump(400)
     win.open_view("plan", doc.active_storey)          # (it has a tab: no new one)
     pump(400)
-    three = bar.count() == 4 and vp.plan and "Alçado Sul" in win.views.text()
+    three = bar.count() == 5 and vp.plan and "Alçado Sul" in win.views.text() and \
+        win.views.keys[-1] == ("presentation",)                          # (0.479: opened before the Presentation's)
     shot("46b_abas_das_vistas.png")
     k = win.views.keys.index(("elevation", "S"))
     button = bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.RightSide) or \
         bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.LeftSide)
     QtTest.QTest.mouseClick(button, Qt.MouseButton.LeftButton)          # its ×
     pump(300)
-    closed = bar.count() == 3 and vp.plan and "Alçado Sul" not in win.views.text()
+    closed = bar.count() == 4 and vp.plan and "Alçado Sul" not in win.views.text()
     key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)               # close the plan's tab
     pump(300)
-    only_3d = bar.count() == 2 and not vp.plan and not vp.cutting()      # (0.403: and the house)
-    key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)               # the last one: the 3D view stays
+    only_3d = bar.count() == 3 and not vp.plan and not vp.cutting() \
+        and not win.presentation_shown()                                 # (0.403: and the house; 0.479: not the
+    key(Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)               #  Presentation's) the last one: the 3D stays
     pump(300)
-    check("abas_fechar_sem_fechar_o_projeto", three and closed and only_3d and bar.count() == 2
+    check("abas_fechar_sem_fechar_o_projeto", three and closed and only_3d and bar.count() == 3
           and len(objects()) == n_objects and doc.path == path,
           "três={} fechou_alçado={} só_3d={} abas={}".format(three, closed, only_3d, win.views.text()))
     key(Qt.Key.Key_F4)
     pump(300)
     key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ControlModifier)             # the next tab: 3D (not the house)
     pump(300)
-    check("abas_ctrl_tab", bar.count() == 3 and not vp.plan and bar.currentIndex() == 1, win.views.text())
+    check("abas_ctrl_tab", bar.count() == 4 and not vp.plan and bar.currentIndex() == 1, win.views.text())
 
     # 0.56: the tabs are saved with the project and come back, each as it was left, when it is opened again
     win.show_elevation("S")
@@ -19027,6 +19034,168 @@ def presentation_panel_flow():
           "estreito={} ({}→{} px, painel ≥ {} px) ordem={} balao={!r}".format(
               on_ribbon, shown, moved, chosen, entry, undone, jpegs, back, pictured, exported, narrow, view_width,
               canvas.width(), panel.minimumSizeHint().width(), order, win.last_message))
+
+
+def presentation_tab_flow():
+    """0.479 — The ArqSynth Presentation tab (the owner: «crie uma aba de ArqSynth Presentation… ao clicar na aba a tela
+    muda a interface para a interface do ArqSynth Presentation»): a room of four walls with a door; the tab is the
+    last one; clicked, the BIM's columns give way to the Presentation's (pages and scenes on the left, the rail and
+    CAMADAS on the right), the 3D view keeps its width, its commands over it, the view cube away, the parameters' bar
+    its commands. «Criar cena» keeps the view as «Cena 1» (a named 3D view, its card chosen, its thumbnail); a wall's
+    eye hides it (in the 3D view, not selectable); ORTO, the lock (the mouse does not turn the camera), «Branco
+    conceptual»; «Atualizar» keeps them in the scene; the FOV in perspective; T: seen from above; TRANSIÇÃO 2,5 s
+    for every scene; duplicated, renamed, the first scene, hidden, the copy deleted (Ctrl+Z brings it back); the
+    Ambiente tab: the sun's hour on the reading; exported: the scene with its camera (orthographic, locked), mode,
+    the wall hidden, the transition. Another tab: the BIM's columns as they were, every element drawn, the cube back,
+    the window and the 3D view as wide as before. Captured: 479_presentation.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_export
+    from arqbim.ui import view_tabs
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    folder = tempfile.mkdtemp(prefix="arqsynth_ptab_")
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_90"], bim_actions.wall_frame(doc, walls[0]),
+                            2.5, -1)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    mode, bar = win.presentation_mode, win.view_bar
+    size, width = win.size(), canvas.width()
+    left_before = [d for d in win.left_panels if d.isVisible()]
+    props_before = win.props.isVisible()
+    k = win.views.keys.index(view_tabs.PRESENT)
+    last = k == len(win.views.keys) - 1 and bar.tabText(k) == "ArqSynth Presentation" \
+        and bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.RightSide) is None
+    QtTest.QTest.mouseClick(bar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, bar.tabRect(k).center())
+    pump(600)
+    titles = [w.text() for w in win.context_bar.findChildren(QtWidgets.QLabel)]
+    swapped = mode.active and mode.pages.isVisible() and mode.side.isVisible() and not win.props.isVisible() \
+        and not any(d.isVisible() for d in win.left_panels) and vp.cube_hidden \
+        and all(w.isVisible() for w in (mode.overlay.create, mode.overlay.camera, mode.overlay.keys,
+                                        mode.overlay.look, mode.overlay.sun)) and "ArqSynth Presentation" in titles
+    kept_width = abs(canvas.width() - width) <= 2 and win.size() == size
+    check("aba_presentation_troca_as_colunas", last and swapped and kept_width,
+          "ultima={} trocou={} largura {}→{} janela {}→{} barra={}".format(
+              last, swapped, width, canvas.width(), size, win.size(), titles))
+    # «Criar cena»: the view kept as «Cena 1»
+    before = len(pm.scenes(doc))
+    QtTest.QTest.mouseClick(mode.overlay.create_button, Qt.MouseButton.LeftButton)
+    pump(500)
+    found = pm.scenes(doc)
+    scene = next((s for s in found if s.name == "Cena 1"), None)
+    created = scene is not None and len(found) == before + 1 and scene.kind == "view3d" \
+        and mode.scene_key == scene.key and scene.key in mode.pages.cards \
+        and mode.pages.cards[scene.key].property("active") == "true" and scene.key in win._scene_thumbs
+    # a wall's eye: hidden in the 3D view
+    layers = mode.side.pages["layers"]
+    rows = len(layers.items)
+    item = layers.items[walls[1]]
+    layers._clicked(item, 1)
+    pump(300)
+    hidden = walls[1] in vp.hidden_ids and not vp.is_shown(doc.get(walls[1])) and walls[1] in mode.live["hidden"]
+    # ORTO, the lock, Branco conceptual — then «Atualizar»
+    QtTest.QTest.mouseClick(mode.overlay.ortho, Qt.MouseButton.LeftButton)
+    pump(300)
+    ortho = vp.is_ortho() and not mode.overlay.fov.isVisible()
+    QtTest.QTest.mouseClick(mode.overlay.lock, Qt.MouseButton.LeftButton)
+    pump(200)
+    snap = vp.camera_snapshot()
+    vp.orbit(40, 10, vp._focus)
+    locked = vp.camera_locked and np.allclose(vp.camera_snapshot()["position"], snap["position"])
+    mode.set_style("white_concept")
+    pump(300)
+    styled = vp.look[0] == "hidden" and mode.overlay.look_button.text().startswith("Branco conceptual")
+    card = mode.pages.cards[scene.key]
+    QtTest.QTest.mouseClick(card.buttons["update"], Qt.MouseButton.LeftButton)
+    pump(500)
+    kept = next(s for s in pm.scenes(doc) if s.key == scene.key)
+    updated = kept.projection == "orthographic" and kept.locked and kept.style == "white_concept" \
+        and kept.hidden_layers == (walls[1],)
+    QtTest.QTest.mouseClick(mode.overlay.lock, Qt.MouseButton.LeftButton)       # (unlocked, in perspective)
+    QtTest.QTest.mouseClick(mode.overlay.persp, Qt.MouseButton.LeftButton)
+    pump(300)
+    mode.overlay.fov_slider.setValue(50)
+    pump(200)
+    lens = not vp.is_ortho() and abs(mode.current_fov() - 50.0) < 0.6 and mode.overlay.fov.isVisible()
+    QtTest.QTest.mouseClick(mode.overlay.keys.findChildren(QtWidgets.QToolButton)[0], Qt.MouseButton.LeftButton)
+    pump(900)                                                                    # (T: from above, turning there)
+    above = vp.view_direction()[2] < -0.98
+    check("aba_presentation_criar_cena_camadas_camera", created and rows >= 5 and hidden and ortho and locked
+          and styled and updated and lens and above,
+          "criada={} camadas={} escondida={} orto={} bloqueada={} estilo={} ({}) atualizada={} ({}) fov={} ({:.1f}) "
+          "topo={}".format(created, rows, hidden, ortho, locked, styled, vp.look, updated, kept, lens,
+                           mode.current_fov(), above))
+    # TRANSIÇÃO for every scene; the card's buttons
+    mode.pages.transition.setValue(25)
+    mode.pages._transition_done()
+    pump(200)
+    every = {s.transition_s for s in pm.scenes(doc)} == {2.5} and mode.pages.transition_value.text() == "2.5s"
+    copy_key = mode.duplicate(scene.key)
+    pump(300)
+    order = [s.key for s in pm.scenes(doc)]
+    copy = next((s for s in pm.scenes(doc) if s.key == copy_key), None)
+    duplicated = copy is not None and copy.name == "Cena 1 cópia" and order.index(copy_key) == \
+        order.index(scene.key) + 1 and copy.style == "white_concept" and mode.scene_key == copy_key
+    renamed = mode.rename(scene.key, "Fachada") and doc.view3d(scene.view[1]).name == "Fachada"
+    pump(200)
+    QtTest.QTest.mouseClick(mode.pages.cards[scene.key].buttons["initial"], Qt.MouseButton.LeftButton)
+    pump(200)
+    first = pm.initial(doc) == scene.key and mode.pages.cards[scene.key].star.isVisibleTo(mode.pages.cards[scene.key])
+    QtTest.QTest.mouseClick(mode.pages.cards[copy_key].buttons["visible"], Qt.MouseButton.LeftButton)
+    pump(200)
+    out = next(s for s in pm.scenes(doc) if s.key == copy_key).hidden \
+        and "FORA DA APRESENTA" in mode.pages.cards[copy_key].sub.text()
+    QtTest.QTest.mouseClick(mode.pages.cards[copy_key].buttons["delete"], Qt.MouseButton.LeftButton)
+    pump(300)
+    gone = copy_key not in [s.key for s in pm.scenes(doc)] and copy_key not in mode.pages.cards
+    _active()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    back = copy_key in [s.key for s in pm.scenes(doc)] and copy_key in mode.pages.cards
+    check("aba_presentation_cartoes_das_cenas", every and duplicated and renamed and first and out and gone and back,
+          "transicao={} duplicada={} ({}) renomeada={} inicial={} fora={} apagada={} ctrl_z={}".format(
+              every, duplicated, order, renamed, first, out, gone, back))
+    # the rail: Ambiente — the sun's hour on the reading
+    QtTest.QTest.mouseClick(mode.side.buttons["environment"], Qt.MouseButton.LeftButton)
+    pump(200)
+    mode.activate(scene.key)
+    pump(300)
+    env = mode.side.pages["environment"]
+    env.time.setTime(QtCore.QTime(9, 30))
+    pump(300)
+    timed = next(s for s in pm.scenes(doc) if s.key == scene.key).sun_minutes == 570 \
+        and mode.side.windowTitle() == "AMBIENTE" and (mode.site() is None or "09:30" in mode.overlay.sun_button.text())
+    shot("479_presentation.png")
+    path = win.export_presentation(os.path.join(folder, "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    sent = {s["id"]: s for s in (found or {}).get("presentation", {}).get("model3d", {}).get("scenes", [])}
+    mine = sent.get("bim_scene_" + scene.key, {})
+    exported = mine.get("name") == "Fachada" and mine.get("camera", {}).get("projection") == "orthographic" \
+        and mine["camera"].get("locked") is True and mine.get("style", {}).get("mode") == "white_concept" \
+        and "bim_" + walls[1] in mine.get("hiddenLayers", ()) and mine.get("transition", {}).get("seconds") == 2.5 \
+        and mode.active
+    check("aba_presentation_exporta_as_configuracoes", timed and exported,
+          "sol={} ({!r}) exportado={} cena={}".format(timed, mode.overlay.sun_button.text(), exported,
+                                                       {k: mine.get(k) for k in ("name", "camera", "style")}))
+    # another tab: the BIM's columns as they were
+    k3 = win.views.keys.index(view_tabs.THREE_D)
+    QtTest.QTest.mouseClick(bar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, bar.tabRect(k3).center())
+    pump(600)
+    restored = not mode.active and not mode.pages.isVisible() and not mode.side.isVisible() \
+        and win.props.isVisible() == props_before and all(d.isVisible() for d in left_before) \
+        and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.cube_hidden and not vp.camera_locked \
+        and not mode.overlay.create.isVisible()
+    same = abs(canvas.width() - width) <= 2 and win.size() == size
+    doc.modified = False
+    check("aba_presentation_volta_ao_bim", restored and same,
+          "repos={} largura {}→{} janela {}→{}".format(restored, width, canvas.width(), size, win.size()))
 
 
 def camera_move_flow():

@@ -21,13 +21,29 @@ from . import camera_moves
 
 TRANSITIONS = ("smooth", "cut")
 EFFECTS = ("none", "sun", "construction", "explode")
+# (0.479) the Presentation's own: the visual modes of its «Renderizado · Auto» menu (VisualStyle.mode, in its order),
+# its qualities, its two cameras
+STYLES = ("rendered", "material", "no_texture", "no_material", "clay", "white_concept", "technical_lines", "xray",
+          "diagrammatic")
+QUALITIES = ("auto", "high", "medium", "low")
+PROJECTIONS = ("perspective", "orthographic")
+FOV_MIN, FOV_MAX, FOV_DEFAULT = 20.0, 65.0, 35.0      # (its FOV slider: CAMERA_FOV_MIN / _MAX, a new camera's)
+TRANSITION_MIN, TRANSITION_MAX = 0.3, 5.0             # (its «Transição» slider of the scenes, in seconds)
 DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effect": "none", "effect_s": 6.0,
             "seconds": 0.0, "caption": "", "move": "", "move_s": 0.0, "room": "",
-            "sun_day": 172, "sun_minutes": 720, "sun_animate": "none", "exposure": 1.0, "sky": False}
+            "sun_day": 172, "sun_minutes": 720, "sun_animate": "none", "exposure": 1.0, "sky": False,
+            # (0.479) the ArqSynth Presentation tab: what «Criar cena» / «Atualizar» keep of the view
+            "name": "", "projection": "", "fov": 0.0, "locked": False, "style": "", "quality": "auto", "ao": True,
+            "ao_intensity": 1.0, "hidden_layers": (), "eye": (), "target": (), "omit": False}
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
-          "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6)}
+          "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
+          "ao_intensity": (0.0, 2.0)}
 SUN_ANIMATIONS = ("none", "day", "year")
 OVERVIEW = "geral"
+# (0.479) a Presentation mode seen in the BIM's 3D view: the view style that looks most like it
+STYLE_VIEW = {"rendered": "realistic", "material": "consistent", "no_texture": "consistent", "no_material": "shaded",
+              "clay": "hidden", "white_concept": "hidden", "technical_lines": "wire", "xray": "xray",
+              "diagrammatic": "shaded"}
 
 
 @dataclass(frozen=True)
@@ -55,6 +71,22 @@ class Scene:
     sun_animate: str = "none"   # its animation: "none" | "day" (sunrise to sunset) | "year" (the months at that hour)
     exposure: float = 1.0       # the picture's exposure (the Presentation's 0,3–1,6)
     sky: bool = False           # its sky behind the model (else the Presentation's plain background)
+    # (0.479) as the ArqSynth Presentation tab kept it («Criar cena», «Atualizar»): its camera's projection ("": the
+    # view's own), lens (0: the view's own; else the Presentation's vertical FOV, 20–65°), locked; its visual mode ("":
+    # the view style's), quality and ambient occlusion; the elements it hides (GlobalIds: the layers' eyes); where its
+    # eye and target are (the model's axes; (): the view's own — a scene that is not a named 3D view); left out of what
+    # is sent (a view's scene «apagada» — the view itself stays)
+    projection: str = ""
+    fov: float = 0.0
+    locked: bool = False
+    style: str = ""
+    quality: str = "auto"
+    ao: bool = True
+    ao_intensity: float = 1.0
+    hidden_layers: tuple = ()
+    eye: tuple = ()
+    target: tuple = ()
+    omit: bool = False
 
 
 def empty():
@@ -99,6 +131,20 @@ def _value(name, value):
     """A setting as it may be kept: its kind and range — None when it is not one."""
     default = DEFAULTS[name]
     try:
+        if name == "hidden_layers":                    # (0.479) GlobalIds, each once, in order
+            if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple, set, frozenset)):
+                return None
+            return tuple(sorted({str(v) for v in value if str(v)}))
+        if name in ("eye", "target"):                  # (0.479) a point, or () for the view's own
+            if isinstance(value, (str, bytes, dict)) or not hasattr(value, "__len__"):
+                return None
+            if len(value) == 0:
+                return ()
+            point = tuple(round(float(c), 4) for c in value)
+            return point if len(point) == 3 and all(c == c and abs(c) < 1e7 for c in point) else None
+        if name == "fov":                              # (0.479) 0: the view's own; else the Presentation's range
+            v = float(value)
+            return 0.0 if v <= 0 else round(min(max(v, FOV_MIN), FOV_MAX), 2)
         if isinstance(default, bool):
             return bool(value)
         if isinstance(default, int):
@@ -118,6 +164,12 @@ def _value(name, value):
         return value if value == "" or value in camera_moves.MOVES else None
     if name == "sun_animate":
         return value if value in SUN_ANIMATIONS else None
+    if name == "projection":                            # (0.479)
+        return value if value == "" or value in PROJECTIONS else None
+    if name == "style":
+        return value if value == "" or value in STYLES else None
+    if name == "quality":
+        return value if value in QUALITIES else None
     return value.strip()
 
 
@@ -171,12 +223,62 @@ def natural(doc):
     return out
 
 
-def scenes(doc):
-    """[Scene] in the presentation's order, each with what was chosen for it."""
+def all_scenes(doc):
+    """[Scene] in the presentation's order, each with what was chosen for it — (0.479) those left out too."""
     data = getattr(doc, "presentation", None) or empty()
     found = {s.key: s for s in natural(doc)}
     keys = [k for k in data["order"] if k in found] + [s.key for s in natural(doc) if s.key not in data["order"]]
-    return [replace(found[k], **data["scenes"].get(k, {})) for k in keys]
+    return [replace(found[k], **_fields(data["scenes"].get(k, {}))) for k in keys]
+
+
+def _fields(kept):
+    """A scene's settings as kept (JSON: lists) as the Scene takes them (tuples)."""
+    return {name: tuple(value) if isinstance(value, list) else value for name, value in kept.items()}
+
+
+def scenes(doc):
+    """[Scene] in the presentation's order, each with what was chosen for it — (0.479) not those left out (a view's
+    scene «apagada» in the Presentation tab: not sent)."""
+    return [s for s in all_scenes(doc) if not s.omit]
+
+
+def omitted(doc):
+    """(0.479) The scenes left out of what is sent («apagadas»; their views are still in the project)."""
+    return [s for s in all_scenes(doc) if s.omit]
+
+
+def changed_all(data, keys, **fields):
+    """(0.479) The presentation with these settings changed for all these scenes (the «Transição» of the scenes:
+    every scene's) — one change."""
+    out = clean(copy.deepcopy(data))
+    for key in keys:
+        out = changed(out, key, **fields)
+    return out
+
+
+def free_name(names, base):
+    """(0.479) «Cena N», N the lowest not taken (the Presentation's nextSceneName), names: those there are."""
+    taken = {str(n).strip().lower() for n in names}
+    n = 1
+    while "{} {}".format(base, n).lower() in taken:
+        n += 1
+    return "{} {}".format(base, n)
+
+
+def copy_name(name, names, word):
+    """(0.479) A copy's name, as the Presentation's uniqueSceneName(«Nome cópia»): «Cena 1 cópia», «Cena 1 cópia 2»…"""
+    taken = {str(n).strip().lower() for n in names}
+    base = "{} {}".format(name, word)
+    out, n = base, 1
+    while out.lower() in taken:
+        n += 1
+        out = "{} {}".format(base, n)
+    return out
+
+
+def transition_of(found):
+    """(0.479) The «Transição» slider's value: the first scene's arrival time (the Presentation's), else 1,2 s."""
+    return float(found[0].transition_s) if found else float(DEFAULTS["transition_s"])
 
 
 def initial(doc, found=None):

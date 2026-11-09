@@ -473,6 +473,43 @@ def _move(doc, scene, building, rooms, offset):
     return {"cameraMove": out}
 
 
+def _tuned_camera(scene, camera, offset):
+    """(0.479) A scene's camera as the ArqSynth Presentation tab kept it: where its eye and target are (a scene that is
+    not a named 3D view: the view's own camera otherwise), its lens (the Presentation's vertical FOV), its projection —
+    orthographic: the Presentation's stored zoom, 2 / the height seen at the target —, locked or not."""
+    cam = dict(camera)
+    if scene.eye and scene.target and scene.kind != "view3d":
+        eye, target = _gl(scene.eye, offset), _gl(scene.target, offset)
+        d = target - eye
+        straight = np.linalg.norm(d) > 1e-9 and abs(float(d[1])) / float(np.linalg.norm(d)) > 0.999
+        cam = _camera(eye, target, (0.0, 0.0, -1.0) if straight else (0.0, 1.0, 0.0), cam["fov"],
+                      cam.get("viewportAspect"))       # (seen from right above: north up)
+    if scene.projection == "orthographic":            # (the height seen with the lens it was framed with)
+        distance = float(np.linalg.norm(np.subtract(cam["target"], cam["position"])))
+        height = 2.0 * max(distance, 1e-3) * math.tan(math.radians(float(cam["fov"])) / 2.0)
+        cam["projection"] = "orthographic"
+        cam["orthographicZoom"] = round(2.0 / max(height, 1e-9), 6)
+    elif scene.projection == "perspective":
+        cam["projection"], cam["orthographicZoom"] = "perspective", None
+    if scene.fov > 0:
+        cam["fov"] = round(float(scene.fov), 3)
+    if scene.locked:
+        cam["locked"] = True
+    return cam
+
+
+def _tuned_style(scene, style):
+    """(0.479) A scene's visual style as the Presentation tab kept it: its mode («Renderizado», «Branco
+    conceptual»…), and with it the quality and the ambient occlusion of the Presentation's «Renderizado · Auto» menu."""
+    out = dict(style)
+    if scene.style:
+        out["mode"] = scene.style
+    if scene.style or scene.quality != "auto" or not scene.ao or scene.ao_intensity != 1.0:
+        out.update(qualityProfile=scene.quality, ambientOcclusion=bool(scene.ao),
+                   ambientOcclusionIntensity=round(float(scene.ao_intensity), 2))
+    return out
+
+
 def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     """The scenes in the order chosen (model/presentation.scenes): the general view, the named 3D views, the plans,
     the sections — as the description's scenes."""
@@ -487,12 +524,16 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     building = camera_moves.Building.of_box(lo, hi)
     rooms = presentation_model.spaces(doc) if any(camera_moves.interior(s.move) for s in chosen) else []
     scenes = []
+    known = {l["id"] for l in layers}
 
     def add(scene, camera, hidden=(), planes=(), style=None):
+        hidden = list(hidden)
+        hidden += [i for i in (LAYER_ID + g for g in scene.hidden_layers) if i in known and i not in hidden]   # (0.479)
         scenes.append(dict({"id": SCENE_ID + scene.key, "name": scene.name, "order": len(scenes), "kind": scene.kind,
-                            "camera": camera, "hiddenLayers": list(hidden),
+                            "camera": _tuned_camera(scene, camera, offset), "hiddenLayers": hidden,
                             "section": {"planes": list(planes)} if planes else None,
-                            "style": style or {"mode": "material", "edges": True, "shadows": False}},
+                            "style": _tuned_style(scene, style or {"mode": "material", "edges": True,
+                                                                   "shadows": False})},
                            **_chosen(scene, thumbnails), **_move(doc, scene, building, rooms, offset)))
 
     for scene in chosen:

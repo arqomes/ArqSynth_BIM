@@ -964,6 +964,18 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
    planta do seu pavimento, atualizados ao importar outra vez sem tirar os feitos à mão). **Integração completa.**
    Fica por decidir pelo dono: se o «Atualizar» deve levar as mudanças do BIM também às cenas que já existem no
    Presentation (hoje leva as camadas e junta as cenas novas, sem mexer nas que lá se afinaram).
+8. ~~**A aba «ArqSynth Presentation»** (o dono, 2026-11-08: «use as 2 colunas para replicar a experiência que se tem no
+   ArqSynth Presentation… ao clicar na aba a tela muda a interface para a interface do ArqSynth Presentation»)~~
+   (0.479.0): a última aba das vistas; as colunas do Presentation (páginas e cartões das cenas com os seis botões,
+   Transição; a barra de ícones com Camadas e os olhos, Cenas 3D, Ambiente, Etiquetas, Imagens, Efeitos, Passeio) e os
+   seus comandos sobre o 3D (Criar cena, Persp / Orto, FOV, cadeado, T/E/F/D/B/Trás, Renderizado · Auto, sol); cada
+   cena leva a câmara, o modo, a qualidade, a oclusão e as camadas escondidas; no Presentation o importador lê o
+   cadeado, a qualidade e a oclusão. Ficam para depois, se o dono quiser:
+   - **Capa, Texto e Concept** feitos no BIM (o pacote só leva o Modelo 3D e as plantas; o Presentation teria de ler
+     páginas novas);
+   - os separadores do Presentation que o BIM ainda não prepara: Biblioteca, Material, Textos, Cortes (planos de corte
+     por cena), Diagramas, Fluxos e zonas, Áudio, Notas;
+   - a «Página final» do Presentation.
 
 ### Alvenaria por tipo de parede (decidido pelo dono do projeto, 2026-11-02)
 «Alvenaria por tipo.» Até aqui a alvenaria do cálculo (os blocos, o seu grupo, a sua resistência fb, a argamassa)

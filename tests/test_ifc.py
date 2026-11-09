@@ -9959,6 +9959,82 @@ class GltfExport(unittest.TestCase):
         self.assertEqual(pm.clean({"order": "x", "scenes": {"a": {"effect": "fogo", "hidden": 0, "z": 1}}}),
                          pm.empty())
 
+    def test_presentation_tab_settings(self):
+        """0.479: what the ArqSynth Presentation tab keeps of a scene — its camera's projection, lens (the Presentation's
+        20–65°), lock, visual mode, quality, ambient occlusion, the layers it hides, where a view's scene looks from,
+        a name of its own, left out of what is sent —, each kept only when it differs, in range, with the project; a
+        3D view named as a scene («Cena 1», another «Cena 1 (2)»); «Cena N» free, «… cópia»; every scene's
+        transition at once (one undo step); in the GLB: an orthographic camera with the Presentation's stored zoom (2
+        / the height seen), the lens, the lock, the mode with its quality, the layers hidden in the scene, the general
+        view seen from where it was kept, the scene taken out not sent."""
+        from arqbim.model import presentation as pm, presentation_export as pe
+        doc = Document()
+        spec = catalog.BY_KEY["parede_alv_20"]
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        walls = bim.add_wall_loop(doc, corners, spec)
+        camera = {"position": (10.0, -8.0, 6.0), "rotation": (0.0, 0.0, 0.0, 1.0), "fov": 50.0, "width": 16.0,
+                  "height": 9.0, "zoom": 1.0, "focus": np.array((2.5, 2.0, 1.0))}
+        view = doc.add_view3d(camera, name="Cena 1")[1]
+        again = doc.add_view3d(camera, name="Cena 1")[1]
+        self.assertEqual((doc.view3d(view).name, doc.view3d(again).name), ("Cena 1", "Cena 1 (2)"))
+        doc.remove_view3d(again)
+        self.assertEqual(pm.free_name(["Cena 1", "cena 2", "Vista geral"], "Cena"), "Cena 3")
+        self.assertEqual(pm.copy_name("Cena 1", ["Cena 1", "Cena 1 cópia"], "cópia"), "Cena 1 cópia 2")
+        key, storey = "vista_" + view, next(g for g, _n, _z in doc.storeys())
+        plan = "planta_" + storey
+        data = pm.changed(doc.presentation, key, projection="orthographic", fov=10, locked=True, style="clay",
+                          quality="high", ao=False, ao_intensity=3, hidden_layers=[walls[1], walls[0], walls[1]])
+        data = pm.changed(data, key, style="fogo", projection="isometrica", quality="ultra")      # (not theirs: kept)
+        data = pm.changed(data, "geral", eye=(-6, -6, 5), target=(2.5, 2.0, 1.0), fov=40, name="  Entrada  ")
+        data = pm.changed(data, plan, omit=True)
+        steps = len(doc._undo)
+        doc.set_presentation(data)
+        kept = doc.presentation["scenes"]
+        self.assertEqual(kept[key], {"projection": "orthographic", "fov": 20.0, "locked": True, "style": "clay",
+                                     "quality": "high", "ao": False, "ao_intensity": 2.0,
+                                     "hidden_layers": tuple(sorted(walls[:2]))})
+        self.assertEqual(kept["geral"], {"eye": (-6.0, -6.0, 5.0), "target": (2.5, 2.0, 1.0), "fov": 40.0,
+                                         "name": "Entrada"})
+        self.assertEqual([s.key for s in pm.scenes(doc)], ["geral", key])
+        self.assertEqual([s.key for s in pm.omitted(doc)], [plan])
+        self.assertEqual(pm.scenes(doc)[0].name, "Entrada")
+        self.assertEqual(pm.changed(doc.presentation, key, fov=0, hidden_layers=[])["scenes"][key].get("fov"), None)
+        doc.set_presentation(pm.changed_all(doc.presentation, [s.key for s in pm.scenes(doc)], transition_s=2.5))
+        self.assertEqual(len(doc._undo), steps + 2)
+        self.assertEqual({s.transition_s for s in pm.scenes(doc)}, {2.5})
+        self.assertEqual(pm.transition_of(pm.scenes(doc)), 2.5)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "casa.ifc")
+            doc.save(path)
+            opened = Document()
+            opened.open(path)
+            self.assertEqual(opened.presentation, doc.presentation)
+            self.assertEqual(pm.scenes(opened)[1].hidden_layers, tuple(sorted(walls[:2])))
+            glb = os.path.join(tmp, "casa.glb")
+            done = pe.export(opened, glb, "Casa")
+            model = pe.read(glb)["presentation"]["model3d"]
+        self.assertEqual(done["scenes"], 2)
+        scenes = {s["id"]: s for s in model["scenes"]}
+        self.assertNotIn("bim_scene_" + plan, scenes)                 # (taken out: not sent)
+        cam = scenes["bim_scene_" + key]["camera"]
+        self.assertEqual((cam["projection"], cam["fov"], cam["locked"]), ("orthographic", 20.0, True))
+        distance = float(np.linalg.norm(np.subtract(cam["target"], cam["position"])))
+        lens = pe._view_camera(camera, np.asarray(model["offset"]))["fov"]
+        height = 2.0 * distance * math.tan(math.radians(lens) / 2.0)
+        self.assertAlmostEqual(cam["orthographicZoom"], 2.0 / height, places=4)
+        style = scenes["bim_scene_" + key]["style"]
+        self.assertEqual((style["mode"], style["qualityProfile"], style["ambientOcclusion"],
+                          style["ambientOcclusionIntensity"]), ("clay", "high", False, 2.0))
+        self.assertEqual(sorted(scenes["bim_scene_" + key]["hiddenLayers"]), sorted("bim_" + g for g in walls[:2]))
+        general = scenes["bim_scene_geral"]
+        offset = np.asarray(model["offset"])
+        self.assertEqual(general["name"], "Entrada")
+        self.assertEqual(general["camera"]["position"], pe._list(pe._gl((-6.0, -6.0, 5.0), offset)))
+        self.assertEqual(general["camera"]["target"], pe._list(pe._gl((2.5, 2.0, 1.0), offset)))
+        self.assertEqual((general["camera"]["projection"], general["camera"]["fov"]), ("perspective", 40.0))
+        self.assertNotIn("qualityProfile", general["style"])          # (nothing of the look chosen: as before)
+        self.assertEqual(general["transition"], {"type": "smooth", "seconds": 2.5})
+
     def test_presentation_camera_moves(self):
         """0.364: a scene's camera move (one of the Presentation's) — chosen with its time, a name it does not know
         not kept; in the GLB: its name, its time (the move's own when none was given), the building's measures (the

@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.479.0 — 2026-11-08
+
+**Aba «ArqSynth Presentation»** (o dono: «crie uma aba de ArqSynth Presentation e use as 2 colunas para replicar a
+experiência que se tem no ArqSynth Presentation… preparando o modelo 3D para exportação com todas as configurações do
+ArqSynth Presentation. Ao clicar na aba a tela muda a interface para a interface do ArqSynth Presentation»).
+
+- Nas abas das vistas, por cima do 3D, há uma aba nova, **sempre a última**: **ArqSynth Presentation** (ícone azul).
+  Não tem ×, não se arrasta e não fecha. Ao clicar nela, as duas colunas do BIM dão lugar às do Presentation, com as
+  mesmas larguras (o 3D fica do mesmo tamanho). Noutra aba, as colunas do BIM voltam como estavam.
+- **Coluna da esquerda**, como a do Presentation:
+  - **DIVIDIDO / ABAS**: as páginas com as cenas por baixo da página 3D, ou uma coisa de cada vez (Páginas / Cenas);
+  - **PÁGINAS**: a página **Modelo 3D** (01) e uma página **Planta** por cada folha com vistas. O botão **Planta** faz
+    uma folha nova. **Capa**, **Texto** e **Concept** fazem-se no Presentation (ficam à vista, sem efeito);
+  - por baixo da página Modelo 3D, **Exportar / atualizar** (grava o pacote para o Presentation) e as **cenas** como
+    cartões: miniatura com o número e a estrela da cena inicial, nome, «PERSPECTIVA» / «ORTOGONAL» / «FORA DA
+    APRESENTAÇÃO», e os seis botões do Presentation — **Atualizar** (a cena fica com a vista atual), **Cena inicial**,
+    **Mostrar / esconder**, **Duplicar** («Cena 1 cópia»), **Renomear** e **Eliminar** (Ctrl+Z repõe). Os cartões
+    arrastam-se para mudar a ordem; um clique mostra a cena no 3D; duplo clique abre a vista dela;
+  - em baixo, **CENAS** com o número, e **TRANSIÇÃO** (0,3 a 5 s): o tempo da chegada a todas as cenas.
+- **Coluna da direita**, a barra de ícones do Presentation:
+  - **Camadas**: cada elemento que vai para o Presentation, agrupado por categoria (PAREDES, LAJES, PORTAS…), cada um
+    com o seu olho, e o grupo com o olho da pasta. Inclui «Procurar peça…», Shift / Ctrl para escolher vários (o olho
+    de um escolhido vale para todos), e um clique que escolhe a peça no 3D (duplo clique: enquadra-a);
+  - **Cenas 3D** (cena inicial, mostrar, movimento Suave / Corte e duração, efeito, tempo, legenda);
+  - **Ambiente** (dia, hora e animação do sol, exposição, céu, «Ver sol»);
+  - **Etiquetas** e **Passeio** (os ambientes como etiquetas e como Passeio Virtual);
+  - **Imagens** (os panoramas 360°);
+  - **Efeitos** (o movimento de câmara, «Ver movimento»).
+- **Sobre o 3D**, os comandos do Presentation:
+  - **+ Criar cena**: guarda a vista como «Cena N» (uma vista 3D com nome), com a miniatura;
+  - **PERSP / ORTO**, **Enquadrar modelo**, **Enquadrar selecção** e o **cadeado** (o rato deixa de mexer a câmara);
+  - **FOV** de 20 a 65° (o enquadramento fica);
+  - as teclas **T, E, F, D, B, TRÁS** e girar 90°;
+  - **Renderizado · Auto**: o modo de visualização (no BIM com o estilo mais parecido), a qualidade, a oclusão ambiente
+    e «Aplicar a todas as cenas»;
+  - a leitura do **sol** (hora, azimute, altura): um clique abre Ambiente.
+  O cubo de vista do BIM sai enquanto a aba está à frente, e a barra de parâmetros mostra os comandos da aba.
+- Como no Presentation, os **olhos das camadas** e o **modo** valem para o que se está a ver; **Criar cena** e
+  **Atualizar** guardam-nos na cena. Ao escolher uma cena, voltam os dela.
+- **Exportação**: cada cena leva a câmara (perspetiva ou ortogonal, FOV, bloqueada), o modo, a qualidade e a oclusão,
+  as camadas escondidas, o nome, a transição e tudo o que já ia (efeito, movimento, sol, legenda, tempo). As cenas das
+  vistas que se eliminam deixam de ir (as vistas ficam no projeto; «Repor» trá-las de volta).
+- **No Presentation** (`C:\BIM\arqsynth`, `lib/presentation/bim-import.ts`), o importador passou a ler também a câmara
+  bloqueada e a qualidade e oclusão ambiente de cada cena (teste novo em `scripts/test-bim-import.mts`).
+
 ## 0.478.0 — 2026-11-08
 
 **Tabelas em células como no Excel — 2.ª fase** (o dono: «A tela, deve ser em células como no excel e ter as

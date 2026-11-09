@@ -19,17 +19,23 @@ from ..i18n import t
 THREE_D = ("3d",)
 START = ("start",)                  # (0.387) the start page: a tab, but not the project's (no camera, not saved)
 NO_CAMERA = ("sheet", "start", "table")     # (0.477: a table, in its tab as a sheet: ("table", its ref))
+# (0.479, the owner: «crie uma aba de ArqSynth Presentation… ao clicar na aba a tela muda a interface para a interface do
+# ArqSynth Presentation») always there, the last one: no ×, not dragged, not saved with the project, not in Ctrl+Tab's
+# round — the 3D view with the Presentation's columns (ui/presentation_mode.py); its camera kept as a view's
+PRESENT = ("presentation",)
+FIXED = (START, PRESENT)
 
 
 class ViewTabs(QtCore.QObject):
-    def __init__(self, bar, show, label, camera, set_camera, home_icon=None):
+    def __init__(self, bar, show, label, camera, set_camera, home_icon=None, present_icon=None):
         """bar: the QTabBar. show(key): the window shows that view; label(key): its tab's name;
         camera() / set_camera(state): the view's camera as it is / as it was; home_icon(): the start page's house
-        (0.403)."""
+        (0.403); present_icon(): (0.479) the ArqSynth Presentation tab's icon — None: no such tab."""
         super().__init__(bar)
         self.bar = bar
         self._show, self._label, self._camera, self._set_camera = show, label, camera, set_camera
         self._home_icon = home_icon
+        self._present_icon = present_icon
         self.keys = []              # per tab, its view
         self.cameras = {}           # view -> its camera when it was left
         self._shown = None          # the view on screen (its camera is kept when another is shown)
@@ -64,6 +70,18 @@ class ViewTabs(QtCore.QObject):
             self.bar.setTabButton(0, side, None)             # (no ×)
         self.bar.blockSignals(blocked)
 
+    def _ensure_present(self):
+        """(0.479) The ArqSynth Presentation's tab, last — added (quietly, not shown) if it is not there."""
+        if self._present_icon is None or PRESENT in self.keys:
+            return
+        blocked = self.bar.blockSignals(True)
+        self.keys.append(PRESENT)
+        k = self.bar.addTab(self._present_icon(), self._label(PRESENT))
+        self.bar.setTabToolTip(k, self._label(PRESENT))
+        for side in (QtWidgets.QTabBar.ButtonPosition.LeftSide, QtWidgets.QTabBar.ButtonPosition.RightSide):
+            self.bar.setTabButton(k, side, None)             # (no ×)
+        self.bar.blockSignals(blocked)
+
     def _text(self, key):
         """A tab's name as written on it: none for the house (its icon), the view's name for the others."""
         return "" if key == START and self._home_icon is not None else self._label(key)
@@ -74,7 +92,7 @@ class ViewTabs(QtCore.QObject):
             kind = event.type()
             if kind == QtCore.QEvent.Type.MouseButtonPress and event.button() == QtCore.Qt.MouseButton.LeftButton:
                 k = self.bar.tabAt(event.position().toPoint())
-                if 0 <= k < len(self.keys) and self.keys[k] == START:
+                if 0 <= k < len(self.keys) and self.keys[k] in FIXED:     # (0.479: the Presentation's neither)
                     self.bar.setCurrentIndex(k)
                     return True
             elif kind == QtCore.QEvent.Type.MouseButtonRelease:
@@ -82,18 +100,22 @@ class ViewTabs(QtCore.QObject):
         return False
 
     def _pin(self):
-        """The house back in the first place (a tab was dragged before it)."""
+        """The house back in the first place (a tab was dragged before it); (0.479) the Presentation's in the last."""
         if START in self.keys and self.keys.index(START) != 0:
             self.bar.moveTab(self.keys.index(START), 0)          # (keys follow: tabMoved)
+        if PRESENT in self.keys and self.keys.index(PRESENT) != len(self.keys) - 1:
+            self.bar.moveTab(self.keys.index(PRESENT), len(self.keys) - 1)
 
     def retheme(self):
-        """The house in the theme's colours (the theme changed)."""
+        """The house in the theme's colours (the theme changed); (0.479) the Presentation's icon too."""
         if START in self.keys and self._home_icon is not None:
             self.bar.setTabIcon(self.keys.index(START), self._home_icon())
+        if PRESENT in self.keys and self._present_icon is not None:
+            self.bar.setTabIcon(self.keys.index(PRESENT), self._present_icon())
 
     def models(self):
-        """The tabs' views but the start page."""
-        return [k for k in self.keys if k != START]
+        """The tabs' views but the start page (0.479: and the Presentation's)."""
+        return [k for k in self.keys if k not in FIXED]
 
     def current(self):
         k = self.bar.currentIndex()
@@ -103,6 +125,7 @@ class ViewTabs(QtCore.QObject):
         """Show a view: its tab if it has one, else a new tab (after the current one — never before the house)."""
         key = tuple(key)
         self._ensure_home()
+        self._ensure_present()
         if key in self.keys:
             k = self.keys.index(key)
             if k != self.bar.currentIndex():
@@ -111,6 +134,8 @@ class ViewTabs(QtCore.QObject):
                 self._enter(key)
             return
         k = max(self.bar.currentIndex() + 1, 1)
+        if PRESENT in self.keys:                            # (0.479: never after the Presentation's)
+            k = min(k, self.keys.index(PRESENT))
         self.keys.insert(k, key)
         self.bar.insertTab(k, self._text(key))              # (the first tab: shown by _changed)
         self.bar.setTabToolTip(k, self._label(key))
@@ -132,8 +157,9 @@ class ViewTabs(QtCore.QObject):
             self._set_camera(self.cameras[key])
 
     def close(self, k):
-        """Close a view's tab (not the project). With none left, the 3D view. (0.403) The house is not closed."""
-        if not 0 <= k < len(self.keys) or self.keys[k] == START:
+        """Close a view's tab (not the project). With none left, the 3D view. (0.403) The house is not closed, (0.479)
+        nor the Presentation's tab."""
+        if not 0 <= k < len(self.keys) or self.keys[k] in FIXED:
             return
         key = self.keys.pop(k)
         camera = self._camera() if key == self._shown and key[0] not in NO_CAMERA else self.cameras.get(key)
@@ -142,7 +168,11 @@ class ViewTabs(QtCore.QObject):
         self.cameras.pop(key, None)
         if key == self._shown:
             self._shown = None                              # (its camera is not kept by the tabs)
+        behaviour = self.bar.selectionBehaviorOnRemove()
+        if k < len(self.keys) and self.keys[k] == PRESENT:  # (0.479: the one on its left, not the Presentation's)
+            self.bar.setSelectionBehaviorOnRemove(QtWidgets.QTabBar.SelectionBehavior.SelectLeftTab)
         self.bar.removeTab(k)                               # (the tab that becomes current is shown)
+        self.bar.setSelectionBehaviorOnRemove(behaviour)
         if not self.models():
             self.open(THREE_D)
 
@@ -150,8 +180,9 @@ class ViewTabs(QtCore.QObject):
         self.close(self.bar.currentIndex())
 
     def step(self, n):
-        """The next (n = 1) or previous (n = -1) view's tab (0.403: not the house; from it, the first view)."""
-        views = [k for k, key in enumerate(self.keys) if key != START]
+        """The next (n = 1) or previous (n = -1) view's tab (0.403: not the house; from it, the first view; 0.479: not
+        the Presentation's)."""
+        views = [k for k, key in enumerate(self.keys) if key not in FIXED]
         if not views:
             return
         k = self.bar.currentIndex()
@@ -169,7 +200,7 @@ class ViewTabs(QtCore.QObject):
                 self.bar.setCurrentIndex(self.keys.index(key))
             return True
         k = self.bar.currentIndex()
-        if 0 <= k < len(self.keys) and self.keys[k] != START:
+        if 0 <= k < len(self.keys) and self.keys[k] not in FIXED:
             self.cameras.pop(self.keys[k], None)
             self.keys[k] = self._shown = key
             self.bar.setTabText(k, self._text(key))
@@ -193,7 +224,7 @@ class ViewTabs(QtCore.QObject):
         """Tabs of views that are gone (a storey or section deleted) closed; the names again
         (a storey renamed). exists(key) says if a view is still there."""
         for k in reversed(range(len(self.keys))):
-            if self.keys[k] != START and not exists(self.keys[k]):
+            if self.keys[k] not in FIXED and not exists(self.keys[k]):
                 self.close(k)
         for k, key in enumerate(self.keys):
             if self.bar.tabText(k) != self._text(key):
@@ -215,14 +246,14 @@ class ViewTabs(QtCore.QObject):
             self.cameras[self._shown] = self._camera()
         tabs = []
         for key in self.keys:
-            if key == START:                                # (0.387: the program's page, not the project's)
+            if key in FIXED:                                # (0.387: the program's page, not the project's; 0.479)
                 continue
             cam = self.cameras.get(key)
             tabs.append({"key": list(key), "camera": None if cam is None else {
                 "position": [float(c) for c in cam["position"]], "rotation": [float(c) for c in cam["rotation"]],
                 "focus": [float(c) for c in cam["focus"]],
                 **{name: float(cam[name]) for name in ("fov", "width", "height", "zoom")}}})
-        current = self.current() if self.current() != START else None
+        current = self.current() if self.current() not in FIXED else None
         return {"tabs": tabs, "current": list(current) if current else None}
 
     def restore(self, state, exists):
@@ -245,6 +276,7 @@ class ViewTabs(QtCore.QObject):
             self.bar.setTabToolTip(len(self.keys) - 1, self._label(key))
             if tab.get("camera"):
                 self.cameras[key] = tab["camera"]
+        self._ensure_present()                              # (0.479: the Presentation's last)
         current = tuple(state.get("current") or ())
         k = self.keys.index(current) if current in self.keys else 1
         self.bar.setCurrentIndex(k)
@@ -254,7 +286,7 @@ class ViewTabs(QtCore.QObject):
 
     def _menu(self, pos):
         k = self.bar.tabAt(pos)
-        if k < 0 or self.keys[k] == START:                  # (0.403: the house has none — it is not closed)
+        if k < 0 or self.keys[k] in FIXED:                  # (0.403: the house has none — it is not closed)
             return
         menu = QtWidgets.QMenu(self.bar)
         menu.addAction(t("tab.close"), lambda: self.close(k))
@@ -264,11 +296,12 @@ class ViewTabs(QtCore.QObject):
 
     def _close_others(self, key):
         for k in reversed(range(len(self.keys))):
-            if self.keys[k] not in (key, START):
+            if self.keys[k] != key and self.keys[k] not in FIXED:
                 self.close(k)
 
     def text(self):
-        """The views' tabs as shown, the current one marked (used by tests) — (0.403) the house left out."""
+        """The views' tabs as shown, the current one marked (used by tests) — (0.403) the house left out, (0.479) and
+        the Presentation's."""
         cur = self.bar.currentIndex()
         return " | ".join(("[{}]" if k == cur else "{}").format(self.bar.tabText(k)) for k in range(self.bar.count())
-                          if k < len(self.keys) and self.keys[k] != START)
+                          if k < len(self.keys) and self.keys[k] not in FIXED)

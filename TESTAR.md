@@ -644,6 +644,58 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.479 — Aba «ArqSynth Presentation»
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.479.0**. Faça Ctrl+N. Com a ferramenta **Parede**
+   desenhe uma sala de 4 paredes e, com a ferramenta **Porta**, ponha uma porta numa delas.
+2. Olhe para as abas por cima do 3D: a última chama-se **ArqSynth Presentation** e tem um ícone azul. Não tem ×.
+   Clique nela.
+3. A janela muda:
+   - **à esquerda**: DIVIDIDO / ABAS, PÁGINAS (Capa, Texto, Planta, Modelo 3D, Concept), o cartão «01 Modelo 3D» e,
+     por baixo, **Exportar / atualizar** e as cenas (Vista geral, Planta — …). Em baixo: **CENAS** e o deslizador
+     **TRANSIÇÃO 1.2s**;
+   - **à direita**: a barra de ícones (Camadas, Cenas 3D, Ambiente, Etiquetas, Imagens, Efeitos, Passeio) e a lista
+     **CAMADAS** com «Procurar peça…»;
+   - **sobre o 3D**: «+ Criar cena» (em cima à esquerda); PERSP / ORTO, dois botões de enquadrar e o cadeado, com o FOV
+     por baixo (em cima à direita); as teclas T, E, F, D, B e TRÁS (em baixo à direita); «… · Auto» (em baixo à
+     esquerda); a leitura do sol (em baixo à direita). O cubo de vista desaparece.
+   O 3D fica com a mesma largura.
+4. Rode a vista com o rato até gostar dela. Clique em **+ Criar cena**: aparece o cartão **Cena 1**, com a miniatura,
+   contornado a azul.
+5. Na lista CAMADAS, abra o grupo **PAREDES** e clique no **olho** de uma parede: a parede desaparece do 3D. Clique
+   outra vez: volta. Esconda-a de novo.
+6. Clique em **ORTO**: a vista perde a perspetiva e o FOV desaparece. Clique em **PERSP**: a perspetiva volta. Arraste
+   o deslizador **FOV** até 50: a lente muda e o edifício fica do mesmo tamanho no centro.
+7. Clique no botão em baixo à esquerda («… · Auto») e escolha **Branco conceptual**: o modelo fica branco.
+8. Clique no **cadeado**: tente rodar a vista com o rato e nada mexe. Clique no cadeado outra vez para desbloquear.
+9. No cartão **Cena 1**, clique no primeiro botão (a seta em círculo, **Atualizar**): a cena guarda a vista, a parede
+   escondida e o branco. A barra de baixo diz «Cena «Cena 1» actualizada…».
+10. Clique no cartão **Vista geral**: o 3D vai para a vista geral e as paredes aparecem todas. Clique outra vez no
+    cartão **Cena 1**: a parede volta a estar escondida e o modelo branco.
+11. Clique na tecla **T**: vê-se de cima. Clique em **TRÁS** e nas duas setas curvas: a vista gira 90°.
+12. Arraste **TRANSIÇÃO** (em baixo à esquerda) até **2.5s**.
+13. Nos botões do cartão Cena 1:
+    - **estrela**: a Cena 1 passa a ser a cena inicial (estrela amarela na miniatura);
+    - **duplicar**: aparece **Cena 1 cópia** logo a seguir;
+    - **lápis**: escreva `Fachada` e OK. O nome muda no cartão.
+14. No cartão **Cena 1 cópia**:
+    - clique no **olho**: o cartão fica esbatido e diz «FORA DA APRESENTAÇÃO»;
+    - clique no **caixote**: o cartão desaparece;
+    - carregue Ctrl+Z: volta.
+15. Arraste o cartão **Planta — …** para cima do cartão **Vista geral**: a ordem muda.
+16. Na barra de ícones da direita:
+    - clique em **Cenas 3D** (a película): a cena escolhida, a chegada (Suave / Corte), o efeito, o tempo e a legenda;
+    - clique em **Efeitos** (a câmara): escolha um movimento, por exemplo «Órbita 90°», e clique em **Ver movimento**;
+    - clique em **Ambiente** (o sol): sem lugar do terreno (Terreno ▸ Localização), a nota diz que o sol fica sem dia
+      nem hora. Com lugar, mude a hora e veja a leitura do sol, em baixo à direita, a mudar.
+17. Em cima, clique em **ABAS**: aparecem os botões **Páginas** e **Cenas**, e a coluna mostra uma coisa de cada vez.
+    Clique em **DIVIDIDO** para voltar.
+18. Clique em **Exportar / atualizar** e grave o ZIP. No ArqSynth Presentation, numa página Modelo 3D, use
+    «Importar / atualizar» (ou o botão «ArqSynth BIM» das páginas) com esse ZIP. A cena **Fachada** vem branca
+    (Branco conceptual), com a parede escondida, a câmara bloqueada e o FOV 50, e as transições de 2,5 s.
+19. Clique na aba **3D**: voltam o Projeto à esquerda e as Propriedades à direita, como estavam. Todas as paredes
+    aparecem, o cubo de vista volta e o 3D tem a mesma largura.
+
 ## 0.478 — Tabelas em células como no Excel
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.478.0**. Faça Ctrl+N e desenhe três paredes
