@@ -82,7 +82,8 @@ class ContextBar(QtWidgets.QToolBar):
 
     def show_items(self, items):
         """items: ("title", text[, icon]) | ("text", text) | ("hint", text: grey) | ("action", QAction) |
-        ("icon_action", QAction: its icon only, 0.183) | ("separator",) | ("option", Option)."""
+        ("icon_action", QAction: its icon only, 0.183) | ("separator",) | ("option", Option) | ("spacer",): (0.481)
+        what follows at the bar's right end."""
         for act in self.actions():
             self.removeAction(act)
             if act.parent() is self:              # (its labels, fields and separators: made again)
@@ -92,6 +93,10 @@ class ContextBar(QtWidgets.QToolBar):
             kind = item[0]
             if kind == "separator":
                 self.addSeparator()
+            elif kind == "spacer":
+                spacer = QtWidgets.QWidget(self)
+                spacer.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+                self.addWidget(spacer)
             elif kind == "action":
                 self.addAction(item[1])
             elif kind == "icon_action":

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.481.0 — 2026-11-09
+
+**A interface do Presentation como a versão nova dele** (o dono: «faça a interface de acordo com a nova versão. O cubo
+de navegação devia continuar o mesmo do programa… a imagem eu peguei na internet da versão antiga, e era apenas uma
+referência. Ao abrir não precisa vir com a janela de ArqSynth aberta na aba de janelas, apenas quero o ícone da aba da
+esquerda e quando ativado, abre a janela de interface»).
+
+- **Não há aba do Presentation ao abrir o programa.** Só o ícone da barra da esquerda. Ao clicar nele abre-se a aba
+  «ArqSynth Presentation» (a última, com o seu ×) e a interface. Para a guardar: o ícone outra vez, o × da aba ou outro
+  ícone da barra. Volta a vista de onde se veio, com as colunas do BIM como estavam, e a aba desaparece.
+- **O cubo de navegação é o do BIM**, e a navegação também. Saíram as teclas T, E, F, D, B e TRÁS.
+- **Nada por cima do modelo**, como na versão nova do Presentation:
+  - a **câmara** fica numa só linha, na ponta direita da barra de parâmetros (a faixa por cima do 3D): PERSP / ORTO,
+    FOV, Enquadrar modelo, Enquadrar selecção e o cadeado;
+  - **Renderizado · Auto ▾** fica no rodapé, à esquerda, e o menu abre para cima;
+  - a **leitura do sol** fica no rodapé, à direita (um clique abre Ambiente);
+  - **+ Criar cena** fica no rodapé fixo da coluna da esquerda, ao lado de «CENAS n», e não desaparece quando a lista
+    rola.
+- **Leitor das cenas** por baixo do 3D: ‹ ▶ «2/4 · Cena 1» › e o tempo da cena. As setas passam à cena anterior ou
+  seguinte, em voo suave (ou corte seco, como a cena tiver). ▶ passa por todas, cada uma o seu tempo; ❚❚ pára.
+- No fim da lista das páginas, o cartão **Página final** (tracejado): a página final faz-se no Presentation.
+
 ## 0.480.0 — 2026-11-09
 
 **ArqSynth Presentation na barra da esquerda, sem o painel que dividia a coluna** (o dono, com uma captura marcada:

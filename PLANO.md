@@ -972,7 +972,11 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
    cena leva a câmara, o modo, a qualidade, a oclusão e as camadas escondidas; no Presentation o importador lê o
    cadeado, a qualidade e a oclusão. ~~O ícone na barra da esquerda e sem o painel que dividia a coluna~~ (0.480.0,
    o dono: «não quero essa divisão na coluna… não vi ainda a aba de ArqSynth Presentation na esquerda»: o painel
-   Apresentação da 0.363 saiu; Render ▸ Cenas da apresentação abre a interface). Ficam para depois, se o dono quiser:
+   Apresentação da 0.363 saiu; Render ▸ Cenas da apresentação abre a interface). ~~Como a versão nova do Presentation~~
+   (0.481.0, o dono: «faça de acordo com o novo… o cubo de navegação devia continuar o mesmo do programa… apenas quero o
+   ícone»: a aba só existe enquanto a interface está aberta; a câmara na barra de parâmetros, «Renderizado · Auto» e o
+   sol no rodapé, «+ Criar cena» no rodapé fixo da coluna, o leitor das cenas por baixo do 3D, «Página final»; o cubo e
+   a navegação do BIM). Ficam para depois, se o dono quiser:
    - **Capa, Texto e Concept** feitos no BIM (o pacote só leva o Modelo 3D e as plantas; o Presentation teria de ler
      páginas novas);
    - os separadores do Presentation que o BIM ainda não prepara: Biblioteca, Material, Textos, Cortes (planos de corte

@@ -159,6 +159,9 @@ def _draw(p, kind):
             p.drawEllipse(QtCore.QPointF(x, y + 5.6), 1.9, 1.6)
     elif kind == "play":
         p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(7, 4.5), QtCore.QPointF(19, 12), QtCore.QPointF(7, 19.5)]))
+    elif kind == "pause":
+        p.drawRoundedRect(QtCore.QRectF(6, 5, 4, 14), 1, 1)
+        p.drawRoundedRect(QtCore.QRectF(14, 5, 4, 14), 1, 1)
     elif kind == "rotate_l":
         p.drawArc(QtCore.QRectF(4, 4, 16, 16), 90 * 16, 250 * 16)
         _line(p, (7, 2.5), (12, 4), (8, 7.5))
@@ -196,4 +199,4 @@ def icon(kind, colour, size=18, on_colour=None):
 KINDS = ("layers", "scene", "camera", "sun", "tag", "pano", "upload", "plus", "eye", "eye_off", "star", "star_on",
          "refresh", "copy", "pencil", "trash", "cube", "cover", "text", "plan", "concept", "split", "tabs", "film",
          "expand", "focus", "lock", "unlock", "palette", "auto", "search", "down", "right", "play", "rotate_l",
-         "rotate_r", "walk")
+         "rotate_r", "walk", "pause")

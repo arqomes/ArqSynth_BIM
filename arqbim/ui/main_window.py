@@ -1935,9 +1935,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _left_up(self, panel):
         """(0.461) A left panel in view alone (the others hidden: no tabs at their foot), the module bar following.
-        (0.479) The ArqSynth Presentation tab in front: the 3D view's tab first (the BIM's columns back)."""
+        (0.479) The ArqSynth Presentation in front: put away first (0.481: its tab closed — the BIM's columns back)."""
         if self.presentation_shown():
-            self.views.open(self._live_3d())
+            self.close_presentation()
         for p in self.left_panels:
             if p is not panel and p.isVisible():
                 p.hide()
@@ -1976,8 +1976,8 @@ class MainWindow(QtWidgets.QMainWindow):
         the left panels folded away."""
         attr = self.LEFT_MODULES.get(name)
         presenting = attr is not None and self.presentation_shown()
-        if presenting:                                         # (0.479: the BIM's columns back, its panel up)
-            self.views.open(self._live_3d())
+        if presenting:                                         # (0.479: the BIM's columns back, its panel up;
+            self.close_presentation()                          #  0.481: the Presentation's tab closed)
         if attr is not None:
             panel = getattr(self, attr)
             in_view = panel.isVisible() and not panel.visibleRegion().isEmpty()
@@ -1994,8 +1994,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.module = name
             self.module_actions[name].setChecked(True)
         elif name == "presentation":                        # (0.480) the ArqSynth Presentation's interface — again:
-            if self.presentation_shown():                   # the BIM's (the 3D view's tab)
-                self.views.open(self._live_3d())
+            if self.presentation_shown():                   # (0.481) its tab closed, the BIM's view it came from
+                self.close_presentation()
             else:
                 self.show_presentation_tab()
         elif name == "settings":
@@ -3721,7 +3721,7 @@ class MainWindow(QtWidgets.QMainWindow):
             mode.enter()
             self._show_3d()
             self._refresh_properties()
-            QtCore.QTimer.singleShot(0, lambda: mode.overlay.show_state() if mode.active else None)
+            QtCore.QTimer.singleShot(0, lambda: mode.show_state() if mode.active else None)
             return
         if kind == "plan":
             if key[1] != self.doc.active_storey and any(g == key[1] for g, _n, _z in self.doc.storeys()):
@@ -3907,9 +3907,25 @@ class MainWindow(QtWidgets.QMainWindow):
         return getattr(self, "presentation_mode", None) is not None and self.presentation_mode.active
 
     def show_presentation_tab(self):
-        """(0.479) The ArqSynth Presentation tab in front."""
+        """(0.479) The ArqSynth Presentation's interface in front — (0.481) its tab opened (the last one) by the left
+        bar's icon; the view it came from remembered."""
+        current = self.views.current()
+        if current is not None and current != view_tabs.PRESENT:
+            self.presentation_mode.came_from = current
         self.views.open(view_tabs.PRESENT)
         return self.presentation_mode
+
+    def close_presentation(self):
+        """(0.481) The ArqSynth Presentation's interface put away: its tab closed, the view it came from shown again
+        (the BIM's columns as they were)."""
+        if view_tabs.PRESENT not in self.views.keys:
+            return False
+        back = getattr(self.presentation_mode, "came_from", None)
+        if back is None or back not in self.views.keys:
+            back = self._live_3d()
+        self.views.open(back)                       # (the view it came from first: no other tab shown on the way)
+        self.views.close(self.views.keys.index(view_tabs.PRESENT))
+        return True
 
     def thumbnail_now(self):
         """(0.479) A scene's thumbnail (JPEG bytes) of the 3D view as it is now."""

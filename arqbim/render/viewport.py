@@ -474,7 +474,6 @@ class Viewport:
         self._last_middle = (0.0, 0.0, 0.0)   # (when, x, y) of the last middle-button press: double click
         self.middle_drag = "orbit"            # what the middle button does: "orbit" (SketchUp) | "pan" (Revit)
         self.cube = None                      # the view cube (0.79; set by the window: its faces' pictures)
-        self.cube_hidden = False              # (0.479) not drawn (the Presentation tab: its own keys of the views)
         self._anim = None                     # a smooth turn in progress: (start time, from, to) camera snapshots
         self._cube_press = None               # [x, y, part, dragged] of the left button pressed on the cube
         self.on_cube_menu = None              # (x, y) -> None: the cube's ▾ (the window's menu)
@@ -561,7 +560,7 @@ class Viewport:
         more = self.bim.flush(FLUSH_BUDGET)          # rebuild only the batches that changed (0.328: many — some)
         self._step_animation()
         self._follow_view()
-        if self.cube is not None and not self.cutting() and not self.cube_hidden:
+        if self.cube is not None and not self.cutting():
             self.renderer.render(self.scene, self.camera, flush=False)
             self.cube.follow(self.camera.local.rotation)       # the view cube in its corner (0.79)
             self.cube.render(self.renderer, self.logical_size())
@@ -738,7 +737,7 @@ class Viewport:
         """The mouse on the view cube (3D only): "down" / "move" / "up". True if the cube took it (the tool does
         not get it): a click there, a drag that started there, the mouse over it."""
         cube = self.cube
-        if cube is None or self.cube_hidden:
+        if cube is None:
             return False
         size = self.logical_size()
         if self.cutting():
@@ -872,19 +871,6 @@ class Viewport:
             return
         level = math.sqrt(max(1.0 - eye[2] ** 2, 0.0))
         self.look_from((sx * level, sy * level, eye[2]))
-
-    def turn_about(self, angle):
-        """(0.479) The camera taken round the focus `angle` radians about the vertical (the Presentation's «Girar vista
-        90°»), smoothly."""
-        focus = self._focus.copy()
-        q = la.quat_from_axis_angle((0.0, 0.0, 1.0), float(angle))
-
-        def change():
-            self.camera.local.rotation = la.quat_mul(q, np.asarray(self.camera.local.rotation, dtype=float))
-            self.camera.local.position = tuple(focus + la.vec_transform_quat(self.camera_position() - focus, q))
-            self._set_focus(focus)
-
-        self._animate(change)
 
     def set_axonometric(self, on):
         """(0.479) Seen without perspective or with it (the Presentation tab's ORTO / PERSP), what is in view staying

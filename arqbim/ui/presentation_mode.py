@@ -3,16 +3,22 @@ uma aba de ArqSynth Presentation e use as 2 colunas para replicar a experiência
 preparando o modelo 3D para exportação com todas as configurações do ArqSynth Presentation. Ao clicar na aba a tela
 muda a interface para a interface do ArqSynth Presentation».
 
-The last tab of the views (view_tabs.PRESENT): while it is in front the window's columns are the Presentation's —
+(0.480) Opened by the left bar's icon (a module); (0.481) in a tab of its own only while it is open (view_tabs.PRESENT)
+and laid out as the Presentation's NEW 3D page (its docs/PLANO-LIMPAR-TELA-3D.md — the owner: «a imagem… era apenas uma
+referência… faça de acordo com o novo»). While it is in front the window's columns are the Presentation's —
 - on the left (PagesPanel): DIVIDIDO / ABAS, the PÁGINAS that go in the package (the Modelo 3D page and a Planta page
   per sheet with views; Capa, Texto and Concept are made over there), the 3D page's scenes as the Presentation's cards
   (thumbnail, number, star of the first one, name, PERSPECTIVA / ORTOGONAL, and Atualizar · Cena inicial · Mostrar ·
-  Duplicar · Renomear · Eliminar), «Exportar / atualizar», and CENAS with the TRANSIÇÃO of every scene;
+  Duplicar · Renomear · Eliminar), «Exportar / atualizar», «Página final»; at its fixed foot CENAS n with «+ Criar cena»
+  and the TRANSIÇÃO of every scene;
 - on the right (SidePanel): the Presentation's rail — Camadas (every element under its category, its eye; «Procurar
   peça…»), Cenas 3D, Ambiente, Etiquetas, Imagens, Efeitos, Passeio —, each for the scene chosen;
-- over the 3D view (Overlay): «Criar cena», PERSP / ORTO, «Enquadrar modelo», «Enquadrar selecção», the lock, the FOV,
-  the keys of the views (T, E, F, D, B, TRÁS and the 90° turns), «Renderizado · Auto» and the sun's reading.
-The BIM's own columns come back as they were when another tab is chosen.
+- on the parameters' bar (the Presentation's strip over its 3D view): the camera in one line — PERSP / ORTO, FOV,
+  «Enquadrar modelo», «Enquadrar selecção», the lock (CameraStrip);
+- on the footer: «Renderizado · Auto ▾» (FooterLook) and the sun's reading (FooterSun);
+- under the 3D view: the scenes' player ‹ ▶ 1/4 · nome › (ScenePlayer).
+Nothing over the model: the 3D view keeps the BIM's own view cube and navigation (the owner: «o cubo de navegação devia
+continuar o mesmo do programa»). The BIM's own columns come back as they were when the tab is closed or left.
 
 What is chosen here goes where the Presentation keeps it, through model/presentation.py (one undo step a change) and
 model/presentation_export.py: a scene is a view of the project — «Criar cena» keeps the 3D view as a named 3D view
@@ -35,12 +41,9 @@ from . import theme
 KEY = QtCore.Qt.ItemDataRole.UserRole
 THUMB = QtCore.QSize(84, 47)            # a scene card's picture (16:9)
 PAGE_THUMB = QtCore.QSize(150, 84)      # a page card's
-MARGIN = 12                             # the commands over the 3D view: this far from its edges
 MIME = "application/x-arqsynth-scene"   # a scene card dragged to another place
 RAIL = (("layers", "layers"), None, ("scenes", "film"), ("environment", "sun"), ("labels", "tag"),
         ("images", "pano"), ("effects", "camera"), None, ("walk", "walk"))
-FACES = {"top": (0.0, 0.0, 1.0), "left": (-1.0, 0.0, 0.0), "front": (0.0, -1.0, 0.0), "right": (1.0, 0.0, 0.0),
-         "bottom": (0.0, 0.0, -1.0), "back": (0.0, 1.0, 0.0)}      # (the Presentation's −Z is north: the model's +Y)
 
 
 def vertical_fov(pygfx_fov, aspect):
@@ -85,18 +88,26 @@ QPushButton#pm_wide { border: 1px dashed %(line)s; border-radius: 6px; padding: 
                       background: transparent; }
 QPushButton#pm_wide:hover { background: %(button_hover)s; }
 QPushButton#pm_link { border: none; color: %(link)s; background: transparent; text-align: left; padding: 2px; }
-QFrame#pm_float { background: %(card)s; border: 1px solid %(line)s; border-radius: 8px; }
-QFrame#pm_float QLabel { color: %(muted)s; font-weight: 700; background: transparent; }
-QFrame#pm_float QToolButton { border: none; border-radius: 6px; padding: 4px 7px; color: %(text)s;
-                              background: transparent; font-weight: 700; }
-QFrame#pm_float QToolButton:hover { background: %(button_hover)s; }
-QFrame#pm_float QToolButton:checked { background: %(accent)s; color: %(accent_text)s; }
-QFrame#pm_float QToolButton:disabled { color: %(hint)s; }
-QFrame#pm_float QToolButton#pm_key { border: 1px solid %(line)s; border-radius: 6px; background: %(button)s;
-                                     color: %(text)s; font-weight: 700; min-width: 30px; min-height: 26px;
-                                     padding: 0 4px; }
-QFrame#pm_float QToolButton#pm_key:hover { background: %(button_hover)s; }
-QFrame#pm_float QToolButton#pm_key:disabled { background: %(button)s; }
+QWidget#pm_strip QLabel#pm_strip_label { color: %(muted)s; font-weight: 700; background: transparent; }
+QWidget#pm_strip QToolButton { border: none; border-radius: 5px; padding: 3px 7px; color: %(text)s;
+                               background: transparent; font-weight: 700; }
+QWidget#pm_strip QToolButton:hover { background: %(button_hover)s; }
+QWidget#pm_strip QToolButton:checked { background: %(accent)s; color: %(accent_text)s; }
+QWidget#pm_strip QToolButton:disabled { color: %(hint)s; }
+QToolButton#pm_footer { border: none; border-radius: 5px; padding: 1px 8px; color: %(text)s; font-weight: 600;
+                        background: transparent; }
+QToolButton#pm_footer:hover { background: %(button_hover)s; }
+QFrame#pm_player { background: %(bar)s; border: none; border-top: 1px solid %(line)s; }
+QFrame#pm_player QToolButton { border: none; border-radius: 5px; padding: 2px 8px; color: %(text)s;
+                               background: transparent; font-weight: 700; font-size: 14px; }
+QFrame#pm_player QToolButton:hover { background: %(button_hover)s; }
+QFrame#pm_player QToolButton:disabled { color: %(hint)s; }
+QLabel#pm_player_label { color: %(text)s; font-weight: 600; }
+QLabel#pm_player_time { color: %(muted)s; }
+QPushButton#pm_create { border: 1px solid %(accent)s; border-radius: 6px; padding: 3px 8px; color: %(accent)s;
+                        background: transparent; font-weight: 700; }
+QPushButton#pm_create:hover { background: %(select_soft)s; }
+QFrame#pm_end { background: transparent; border: 1px dashed %(line)s; border-radius: 8px; }
 QFrame#pm_line { background: %(line)s; border: none; max-height: 1px; min-height: 1px; }
 QFrame#pm_vline { background: %(line)s; border: none; max-width: 1px; min-width: 1px; }
 """ % c)
@@ -423,6 +434,14 @@ class PagesPanel(QtWidgets.QDockWidget):
         self.count = _label("0", "pm_count")
         foot.addWidget(self.count)
         foot.addStretch(1)
+        # (0.481) «+ Criar cena» on the fixed foot, beside the scenes' count — the Presentation's new place for it (in
+        # the list it scrolled away)
+        self.create_button = QtWidgets.QPushButton(t("pmode.create"))
+        self.create_button.setObjectName("pm_create")
+        self.create_button.setToolTip(t("pmode.create_tip"))
+        self.create_button.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.create_button.clicked.connect(lambda: self.mode.create_scene())
+        foot.addWidget(self.create_button)
         column.addLayout(foot)
         slide = QtWidgets.QHBoxLayout()
         self.transition_label = _label(t("pmode.transition").upper(), "pm_sub")
@@ -481,6 +500,7 @@ class PagesPanel(QtWidgets.QDockWidget):
             button.setIcon(_icon({"cover": "cover", "text": "text", "plan": "plan", "model": "cube",
                                   "concept": "concept"}[name], "text" if button.isEnabled() else "hint", 15))
         self.scenes_icon.setPixmap(glyphs.pixmap("film", theme.colour("accent"), 14))
+        self.create_button.setIcon(_icon("plus", "accent", 14))
 
     # ------------------------------------------------------------ shown
 
@@ -535,6 +555,7 @@ class PagesPanel(QtWidgets.QDockWidget):
                 note = _label(t("pmode.no_sheets"), "pm_note")
                 note.setWordWrap(True)
                 self.list_box.addWidget(note)
+            self.list_box.addWidget(self._end_card())
         self.list_box.addStretch(1)
         for page, card in self.page_cards.items():
             card.set_active(page == self.page)
@@ -574,6 +595,21 @@ class PagesPanel(QtWidgets.QDockWidget):
         if not found:
             box.addWidget(_label(t("pmode.no_scenes"), "pm_note"))
         return block
+
+    @staticmethod
+    def _end_card():
+        """(0.481) «Página final», as the Presentation's list ends: made over there (its end page), shown here dashed."""
+        card = QtWidgets.QFrame()
+        card.setObjectName("pm_end")
+        card.setToolTip(t("pmode.end_page_tip"))
+        box = QtWidgets.QVBoxLayout(card)
+        box.setContentsMargins(10, 8, 10, 8)
+        box.setSpacing(2)
+        box.addWidget(_label(t("pmode.end_page"), "pm_name"))
+        note = _label(t("pmode.end_page_note"), "pm_sub")
+        note.setWordWrap(True)
+        box.addWidget(note)
+        return card
 
     def mark(self, key):
         for k, card in self.cards.items():
@@ -1150,32 +1186,42 @@ class SidePanel(QtWidgets.QDockWidget):
             self.pages[self.tab].show_scene(scene)
 
 
-# ------------------------------------------------------------------ over the 3D view
+# ------------------------------------------------------------------ (0.481) as the Presentation's new 3D page
+# (its docs/PLANO-LIMPAR-TELA-3D.md: «nada no centro do viewport»): the camera in one line on the strip over the 3D view
+# — here the BIM's parameters' bar —, «Renderizado · Auto» and the sun on the footer, the scenes' player under the 3D
+# view, «+ Criar cena» on the left column's foot; the 3D view keeps the BIM's own view cube (the owner: «o cubo de
+# navegação devia continuar o mesmo do programa»)
 
-class Overlay(QtCore.QObject):
-    """The Presentation's commands over the 3D view: «Criar cena» (top left); PERSP / ORTO, «Enquadrar modelo»,
-    «Enquadrar selecção», the lock and the FOV (top right); the keys of the views (bottom right, over the sun's
-    reading); «Renderizado · Auto» (bottom left)."""
+class CameraStrip(QtWidgets.QWidget):
+    """The Presentation's camera in one line: PERSP / ORTO · FOV · Enquadrar modelo · Enquadrar selecção · Bloquear —
+    at the right end of the parameters' bar (the Presentation's strip over its 3D view, in a wide window)."""
 
-    def __init__(self, mode, parent, canvas):
-        super().__init__(parent)
-        self.mode, self.host, self.canvas = mode, parent, canvas      # (host: not `parent`, QObject's own)
-        self.widgets = []
-        self.create = self._float()
-        row = QtWidgets.QHBoxLayout(self.create)
-        row.setContentsMargins(2, 2, 2, 2)
-        self.create_button = self._button(t("pmode.create"), "pmode.create_tip", mode.create_scene)
-        self.create_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        row.addWidget(self.create_button)
-        self.camera = self._float()
-        row = QtWidgets.QHBoxLayout(self.camera)
-        row.setContentsMargins(3, 3, 3, 3)
+    def __init__(self, mode):
+        super().__init__()
+        self.mode = mode
+        self.setObjectName("pm_strip")
+        row = QtWidgets.QHBoxLayout(self)
+        row.setContentsMargins(4, 0, 4, 0)
         row.setSpacing(2)
         self.persp = self._button(t("pmode.persp_short").upper(), "pmode.persp_tip", lambda: mode.set_ortho(False))
         self.ortho = self._button(t("pmode.ortho_short").upper(), "pmode.ortho_tip", lambda: mode.set_ortho(True))
         for b in (self.persp, self.ortho):
             b.setCheckable(True)
             row.addWidget(b)
+        row.addSpacing(8)
+        self.fov_label = QtWidgets.QLabel(t("pmode.fov"))
+        self.fov_label.setObjectName("pm_strip_label")
+        row.addWidget(self.fov_label)
+        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.fov_slider.setRange(int(pm.FOV_MIN), int(pm.FOV_MAX))
+        self.fov_slider.setFixedWidth(80)
+        self.fov_slider.setToolTip(t("pmode.fov_tip"))
+        self.fov_slider.valueChanged.connect(self._fov)
+        row.addWidget(self.fov_slider)
+        self.fov_value = QtWidgets.QLabel(str(int(pm.FOV_DEFAULT)))
+        self.fov_value.setObjectName("pm_strip_label")
+        self.fov_value.setMinimumWidth(20)
+        row.addWidget(self.fov_value)
         row.addSpacing(6)
         self.frame_model = self._button("", "pmode.frame_model", mode.frame_model)
         self.frame_selection = self._button("", "pmode.frame_selection", mode.frame_selection)
@@ -1183,128 +1229,75 @@ class Overlay(QtCore.QObject):
         self.lock.setCheckable(True)
         for b in (self.frame_model, self.frame_selection, self.lock):
             row.addWidget(b)
-        self.fov = self._float()
-        row = QtWidgets.QHBoxLayout(self.fov)
-        row.setContentsMargins(10, 3, 10, 3)
-        row.addWidget(QtWidgets.QLabel(t("pmode.fov")))
-        self.fov_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.fov_slider.setRange(int(pm.FOV_MIN), int(pm.FOV_MAX))
-        self.fov_slider.setFixedWidth(120)
-        self.fov_slider.setToolTip(t("pmode.fov_tip"))
-        self.fov_slider.valueChanged.connect(self._fov)
-        row.addWidget(self.fov_slider)
-        self.fov_value = QtWidgets.QLabel("35")
-        self.fov_value.setMinimumWidth(22)
-        row.addWidget(self.fov_value)
-        self.keys = self._float()
-        grid = QtWidgets.QGridLayout(self.keys)
-        grid.setContentsMargins(6, 6, 6, 6)
-        grid.setSpacing(4)
-        for face, r, c in (("top", 0, 1), ("left", 1, 0), ("front", 1, 1), ("right", 1, 2), ("bottom", 2, 1)):
-            key = self._key(t("pmode.face_short." + face), t("pmode.face." + face), lambda f=face: mode.look(f))
-            grid.addWidget(key, r, c)
-        for r, c in ((0, 0), (0, 2), (2, 0), (2, 2)):          # (the keypad's empty corners, as the Presentation's)
-            blank = self._key("", "", lambda: None)
-            blank.setEnabled(False)
-            grid.addWidget(blank, r, c)
-        self.turn_left = self._key("", t("pmode.turn_left"), lambda: mode.turn(1))
-        self.back = self._key(t("pmode.face_short.back"), t("pmode.face.back"), lambda: mode.look("back"))
-        self.turn_right = self._key("", t("pmode.turn_right"), lambda: mode.turn(-1))
-        grid.addWidget(self.turn_left, 3, 0)
-        grid.addWidget(self.back, 3, 1)
-        grid.addWidget(self.turn_right, 3, 2)
-        self.look = self._float()
-        row = QtWidgets.QHBoxLayout(self.look)
-        row.setContentsMargins(2, 2, 2, 2)
-        self.look_button = self._button("", "pmode.look_tip", None)
-        self.look_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.look_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.look_menu = QtWidgets.QMenu(self.look_button)
-        self.look_menu.aboutToShow.connect(self._fill_look_menu)
-        self.look_button.setMenu(self.look_menu)
-        row.addWidget(self.look_button)
-        self.sun = self._float()
-        row = QtWidgets.QHBoxLayout(self.sun)
-        row.setContentsMargins(2, 2, 2, 2)
-        self.sun_button = self._button("", "pmode.sun_tip", lambda: mode.side.show_tab("environment"))
-        self.sun_button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        row.addWidget(self.sun_button)
-        parent.installEventFilter(self)
-        canvas.installEventFilter(self)
-        self.hide()
-
-    def _float(self):
-        frame = QtWidgets.QFrame(self.host)
-        frame.setObjectName("pm_float")
-        frame.hide()
-        self.widgets.append(frame)
-        return frame
+        self.restyle()
 
     def _button(self, text, tip, call):
         button = QtWidgets.QToolButton()
         button.setText(text)
         button.setToolTip(t(tip))
-        button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        button.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        if call is not None:
-            button.clicked.connect(lambda _on=False: call())
-        return button
-
-    def _key(self, text, tip, call):
-        button = QtWidgets.QToolButton()
-        button.setObjectName("pm_key")
-        button.setText(text)
-        button.setToolTip(tip)
+        button.setAutoRaise(True)
         button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         button.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         button.clicked.connect(lambda _on=False: call())
         return button
 
     def restyle(self):
-        css = _css()
-        for w in self.widgets:
-            w.setStyleSheet(css)
-        self.create_button.setIcon(_icon("plus", "text", 15))
+        self.setStyleSheet(_css())
         self.frame_model.setIcon(_icon("expand", "text", 15))
         self.frame_selection.setIcon(_icon("focus", "text", 15))
-        self.turn_left.setIcon(_icon("rotate_l", "text", 14))
-        self.turn_right.setIcon(_icon("rotate_r", "text", 14))
-        self.look_button.setIcon(_icon("palette", "accent", 15))
-        self.sun_button.setIcon(_icon("sun", "attention", 15))
         self.show_state()
 
     def show_state(self):
-        """The buttons as the camera is now (its projection, lens, lock) and the look and the sun as chosen."""
+        """As the camera is now: its projection, its lens (in perspective only), the lock; «Enquadrar selecção» only
+        with something selected."""
         mode = self.mode
         ortho = mode.vp.is_ortho()
         self.persp.setChecked(not ortho)
         self.ortho.setChecked(ortho)
-        self.lock.setChecked(mode.live["locked"])
-        self.lock.setIcon(_icon("lock" if mode.live["locked"] else "unlock",
-                                "accent_text" if mode.live["locked"] else "text", 15))
-        self.lock.setToolTip(t("pmode.unlock_tip" if mode.live["locked"] else "pmode.lock_tip"))
+        locked = mode.live["locked"]
+        self.lock.setChecked(locked)
+        self.lock.setIcon(_icon("lock" if locked else "unlock", "accent_text" if locked else "text", 15))
+        self.lock.setToolTip(t("pmode.unlock_tip" if locked else "pmode.lock_tip"))
         self.frame_selection.setEnabled(bool(mode.vp.selection))
-        self.fov.setVisible(self.is_on() and not ortho)
+        for w in (self.fov_label, self.fov_slider, self.fov_value):
+            w.setVisible(not ortho)
         self.fov_slider.blockSignals(True)
         self.fov_slider.setValue(int(round(mode.current_fov())))
         self.fov_slider.blockSignals(False)
         self.fov_value.setText(str(self.fov_slider.value()))
-        for w in (self.keys,):
-            w.setEnabled(not mode.live["locked"])
-        self.look_button.setText(mode.look_text())
-        self.sun_button.setText(mode.sun_text())
-        for w in self.widgets:
-            w.adjustSize()
-        self.place()
 
     def _fov(self, value):
         self.fov_value.setText(str(value))
         self.mode.set_fov(float(value))
 
-    def _fill_look_menu(self):
-        """«Renderizado · Auto»: the Presentation's menu — the visual mode, the quality, the ambient occlusion and
-        its strength, «Aplicar a todas as cenas»."""
-        mode, menu = self.mode, self.look_menu
+
+class FooterLook(QtWidgets.QToolButton):
+    """«Renderizado · Auto ▾» at the footer's left, as the Presentation's: its menu opens upwards — the visual mode,
+    the quality, the ambient occlusion and its strength, «Aplicar a todas as cenas»."""
+
+    def __init__(self, mode):
+        super().__init__()
+        self.mode = mode
+        self.setObjectName("pm_footer")
+        self.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(t("pmode.look_tip"))
+        self.menu_ = QtWidgets.QMenu(self)
+        self.clicked.connect(self._open)
+        self.hide()
+
+    def restyle(self):
+        self.setStyleSheet(_css())
+        self.setIcon(_icon("palette", "accent", 15))
+        self.show_state()
+
+    def show_state(self):
+        self.setText(self.mode.look_text() + "  ▾")
+
+    def fill(self):
+        mode, menu = self.mode, self.menu_
         menu.clear()
         menu.addSection(t("pmode.look_modes"))
         group = QtGui.QActionGroup(menu)
@@ -1343,39 +1336,131 @@ class Overlay(QtCore.QObject):
         every.setCheckable(True)
         every.setChecked(mode.apply_all)
         every.setToolTip(t("pmode.apply_all_tip"))
+        return menu
 
-    def is_on(self):
-        return self.mode.active
+    def _open(self):
+        from . import menus
+        menu = self.fill()
+        menu.exec(menus.above(menu, self, x=0))           # (up from the footer, as the Presentation's)
 
-    def show(self):
-        for w in self.widgets:
-            w.show()
-            w.raise_()
+
+class FooterSun(QtWidgets.QToolButton):
+    """The sun's reading at the footer's right, as the Presentation's: «☀ 12:00  Az 199°  Alt 74°» — a click: the
+    Ambiente tab, where it is set."""
+
+    def __init__(self, mode):
+        super().__init__()
+        self.mode = mode
+        self.setObjectName("pm_footer")
+        self.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(t("pmode.sun_tip"))
+        self.clicked.connect(lambda: mode.side.show_tab("environment"))
+        self.hide()
+
+    def restyle(self):
+        self.setStyleSheet(_css())
+        self.setIcon(_icon("sun", "attention", 15))
         self.show_state()
 
-    def hide(self):
-        for w in self.widgets:
-            w.hide()
+    def show_state(self):
+        self.setText(self.mode.sun_text())
 
-    def place(self):
-        """Each box in its corner of the 3D view."""
-        if not self.mode.active:
+
+class ScenePlayer(QtWidgets.QFrame):
+    """The scenes' player under the 3D view, as the Presentation's (in its timeline's line): ‹ ▶ 1/4 · Vista geral › —
+    the scene before / after in the presentation's sequence (those shown), or all of them one after the other, each
+    reached as it is (a smooth flight or a cut) and kept its time on screen."""
+
+    STAY = 4.0                  # s on a scene with no time of its own (the Presentation's)
+
+    def __init__(self, mode):
+        super().__init__()
+        self.mode = mode
+        self.setObjectName("pm_player")
+        row = QtWidgets.QHBoxLayout(self)
+        row.setContentsMargins(10, 3, 10, 3)
+        row.setSpacing(4)
+        self.prev = self._button("‹", "pmode.prev_scene", lambda: mode.step_scene(-1))
+        self.play = self._button("", "pmode.play_scenes", self.toggle)
+        self.next = self._button("›", "pmode.next_scene", lambda: mode.step_scene(1))
+        self.label = QtWidgets.QLabel("")
+        self.label.setObjectName("pm_player_label")
+        self.label.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
+        for w in (self.prev, self.play, self.next):
+            row.addWidget(w)
+        row.addWidget(self.label, 1)
+        self.time = QtWidgets.QLabel("")
+        self.time.setObjectName("pm_player_time")
+        row.addWidget(self.time)
+        self.timer = QtCore.QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self._on)
+        self.playing = False
+        self.hide()
+
+    def _button(self, text, tip, call):
+        button = QtWidgets.QToolButton()
+        button.setText(text)
+        button.setToolTip(t(tip))
+        button.setAutoRaise(True)
+        button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        button.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda _on=False: call())
+        return button
+
+    def restyle(self):
+        self.setStyleSheet(_css())
+        self.show_state()
+
+    def show_state(self):
+        mode = self.mode
+        shown = [s for s in mode.scenes() if not s.hidden]
+        keys = [s.key for s in shown]
+        scene = mode.scene()
+        k = keys.index(scene.key) + 1 if scene is not None and scene.key in keys else 0
+        self.label.setText("{}/{} · {}".format(k, len(keys), scene.name) if scene is not None else
+                           t("pmode.no_scenes"))
+        stay = (scene.seconds or self.STAY) if scene is not None else 0.0
+        self.time.setText(t("pmode.scene_time", s="{:.1f}".format(stay).replace(".", ",")) if scene else "")
+        self.play.setIcon(_icon("pause" if self.playing else "play", "text", 14))
+        self.play.setToolTip(t("pmode.pause_scenes" if self.playing else "pmode.play_scenes"))
+        for b in (self.prev, self.next, self.play):
+            b.setEnabled(len(keys) > 1 or (b is self.play and self.playing))
+
+    def toggle(self):
+        """▶: the scenes one after the other (from the one chosen); ❚❚: stopped where it is."""
+        if self.playing:
+            self.stop()
             return
-        g = self.canvas.geometry()
-        left, top, right, bottom = g.left() + MARGIN, g.top() + MARGIN, g.right() - MARGIN, g.bottom() - MARGIN
-        self.create.move(left, top)
-        self.camera.move(right - self.camera.width(), top)
-        self.fov.move(right - self.fov.width(), top + self.camera.height() + 6)
-        self.look.move(left, bottom - self.look.height())
-        self.sun.move(right - self.sun.width(), bottom - self.sun.height())
-        self.keys.move(right - self.keys.width(), bottom - self.sun.height() - 8 - self.keys.height())
-        for w in self.widgets:
-            w.raise_()
+        self.playing = True
+        self._wait()
+        self.show_state()
 
-    def eventFilter(self, obj, event):  # noqa: N802
-        if event.type() in (QtCore.QEvent.Type.Resize, QtCore.QEvent.Type.Move) and self.mode.active:
-            QtCore.QTimer.singleShot(0, self.place)
-        return False
+    def stop(self):
+        self.playing = False
+        self.timer.stop()
+        self.show_state()
+
+    def _wait(self):
+        scene = self.mode.scene()
+        if scene is None:
+            self.stop()
+            return
+        self.timer.start(int(1000 * ((scene.seconds or self.STAY) + (scene.transition_s if scene.transition != "cut"
+                                                                       else 0.0))))
+
+    def _on(self):
+        if not self.playing or not self.mode.active:
+            self.stop()
+            return
+        if not self.mode.step_scene(1, wrap=False):
+            self.stop()
+            return
+        self._wait()
+        self.show_state()
 
 
 # ------------------------------------------------------------------ the tab itself
@@ -1397,16 +1482,25 @@ class PresentationMode(QtCore.QObject):
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
         self._layers_stale = True
         self._entered_once = False
+        self.came_from = None               # (0.481) the view it was opened from: shown again when it is put away
         self.pages = PagesPanel(self, win)
         self.side = SidePanel(self, win)
         win.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self.pages)
         win.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, self.side)
         self.pages.hide()
         self.side.hide()
-        self.overlay = Overlay(self, win.centralWidget(), win.canvas)
-        self.act_create = QtGui.QAction(t("pmode.create"), win)
-        self.act_create.setToolTip(t("pmode.create_tip"))
-        self.act_create.triggered.connect(lambda _on=False: self.create_scene())
+        # (0.481) as the Presentation's new page: the camera on the parameters' bar, the look and the sun on the footer,
+        # the scenes' player under the 3D view (nothing over the model)
+        self.camera = CameraStrip(self)
+        self.act_camera = QtWidgets.QWidgetAction(self)                 # (kept: the bar only borrows its widget)
+        self.act_camera.setDefaultWidget(self.camera)
+        self.look_button = FooterLook(self)
+        self.sun_button = FooterSun(self)
+        bar = win.statusBar()
+        bar.insertWidget(0, self.look_button)
+        bar.insertPermanentWidget(0, self.sun_button)
+        self.player = ScenePlayer(self)
+        win._central_layout.addWidget(self.player)
         self.act_thumbs = QtGui.QAction(t("present.thumbs"), win)
         self.act_thumbs.setToolTip(t("present.thumbs_tip"))
         self.act_thumbs.triggered.connect(lambda _on=False: self.win.scene_thumbnails())
@@ -1545,7 +1639,8 @@ class PresentationMode(QtCore.QObject):
 
     def enter(self):
         """The tab in front: the Presentation's columns instead of the BIM's (their widths kept: the 3D view keeps
-        its size), its commands over the 3D view, the scene chosen (the first one, the first time)."""
+        its size), its camera on the parameters' bar, its look and sun on the footer, its scenes' player under the 3D
+        view, the scene chosen (the first one, the first time)."""
         win = self.win
         if not self.active:
             left = QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
@@ -1562,14 +1657,13 @@ class PresentationMode(QtCore.QObject):
             self.side.show()
             win.resizeDocks([self.pages, self.side], [widths[left] or 270, widths[right] or 300],
                             QtCore.Qt.Orientation.Horizontal)
-        self.vp.cube_hidden = True
         self.vp.camera_locked = self.live["locked"]
         self.vp.set_hidden_elements(self.live["hidden"])
         if self.scene_key is None or self.scene(self.scene_key) is None:
             self.scene_key = pm.initial(self.doc)
+        for w in (self.look_button, self.sun_button, self.player):
+            w.show()
         self.refresh(layers=True)
-        self.overlay.restyle()
-        self.overlay.show()
         win.refresh_context_bar()
         if hasattr(win, "_presentation_module"):          # (0.480: its icon lit in the left bar)
             win._presentation_module(True)
@@ -1578,13 +1672,14 @@ class PresentationMode(QtCore.QObject):
             QtCore.QTimer.singleShot(0, lambda: self.activate(self.scene_key) if self.active else None)
 
     def leave(self):
-        """Another tab: the BIM's columns again as they were, every element drawn, the view cube back."""
+        """Another tab: the BIM's columns again as they were, every element drawn, the mouse free."""
         if not self.active:
             return
         self.active = False
-        self.overlay.hide()
+        self.player.stop()
+        for w in (self.look_button, self.sun_button, self.player):
+            w.hide()
         self.vp.set_hidden_elements(set())
-        self.vp.cube_hidden = False
         self.vp.camera_locked = False
         self.pages.hide()
         self.side.hide()
@@ -1600,6 +1695,7 @@ class PresentationMode(QtCore.QObject):
         self.scene_key = None
         self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False)
         self._entered_once = False
+        self.came_from = None
         self._layers_stale = True
         if self.active:
             self.vp.set_hidden_elements(set())
@@ -1608,9 +1704,15 @@ class PresentationMode(QtCore.QObject):
     def restyle(self):
         self.pages.restyle()
         self.side.restyle()
-        self.overlay.restyle()
+        for w in (self.camera, self.look_button, self.sun_button, self.player):
+            w.restyle()
         if self.active:
             self.refresh(layers=False)
+
+    def show_state(self):
+        """(0.481) The camera's buttons, the footer's look and sun, the player — as they are now."""
+        for w in (self.camera, self.look_button, self.sun_button, self.player):
+            w.show_state()
 
     def refresh(self, layers=None, changed=None, removed=None):
         """The columns again (the project changed): the pages and the scenes; the layers when elements changed."""
@@ -1634,7 +1736,7 @@ class PresentationMode(QtCore.QObject):
             self.side.pages["layers"].show_layers(rows, self.live["hidden"])
         self.pages.show_all()
         self.side.show_scene(self.scene())
-        self.overlay.show_state()
+        self.show_state()
 
     def layer_rows(self):
         """[(GlobalId, name, category, storey, IFC class)] of what goes to the Presentation, a layer each (the GLB's
@@ -1651,15 +1753,16 @@ class PresentationMode(QtCore.QObject):
         return sorted(rows, key=lambda r: (r[2].lower(), r[1].lower()))
 
     def context_items(self):
-        """The parameters' bar while the tab is in front: its commands, as a tool's."""
+        """The parameters' bar while the tab is in front — the Presentation's strip over its 3D view: its commands,
+        and at its right end the camera in one line (0.481)."""
         icon = glyphs.icon("scene", theme.colour("text"), 20)
-        return [("title", t("pmode.title"), icon), ("action", self.act_create), ("action", self.act_thumbs),
-                ("separator",), ("action", self.act_export), ("separator",), ("hint", t("pmode.bar_hint"))]
+        return [("title", t("pmode.title"), icon), ("action", self.act_thumbs), ("action", self.act_export),
+                ("spacer",), ("action", self.act_camera)]
 
     def selection_changed(self, ids):
         if self.active:
             self.side.pages["layers"].show_selection(ids)
-            self.overlay.show_state()
+            self.camera.show_state()
 
     def set_playing(self, kind):
         self.playing = kind or None
@@ -1668,9 +1771,10 @@ class PresentationMode(QtCore.QObject):
 
     # ------------------------------------------------------------ the scene chosen
 
-    def activate(self, key):
+    def activate(self, key, fly=False):
         """A scene chosen (its card clicked): the 3D view as it was kept — its camera, projection and lens, the
-        layers it hides, its visual mode, its lock — as the Presentation's «setActiveScene3D»."""
+        layers it hides, its visual mode, its lock — as the Presentation's «setActiveScene3D». fly: (0.481, the
+        scenes' player) reached as the scene is — a smooth flight (the same projection) or a cut."""
         scene = self.scene(key)
         if scene is None:
             return False
@@ -1680,22 +1784,29 @@ class PresentationMode(QtCore.QObject):
                          ao_intensity=scene.ao_intensity, locked=scene.locked)
         ortho = self.ortho_of(scene)
         vp.camera_locked = False                          # (placed by the program, not the mouse)
-        if scene.kind == "view3d":
-            view = self.doc.view3d(scene.view[1])
-            camera = view.camera if view is not None else None
-            if camera:
-                vp.set_axonometric(float(camera.get("fov") or 0) == 0)
-                vp.restore_camera(camera)
-        elif scene.eye and scene.target:
-            vp.set_axonometric(False)
-            vp.look_at(scene.eye, scene.target)
-        elif scene.kind == "overview":
-            vp.set_axonometric(False)
-            self.win._look_overview()
-        elif scene.kind == "plan":
-            self._frame_storey(scene.view[1])
-        elif scene.kind == "section":
-            self._frame_section(scene.view[1])
+
+        def place():
+            if scene.kind == "view3d":
+                view = self.doc.view3d(scene.view[1])
+                camera = view.camera if view is not None else None
+                if camera:
+                    vp.set_axonometric(float(camera.get("fov") or 0) == 0)
+                    vp.restore_camera(camera)
+            elif scene.eye and scene.target:
+                vp.set_axonometric(False)
+                vp.look_at(scene.eye, scene.target)
+            elif scene.kind == "overview":
+                vp.set_axonometric(False)
+                self.win._look_overview()
+            elif scene.kind == "plan":
+                self._frame_storey(scene.view[1])
+            elif scene.kind == "section":
+                self._frame_section(scene.view[1])
+
+        if fly and scene.transition != "cut" and ortho == vp.is_ortho():
+            vp._animate(place)                            # (the viewport's own smooth turn, there)
+        else:
+            place()
         if scene.fov > 0 and not vp.is_ortho():
             vp.camera.fov = pygfx_fov(scene.fov, self.aspect())
         self.live["ortho"] = ortho
@@ -1706,9 +1817,23 @@ class PresentationMode(QtCore.QObject):
         self.side.pages["layers"].set_hidden(self.live["hidden"])
         self.pages.mark(key)
         self.side.show_scene(scene)
-        self.overlay.show_state()
+        self.show_state()
         vp.redraw()
         return True
+
+    def step_scene(self, n, wrap=True):
+        """(0.481) The scenes' player: the scene before (n = −1) or after (n = 1) in the presentation's sequence (those
+        shown), reached as it is; past the last (wrap False): none — returns whether one was."""
+        sequence = [s.key for s in self.scenes() if not s.hidden]
+        if not sequence:
+            return False
+        k = sequence.index(self.scene_key) if self.scene_key in sequence else (-1 if n > 0 else 0)
+        k += n
+        if not 0 <= k < len(sequence):
+            if not wrap:
+                return False
+            k %= len(sequence)
+        return self.activate(sequence[k], fly=True)
 
     def _frame_storey(self, guid):
         objs = [o for o in self.doc.objects.values() if o.is_bim and o.storey == guid and o.mesh is not None]
@@ -1952,7 +2077,7 @@ class PresentationMode(QtCore.QObject):
         """PERSP / ORTO (the 3D view's own projection is not changed: this tab's)."""
         self.live["ortho"] = bool(on)
         self.vp.set_axonometric(bool(on))
-        self.overlay.show_state()
+        self.show_state()
         self.pages.show_all()
 
     def set_fov(self, vertical):
@@ -1960,7 +2085,7 @@ class PresentationMode(QtCore.QObject):
         as big (as the Presentation's dolly zoom)."""
         vp = self.vp
         if vp.is_ortho() or self.live["locked"]:
-            self.overlay.show_state()
+            self.camera.show_state()
             return
         before = self.current_fov()
         focus = vp._focus.copy()
@@ -1986,19 +2111,8 @@ class PresentationMode(QtCore.QObject):
         """«Bloquear câmara da cena»: the mouse no longer moves the camera (kept with the scene)."""
         self.live["locked"] = not self.live["locked"]
         self.vp.camera_locked = self.live["locked"]
-        self.overlay.show_state()
+        self.camera.show_state()
         self.win.message(t("pmode.locked" if self.live["locked"] else "pmode.unlocked"))
-
-    def look(self, face):
-        """T, E, F, D, B, TRÁS: the model seen from that side, framed."""
-        if self.live["locked"]:
-            return
-        self.vp.look_from(FACES[face])
-
-    def turn(self, sign):
-        """The view turned 90° round the model (left: 1, right: −1)."""
-        if not self.live["locked"]:
-            self.vp.turn_about(sign * math.pi / 2.0)
 
     def set_style(self, name):
         """A visual mode of «Renderizado · Auto» (seen in the 3D view with the BIM's style most like it); with
@@ -2007,7 +2121,7 @@ class PresentationMode(QtCore.QObject):
         self.win._apply_look()
         if self.apply_all:
             self._to_all(style=self.live["style"])
-        self.overlay.show_state()
+        self.show_state()
 
     def set_look(self, **fields):
         """The quality, the ambient occlusion and its strength (they go to the Presentation; the BIM's view does not
@@ -2017,7 +2131,7 @@ class PresentationMode(QtCore.QObject):
                 self.live[name] = fields[name]
         if self.apply_all:
             self._to_all(**{k: self.live[k] for k in fields if k in self.live})
-        self.overlay.show_state()
+        self.show_state()
 
     def set_apply_all(self, on):
         self.apply_all = bool(on)

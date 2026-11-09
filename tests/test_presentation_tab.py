@@ -1,6 +1,6 @@
-"""(0.479) The ArqSynth Presentation tab without a window (Qt off screen): its tab among the views' — always the last,
-not closed, not dragged, not saved with the project, never chosen by itself when the tab beside it closes —, its
-glyphs, the Presentation's lens as pygfx's and back."""
+"""(0.479) The ArqSynth Presentation tab without a window (Qt off screen): its tab among the views' — (0.481) there only
+once opened (by the left bar's icon), then the last one, closed with its ×, not dragged, not saved with the project,
+never chosen by itself when the tab beside it closes —, its glyphs, the Presentation's lens as pygfx's and back."""
 
 import math
 import os
@@ -39,23 +39,18 @@ class Tabs(unittest.TestCase):
                                        lambda: dict(CAMERA), lambda state: None,
                                        home_icon=icon, present_icon=icon)
 
-    def test_last_and_fixed(self):
+    def test_opened_last_closed(self):
         tabs, bar = self.tabs, self.bar
         tabs.open(view_tabs.THREE_D)
-        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D, view_tabs.PRESENT])
+        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D])     # (0.481: not there at first)
         tabs.open(PLAN)
-        tabs.open(SECTION)
-        self.assertEqual(tabs.keys[-1], view_tabs.PRESENT)              # (new tabs before it)
-        self.assertEqual(tabs.keys.index(SECTION), 3)
-        k = tabs.keys.index(view_tabs.PRESENT)
-        self.assertIsNone(bar.tabButton(k, QtWidgets.QTabBar.ButtonPosition.RightSide))     # (no ×)
-        tabs.close(k)
-        self.assertIn(view_tabs.PRESENT, tabs.keys)                     # (not closed)
-        tabs.open(view_tabs.PRESENT)
+        tabs.open(view_tabs.PRESENT)                                      # (the left bar's icon)
+        self.assertEqual(tabs.keys[-1], view_tabs.PRESENT)
         self.assertEqual(tabs.current(), view_tabs.PRESENT)
         self.assertEqual(self.shown[-1], view_tabs.PRESENT)
-        tabs.open(("elevation", "S"))                                     # (opened from it: before it)
-        self.assertEqual(tabs.keys[-2:], [("elevation", "S"), view_tabs.PRESENT])
+        self.assertFalse(bar.tabIcon(len(tabs.keys) - 1).isNull())
+        tabs.open(SECTION)                                                # (opened from it: before it)
+        self.assertEqual(tabs.keys[-2:], [SECTION, view_tabs.PRESENT])
         bar.moveTab(len(tabs.keys) - 1, 1)                                # (dragged away…)
         tabs._pin()                                                       # (…and let go: back to the end)
         self.assertEqual(tabs.keys[0], view_tabs.START)
@@ -63,13 +58,19 @@ class Tabs(unittest.TestCase):
         self.assertNotIn("presentation", tabs.text())
         self.assertNotIn(view_tabs.PRESENT, tabs.models())
         self.assertNotIn(["presentation"], [tab["key"] for tab in tabs.state()["tabs"]])
+        tabs.close(tabs.keys.index(view_tabs.PRESENT))                    # (its ×: closed)
+        self.assertNotIn(view_tabs.PRESENT, tabs.keys)
+        tabs.close(0)                                                     # (the house is not)
+        self.assertEqual(tabs.keys[0], view_tabs.START)
 
     def test_closing_beside_it(self):
         """The view just before it closed while shown: the one on its left comes, not the Presentation's."""
         tabs = self.tabs
         tabs.open(view_tabs.THREE_D)
+        tabs.open(view_tabs.PRESENT)
         tabs.open(PLAN)
         self.assertEqual(tabs.current(), PLAN)
+        self.assertEqual(tabs.keys[-1], view_tabs.PRESENT)
         tabs.close(tabs.keys.index(PLAN))
         self.assertEqual(tabs.current(), view_tabs.THREE_D)
         self.assertEqual(self.shown[-1], view_tabs.THREE_D)
@@ -84,16 +85,10 @@ class Tabs(unittest.TestCase):
         self.assertIsNone(tabs.state()["current"])                        # (not the project's)
         tabs.restore({"tabs": [{"key": ["3d"], "camera": None}, {"key": list(PLAN), "camera": None}],
                       "current": list(PLAN)}, lambda key: True)
-        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D, PLAN, view_tabs.PRESENT])
+        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D, PLAN])      # (a project opened: not there)
+        tabs.open(view_tabs.PRESENT)
         tabs.reset()
-        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D, view_tabs.PRESENT])
-
-    def test_without_it(self):
-        """A bar without the Presentation's icon has no such tab (as before)."""
-        bar = QtWidgets.QTabBar()
-        tabs = view_tabs.ViewTabs(bar, lambda key: None, lambda key: "x", lambda: {}, lambda state: None)
-        tabs.open(view_tabs.THREE_D)
-        self.assertNotIn(view_tabs.PRESENT, tabs.keys)
+        self.assertEqual(tabs.keys, [view_tabs.START, view_tabs.THREE_D])
 
 
 class Glyphs(unittest.TestCase):

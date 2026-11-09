@@ -644,6 +644,32 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.481 — A interface do Presentation como a versão nova
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`** (não pela cópia de `C:\BIM-bateria`).
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.481.0**. Faça Ctrl+N e desenhe uma sala de 4
+   paredes com uma porta.
+2. Olhe para as abas por cima do 3D: há a casa e o «3D», e **não** há aba do ArqSynth Presentation.
+3. Na barra de ícones da esquerda, clique no ícone **ArqSynth Presentation** (o ecrã com o triângulo azul, por baixo
+   do pincel das Regras). Abre-se a aba «ArqSynth Presentation», a última, com um ×, e a janela muda:
+   - à esquerda, as páginas e as cenas e, em baixo, «CENAS» com o botão **+ Criar cena** e a **Transição**;
+   - à direita, a barra de ícones do Presentation e as Camadas;
+   - na barra de parâmetros, na ponta direita: **PERSP ORTO**, **FOV**, enquadrar modelo, enquadrar selecção e o
+     cadeado;
+   - no rodapé, à esquerda: **«Com material · Auto ▾»**; à direita, a leitura do sol;
+   - por baixo do 3D, o leitor das cenas: ‹ ▶ «1/2 · Vista geral» ›.
+   O cubo de navegação do canto do 3D é o mesmo de sempre; rode a vista com ele ou com o rato, como sempre.
+4. Rode a vista até gostar dela e clique em **+ Criar cena** (em baixo, à esquerda): aparece o cartão «Cena 1».
+5. Clique em **ORTO** (barra de parâmetros): a vista perde a perspetiva e o FOV some. Clique em **PERSP**: volta.
+6. Clique em **«Com material · Auto ▾»** no rodapé: o menu abre para cima. Escolha **Branco conceptual**: o modelo fica
+   branco.
+7. No leitor por baixo do 3D, clique em **›**: o 3D voa para a cena seguinte e o leitor diz «3/3 · …». Clique em **‹**:
+   volta. Clique em **▶**: as cenas passam uma a uma; clique outra vez (❚❚) para parar.
+8. Clique outra vez no ícone **ArqSynth Presentation** da barra da esquerda: a aba fecha-se, volta o «3D» com o
+   Navegador e as Propriedades como estavam.
+9. Abra outra vez pelo ícone e feche desta vez pelo **×** da aba: o mesmo.
+
 ## 0.480 — ArqSynth Presentation na barra da esquerda
 
 Atenção: abra o programa por **`C:\BIM\ArqSynth BIM.bat`** (ou pelo atalho «ArqBIM - Shortcut» do Ambiente de
