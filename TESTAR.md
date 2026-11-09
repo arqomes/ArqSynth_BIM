@@ -644,6 +644,37 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.482 — A fita organizada como a do Revit
+
+1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.482.0** (ou uma versão mais recente). Faça Ctrl+N.
+2. Olhe para os separadores no topo. Depois da casa vêm, por esta ordem: **Modelagem, Arquitetura, Estrutura,
+   Instalações, Inserir, Anotar, Analisar, Massa e Estudos, Terreno, Colaborar, Visualizar, Gerenciar** (o «Render»
+   saiu: está dentro de Visualizar).
+3. Clique em **Arquitetura**. Da esquerda para a direita: **Selecionar**, o grupo **Construir** (Parede, Porta, Janela,
+   Mobiliário solto, Pilar, Cobertura, Teto, Laje, Parede cortina), depois **Circulação**, **Modelo**, **Ambiente e
+   área**, **Aberturas**, **Referência**, **Plano de trabalho**, **Acabamentos**, **Mobiliário**.
+   - Se a janela não for larga, os grupos da direita aparecem como um botão com ▾ (clique: as ferramentas desse grupo)
+     e, no fim, um botão **»** com os grupos que não couberam (passe o rato por cima de cada nome para ver as suas
+     ferramentas).
+4. Ao lado de **Cobertura** há uma setinha **▾** em baixo à direita. Clique na setinha: aparecem **Perfil da
+   cobertura**, **Calha** e **Ralo**. Carregue em Esc para fechar.
+   - Clique no próprio botão **Cobertura** (no desenho): começa a ferramenta Cobertura (a barra de baixo diz o primeiro
+     passo). Carregue em Esc.
+   - Faça o mesmo na setinha de **Janela** (Caixilho Studio), de **Laje** (Piso, Editar contorno) e de **Parede
+     cortina** (Painel de fachada).
+5. Carregue em **Ctrl+3**: abre a **Estrutura** — Selecionar, Estrutura (Viga, Parede, Pilar, Laje), Fundação
+   (Sapata…), Automático, Referência (Eixo…), Plano de trabalho. Carregue em **Ctrl+2**: volta à Arquitetura;
+   **Ctrl+1**: Modelagem.
+6. Na **Modelagem**: Selecionar, Copiar e colar, Geometria, Modificar (Mover, Copiar, Rodar, Espelhar…), Desenhar,
+   Medir, Criar.
+7. Clique em **Inserir**: **Vincular** (desenho DXF/DWG, nuvem de pontos) e **Importar** (imagem de fundo, modelo 3D…).
+8. Clique em **Analisar**: **Cálculo** (da estrutura), **Mapas** e **Verificar** (o Verificador, IFC, IDS).
+9. Clique em **Visualizar**: em **Apresentação**, **Render realista ▾** (a seta tem o Panorama 360° e o Gaussian splat);
+   em **Criar** (num ecrã estreito, no botão «Criar ▾»), **Vista 3D**, **Planta**, **Corte**.
+10. Escolha a ferramenta **Parede** e carregue em **F1**: a Ajuda diz «Na fita: Arquitetura ▸ Construir». No separador
+    **Procurar**, escreva `calha` e clique em **Mostrar onde está**: abre a Arquitetura e acende o botão **Cobertura**
+    (a calha está na sua setinha).
+
 ## 0.481 — A interface do Presentation como a versão nova
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`** (não pela cópia de `C:\BIM-bateria`).

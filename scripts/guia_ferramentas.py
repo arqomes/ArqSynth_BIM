@@ -80,8 +80,9 @@ def sections_of(label, sections, where):
 
 
 def items(panel_items):
-    """A panel's commands in order (its stacked small ones too)."""
-    return [n for item in panel_items for n in (item if isinstance(item, tuple) else (item,))]
+    """A panel's commands in order (its stacked small ones too; 0.482: those in a button's arrow)."""
+    from arqbim.ui import ribbon
+    return [n for item in panel_items for n in ribbon.names_of(item)]
 
 
 def describe(win, name):

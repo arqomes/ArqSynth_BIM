@@ -8375,7 +8375,7 @@ def windows_outward_flow():
 
 
 def ribbon_wall_modifiers_flow():
-    """0.298 — The ribbon by disciplines and the tab Modify | Walls: in Structure (Ctrl+6), a wall attached to a slab
+    """0.298 — The ribbon by disciplines and the tab Modify | Walls: in Structure (Ctrl+3), a wall attached to a slab
     selected — the green tab «Modificar | Paredes» comes at the end and is shown, every tab's name whole; its button
     «Desligar o topo» clicked: the wall no longer follows the slab; a profile drawn, «Repor perfil»: plain again;
     the Architecture tab clicked — its panels, the contextual tab still there; Esc: the tab goes, Architecture
@@ -8393,7 +8393,7 @@ def ribbon_wall_modifiers_flow():
     pump(200)
     win.set_tool("select")
     vp.set_selection(set())
-    key(Qt.Key.Key_6, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_3, Qt.KeyboardModifier.ControlModifier)          # (0.482: Revit's order — Ctrl+6 before)
     structure = win.discipline == "structure" and win.ribbon_tab == "structure"
     tabs = win.header.tabs
     vp.set_selection({wall})
@@ -8431,13 +8431,24 @@ def ribbon_wall_modifiers_flow():
     win.resize(1000, 740)
     pump(400)
     panels = win.ribbon.panels
+
+    def shown():                    # (0.482: a panel open counts 2, folded into its button 1, in «»» 0)
+        return sum(0 if p.isHidden() else 1 if p.is_folded() else 2 for p in win.ribbon.panels)
+
     folded = [p for p in panels if p.is_folded()]
     menus = all(len(p.folded.menu().actions()) > 0 for p in folded)
+    # (0.482) the panels that do not fit even folded: in «»» at the end, a submenu each
+    left_over = [p.title.text() for p in panels if p.isHidden()]
+    more = win.ribbon.overflow
+    in_more = not left_over or (more is not None and not more.isHidden()
+                                and [a.text() for a in more.menu().actions()] == left_over)
     every = {win.tool_actions[k] for k in ("stair", "room", "kitchen")} <= set(win.ribbon_actions())
+    narrow = shown()
     shot("298_fita_estreita.png")
     win.resize(1280, 740)
     pump(400)
-    opened = sum(p.is_folded() for p in win.ribbon.panels) < len(folded)
+    opened = shown() > narrow
+    menus = menus and in_more
     check("fita_modificar_paredes", structure and came and whole and detached and reset and other and gone
           and bool(folded) and menus and every and opened,
           "estrutura={} separador={} nomes_inteiros={} desligado={} perfil_reposto={} arquitetura={} saiu={} "
@@ -13798,7 +13809,7 @@ def moments_flow():
     pump(300)
     vp.zoom_extents()
     pump(200)
-    win.set_discipline("structure")
+    win.set_discipline("analyze")                          # (0.482: the structure's analysis in Analyze, as Revit's)
     pump(100)
     in_ribbon = win.act_moments in win.ribbon_actions()
     analysis = win.show_moments(True)
@@ -16946,7 +16957,7 @@ def splat_flow():
     bim_actions.add_opening(doc, walls[0], catalog.OPENING_BY_KEY["porta_80"], bim_actions.wall_frame(doc, walls[0]),
                             2.0, -1)
     pump(300)
-    win.set_discipline("render")                         # (0.182: in the ribbon's Render, the menus hidden)
+    win.set_discipline("view")                           # (0.182; 0.482: the render in View, as Revit's)
     pump(100)
     in_menu = win.act_splat in win.ribbon_actions()
     path = os.path.join(OUT, "casa_splat.ply")
@@ -18577,8 +18588,8 @@ def notices_flow():
 
 def help_flow():
     """0.327 — The Help window (F1). With the Wall tool on: «This tool» says «Parede», «Na fita: Arquitetura ▸
-    Paredes», the step now and the tool's keys; it follows another tool chosen. «Find a command»: «pilares na» lists
-    «Pilares na grelha — Estrutura ▸ Grelha» first; «Show where» chooses Structure and lights its button; «Use» runs it
+    Construir» (0.482), the step now and the tool's keys; it follows another tool chosen. «Find a command»: «pilares
+    na» lists «Pilares na grelha — Estrutura ▸ Automático» first; «Show where» chooses Structure and lights its button; «Use» runs it
     (no grid: said). «First steps»: ten, the first one's «Show where» chooses Architecture. «Keys» has Ctrl+C and no
     hidden menu (BIM ▸)."""
     from arqbim.ui import ribbon
@@ -18592,7 +18603,7 @@ def help_flow():
     pump(300)
     h = win._help
     tool = (h is not None and h.isVisible() and h.tabs.currentIndex() == 0 and h.tool_name.text() == "Parede"
-            and "Arquitetura ▸ Paredes" in h.tool_where.text() and "Parede alvenaria" in h.tool_text.text()
+            and "Arquitetura ▸ Construir" in h.tool_where.text() and "Parede alvenaria" in h.tool_text.text()
             and "Tab" in h.tool_text.text())
     shot("327_ajuda_ferramenta.png")
     key(Qt.Key.Key_R)                                   # (the window follows the tool)
@@ -18604,7 +18615,7 @@ def help_flow():
     pump(200)
     names = h.found_names()
     first = h.found.item(0).text() if names else ""
-    found = bool(names) and names[0] == "columns_on_grid" and "Estrutura ▸ Grelha" in first
+    found = bool(names) and names[0] == "columns_on_grid" and "Estrutura ▸ Automático" in first    # (0.482)
     shot("327_ajuda_procurar.png")
     shown = win.show_command("columns_on_grid")
     pump(100)
@@ -18646,7 +18657,7 @@ def image_flow():
     win.set_tool("select")
     vp.set_view("front", center=(2.0, 0.0, 1.4), radius=3.5)
     pump(400)
-    on_ribbon = "export_image" in ribbon.items_of("home") and "export_image" in ribbon.items_of("render")
+    on_ribbon = "export_image" in ribbon.items_of("home") and "export_image" in ribbon.items_of("view")   # (0.482)
     vp.set_selection({wall})
     middle = np.array((2.0, -0.1, 1.4))
     on_screen = pixel(middle)
@@ -19032,7 +19043,7 @@ def presentation_export_flow():
     vp.zoom_extents()
     pump(200)
     doc.add_view3d(vp.camera_snapshot())
-    on_ribbon = "export_presentation" in ribbon.items_of("home") and "export_presentation" in ribbon.items_of("render")
+    on_ribbon = "export_presentation" in ribbon.items_of("home") and "export_presentation" in ribbon.items_of("view")
     path = win.export_presentation(os.path.join(folder, "casa.glb"))
     found = presentation_export.read(path) if path and os.path.exists(path) else None
     model = (found or {}).get("presentation", {}).get("model3d", {})
@@ -19077,7 +19088,7 @@ def presentation_panel_flow():
     doc.add_section(np.array((3.0, 2.0, 0.0)), np.array((0.0, 1.0, 0.0)))
     win.open_view("3d", None)
     pump(300)
-    on_ribbon = "presentation_panel" in ribbon.items_of("render")
+    on_ribbon = "presentation_panel" in ribbon.items_of("view")
     view_width, size = canvas.width(), win.size()
     win.ribbon_item("presentation_panel").trigger()
     pump(500)
@@ -19598,7 +19609,7 @@ def panorama_flow():
     bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 8.0, 4.0, catalog.BY_KEY["laje_12"])
     storey = next(g for g, _n, _z in doc.storeys())
     doc.make_sheets([("Planta", [("plan", storey)])], "A3", "full")
-    on_ribbon = "panorama" in ribbon.items_of("render")
+    on_ribbon = "panorama" in ribbon.items_of("view")
     win.open_view("3d", None)
     pump(300)
     unsaved = win.render_panorama(width=64, samples=4) is None and "Guarde o projeto" in win.last_message
@@ -19686,7 +19697,7 @@ def gltf_flow():
     bim_actions.add_slab(doc, np.array((0.0, 0.0, top)), 6.0, 4.0, catalog.BY_KEY["laje_12"])
     win.open_view("3d", None)
     pump(300)
-    on_ribbon = "export_model" in ribbon.items_of("home") and "export_model" in ribbon.items_of("render")
+    on_ribbon = "export_model" in ribbon.items_of("home") and "export_model" in ribbon.items_of("view")
     folder = tempfile.mkdtemp(prefix="arqsynth_glb_")
     path = win.export_model(os.path.join(folder, "casa.glb"), "shown")
     whole = path is not None and os.path.exists(path)
@@ -20472,7 +20483,7 @@ def model_import_flow():
     pump(400)
     win.open_view("3d", None)
     pump(300)
-    on_ribbon = "import_model" in ribbon.items_of("home") and "import_model" in ribbon.items_of("manage")
+    on_ribbon = "import_model" in ribbon.items_of("insert") and "import_model" in ribbon.items_of("manage")
     seen = {}
 
     def answer(how, where=None, unit=None):
@@ -20887,7 +20898,7 @@ def render_flow():
     vp.set_view("iso")
     vp.zoom_extents()
     pump(400)
-    on_ribbon = "render" in ribbon.items_of("render")
+    on_ribbon = "render" in ribbon.items_of("view")
     window = win.render_realistic(width=480, quality="draft", samples=8)
     started = window is not None and window.running() and "Render realista" in win.last_message
     answering = 0
@@ -21497,9 +21508,10 @@ def pick_flow():
 
 def environments_flow():
     """0.182 (the environments of 0.84 before): the header's disciplines — Massing and studies shows the sketch
-    tools (no walls), Ctrl+6 Structure's (grid, beam; Ctrl+3 before 0.298), a click on the Annotate tab the plan and
-    the dimensions; a tool's key works in any of them (W in Annotate); kept for next time; Home has the file's
-    commands; the menus hidden, the navigation in the status bar; the header shows the project's name."""
+    tools (no walls), Ctrl+3 Structure's (grid, beam; Ctrl+6 in 0.298–0.481, Revit's order since 0.482), a click on
+    the Annotate tab the dimensions and the symbols (0.482: the plan in View ▸ Create, as Revit's); a tool's key works
+    in any of them (W in Annotate); kept for next time; Home has the file's commands; the menus hidden, the
+    navigation in the status bar; the header shows the project's name."""
     from arqbim.ui import ribbon
 
     def shown():
@@ -21510,13 +21522,14 @@ def environments_flow():
     pump(100)
     massing = (win.tool_actions["line"] in shown() and win.tool_actions["wall"] not in shown()
                and tabs.currentIndex() == ribbon.DISCIPLINES.index("massing"))
-    key(Qt.Key.Key_6, Qt.KeyboardModifier.ControlModifier)
+    key(Qt.Key.Key_3, Qt.KeyboardModifier.ControlModifier)
     structure = (win.discipline == "structure" and win.tool_actions["grid"] in shown()
                  and win.tool_actions["beam"] in shown() and tabs.currentIndex() == ribbon.DISCIPLINES.index("structure"))
     tabs.setCurrentIndex(ribbon.DISCIPLINES.index("annotate"))       # (as a click on the Annotate tab)
     pump(100)
-    annotate = (win.discipline == "annotate" and win.act_plan in shown() and win.tool_actions["dimension"] in shown()
-                and win.tool_actions["wall"] not in shown() and win.disc_actions["annotate"].isChecked())
+    annotate = (win.discipline == "annotate" and win.ribbon_item("symbol_styles") in shown()
+                and win.tool_actions["dimension"] in shown() and win.tool_actions["wall"] not in shown()
+                and win.disc_actions["annotate"].isChecked())
     shot("77_ambiente_docs.png")
     key(Qt.Key.Key_W)
     wall_key = win.tool.name == "wall"

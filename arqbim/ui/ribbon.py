@@ -4,53 +4,107 @@ ribbon, the active discipline's tools. They take the place of the four environme
 of the menus; every tool keeps its key whatever the discipline, and the menus are still there underneath (hidden),
 so that nothing is lost.
 
-(0.298) The disciplines in the order a project is worked — Home, Modelling (drawing and modifying, at any stage),
-Manage (setting the project up), Massing and studies, Terrain, Architecture, Structure, Services, Collaborate
-(coordinating), Annotate, View, Render — and each one's tools in named panels, as Revit's, in the order they are
-used: large buttons (an icon over a name) for the main ones, columns of up to three small ones (an icon beside the
+(0.298; 0.482 in Revit's order, the owner's «como do Revit») The disciplines — Home (Revit's File), Modelling (Revit's
+Modify: drawing and modifying, at any stage), Architecture, Structure, Services (Systems), Insert, Annotate, Analyze,
+Massing and studies, Terrain (Massing & Site), Collaborate, View (with the render, as Revit's), Manage — and each one's
+tools in named panels, as Revit's, in Revit's order (its Build, Circulation, Model, Room & Area, Opening, Datum, Work
+Plane…): large buttons (an icon over a name) for the main ones, columns of up to three small ones (an icon beside the
 name) for the others. When the window is too narrow the panels on the right fold, each into one button with its
 name that drops its tools down — none is hidden. A contextual tab ("Modify | Walls") comes at the end of the tabs
 when walls are selected, with their modifiers, and goes when the selection is emptied.
 
 PANELS and CONTEXTS are pure data: each discipline's (context's) panels — (its name, its items); an item is a name
-(a large button) or a tuple of names (a column of small ones); a name is a tool's, one of the window's actions by
-the end of its attribute's name ("new": act_new), or a dropdown ("classify", "type_lists", "phase", "panels")."""
+(a large button), a tuple of names (a column of small ones) or (0.482) a list of names — a large button with an arrow,
+as Revit's «Roof ▾»: the first its command, the others in its arrow's menu; a name is a tool's, one of the window's
+actions by the end of its attribute's name ("new": act_new), or a dropdown ("classify", "type_lists", "phase",
+"panels")."""
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from ..i18n import t
 from . import command_icons, theme
 
-DISCIPLINES =("home", "modeling", "manage", "massing", "terrain", "architecture", "structure", "services",
-               "collaborate", "annotate", "view", "render")
+# (0.482, the owner: «organização das ferramentas como do Revit… começasse com modelagem, depois arquitetura,
+# estrutura, e assim vai») the tabs in Revit's order — after the house (Revit's File): Modify (here the first, as the
+# owner asked), Architecture, Structure, Systems, Insert, Annotate, Analyze, Massing & Site (here massing, then the
+# terrain), Collaborate, View (the render's in it, as Revit's Graphics ▸ Render), Manage
+DISCIPLINES = ("home", "modeling", "architecture", "structure", "services", "insert", "annotate", "analyze",
+               "massing", "terrain", "collaborate", "view", "manage")
 DEFAULT = "architecture"
-OLD = {"concept": "massing", "bim": "architecture", "structure": "structure", "docs": "annotate"}   # (the 0.84 ones)
+OLD = {"concept": "massing", "bim": "architecture", "structure": "structure", "docs": "annotate",   # (the 0.84 ones)
+       "render": "view"}                                                                             # (0.482)
 SHORTCUTS = {d: "Ctrl+{}".format(k + 1) for k, d in enumerate(DISCIPLINES[1:10])}
 MENUS = ("classify", "type_lists", "phase", "panels")       # (dropdown buttons)
 
 PANELS = {
+    # (0.482) as Revit's File: the project, exporting, help (importing and linking went to Insert, as Revit's)
     "home": (("file", ("new", "open", "save", "save_as", ("start_page", "new_from_base"))),     # (0.387)
-             ("import", ("cad_link", "cloud_link", "import_image", "import_model", ("terrain_points", "terrain_dxf",
-                                                                                    "import_components"))),
              ("export", ("pdf", "dxf", "export_image", "export_model", "export_presentation", "sheets_pdf",
                          ("sheets_by_storey", "splat"))),
              ("help", ("help", "quit"))),
+    # (0.482) as Revit's Modify: Select, Clipboard, Geometry, Modify (Align, Offset, Mirror, Move, Copy, Rotate, Trim,
+    # Split, Array, Scale, Delete) — then the drawing (lines, arcs, Push/Pull: Revit's in its contextual tabs), Measure,
+    # Create
     "modeling": (("select", ("select",)),
-                 # (0.412) the work plane beside the curves; Offset with Modify, as Revit's (no column more: the
-                 # owner's 1536 px keep the panels they had open)
-                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
-                 ("modify", ("move", "copy", "rotate", "mirror", ("array", "align", "scale"),
-                             ("split_wall", "split_gap", "offset"), ("delete", "corner_walls", "trim_extend"),
-                             ("wall_joins", "join_geometry", "unjoin_geometry"))),
                  ("clipboard", (("copy_clip", "paste", "paste_storeys"),)),            # (0.326, Revit's Clipboard)
+                 ("geometry", (("wall_joins", "join_geometry", "unjoin_geometry"),)),
+                 ("modify", ("move", "copy", "rotate", "mirror", ("align", "offset", "scale"),
+                             ("trim_extend", "corner_walls", "split_wall"), ("split_gap", "array", "delete"))),
+                 # (0.412) the work plane beside the curves
+                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
                  ("measure", ("tape", "dimension")),
                  ("create", ("component_make", "group_make", ("classify", "materials")))),
-    "manage": (("project", ("site_location", "phase")),
-               ("storeys", ("storey_new", ("storey_up", "storey_down", "only_active"), ("repeat", "typical"))),
-               ("types", ("types", "materials", "patterns", "type_lists")),
-               ("components", ("component_make", "import_model", ("component_edit", "component_close",
-                                                                  "import_components"))),
-               ("groups", ("group_make", "group_ungroup")),
-               ("ai", ("ai_link", "ai_install"))),
+    # (0.482) as Revit's Architecture: Build (Wall, Door, Window, Component, Column, Roof, Ceiling, Floor, Curtain
+    # System…), Circulation, Model, Room & Area, Opening, Datum, Work Plane — the finishes and the furniture, ours, last
+    "architecture": (("select", ("select",)),
+                     # (as Revit's, their variants in an arrow: Window ▾ the Caixilho Studio, Roof ▾ its profile,
+                     # the gutter, the drain; Floor ▾ the floor finish, the outline; Curtain wall ▾ its panel)
+                     ("build", ("wall", "door", ["window", "caixilho"], "loose_furniture", "column",
+                                ["roof", "roof_profile", "gutter", "drain"], "ceiling", ["slab", "flooring", "edit_outline"],
+                                ["curtain_wall", "curtain_panel"])),
+                     ("circulation", (["railing", "railing_types"], "ramp", "stair", ("elevator",))),
+                     ("model", (("line", "component_make", "group_make"),)),
+                     ("rooms", ("room", ("room_separator", "rooms_identify", "areas"), ("room_program",))),
+                     ("openings", (("wall_opening", "roof_opening", "niche"),)),
+                     ("datum", ("storey_new", "grid")),
+                     ("work_plane", ("work_plane",)),
+                     ("finishes", ("paint", "perforated_panel", ("ripado_panel", "wall_finish", "wall_reveal"),
+                                   ("profile", "wall_sweep", "profile_from_face"), ("ripado_screen",))),   # (0.389; 0.434)
+                     ("furniture", ("kitchen", "cabinet", ("worktop", "appliance", "cut_list")))),
+    # (0.482) as Revit's Structure: Structure (Beam, Wall, Column, Floor, Beam System), Foundation, then ours — the
+    # structure proposed at once —, Datum, Work Plane (its analysis went to Analyze, as Revit's)
+    "structure": (("select", ("select",)),
+                  ("structure", ("beam", "wall", "column", "slab", ("beam_system", "param_surface"))),
+                  ("foundation", ("footing", ("combined_footing", "footings_under"))),
+                  ("automatic", ("propose_structure", ("beams_between", "walls_under_beams", "slabs_in_bays"),
+                                 ("columns_on_grid", "remove_proposal"))),
+                  ("datum", ("grid", ("grid_generate", "grid_settings", "storey_new"))),
+                  ("work_plane", ("work_plane",))),
+    # (0.482) as Revit's Systems: HVAC, Plumbing & Piping, Electrical, Work Plane (the clashes in Collaborate)
+    "services": (("select", ("select",)),
+                 ("hvac", ("duct", ("air_terminal", "equipment"))),
+                 ("water", ("pipe", "fixture", ("connect_network", "water_proposal", "remove_water_proposal"))),
+                 ("electrical", ("electrical", "conduit", ("light", "new_circuit", "route_circuits"),
+                                 ("electrical_proposal", "remove_electrical_proposal", "electrical_check"))),
+                 ("work_plane", ("work_plane",))),
+    # (0.482) as Revit's Insert: Link (CAD, point clouds, and their list), Import (pictures, 3D models, components,
+    # survey points)
+    "insert": (("link", ("cad_link", "cloud_link", ("cad_links", "cloud_links"))),
+               ("import", ("import_image", "import_model", ("images", "import_components"),
+                           ("terrain_points", "terrain_dxf")))),
+    # (0.482) as Revit's Annotate: Dimension, Detail, Tag, Symbol
+    "annotate": (("select", ("select",)),
+                 # (0.399) the one-click ones beside the manual one (C), as the owner asked
+                 ("dimensions", ("dimension", "dim_exterior", "dim_interior", ("dimension_walls", "dimension_facades",
+                                                                               "dimension_rooms"), ("dimension_style",))),
+                 ("drafting", ("draft", ("tape",))),
+                 ("tags", ("room", "renumber", "keynote_table")),
+                 ("symbols", ("symbol_styles",))),
+    # (0.482) as Revit's Analyze: the structural analysis and its reports, the checks (regulations, IFC, IDS)
+    "analyze": (("analysis", ("analyse", ("analytical", "actions", "show_analytical"), ("moments", "verify_ec2"))),
+                ("documents", (("rebar_schedule", "structure_quantities", "calc_report"),)),
+                ("check", ("verify_panel", ("verify_settings", "verify_sheet", "rules_editor"),
+                           ("check_ifc", "check_ids", "missing_data")))),               # (0.425, 0.426)
     "massing": (("select", ("select",)),
                 ("image", ("import_image", "calibrate_image")),
                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
@@ -65,59 +119,35 @@ PANELS = {
                 ("lot", ("lot",)),                                   # (0.423) the lot, for the town plan's checks
                 ("platforms", ("platform", "terrain_ramp", "edit_platform")),
                 ("earthworks", ("earthworks", "slopes"))),
-    # (0.374) as the owner's study (proposta-interface-arqsynth.html): the walls' shapes in sight, the niche, the floor
-    # finish, the gutter, the elevator, the room separators, identifying the rooms and their areas
-    "architecture": (("select", ("select",)),
-                     # (0.450, the owner: the shapes on the contextual bar, as Revit's «Draw» panel — not as buttons
-                     # here; Retangular, Circular, Arco, Por face, Varinha mágica stay on W + letter)
-                     ("walls", ("wall", "curtain_wall", "curtain_panel")),
-                     ("openings", ("door", "window", ("wall_opening", "roof_opening", "niche"), ("caixilho", "renumber"))),
-                     ("floors_roofs", ("slab", "roof", ("flooring", "ceiling", "gutter"),
-                                      ("edit_outline", "roof_profile", "drain"))),
-                     ("circulation", ("stair", "ramp", ("elevator", "railing", "railing_types"))),
-                     ("rooms", ("room", ("room_separator", "rooms_identify", "areas"), ("room_program", "light"))),
-                     ("finishes", ("paint", "perforated_panel", ("ripado_panel", "wall_finish", "wall_reveal"),
-                                   ("profile", "wall_sweep", "profile_from_face"), ("ripado_screen",))),   # (0.389; 0.434 the ripado)
-                     ("furniture", ("loose_furniture", "kitchen", "cabinet", ("worktop", "appliance", "cut_list")))),
-    "structure": (("select", ("select",)),
-                  ("grid", ("grid", ("grid_generate", "grid_settings", "columns_on_grid"))),
-                  ("elements", ("footing", "column", "beam", "slab", ("wall", "param_surface"))),
-                  ("automatic", ("propose_structure", ("footings_under", "combined_footing", "beams_between"),
-                                 ("walls_under_beams", "slabs_in_bays", "beam_system"), ("remove_proposal",))),
-                  ("analysis", ("analyse", ("analytical", "actions", "show_analytical"), ("moments", "verify_ec2"))),
-                  ("documents", (("rebar_schedule", "structure_quantities", "calc_report"),))),
-    "services": (("select", ("select",)),
-                 ("water", ("fixture", "pipe", ("connect_network", "water_proposal", "remove_water_proposal"))),
-                 ("hvac", ("duct", ("air_terminal", "equipment"))),
-                 ("electrical", ("electrical", "conduit", ("light", "new_circuit", "route_circuits"),
-                                 ("electrical_proposal", "remove_electrical_proposal", "electrical_check"))),
-                 ("coordination", ("clashes",))),
-    "collaborate": (("team", ("share", "open_shared", "sync", ("reserve_views", "give_back"))),
-                    ("links", ("cad_link", "cloud_link", ("cad_links", "cloud_links", "walls_from_cad"))),
-                    ("check", ("verify_panel", "clashes", ("check_ifc", "check_ids", "missing_data"),
-                               ("verify_settings", "verify_sheet", "rules_editor"))),  # (0.425, 0.426)
-                    ("notes", ("new_note",))),
-    "annotate": (("select", ("select",)),
-                 ("views", ("plan", "section", ("last_section", "detail", "symbol_styles"))),
-                 # (0.399) the one-click ones beside the manual one (C), as the owner asked
-                 ("dimensions", ("dimension", "dim_exterior", "dim_interior", ("dimension_walls", "dimension_facades",
-                                                                               "dimension_rooms"), ("dimension_style",))),
-                 ("drafting", ("draft", ("tape",))),
-                 ("tags", ("room", "renumber", "keynote_table"))),
-    "view": (("views3d", ("iso", ("top", "front", "view3d_new"))),
-             ("plans", ("plan", "section", ("last_section", "box", "box_selection"))),
-             ("look", ("view_styles", "graphic_styles", "symbol_styles", "templates", "element_hatches",
+    # (0.482) as Revit's Collaborate: Communicate, Manage Collaboration and Synchronize, Coordinate (the links went to
+    # Insert, the checks to Analyze)
+    "collaborate": (("notes", ("new_note",)),
+                    ("team", ("share", "open_shared", "sync", ("reserve_views", "give_back"))),
+                    ("coordination", ("clashes",))),
+    # (0.482) as Revit's View: Graphics, Presentation (the Render tab's, as Revit's Graphics ▸ Render), Create (its
+    # «3D View ▾»), then the camera, Windows — the theme last (0.376 had it beside the looks, not to fold out of sight
+    # on a 1536 px screen; the header's palette button has every theme since)
+    "view": (("look", ("view_styles", "graphic_styles", ("symbol_styles", "templates", "element_hatches"),
                        ("images", "cad_links", "cloud_links"),
                        ("show_analytical", "reset_patterns", "thin_lines"))),          # (0.428: «Linhas finas»)
-             # (0.376: the theme beside the looks — at the end it folded first, out of sight on a 1536 px screen)
+             ("present", (["render", "panorama", "splat"], "presentation_panel", ("export_image", "export_model",
+                                                                                 "export_presentation"))),
+             ("create", (["iso", "top", "front", "view3d_new"], "plan", "section", ("detail", "last_section", "box"),
+                         ("box_selection",))),
+             ("camera", ("position_camera", ("look_around", "walk"))),
+             ("windows", ("panels", ("next_view", "prev_view", "close_view"))),
              ("theme", (("theme_light", "theme_dark", "canvas_dark"),             # (0.338; 0.341)
                         ("theme_bege", "theme_pedra", "theme_revit"),             # (0.374: the owner's study's palettes)
                         ("theme_escuro", "theme_grafite", "theme_studio"))),
-             ("camera", ("position_camera", ("look_around", "walk"))),
-             ("windows", ("panels", ("next_view", "prev_view", "close_view"))),
              ("mouse", (("mouse_sketchup", "mouse_revit"),))),
-    "render": (("present", ("render", "panorama", "export_image", "export_model", "presentation_panel",
-                            "export_presentation", "splat", "view3d_new", "view_styles", "graphic_styles")),),
+    # (0.482) as Revit's Manage: Settings (types, materials, patterns), the project's place and phases, then ours
+    "manage": (("types", ("types", "materials", "patterns", "type_lists")),
+               ("project", ("site_location", "phase")),
+               ("storeys", ("storey_new", ("storey_up", "storey_down", "only_active"), ("repeat", "typical"))),
+               ("components", ("component_make", "import_model", ("component_edit", "component_close",
+                                                                  "import_components"))),
+               ("groups", ("group_make", "group_ungroup")),
+               ("ai", ("ai_link", "ai_install"))),
 }
 
 # (0.298) the contextual tabs, as Revit's "Modify | …": what they are for, and their panels
@@ -144,10 +174,14 @@ def panels_of(tab):
     return CONTEXTS[tab[4:]] if tab.startswith("ctx:") else PANELS[tab]
 
 
+def names_of(item):
+    """The names in an item of a panel: a name, a column of them (tuple), a button and its arrow's (list, 0.482)."""
+    return tuple(item) if isinstance(item, (tuple, list)) else (item,)
+
+
 def items_of(tab):
-    """The buttons of a discipline (or of a contextual tab), in order."""
-    return [name for _key, items in panels_of(tab) for item in items
-            for name in (item if isinstance(item, tuple) else (item,))]
+    """The buttons of a discipline (or of a contextual tab), in order — (0.482) those in an arrow's menu too."""
+    return [name for _key, items in panels_of(tab) for item in items for name in names_of(item)]
 
 
 def short_label(text):
@@ -577,9 +611,12 @@ class Panel(QtWidgets.QWidget):
 
 class Ribbon(QtWidgets.QWidget):
     """(0.298) The ribbon's panels in a row, as wide as the window lets them be: when they do not fit, those on the
-    right fold one by one into a button each (the first ones, the most used, stay open)."""
+    right fold one by one into a button each (the first ones, the most used, stay open). (0.482) The first two — Select
+    and the discipline's own, as Revit's Build — fold last; and when the folded ones still do not fit, those on the
+    right go into one button at the end, «»», a submenu each."""
 
     GAP = 7                         # (a thin line between two panels, and its margins)
+    KEEP = 2                        # (0.482) the panels that fold last
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -589,7 +626,9 @@ class Ribbon(QtWidgets.QWidget):
         self.row = QtWidgets.QHBoxLayout(self)
         self.row.setContentsMargins(0, 0, 0, 0)
         self.row.setSpacing(0)
-        self.panels = []
+        self.panels, self.lines = [], []
+        self.overflow = None            # (0.482) «»»: the panels that did not fit, folded
+        self._hidden = ()
 
     def sizeHint(self):                 # (the toolbar gives it the room there is: it never asks for more)
         return QtCore.QSize(200, self.height())
@@ -605,6 +644,7 @@ class Ribbon(QtWidgets.QWidget):
                 widget.hide()
                 widget.setParent(None)                  # (out of the ribbon now, not when Qt gets round to it)
                 widget.deleteLater()
+        self.lines = []
         for i, panel in enumerate(panels):
             if i:
                 line = QtWidgets.QFrame(self)
@@ -612,26 +652,66 @@ class Ribbon(QtWidgets.QWidget):
                 line.setFrameShape(QtWidgets.QFrame.Shape.VLine)
                 line.setFixedWidth(self.GAP)
                 self.row.addWidget(line)
+                self.lines.append(line)
             self.row.addWidget(panel)
+        self.overflow = QtWidgets.QToolButton(self)
+        self.overflow.setObjectName("ribbon_overflow")
+        self.overflow.setText("»")
+        self.overflow.setToolTip(t("rib.more"))
+        self.overflow.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.overflow.setMenu(QtWidgets.QMenu(self.overflow))
+        self.overflow.hide()
+        self.row.addWidget(self.overflow, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         self.row.addStretch(1)
-        self.panels = panels
+        self.panels, self._hidden = panels, ()
         self.fit()
 
     def fit(self):
-        """Open as many panels as fit, from the left; fold the others."""
+        """Open as many panels as fit, from the left; fold the others — (0.482) the first two last; those that do not
+        fit even folded into «»»."""
         if not self.panels:
             return
-        room = self.width() - self.GAP * (len(self.panels) - 1) - 4
+        n = len(self.panels)
         full = [p.width_for(False) for p in self.panels]
         small = [p.width_for(True) for p in self.panels]
-        total, folded = sum(full), [False] * len(self.panels)
-        for i in range(len(self.panels) - 1, -1, -1):
-            if total <= room:
+        more = self.overflow.sizeHint().width() + self.GAP if self.overflow is not None else 0
+        room = self.width() - 4
+        folded, hidden = [False] * n, [False] * n
+
+        def total():
+            shown = [i for i in range(n) if not hidden[i]]
+            return sum(small[i] if folded[i] else full[i] for i in shown) + self.GAP * (len(shown) - 1) + \
+                (more if any(hidden) else 0)
+
+        keep = min(self.KEEP, n)
+        for i in range(n - 1, keep - 1, -1):           # the panels on the right folded, one by one
+            if total() <= room:
                 break
-            total -= full[i] - small[i]
             folded[i] = True
-        for panel, f in zip(self.panels, folded):
-            panel.fold(f)
+        for i in range(n - 1, keep - 1, -1):           # still too wide: the folded ones on the right into «»»
+            if total() <= room or self.overflow is None:
+                break
+            hidden[i] = True
+        for i in range(keep - 1, -1, -1):              # a narrow window: the first ones fold too
+            if total() <= room:
+                break
+            folded[i] = True
+        for k, panel in enumerate(self.panels):
+            panel.fold(folded[k] or hidden[k])
+            panel.setVisible(not hidden[k])
+            if k:
+                self.lines[k - 1].setVisible(not hidden[k])
+        if self.overflow is not None and tuple(hidden) != self._hidden:
+            self._hidden = tuple(hidden)
+            old, menu = self.overflow.menu(), QtWidgets.QMenu(self.overflow)
+            for panel, h in zip(self.panels, hidden):
+                if h:
+                    sub = menu.addMenu(panel.folded.icon(), panel.title.text())
+                    sub.addActions(panel.folded.menu().actions())
+            self.overflow.setMenu(menu)
+            if old is not None:
+                old.deleteLater()
+            self.overflow.setVisible(any(hidden))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -647,7 +727,8 @@ def header_style():
             "QLabel#project { padding: 0 12px; }"
             "QToolButton { border: none; padding: 5px; border-radius: 4px; color: %s; }"
             "QToolButton:hover { background: rgba(255, 255, 255, 0.12); }"
-            "QTabBar::tab { color: %s; background: transparent; padding: 7px 8px; border: none; border-top: 2px solid transparent; }"
+            # (0.482: 5 px each side, not 8 — Revit's thirteen tabs and «Modificar | Paredes» whole on a 1280 px window)
+            "QTabBar::tab { color: %s; background: transparent; padding: 7px 5px; border: none; border-top: 2px solid transparent; }"
             "QTabBar::tab:hover:!selected { background: rgba(255, 255, 255, 0.10); }"
             "QTabBar::tab:selected { background: %s; color: %s; font-weight: 600; border-top: 2px solid %s; }"
             # (0.298) the contextual tab, the last one while there is one: green
@@ -673,7 +754,16 @@ def ribbon_style():
             "QToolBar#ribbon QToolButton:hover { background: %s; }"
             "QToolBar#ribbon QToolButton:checked { background: %s; border: 1px solid %s; }"
             "QToolBar#ribbon QToolButton#panel_folded::menu-indicator { image: none; width: 0px; }"
+            # (0.482) «»»: the panels left over, at the end
+            "QToolBar#ribbon QToolButton#ribbon_overflow { font-size: 18px; padding: 10px 8px; }"
+            "QToolBar#ribbon QToolButton#ribbon_overflow::menu-indicator { image: none; width: 0px; }"
+            # (0.482) a large button with an arrow, as Revit's «Roof ▾»: the arrow small, at the bottom right, in a
+            # margin of its own (the name whole)
+            "QToolBar#ribbon QToolButton[arrow=\"true\"] { padding-right: 12px; }"
+            "QToolBar#ribbon QToolButton[arrow=\"true\"]::menu-button { width: 12px; height: 16px; border: none;"
+            " subcontrol-origin: padding; subcontrol-position: right bottom; }"
+            "QToolBar#ribbon QToolButton[arrow=\"true\"]::menu-button:hover { background: %s; border-radius: 3px; }"
             "QToolBar#ribbon QLabel#panel_title { color: %s; font-size: 10px; padding: 0px; }"
             "QToolBar#ribbon QFrame#panel_line { color: %s; margin: 4px 3px 4px 3px; }"
-            % (c["bar"], c["line"], c["text"], c["button_hover"], c["select_soft"], c["select_border"], c["muted"],
-               c["line"]))
+            % (c["bar"], c["line"], c["text"], c["button_hover"], c["select_soft"], c["select_border"],
+               c["button_hover"], c["muted"], c["line"]))

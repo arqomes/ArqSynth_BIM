@@ -6130,19 +6130,34 @@ class Disciplines(unittest.TestCase):
         self.assertEqual(acts - placed - elsewhere, set())
         for d in ("modeling", "architecture", "structure", "services", "terrain", "annotate", "massing"):
             self.assertEqual(ribbon.items_of(d)[0], "select")
-        self.assertEqual(ribbon.DISCIPLINES, ("home", "modeling", "manage", "massing", "terrain", "architecture",
-                                              "structure", "services", "collaborate", "annotate", "view", "render"))
+        # (0.482) Revit's order, Modelling first (the owner's «começasse com modelagem, depois arquitetura, estrutura»)
+        self.assertEqual(ribbon.DISCIPLINES, ("home", "modeling", "architecture", "structure", "services", "insert",
+                                              "annotate", "analyze", "massing", "terrain", "collaborate", "view",
+                                              "manage"))
         self.assertEqual(sorted(ribbon.SHORTCUTS.values()), ["Ctrl+{}".format(k) for k in range(1, 10)])
-        self.assertEqual(ribbon.SHORTCUTS["architecture"], "Ctrl+5")
+        self.assertEqual(ribbon.SHORTCUTS["modeling"], "Ctrl+1")
+        self.assertEqual(ribbon.SHORTCUTS["architecture"], "Ctrl+2")
         self.assertEqual(ribbon.OLD["concept"], "massing")
+        self.assertEqual(ribbon.OLD["render"], "view")
+        # (0.482) Revit's Architecture: Build, Circulation, Model, Room & Area, Opening, Datum, Work Plane — in that order
+        keys = [k for k, _items in ribbon.PANELS["architecture"]]
+        self.assertEqual(keys[:8], ["select", "build", "circulation", "model", "rooms", "openings", "datum",
+                                    "work_plane"])
+        build = dict(ribbon.PANELS["architecture"])["build"]
+        self.assertEqual([ribbon.names_of(i)[0] for i in build], ["wall", "door", "window", "loose_furniture", "column",
+                                                                  "roof", "ceiling", "slab", "curtain_wall"])
+        self.assertIn("gutter", ribbon.names_of(build[5]))         # (Roof ▾, as Revit's)
+        self.assertEqual([k for k, _items in ribbon.PANELS["structure"]][:3], ["select", "structure", "foundation"])
+        self.assertEqual(ribbon.items_of("structure")[1:5], ["beam", "wall", "column", "slab"])
         self.assertTrue(set(ribbon.OLD.values()) <= set(ribbon.DISCIPLINES))
         for tab in tabs:
             names = ribbon.items_of(tab)
             self.assertEqual(len(names), len(set(names)), tab)
             for key, items in ribbon.panels_of(tab):
                 self.assertTrue(i18n.has("rpanel." + key), key)
-                for item in items:
-                    self.assertTrue(isinstance(item, str) or 1 <= len(item) <= 3, (tab, key, item))
+                for item in items:     # (a name; a column of up to three; 0.482: a button and its arrow's, a list)
+                    self.assertTrue(isinstance(item, str) or (isinstance(item, list) and len(item) >= 2)
+                                    or 1 <= len(item) <= 3, (tab, key, item))
         walls = set(ribbon.items_of("ctx:walls"))
         self.assertTrue({"merge_walls", "orthogonalize", "unjoin_walls", "attach_top", "detach_top", "edit_profile",
                          "reset_profile", "split_wall", "corner_walls", "align", "offset", "mirror", "move",

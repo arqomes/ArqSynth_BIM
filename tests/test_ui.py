@@ -1448,11 +1448,11 @@ class HelpPlaces(unittest.TestCase):
 
     def test_where(self):
         from arqbim.ui import help_window, ribbon
-        self.assertEqual(help_window.where("wall"), ("architecture", "walls"))
-        self.assertEqual(help_window.where("plan"), ("annotate", "views"))
+        self.assertEqual(help_window.where("wall"), ("architecture", "build"))      # (0.482: Revit's Build)
+        self.assertEqual(help_window.where("plan"), ("view", "create"))            # (0.482: Revit's View ▸ Create)
         self.assertEqual(help_window.where("merge_walls"), ("ctx:walls", "geometry"))
         self.assertIsNone(help_window.where("nothing_of_the_kind"))
-        self.assertEqual(help_window.where_text("wall"), "Arquitetura ▸ Paredes")
+        self.assertEqual(help_window.where_text("wall"), "Arquitetura ▸ Construir")
         self.assertEqual(help_window.folded("Coberturas e Ligações"), "coberturas e ligacoes")
         for tab in list(ribbon.DISCIPLINES) + ["ctx:" + k for k in ribbon.CONTEXTS]:
             for name in ribbon.items_of(tab):

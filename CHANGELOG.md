@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.482.0 — 2026-11-09
+
+**A fita organizada como a do Revit** (o dono: «gostaria que trabalhasse a organização das ferramentas como do revit…
+começasse com modelagem, depois arquitetura, estrutura, e assim vai. organize também os ícones para serem como dos
+revit nessa ordem»).
+
+- **Os separadores, pela ordem do Revit**: a casa (o «Início»: projeto, exportar e ajuda — o «File» do Revit),
+  **Modelagem**, **Arquitetura**, **Estrutura**, **Instalações**, **Inserir** (novo), **Anotar**, **Analisar** (novo),
+  **Massa e Estudos**, **Terreno**, **Colaborar**, **Visualizar** e **Gerenciar**. O separador «Render» saiu: as suas
+  ferramentas estão em **Visualizar ▸ Apresentação**, como no Revit.
+- **Atalhos**: Ctrl+1 Modelagem, Ctrl+2 Arquitetura, Ctrl+3 Estrutura, Ctrl+4 Instalações, Ctrl+5 Inserir, Ctrl+6
+  Anotar, Ctrl+7 Analisar, Ctrl+8 Massa e Estudos, Ctrl+9 Terreno.
+- **Botões com seta ▾, como no Revit**: um clique no botão usa a ferramenta; a setinha em baixo à direita mostra as
+  variantes — Janela ▾ (Caixilho Studio), Cobertura ▾ (perfil da cobertura, calha, ralo), Laje ▾ (piso, editar
+  contorno), Parede cortina ▾ (painel de fachada), Guarda ▾ (tipos de guarda), Render realista ▾ (panorama 360°,
+  Gaussian splat), Vista 3D ▾ (de cima, de frente, nova vista 3D).
+- **Modelagem**, como o «Modificar» do Revit: Selecionar · Copiar e colar · Geometria (junções de paredes, unir e
+  desunir) · Modificar (Mover, Copiar, Rodar, Espelhar; Alinhar, Offset, Escala; aparar, dividir, matriz, apagar) ·
+  Desenhar · Medir · Criar.
+- **Arquitetura**: Selecionar · **Construir** (Parede, Porta, Janela ▾, Mobiliário solto — o «Componente» do Revit —,
+  Pilar, Cobertura ▾, Teto, Laje ▾, Parede cortina ▾) · **Circulação** (Guarda ▾, Rampa, Escada, Elevador) · **Modelo**
+  (linha, fazer componente, fazer grupo) · **Ambiente e área** · **Aberturas** · **Referência** (novo pavimento, eixo)
+  · **Plano de trabalho** · e no fim os nossos: Acabamentos e Mobiliário.
+- **Estrutura**: Selecionar · **Estrutura** (Viga, Parede, Pilar, Laje; sistema de vigas, superfície paramétrica) ·
+  **Fundação** (Sapata, sapata combinada, sapatas sob pilares) · Automático (propor a estrutura) · **Referência**
+  (Eixo, gerar eixos, grelha estrutural, novo pavimento) · Plano de trabalho. O cálculo passou para **Analisar**.
+- **Instalações**: AVAC · Águas e esgotos · Eletricidade · Plano de trabalho (as colisões estão em Colaborar).
+- **Inserir** (novo): **Vincular** (desenho DXF/DWG, nuvem de pontos, e as listas de cada um) e **Importar** (imagem de
+  fundo, modelo 3D, imagens, componentes de outro projeto, pontos de levantamento) — saíram do Início.
+- **Anotar**: Cotas · Desenho · Etiquetas e tabelas · Símbolo. A planta e o corte estão em **Visualizar ▸ Criar**, como
+  no Revit.
+- **Analisar** (novo): Cálculo (da estrutura) · Mapas · Verificar (o Verificador, IFC, IDS, dados em falta).
+- **Colaborar**: Notas · Equipa · Coordenação (colisões).
+- **Visualizar**: Gráficos · Apresentação (Render realista ▾, cenas da apresentação, exportar) · Criar (Vista 3D ▾,
+  Planta, Corte, pormenor, caixa de corte) · Câmara · Janelas · Tema · Rato.
+- **Gerenciar**: Tipos e materiais · Projeto · Pavimentos · Componentes · Grupos · Assistente IA.
+- Os nomes dos grupos passaram a ser os do Revit em português (Construir, Ambiente e área, Referência, Plano de
+  trabalho, Geometria, Gráficos…). Os desenhos dos ícones são os mesmos; mudaram a ordem e os grupos.
+- Numa janela estreita, os grupos da direita continuam a dobrar-se num botão com ▾ cada um (nada se perde).
+- As mensagens que dizem onde está uma ferramenta seguem os sítios novos (por exemplo «Inserir ▸ Importar ▸ Imagem de
+  fundo»), e a Ajuda (F1) também («Na fita: Arquitetura ▸ Construir»).
+
 ## 0.481.0 — 2026-11-09
 
 **A interface do Presentation como a versão nova dele** (o dono: «faça a interface de acordo com a nova versão. O cubo

@@ -33,7 +33,7 @@ def folded(text):
 
 
 def _names(items):
-    return [n for item in items for n in (item if isinstance(item, tuple) else (item,))]
+    return [n for item in items for n in ribbon.names_of(item)]
 
 
 def where(name):

@@ -3559,6 +3559,26 @@ class MainWindow(QtWidgets.QMainWindow):
         for key, items in ribbon.panels_of(self.ribbon_tab):
             columns, entries, icon = [], [], None
             for entry in items:
+                if isinstance(entry, list):               # (0.482) a large button with an arrow, as Revit's «Roof ▾»
+                    found = [(n, self.ribbon_item(n)) for n in entry]
+                    found = [(n, item) for n, item in found if item is not None]
+                    if not found:
+                        continue
+                    button = self._ribbon_button(found[0][0], found[0][1], False)
+                    if len(found) > 1:
+                        menu = QtWidgets.QMenu(button)    # (the button's own: made again with the ribbon)
+                        for _n, item in found[1:]:
+                            menu.addAction(item.menuAction() if isinstance(item, QtWidgets.QMenu) else item)
+                        button.setMenu(menu)
+                        button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+                        button.setProperty("arrow", True)          # (its look: ribbon.ribbon_style)
+                    columns.append(button)
+                    for name, item in found:
+                        entries.append(item)
+                        self._ribbon_items.append((name, item))
+                    if icon is None:
+                        icon = button.icon()
+                    continue
                 names = entry if isinstance(entry, tuple) else (entry,)
                 column = []
                 for name in names:
@@ -6732,13 +6752,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self._show_ribbon(tab)
         else:
             self.set_discipline(tab)
-        button = next((b for b in self.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == name), None)
+        main = next((ribbon.names_of(i)[0] for _key, items in ribbon.panels_of(tab) for i in items
+                     if isinstance(i, list) and name in i), name)          # (0.482: in a button's arrow — that button)
+        button = next((b for b in self.ribbon.findChildren(ribbon.RibbonButton) if b.objectName() == main), None)
         if button is None:
             return False
         panel = button.parent()
         while panel is not None and not isinstance(panel, ribbon.Panel):
             panel = panel.parent()
         target = panel.folded if panel is not None and panel.is_folded() else button
+        if panel is not None and panel.isHidden() and self.ribbon.overflow is not None:
+            target = self.ribbon.overflow                                  # (0.482: in «»», the panels left over)
         target.setStyleSheet("QToolButton { background: %s; border: 2px solid %s; border-radius: 4px; }"
                              % (theme.C["target"], theme.C["target_border"]))
         self._lit = target

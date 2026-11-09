@@ -549,26 +549,35 @@ _STRINGS = {
     "disc.manage": ("Gerenciar", "Manage"),
     "disc.render": ("Render", "Render"),
     "disc.collaborate": ("Colaborar", "Collaborate"),
-    "tip.disc.home": ("Criar, abrir e gerir projetos; importar e exportar.",
-                      "Make, open and manage projects; import and export."),
+    "disc.insert": ("Inserir", "Insert"),                     # (0.482, as Revit's)
+    "disc.analyze": ("Analisar", "Analyze"),                  # (0.482, as Revit's)
+    "tip.disc.home": ("Criar, abrir e gravar projetos; exportar; ajuda.",
+                      "Make, open and save projects; export; help."),
+    "tip.disc.insert": ("Vincular desenhos CAD e nuvens de pontos; importar imagens, modelos 3D, componentes e "
+                        "pontos de levantamento.",
+                        "Link CAD drawings and point clouds; import pictures, 3D models, components and survey "
+                        "points."),
+    "tip.disc.analyze": ("Cálculo da estrutura e os seus mapas; o Verificador (regulamentos), IFC e IDS.",
+                         "The structure's analysis and its schedules; the Checker (regulations), IFC and IDS."),
     "tip.disc.modeling": ("Operações gerais de criação e edição geométrica.", "General making and editing."),
     "tip.disc.architecture": ("Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.",
                               "Architectural elements: walls, doors, windows, roofs, furniture."),
-    "tip.disc.structure": ("Fundações, pilares, vigas, lajes, cálculo e armaduras.",
-                           "Foundations, columns, beams, slabs, analysis and reinforcement."),
+    "tip.disc.structure": ("Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.",
+                           "Beams, walls, columns, slabs, foundations and the structure proposed at once."),
     "tip.disc.services": ("Redes elétricas, de água, de esgoto e AVAC.", "Electrical, water, drainage and HVAC."),
     "tip.disc.terrain": ("Topografia, plataformas, curvas de nível e movimentação de terras.",
                          "Topography, platforms, contour lines and earthworks."),
-    "tip.disc.annotate": ("Cotas, textos, pormenores, plantas e cortes.", "Dimensions, texts, details, plans and "
-                                                                          "sections."),
+    "tip.disc.annotate": ("Cotas, desenho, textos, etiquetas e símbolos.", "Dimensions, drafting, texts, tags and "
+                                                                           "symbols."),
     "tip.disc.massing": ("Estudos volumétricos: linhas, retângulos, empurrar/puxar; depois classificar em BIM.",
                          "Massing studies: lines, rectangles, push/pull; then classify as BIM."),
-    "tip.disc.view": ("Vistas, estilos gráficos, câmaras e painéis.", "Views, graphic styles, cameras and panels."),
+    "tip.disc.view": ("Estilos gráficos, tema, render e apresentação, vistas (plantas, cortes, 3D), câmaras e painéis.",
+                      "Graphic styles, theme, render and presentation, views (plans, sections, 3D), cameras and "
+                      "panels."),
     "tip.disc.manage": ("Tipos, materiais, pavimentos, fases, componentes e grupos.",
                         "Types, materials, storeys, phases, components and groups."),
     "tip.disc.render": ("Imagens e apresentação (Gaussian splat).", "Pictures and presentation (Gaussian splat)."),
-    "tip.disc.collaborate": ("Trabalho em equipa, vínculos, verificação IFC e notas.",
-                             "Teamwork, links, IFC checks and notes."),
+    "tip.disc.collaborate": ("Notas, trabalho em equipa e colisões.", "Notes, teamwork and clashes."),
     "notice.close": ("Fechar (Esc)", "Close (Esc)"),          # (0.321) the balloon over the view
     # (0.322) a command asking for the elements it needs
     # (0.326) Copy, Array and the clipboard, as Revit's
@@ -701,6 +710,8 @@ _STRINGS = {
     "rib.ribbon": ("Ferramentas", "Tools"),
     "rib.panels": ("Painéis", "Panels"),
     "rib.type_lists": ("Tipos para desenhar", "Types to draw with"),
+    "rib.more": ("Mais grupos desta fita (a janela é estreita para os mostrar todos)",           # (0.482)
+                 "More panels of this tab (the window is too narrow to show them all)"),
     # the ribbon's short names under the icons (the full one in the tooltip)
     "rib.short.save_as": ("Guardar\ncomo", "Save\nas"),
     "rib.short.import_image": ("Imagem\nde fundo", "Background\npicture"),
@@ -827,8 +838,16 @@ _STRINGS = {
     "rpanel.openings": ("Aberturas", "Openings"),
     "rpanel.floors_roofs": ("Pisos e coberturas", "Floors and roofs"),
     "rpanel.circulation": ("Circulação", "Circulation"),
-    "rpanel.rooms": ("Ambientes", "Rooms"),
+    "rpanel.rooms": ("Ambiente e área", "Room & Area"),               # (0.482: Revit's names)
     "rpanel.furniture": ("Mobiliário", "Furniture"),
+    "rpanel.build": ("Construir", "Build"),
+    "rpanel.model": ("Modelo", "Model"),
+    "rpanel.datum": ("Referência", "Datum"),
+    "rpanel.work_plane": ("Plano de trabalho", "Work Plane"),
+    "rpanel.structure": ("Estrutura", "Structure"),
+    "rpanel.foundation": ("Fundação", "Foundation"),
+    "rpanel.link": ("Vincular", "Link"),
+    "rpanel.symbols": ("Símbolo", "Symbol"),
     # (0.374) the study's ribbon: the Wall's shapes as buttons, the rooms found at once, their areas
     "act.wall_rect": ("Retangular", "Rectangular"),
     "act.wall_circle": ("Circular", "Circular"),
@@ -1366,13 +1385,13 @@ _STRINGS = {
     "rpanel.tags": ("Etiquetas e tabelas", "Tags and tables"),
     "rpanel.views3d": ("Vistas 3D", "3D views"),
     "rpanel.plans": ("Plantas e cortes", "Plans and sections"),
-    "rpanel.look": ("Aspeto", "Look"),
+    "rpanel.look": ("Gráficos", "Graphics"),                                               # (0.482: Revit's)
     "rpanel.camera": ("Câmara", "Camera"),
     "rpanel.windows": ("Janelas", "Windows"),
     "rpanel.mouse": ("Rato", "Mouse"),
     "rpanel.theme": ("Tema", "Theme"),                                                       # (0.338)
     "rpanel.present": ("Apresentação", "Presentation"),
-    "rpanel.geometry": ("Ligações", "Joins"),
+    "rpanel.geometry": ("Geometria", "Geometry"),                                          # (0.482: Revit's)
     "rpanel.trim": ("Dividir e aparar", "Split and trim"),
     "rpanel.wall_edit": ("Modificar parede", "Modify wall"),
     "rpanel.wall_dims": ("Cotas temporárias", "Temporary dimensions"),
@@ -1935,7 +1954,7 @@ _STRINGS = {
     "props.view_visibility_tip": ("Escolher as categorias que se veem nesta vista (paredes, mobiliário…).",
                                   "Choose the categories this view shows (walls, furniture…)."),
     "props.view_by_template": ("Estes valores vêm do modelo «{name}». Para os mudar só nesta vista, escolha no topo "
-                               "«(sem modelo de vista)»; para mudar todas as vistas desse modelo: Visualizar ▸ Aspeto ▸ "
+                               "«(sem modelo de vista)»; para mudar todas as vistas desse modelo: Visualizar ▸ Gráficos ▸ "
                                "Modelos de vista…",
                                "These values come from the template \"{name}\". To change them for this view "
                                "alone, choose «(no view template)» on top; to change every view of that template: "
@@ -2301,7 +2320,7 @@ _STRINGS = {
     "tree.open_view": ("Abrir", "Open"),
     "tree.rename": ("Mudar o nome (F2)", "Rename (F2)"),
     "tree.remove_section": ("Apagar este corte", "Delete this section"),
-    "info.no_section": ("Ainda não há corte: desenhe um com a ferramenta Corte (Anotar ▸ Vistas ▸ Corte).",
+    "info.no_section": ("Ainda não há corte: desenhe um com a ferramenta Corte (Visualizar ▸ Criar ▸ Corte).",
                         "No section yet: draw one with the Section tool (Annotate ▸ Views ▸ Section)."),
     "tree.title": ("Navegador do Projeto", "Project Browser"),
     "tree.search": ("Pesquisar…", "Search…"),
@@ -2973,7 +2992,7 @@ _STRINGS = {
     "types.masonry_own": ("Alvenaria própria deste tipo (desligada: a do projeto)",
                           "This type's own masonry (off: the project's)"),
     "types.masonry_tip": ("Os blocos, o seu grupo, a sua resistência fb e a argamassa das paredes deste tipo, para a "
-                          "verificação pelo Eurocódigo 6. Desligada, usam a do projeto (Estrutura ▸ Cálculo ▸ Ações e "
+                          "verificação pelo Eurocódigo 6. Desligada, usam a do projeto (Analisar ▸ Cálculo ▸ Ações e "
                           "materiais). "
                           "O γM é sempre o do projeto: vem da classe de execução da obra.",
                           "The units, their group, their strength fb and the mortar of this type's walls, for the "
@@ -3044,7 +3063,7 @@ _STRINGS = {
     "cmd.grid_axis": ("Eixo", "Grid axis"),
     "tool.grid": ("Eixo (grelha estrutural)", "Grid axis"),
     "hint.grid.start": ("Clique no início do eixo (snaps e alinhamentos). Ao longo de Y fica numerado (1, 2, 3…), ao "
-                        "longo de X com letra (A, B, C…). Vários de uma vez: Estrutura ▸ Grelha ▸ Gerar eixos…",
+                        "longo de X com letra (A, B, C…). Vários de uma vez: Estrutura ▸ Referência ▸ Gerar eixos…",
                         "Click the axis's start (snaps and alignments). Along Y it is numbered (1, 2, 3…), along X "
                         "lettered (A, B, C…). Several at once: Structure ▸ Grid ▸ Generate grid…"),
     # grid axes edited and generated (0.72)
@@ -3075,7 +3094,7 @@ _STRINGS = {
     "info.grid_generated": ("{n} eixos gerados ({first} a {last}).", "{n} grid axes made ({first} to {last})."),
     "gen.title": ("Gerar eixos", "Generate grid"),
     "gen.hint": ("Os eixos verticais na planta vão da esquerda para a direita; os horizontais, de baixo para cima. "
-                 "Os números e as letras seguem o esquema da grelha (Estrutura ▸ Grelha ▸ Grelha estrutural…). "
+                 "Os números e as letras seguem o esquema da grelha (Estrutura ▸ Referência ▸ Grelha estrutural…). "
                  "Distância: um "
                  "valor (todos iguais) ou vários separados por «;» (ex.: 5;5;6,50 — o último repete-se).",
                  "Vertical axes go from left to right on the plan; horizontal ones from the bottom up. Numbers and "
@@ -3706,7 +3725,8 @@ _STRINGS = {
                        "Magic wand: drag a window over a wall's two lines in a drawing (a linked DWG/DXF or sketch "
                        "lines): the wall goes between them, its thickness measured."),
     "err.wall_wand_none": ("Na janela não há duas linhas paralelas a 5–60 cm uma da outra (as faces de uma parede). "
-                           "Ligue o desenho (Início ▸ Ligar um desenho DXF/DWG…) ou arraste por cima das duas linhas.",
+                           "Ligue o desenho (Inserir ▸ Vincular ▸ Ligar um desenho DXF/DWG…) ou arraste por cima das "
+                           "duas linhas.",
                            "In the window there are no two parallel lines 5–60 cm apart (a wall's faces). Link the "
                            "drawing (Home ▸ Link DWG/DXF) or drag over both lines."),
     "info.wall_wand": ("{n} parede(s) entre as linhas do desenho ({t}). Ctrl+Z desfaz.",
@@ -7832,7 +7852,7 @@ _STRINGS = {
     "cadwalls.curved": ("Destas, {n} curvas (arcos duplos).", "Of these, {n} curved (double arcs)."),       # (0.210)
     "cadwalls.none": ("Nenhuma parede encontrada: marque as camadas das paredes, ou alargue as espessuras.",
                       "No walls found: tick the walls' layers, or widen the thicknesses."),
-    "err.cadwalls_no_link": ("Ligue primeiro um desenho DXF (Início ▸ Importar ▸ Ligar DXF).",
+    "err.cadwalls_no_link": ("Ligue primeiro um desenho DXF (Inserir ▸ Vincular ▸ Ligar DXF).",
                              "Link a DXF drawing first (Home ▸ Import ▸ Link DXF)."),
     "info.cadwalls": ("{n} paredes feitas a partir do desenho. Ctrl+Z desfaz.",
                       "{n} walls made from the drawing. Ctrl+Z undoes."),
@@ -9070,7 +9090,7 @@ _STRINGS = {
     "scan.again": ("Procurar outra vez", "Look again"),
     "scan.none": ("Nenhuma parede encontrada: veja a cota do chão e a fatia.",
                   "No walls found: check the floor's height and the slice."),
-    "err.scan_no_cloud": ("Ligue primeiro uma nuvem de pontos (Início ▸ Importar ▸ Nuvem de pontos).",
+    "err.scan_no_cloud": ("Ligue primeiro uma nuvem de pontos (Inserir ▸ Vincular ▸ Nuvem de pontos).",
                           "Link a point cloud first (Home ▸ Import ▸ Point cloud)."),
     "info.scanmodel": ("Da nuvem: {w} paredes e {s} laje. Ctrl+Z desfaz.",
                        "From the cloud: {w} walls and {s} slab. Ctrl+Z undoes."),
@@ -9130,8 +9150,8 @@ _STRINGS = {
     "err.cad_read": ("Não foi possível ler «{f}» (não é um DXF em texto, ou está danificado).",
                      "\"{f}\" could not be read (not a text DXF, or damaged)."),
     "err.cad_empty": ("«{f}» não tem linhas para mostrar.", "\"{f}\" has no lines to show."),
-    "info.cad_linked": ("«{f}» ligado ao pavimento {s} ({u}; {how}). As camadas veem-se e escondem-se em Colaborar ▸ "
-                        "Vínculos ▸ DXF ligados.",
+    "info.cad_linked": ("«{f}» ligado ao pavimento {s} ({u}; {how}). As camadas veem-se e escondem-se em Inserir ▸ "
+                        "Vincular ▸ DXF ligados.",
                         "\"{f}\" linked to the storey {s} ({u}; {how}). Its layers are shown or hidden in Collaborate ▸ "
                         "Links ▸ Linked DXFs."),
     "cadlinks.how.shared": ("nas coordenadas do levantamento do projeto", "in the project's survey coordinates"),
@@ -9259,9 +9279,9 @@ _STRINGS = {
     "cmd.turn_image": ("Rodar a imagem", "Turn image"),
     "cmd.change_image": ("Mudar a imagem", "Change image"),
     "cmd.remove_image": ("Apagar a imagem", "Delete image"),
-    "hint.image.none": ("Calibrar imagem: importe primeiro uma imagem (Início ▸ Importar ▸ Imagem de fundo).",
+    "hint.image.none": ("Calibrar imagem: importe primeiro uma imagem (Inserir ▸ Importar ▸ Imagem de fundo).",
                         "Calibrate image: import an image first (Home ▸ Import ▸ Background picture)."),
-    "hint.image.locked": ("A imagem está bloqueada. Desbloqueie-a em Visualizar ▸ Aspeto ▸ Imagens de fundo para a "
+    "hint.image.locked": ("A imagem está bloqueada. Desbloqueie-a em Visualizar ▸ Gráficos ▸ Imagens de fundo para a "
                           "calibrar outra vez.",
                           "The image is locked. Unlock it in View ▸ Look ▸ Background pictures to calibrate it again."),
     "hint.image.start": ("Clique na imagem no início de uma medida que conhece (uma cota, a largura de uma porta…).",
@@ -9279,7 +9299,7 @@ _STRINGS = {
                             "Image \"{f}\" imported, {w} wide. Calibrate it with a measure you know."),
     "info.image_calibrated": ("Imagem calibrada (×{f}): tem agora {w} de largura, e ficou bloqueada.",
                               "Image calibrated (×{f}): it is now {w} wide, and locked."),
-    "info.image_done": ("Imagem calibrada. Para a mudar, desbloqueie-a em Visualizar ▸ Aspeto ▸ Imagens de fundo.",
+    "info.image_done": ("Imagem calibrada. Para a mudar, desbloqueie-a em Visualizar ▸ Gráficos ▸ Imagens de fundo.",
                         "Image calibrated. To change it, unlock it in View ▸ Look ▸ Background pictures."),
     "err.image_read": ("Não foi possível ler a imagem «{f}» (o formato não é conhecido, ou o ficheiro está "
                        "danificado).",
@@ -9614,7 +9634,8 @@ _STRINGS = {
         "  C: Cota\n"
         "  W: Parede · D: Porta · J: Janela · G: criar componente · Ctrl+G: criar grupo\n"
         "  O: Orbitar · H: Deslocar · Z: Zoom · Ctrl+T: Tabelas · Ctrl+P: PDF da vista · F1: esta ajuda\n"
-        "  Ctrl+1 … Ctrl+9: os separadores da fita (Modelagem … Anotar); as teclas funcionam em todos\n\n"
+        "  Ctrl+1 … Ctrl+9: os separadores da fita (Modelagem, Arquitetura, Estrutura … Terreno); as teclas funcionam "
+        "em todos\n\n"
         "Nas ferramentas de colocação (pilar, porta, louça, móvel…)\n"
         "  R / Shift+R: rodar 90° · Espaço: outro ponto de inserção · F: inverter · X / Y: só nesse eixo\n"
         "  Tab: muda a opção da ferramenta (a linha de referência da parede, a forma da laje…)\n\n"
@@ -9645,7 +9666,8 @@ _STRINGS = {
         "  C: Dimension\n"
         "  W: Wall · D: Door · J: Window · G: make component · Ctrl+G: make group\n"
         "  O: Orbit · H: Pan · Z: Zoom · Ctrl+T: Schedules · Ctrl+P: the view's PDF · F1: this help\n"
-        "  Ctrl+1 … Ctrl+9: the ribbon's tabs (Modelling … Annotate); the keys work in all of them\n\n"
+        "  Ctrl+1 … Ctrl+9: the ribbon's tabs (Modelling, Architecture, Structure … Terrain); the keys work in all of "
+        "them\n\n"
         "In the placing tools (column, door, fixture, cabinet…)\n"
         "  R / Shift+R: turn 90° · Space: another insertion point · F: flip · X / Y: only along that axis\n"
         "  Tab: changes the tool's option (the wall's reference line, the slab's shape…)\n\n"
