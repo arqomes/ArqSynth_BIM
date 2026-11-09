@@ -644,6 +644,37 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.493 — Combinar e recortar volumes de diagrama
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.493.0**.
+
+1. Faça Ctrl+N e desenhe 4 paredes (uma sala simples).
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda e, na barra de ícones da direita, em **Diagramas**.
+3. Clique em **Caixa**: aparece «Caixa 1» ao lado da casa. Clique outra vez em **Caixa**: aparece «Caixa 2» no
+   mesmo sítio, já escolhida.
+4. Com a «Caixa 2» escolhida, em **POSIÇÃO** some ao **X** metade da **Largura** (por exemplo, largura 2 → X mais 1)
+   e carregue em Enter: a Caixa 2 fica meio metida na Caixa 1. Clique em **Enquadrar volumes** (o botão no canto de
+   cima da coluna).
+5. Desça a coluna até **COMBINAR E RECORTAR**. Em **Volume A** escolha «Caixa 1» e em **Volume B** «Caixa 2».
+6. Clique em **União** e depois em **Aplicar à cena**:
+   - aparece «União» na lista, escolhida, e no 3D uma só forma, sem as paredes de dentro;
+   - «Caixa 1» e «Caixa 2» ficam com o olho fechado (escondidas) e, nas listas A e B, com « · oculto»;
+   - a mensagem de cima diz o volume em m³.
+7. Com «União» escolhida, a secção mostra Caixa 1, Caixa 2 e União. Clique em **A − B** e depois em
+   **Atualizar «União» com estes**: a forma passa a ser a Caixa 1 com um buraco onde estava a Caixa 2.
+8. Experimente também **Interseção** (só a parte comum) e **Diferença** (as duas sem a parte comum), sempre com
+   **Atualizar**.
+9. Na lista, clique em «Caixa 2» (está escondida, mas escolhe-se e vêem-se os seus campos). Em **POSIÇÃO**, mude o
+   **X** uns 50 cm: o resultado muda sozinho, sem carregar em nada.
+10. Escolha o resultado e arraste-o para o lado: vai com o rato, e as origens não se mexem.
+11. Clique em «Caixa 2» na lista e em **Remover**: a barra de baixo diz que é origem de «União» e não a apaga.
+12. Escolha «União» e carregue em **Delete**: o resultado sai e as duas caixas voltam a ver-se. Ctrl+Z: volta.
+13. Clique em **Plano**: o plano novo fica escolhido e passa a ser o Volume A; na secção aparece «O plano não tem
+    espessura…» e **Aplicar à cena** fica apagado.
+14. Se quiser ver no Presentation: **Exportar / atualizar** e importe o ZIP no Presentation local — na página 3D
+    aparece o resultado pronto (no painel «Combinar e recortar» de lá, com as duas origens), sem o aviso de
+    desatualizado.
+
 ## 0.492 — Volumes de diagrama editáveis com o rato e a Modelagem
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.492.0**.

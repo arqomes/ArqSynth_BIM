@@ -1016,7 +1016,7 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       (o importador do Presentation passa a lê-los)~~ (0.487.0: os «Volumes para diagramas» do Presentation — caixa,
       cilindro, esfera, cone, plano — por cena, com medidas, posição, rotação, escala, cor, opacidade, linhas, olho,
       cadeado e descrição; o importador lê-os). Fica por fazer: as animações dos volumes (crescer, explodir,
-      organizar, repetir) e combinar e recortar volumes (item 10.3). Mexer com o rato: 0.492.0 (item 10.2).
+      organizar, repetir). Mexer com o rato: 0.492.0 (item 10.2); combinar e recortar: 0.493.0 (item 10.3).
    7. ~~**Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
       Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar)~~ (0.488.0: separador Passeio com as contas,
       o início, o tempo em cada ambiente e a visita guiada pela ordem em que se percorre, ambientes de fora; zonas e
@@ -1038,9 +1038,13 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
        arrastar move de 10 em 10 cm, as pegas das faces mudam uma face com a oposta fixa; Mover, Copiar, Rodar e
        Escala da Modelagem no volume escolhido; Delete; tudo com Ctrl+Z). Fica por fazer: Espelhar e Alinhar nos
        volumes, e escolher vários volumes de uma vez.
-    3. **Combinar volumes, nativo**: União, Subtrair, Interseção e Diferença de dois volumes, calculados no BIM com o
+    3. ~~**Combinar volumes, nativo**: União, Subtrair, Interseção e Diferença de dois volumes, calculados no BIM com o
        mesmo motor do Presentation (manifold), as origens guardadas; vão já prontos como o «volume resultante» do
-       Presentation (`source: "boolean"` com a malha). Precisa da biblioteca `manifold3d` no Python do programa.
+       Presentation (`source: "boolean"` com a malha). Precisa da biblioteca `manifold3d` no Python do programa~~
+       (0.493.0: secção COMBINAR E RECORTAR no separador Diagramas, as cinco operações do Presentation, origens
+       escondidas e guardadas, `manifold3d` 3.5.4 autorizado pelo dono; a mais que no Presentation: o resultado volta
+       a ser calculado sozinho quando uma origem muda, também em cadeia). Fica por fazer: escolher A e B com o rato no
+       3D (Ctrl+clique) e ver uma prévia antes de aplicar.
 
 ### Alvenaria por tipo de parede (decidido pelo dono do projeto, 2026-11-02)
 «Alvenaria por tipo.» Até aqui a alvenaria do cálculo (os blocos, o seu grupo, a sua resistência fb, a argamassa)

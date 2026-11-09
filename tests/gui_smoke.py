@@ -649,6 +649,7 @@ def bim_flow():
     scene_effects_flow()
     scene_diagrams_flow()
     diagram_editing_flow()
+    diagram_boolean_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -19778,6 +19779,100 @@ def diagram_editing_flow():
           "escolhido={} arrastado={} ({}) face={} ({}) mover={} rodar={} ({}) escala={} ({}) copiar={} apagado={} "
           "voltou={}".format(chosen, dragged, step, widened, wide and wide["dimensions"], moved_ok, turned_ok,
                              turned and turned["rotation"], scaled, big and big["scale"], copied, gone, back))
+
+
+def diagram_boolean_flow():
+    """0.493 — «Combinar e recortar» (the owner: «ferramentas de adição, subtração, interseção etc. nativo… quando
+    exportamos para o ArqSynth, já vai pronto»): two boxes that share 1 × 2 × 2 m (A 3 × 2 × 2, B 2 × 2 × 2); A and B
+    in the lists, «União», «Aplicar»: a third volume of 16 m³, chosen, its origins hidden; the result chosen fills the
+    section with its own; «A − B», «Atualizar»: 8 m³; B moved apart: the result follows by itself (12 m³); Remover on
+    B: refused (it is an origin); Delete on the result: gone, its origins shown; Ctrl+Z: back; exported: the result as the
+    Presentation's «boolean» with its mesh. Captured: 493_diagramas_combinar.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_diagrams as dia
+    from arqbim.model import presentation_export
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.show_presentation_tab()
+    pump(600)
+    mode = win.presentation_mode
+    mode.activate("geral")
+    pump(200)
+    QtTest.QTest.mouseClick(mode.side.buttons["diagrams"], Qt.MouseButton.LeftButton)
+    pump(200)
+    page = mode.side.pages["diagrams"]
+    a_id = mode.add_diagram("box")
+    mode.update_diagram(a_id, position=(3.0, -3.0, 0.0), dimensions=(3.0, 2.0, 2.0), opacity=1.0)
+    b_id = mode.add_diagram("box")
+    mode.update_diagram(b_id, position=(4.5, -3.0, 0.0), dimensions=(2.0, 2.0, 2.0), opacity=1.0)
+    pump(300)
+    vp.zoom_box((np.array((-1.0, -6.0, 0.0)), np.array((8.0, 4.0, 3.0))))
+    pump(200)
+
+    def volumes():
+        return list(next(s for s in pm.scenes(doc) if s.key == "geral").diagrams)
+
+    def by(d_id):
+        return next((d for d in volumes() if d["id"] == d_id), None)
+
+    shown = page.combine.isVisible() and page.bool_a.count() == 2
+    page.bool_a.setCurrentIndex(page.bool_a.findData(a_id))
+    page.bool_b.setCurrentIndex(page.bool_b.findData(b_id))
+    QtTest.QTest.mouseClick(page.bool_tiles["union"], Qt.MouseButton.LeftButton)
+    QtTest.QTest.mouseClick(page.bool_apply, Qt.MouseButton.LeftButton)
+    pump(400)
+    made = volumes()
+    r = made[-1] if len(made) == 3 else None
+    united = r is not None and dia.is_boolean(r) and abs(dia.volume(r) - 16.0) < 1e-3 and r["name"] == "União" \
+        and mode.diagram_key == r["id"] and not by(a_id)["visible"] and not by(b_id)["visible"] \
+        and vp.diagrams_shown() == 1 and "→ União" in page.info.text()
+    shot("493_diagramas_combinar.png")
+    r_id = r["id"] if r else None
+    filled = page.bool_update.isVisible() and page.bool_a.currentData() == a_id and page.bool_b.currentData() == b_id
+    QtTest.QTest.mouseClick(page.bool_tiles["subtract"], Qt.MouseButton.LeftButton)
+    QtTest.QTest.mouseClick(page.bool_update, Qt.MouseButton.LeftButton)
+    pump(400)
+    r = by(r_id)
+    updated = r is not None and len(volumes()) == 3 and r["boolean"]["operation"] == "subtract" \
+        and abs(dia.volume(r) - 8.0) < 1e-3
+    mode.update_diagram(b_id, position=(5.5, -3.0, 0.0))                  # (B apart: A − B is all of A)
+    pump(300)
+    followed = abs(dia.volume(by(r_id)) - 12.0) < 1e-3 and not dia.stale(by(r_id), volumes())
+    refused = not mode.remove_diagram(b_id) and by(b_id) is not None     # (B is hidden: from its row's Remover)
+    mode.choose_diagram(r_id)
+    _active()
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    gone = by(r_id) is None and by(a_id)["visible"] and by(b_id)["visible"]
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = by(r_id) is not None and not by(a_id)["visible"]
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_bool_"), "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    sent = {s["id"]: s for s in (found or {}).get("presentation", {}).get("model3d", {}).get("scenes", [])}
+    out = next((d for d in sent.get("bim_scene_geral", {}).get("diagrams", []) if d.get("source") == "boolean"), {})
+    b_out = out.get("boolean", {})
+    exported = b_out.get("operation") == "subtract" and b_out.get("inputA") == "bim_dia_" + a_id \
+        and len(b_out.get("mesh", {}).get("positions", [])) >= 12 and b_out.get("hiddenInputs") == [
+            "bim_dia_" + a_id, "bim_dia_" + b_id]
+    doc.modified = False
+    win.close_presentation()
+    pump(300)
+    check("diagramas_combinar_e_recortar", shown and united and filled and updated and followed and refused and gone
+          and back and exported,
+          "secao={} uniao={} ({}) preenchida={} atualizada={} seguiu={} recusou={} apagado={} voltou={} exportado={} "
+          "({})".format(shown, united, r and round(dia.volume(r), 3), filled, updated, followed, refused, gone, back,
+                        exported, {k: v for k, v in b_out.items() if k != "mesh"}))
 
 
 def camera_move_flow():

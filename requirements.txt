@@ -40,5 +40,8 @@ openpyxl==3.1.5              # XLSX writing (MIT)
 et-xmlfile==2.0.0            # its XML writer (MIT)
 # USDZ, augmented reality on iPhone and iPad (0.371; the owner's go-ahead 2026-11-03): Pixar's USD, no other package
 usd-core==26.8               # Universal Scene Description (Pixar's TOST-1.0, Apache-2.0 based)
+# diagram volumes combined — union, subtract, intersect, difference (0.493; the owner's go-ahead 2026-11-09): the same
+# engine as the ArqSynth Presentation's (manifold-3d there, in WebAssembly)
+manifold3d==3.5.4            # exact solid booleans on triangle meshes (Apache-2.0)
 # development only
 pytest==9.1.1                # needed by IfcOpenShell's full validator (IFC WHERE rules) in the tests

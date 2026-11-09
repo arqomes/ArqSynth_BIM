@@ -154,6 +154,12 @@ def _pair(a, b):
     return w
 
 
+def _m3(value):
+    """(0.493) A volume in m³, as the program writes numbers («28,00»)."""
+    from ..i18n import decimal_sep
+    return "{:.2f}".format(value).replace(".", decimal_sep())
+
+
 def _narrow(box, chars=9):
     """A list box as narrow as the column (its long names in the open list only)."""
     box.setSizeAdjustPolicy(QtWidgets.QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
@@ -1869,6 +1875,7 @@ class PresentationMode(QtCore.QObject):
         self.diagram_key = None             # (0.487) the volume chosen in «Diagramas» (its editor open)
         self._diagrams_drawn = None
         self._diagram_preview = None        # (0.492) a volume being dragged: drawn where it goes, not kept yet
+        self._bool_said = set()             # (0.493) results that could not be calculated again, said once each
         self._walk_data = None              # (0.488) the walk as it goes (worked out again after each change)
         self._walk_drawn = False
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
@@ -2724,12 +2731,37 @@ class PresentationMode(QtCore.QObject):
         return next((d for d in self.diagrams() if d["id"] == d_id), None) if d_id else None
 
     def _keep_diagrams(self, items, label):
-        """The scene chosen's volumes these: one undo step."""
+        """The scene chosen's volumes these: one undo step. (0.493) A result whose origins changed is calculated
+        again in the same step; one that cannot be is said once (and kept as it was)."""
         if self.scene() is None:
             return False
+        items, errors = diagrams_model.refreshed(items)
+        for d, code in errors:
+            said = (d["id"], d["boolean"]["keys"], code)
+            if said not in self._bool_said:
+                self._bool_said.add(said)
+                self.win.message(t("pmode.dia_bool_stale", name=d["name"], why=t("pmode.dia_bool_err." + code)),
+                                 warning=True)
         self.doc.set_presentation(pm.changed(self.doc.presentation, self.scene_key, diagrams=list(items)), t(label))
         self.refresh(layers=False)
         return True
+
+    def combine_diagrams(self, a_id, b_id, operation, hide=True, target=None):
+        """(0.493) «Combinar e recortar»: A and B into a new result (target: that result calculated again with these),
+        chosen. One undo step. Returns its id, or None (said why)."""
+        if self.scene() is None:
+            return None
+        try:
+            items, r_id = diagrams_model.combine(self.diagrams(), a_id, b_id, operation,
+                                                 t("pmode.dia_bool_name." + operation), hide, target)
+        except diagrams_model.BooleanError as e:
+            self.win.message(t("pmode.dia_bool_err." + e.code), warning=True)
+            return None
+        self.diagram_key = r_id
+        self._keep_diagrams(items, "pmode.cmd_dia_bool")
+        d = self.diagram(r_id)
+        self.win.message(t("pmode.dia_bool_done", name=d["name"], v=_m3(diagrams_model.volume(d))))
+        return r_id
 
     def add_diagram(self, kind):
         """«Criar volume»: a box, cylinder, sphere, cone or plane beside the model (the Presentation's createDiagram),
@@ -2763,6 +2795,10 @@ class PresentationMode(QtCore.QObject):
     def remove_diagram(self, d_id):
         d = self.diagram(d_id)
         if d is None or d["locked"]:
+            return False
+        used = diagrams_model.dependents(self.diagrams(), d_id)
+        if used:                                       # (0.493) an origin of a result: the result first
+            self.win.message(t("pmode.dia_bool_used", name=d["name"], result=used[0]["name"]), warning=True)
             return False
         if self.diagram_key == d_id:
             self.diagram_key = None

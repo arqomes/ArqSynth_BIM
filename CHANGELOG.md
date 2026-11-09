@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.493.0 — 2026-11-09
+
+**Combinar e recortar volumes de diagrama, nativo no BIM** (o dono: «ferramentas de adição, subtração, interseção
+etc. nativo mesmo para este caso, quando exportamos para o ArqSynth, já vai pronto»).
+
+- No separador **Diagramas** da interface do Presentation há uma secção nova, **COMBINAR E RECORTAR**, como a do
+  Presentation: escolhe-se o **Volume A** e o **Volume B** (⇅ troca-os), a operação — **União**, **A − B**, **B − A**,
+  **Interseção**, **Diferença** (as partes não comuns) — e carrega-se em **Aplicar à cena**.
+- Aparece um volume novo, o **resultado** (chamado «União», «Subtração A − B»…), com a cor de A, já escolhido. As
+  duas origens ficam guardadas e escondidas (desligue **Ocultar origens ao aplicar** para as deixar à vista; as
+  bloqueadas ficam sempre à vista).
+- O cálculo é feito no BIM com o **mesmo motor do Presentation** (manifold): o resultado vai para o Presentation **já
+  pronto**, como o «volume resultante» de lá, com as origens.
+- **Mais do que no Presentation:** quando uma origem muda (move-se, roda, muda de medidas), o resultado **volta a ser
+  calculado sozinho**, mantendo o nome, a cor e o sítio para onde o tenha levado. Funciona em cadeia (um resultado
+  pode ser origem de outro, até oito operações).
+- Com um resultado escolhido, a secção mostra as suas origens e a operação; mudando-as, **Atualizar «…» com estes**
+  recalcula-o no lugar.
+- O resultado é um volume como os outros: arrasta-se, tem pegas, Mover, Rodar, Escala, Copiar, a cor e a opacidade.
+- Apagar um resultado devolve as origens à vista. Uma origem de um resultado não se apaga (o aviso diz qual é o
+  resultado). Tudo com Ctrl+Z.
+- Recusas com as palavras do Presentation: um **plano** não tem espessura; uma interseção de volumes que não se tocam
+  dá vazio; o mesmo volume duas vezes.
+- Biblioteca nova no Python do programa: `manifold3d` 3.5.4 (licença Apache 2.0), com a autorização do dono.
+- **No Presentation** (ramo `integracao-arqsynth-bim`): o importador calcula as chaves das origens como o editor de lá,
+  para o resultado não aparecer como «desatualizado».
+
 ## 0.492.0 — 2026-11-09
 
 **Volumes de diagrama editáveis com o rato e a Modelagem** (o dono: «elas podem ser editáveis usando as ferramentas
