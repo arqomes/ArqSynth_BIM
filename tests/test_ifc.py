@@ -10049,6 +10049,48 @@ class GltfExport(unittest.TestCase):
         self.assertNotIn("qualityProfile", general["style"])          # (nothing of the look chosen: as before)
         self.assertEqual(general["transition"], {"type": "smooth", "seconds": 2.5})
 
+    def test_presentation_cuts(self):
+        """0.484: a scene's section planes (the Presentation tab's «Cortes») — kept (type, position, side turned), those
+        that are not of the Presentation's types left out, at most six; what each keeps (horizontal: what is under its
+        height; Vertical X: the low x side; Vertical Z: the high y side; turned: the other); in the GLB with the scene's
+        other planes, as THREE.Plane keeps them, with the Presentation's types."""
+        from arqbim.model import gltf_export, presentation as pm, presentation_export as pe
+        self.assertEqual(pm.cut_plane("horizontal", 1.2), ((0.0, 0.0, -1.0), (0.0, 0.0, 1.2)))
+        self.assertEqual(pm.cut_plane("horizontal", 1.2, True), ((0.0, 0.0, 1.0), (0.0, 0.0, 1.2)))
+        self.assertEqual(pm.cut_plane("transversal", 2.0), ((-1.0, 0.0, 0.0), (2.0, 0.0, 0.0)))
+        self.assertEqual(pm.cut_plane("longitudinal", 3.0), ((0.0, 1.0, 0.0), (0.0, 3.0, 0.0)))
+        doc = Document()
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        bim.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+        doc.set_presentation(pm.changed(doc.presentation, "geral", cuts=[
+            ["horizontal", 1.25, False], ("transversal", 2, 1), ["inclinado", 1.0, False], {"type": "longitudinal",
+                                                                                           "position": 3.0}]))
+        self.assertEqual(pm.scenes(doc)[0].cuts, (("horizontal", 1.25, False), ("transversal", 2.0, True),
+                                                  ("longitudinal", 3.0, False)))
+        self.assertEqual(len(pm.changed(doc.presentation, "geral", cuts=[["horizontal", k, False]
+                                                                         for k in range(9)])["scenes"]["geral"]["cuts"]),
+                         pm.MAX_CUTS)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "casa.ifc")
+            doc.save(path)
+            again = Document()
+            again.open(path)
+            self.assertEqual(pm.scenes(again)[0].cuts, pm.scenes(doc)[0].cuts)
+            glb = os.path.join(tmp, "casa.glb")
+            pe.export(again, glb, "Casa")
+            model = pe.read(glb)["presentation"]["model3d"]
+        offset = np.asarray(model["offset"])
+        planes = {p["id"]: p for p in model["scenes"][0]["section"]["planes"]}
+        self.assertEqual(sorted(planes), ["cut_geral_1", "cut_geral_2", "cut_geral_3"])
+        self.assertEqual([planes["cut_geral_{}".format(k)]["type"] for k in (1, 2, 3)],
+                         ["horizontal", "transversal", "longitudinal"])
+        flat = planes["cut_geral_1"]
+        self.assertEqual(flat["normal"], [0.0, -1.0, 0.0])
+        self.assertAlmostEqual(flat["constant"], 1.25 - offset[2], places=4)
+        under = gltf_export._y_up(np.array((1.0, 1.0, 1.0)) - offset)[0]                # (1 m high: kept)
+        self.assertGreater(np.dot(flat["normal"], under) + flat["constant"], 0.0)
+        self.assertIsNone(model["scenes"][1]["section"]["planes"][1:] or None)      # (the plan: its own cut only)
+
     def test_presentation_camera_moves(self):
         """0.364: a scene's camera move (one of the Presentation's) — chosen with its time, a name it does not know
         not kept; in the GLB: its name, its time (the move's own when none was given), the building's measures (the

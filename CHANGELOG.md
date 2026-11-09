@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.484.0 — 2026-11-09
+
+**Cortes na interface do Presentation** (o dono: «é importante criar cortes…»; passo 3 da lista do PLANO).
+
+- Na barra de ícones da direita da interface do Presentation há um separador novo, **Cortes** (o ícone do bloco
+  cortado), logo a seguir a Cenas 3D, como no Presentation.
+- **Planos de corte**: os botões **Horizontal**, **Vertical X** e **Vertical Z** acrescentam um plano:
+  - o horizontal nasce à altura de uma planta (1,20 m acima do piso mais baixo);
+  - os verticais nascem a meio do modelo.
+  Cada plano tem um deslizador e a **posição exata em metros**, **Inverter lado** (fica a outra metade) e **Remover**.
+  Até 6 planos.
+- O corte vê-se logo no 3D, com o enchimento escuro onde corta paredes e lajes, como a caixa de corte. Não apaga nada.
+- Como no Presentation, **os cortes guardam-se na cena ao Criar cena / Atualizar**. Ao escolher uma cena voltam os
+  dela; fora da interface o 3D do BIM fica inteiro.
+- Vão para o Presentation como planos de corte da cena (Horizontal, Vertical X, Vertical Z), junto com os que ela já
+  levava (a caixa de corte de uma vista 3D, o corte de uma planta).
+
 ## 0.483.0 — 2026-11-09
 
 **Uma camada por janela no Presentation e transições animadas entre as cenas** (o dono, depois de importar o pacote no

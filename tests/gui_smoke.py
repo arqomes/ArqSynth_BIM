@@ -19244,12 +19244,23 @@ def presentation_tab_flow():
     mode.set_style("white_concept")
     pump(300)
     styled = vp.look[0] == "hidden" and mode.look_button.text().startswith("Branco conceptual") and modes
+    # (0.484) Cortes: a horizontal plane at 1 m, seen at once in the 3D view (kept in the scene by «Atualizar»)
+    QtTest.QTest.mouseClick(mode.side.buttons["cuts"], Qt.MouseButton.LeftButton)
+    pump(150)
+    cuts_page = mode.side.pages["cuts"]
+    QtTest.QTest.mouseClick(cuts_page.add_buttons["horizontal"], Qt.MouseButton.LeftButton)
+    pump(200)
+    cuts_page.spins[0].setValue(1.0)
+    pump(300)
+    planes = [tuple(round(c, 6) for c in p) for p in vp.clipping_planes()]
+    cut_live = len(vp.extra_cuts) == 1 and (0.0, 0.0, -1.0, -1.0) in planes and mode.side.windowTitle() == "CORTES"
+    shot("484_cortes.png")
     card = mode.pages.cards[scene.key]
     QtTest.QTest.mouseClick(card.buttons["update"], Qt.MouseButton.LeftButton)
     pump(500)
     kept = next(s for s in pm.scenes(doc) if s.key == scene.key)
     updated = kept.projection == "orthographic" and kept.locked and kept.style == "white_concept" \
-        and kept.hidden_layers == (walls[1],)
+        and kept.hidden_layers == (walls[1],) and cut_live and kept.cuts == (("horizontal", 1.0, False),)
     QtTest.QTest.mouseClick(mode.camera.lock, Qt.MouseButton.LeftButton)        # (unlocked, in perspective)
     QtTest.QTest.mouseClick(mode.camera.persp, Qt.MouseButton.LeftButton)
     pump(300)
@@ -19330,7 +19341,8 @@ def presentation_tab_flow():
     exported = mine.get("name") == "Fachada" and mine.get("camera", {}).get("projection") == "orthographic" \
         and mine["camera"].get("locked") is True and mine.get("style", {}).get("mode") == "white_concept" \
         and "bim_" + walls[1] in mine.get("hiddenLayers", ()) and mine.get("transition", {}).get("seconds") == 2.5 \
-        and mode.active
+        and mode.active and any(p["id"] == "cut_{}_1".format(scene.key) and p["type"] == "horizontal"
+                                for p in (mine.get("section") or {}).get("planes", ()))       # (0.484: its cut)
     check("aba_presentation_exporta_as_configuracoes", timed and exported,
           "sol={} ({!r}) exportado={} cena={}".format(timed, mode.sun_button.text(), exported,
                                                        {k: mine.get(k) for k in ("name", "camera", "style")}))
@@ -19341,7 +19353,7 @@ def presentation_tab_flow():
         and view_tabs.PRESENT not in win.views.keys and win.views.current() == view_tabs.THREE_D \
         and not win.module_actions["presentation"].isChecked() \
         and win.props.isVisible() == props_before and all(d.isVisible() for d in left_before) \
-        and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.camera_locked \
+        and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.camera_locked and not vp.extra_cuts \
         and not mode.player.isVisible() and not mode.look_button.isVisible() and not mode.sun_button.isVisible()
     same = abs(canvas.width() - width) <= 2 and win.size() == size
     doc.modified = False

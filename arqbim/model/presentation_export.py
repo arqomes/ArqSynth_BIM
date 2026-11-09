@@ -516,6 +516,16 @@ def _tuned_camera(scene, camera, offset):
     return cam
 
 
+def _cut_planes(scene, offset):
+    """(0.484) A scene's own section planes (the Presentation tab's «Cortes») as THREE.Plane keeps them, each with the
+    Presentation's type (horizontal, transversal = «Vertical X», longitudinal = «Vertical Z»)."""
+    out = []
+    for k, (kind, position, flip) in enumerate(scene.cuts):
+        normal, point = presentation_model.cut_plane(kind, position, flip)
+        out.append(_plane("cut_{}_{}".format(scene.key, k + 1), kind, normal, point, offset))
+    return out
+
+
 def _tuned_style(scene, style):
     """(0.479) A scene's visual style as the Presentation tab kept it: its mode («Renderizado», «Branco
     conceptual»…), and with it the quality and the ambient occlusion of the Presentation's «Renderizado · Auto» menu."""
@@ -547,6 +557,7 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     def add(scene, camera, hidden=(), planes=(), style=None):
         hidden = list(hidden)
         hidden += [i for i in (LAYER_ID + g for g in scene.hidden_layers) if i in known and i not in hidden]   # (0.479)
+        planes = list(planes) + _cut_planes(scene, offset)                                                 # (0.484)
         scenes.append(dict({"id": SCENE_ID + scene.key, "name": scene.name, "order": len(scenes), "kind": scene.kind,
                             "camera": _tuned_camera(scene, camera, offset), "hiddenLayers": hidden,
                             "section": {"planes": list(planes)} if planes else None,

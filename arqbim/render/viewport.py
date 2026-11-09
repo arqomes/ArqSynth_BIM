@@ -392,6 +392,7 @@ class Viewport:
         self.hidden_phases = set()  # phases it hides ("NEW"…; "" for the elements without one)
         self.hidden_ids = set()     # (0.479) elements hidden one by one (the Presentation tab's layers: their eyes)
         self.camera_locked = False  # (0.479) the mouse does not move the camera (the Presentation tab's lock)
+        self.extra_cuts = []        # (0.484) [(normal, offset)]: the Presentation tab's section planes (3D only)
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -552,8 +553,8 @@ class Viewport:
 
     def _draw(self):
         self._sync_work_plane()
-        if self.box is not None and not self.cutting():
-            # the section box's poché a hair towards the viewer, wherever they turned (see batches)
+        if (self.box is not None or self.extra_cuts) and not self.cutting():
+            # the section box's poché a hair towards the viewer, wherever they turned (see batches; 0.484: the cuts')
             lift = tuple(float(c) for c in np.round(-self.view_direction() * POCHE_LIFT, 4))
             if lift != self.bim.poche_lift:
                 self.bim.set_poche_lift(lift)
@@ -2181,11 +2182,25 @@ class Viewport:
                 ex, ey = np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
                 return [kept, (ex, x0), (-ex, -x1), (ey, y0), (-ey, -y1)]
             return [kept]
-        if self.box is None:
-            return None
-        lo, hi = self.box
-        axes = np.eye(3)
-        return [(axes[k], float(lo[k])) for k in range(3)] + [(-axes[k], -float(hi[k])) for k in range(3)]
+        planes = list(self.extra_cuts)                    # (0.484: the Presentation tab's «Cortes»)
+        if self.box is not None:
+            lo, hi = self.box
+            axes = np.eye(3)
+            planes += [(axes[k], float(lo[k])) for k in range(3)] + [(-axes[k], -float(hi[k])) for k in range(3)]
+        return planes or None
+
+    def set_cuts(self, planes):
+        """(0.484) Section planes over the 3D view — the Presentation tab's «Cortes»: [(normal, a point)], what is on
+        each normal's side kept, what they go through filled as the section box's; [] none. Not in a plan or a section
+        (their own cut)."""
+        cuts = [(normalize(np.asarray(n, dtype=float)), float(normalize(np.asarray(n, dtype=float))
+                                                              @ np.asarray(p, dtype=float))) for n, p in planes]
+        if len(cuts) == len(self.extra_cuts) and all(np.allclose(a[0], b[0]) and abs(a[1] - b[1]) < 1e-9
+                                                     for a, b in zip(cuts, self.extra_cuts)):
+            return
+        self.extra_cuts = cuts
+        self._apply_clipping()                            # (only the clipping: a plane dragged stays fluid)
+        self.redraw()
 
     def clipping_planes(self):
         """The pygfx clipping planes of the current view (pygfx keeps what has n·p >= d — read
@@ -2276,7 +2291,7 @@ class Viewport:
         else:
             for w in extras:
                 w.material.clipping_planes = []
-        cut = self.cutting() or self.box is not None
+        cut = self.cutting() or self.box is not None or (bool(self.extra_cuts) and not self.cutting())
         if self.bim.cutting or cut:
             kept = self.kept_side()
             # the poché a hair towards the viewer, who looks along the kept side's normal (see batches)

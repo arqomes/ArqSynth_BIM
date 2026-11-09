@@ -28,13 +28,18 @@ STYLES = ("rendered", "material", "no_texture", "no_material", "clay", "white_co
 QUALITIES = ("auto", "high", "medium", "low")
 PROJECTIONS = ("perspective", "orthographic")
 FOV_MIN, FOV_MAX, FOV_DEFAULT = 20.0, 65.0, 35.0      # (its FOV slider: CAMERA_FOV_MIN / _MAX, a new camera's)
+# (0.484) the Presentation's «Cortes»: a plane across the model — «Horizontal» (at a height), «Vertical X» (across the
+# model's x), «Vertical Z» (its z, the model's y) — at a position (m, the model's axes), its side turned or not
+CUT_TYPES = ("horizontal", "transversal", "longitudinal")
+MAX_CUTS = 6
 TRANSITION_MIN, TRANSITION_MAX = 0.3, 5.0             # (its «Transição» slider of the scenes, in seconds)
 DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effect": "none", "effect_s": 6.0,
             "seconds": 0.0, "caption": "", "move": "", "move_s": 0.0, "room": "",
             "sun_day": 172, "sun_minutes": 720, "sun_animate": "none", "exposure": 1.0, "sky": False,
             # (0.479) the ArqSynth Presentation tab: what «Criar cena» / «Atualizar» keep of the view
             "name": "", "projection": "", "fov": 0.0, "locked": False, "style": "", "quality": "auto", "ao": True,
-            "ao_intensity": 1.0, "hidden_layers": (), "eye": (), "target": (), "omit": False}
+            "ao_intensity": 1.0, "hidden_layers": (), "eye": (), "target": (), "omit": False,
+            "cuts": ()}                                   # (0.484) ((type, position, flipped), …)
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
           "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
           "ao_intensity": (0.0, 2.0)}
@@ -87,6 +92,7 @@ class Scene:
     eye: tuple = ()
     target: tuple = ()
     omit: bool = False
+    cuts: tuple = ()            # (0.484) its section planes: ((type of CUT_TYPES, position m, side turned), …)
 
 
 def empty():
@@ -142,6 +148,18 @@ def _value(name, value):
                 return ()
             point = tuple(round(float(c), 4) for c in value)
             return point if len(point) == 3 and all(c == c and abs(c) < 1e7 for c in point) else None
+        if name == "cuts":                             # (0.484) the section planes, each (type, position, flipped)
+            if isinstance(value, (str, bytes, dict)) or not hasattr(value, "__iter__"):
+                return None
+            out = []
+            for cut in value:
+                if isinstance(cut, dict):
+                    cut = (cut.get("type"), cut.get("position"), cut.get("flip", False))
+                kind, position, flip = (list(cut) + [False])[:3]
+                position = float(position)
+                if kind in CUT_TYPES and position == position and abs(position) < 1e6:
+                    out.append((str(kind), round(position, 3), bool(flip)))
+            return tuple(out[:MAX_CUTS])
         if name == "fov":                              # (0.479) 0: the view's own; else the Presentation's range
             v = float(value)
             return 0.0 if v <= 0 else round(min(max(v, FOV_MIN), FOV_MAX), 2)
@@ -232,8 +250,20 @@ def all_scenes(doc):
 
 
 def _fields(kept):
-    """A scene's settings as kept (JSON: lists) as the Scene takes them (tuples)."""
-    return {name: tuple(value) if isinstance(value, list) else value for name, value in kept.items()}
+    """A scene's settings as kept (JSON: lists) as the Scene takes them (tuples, also inside: the cuts)."""
+    return {name: tuple(tuple(v) if isinstance(v, list) else v for v in value) if isinstance(value, list) else value
+            for name, value in kept.items()}
+
+
+def cut_plane(kind, position, flip=False):
+    """(0.484) A section plane (the Presentation's «Cortes») as what it keeps, in the model's axes: (normal, a point of
+    it) — what is on the normal's side stays. «Horizontal» keeps what is under its height, «Vertical X» what is on the
+    low x side, «Vertical Z» (the Presentation's z: the model's y) what is on the high y side; turned, the other side."""
+    axis = {"horizontal": 2, "transversal": 0, "longitudinal": 1}[kind]
+    sign = (-1.0 if kind in ("horizontal", "transversal") else 1.0) * (-1.0 if flip else 1.0)
+    normal, point = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
+    normal[axis], point[axis] = sign, float(position)
+    return tuple(normal), tuple(point)
 
 
 def scenes(doc):

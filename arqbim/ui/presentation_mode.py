@@ -42,8 +42,8 @@ KEY = QtCore.Qt.ItemDataRole.UserRole
 THUMB = QtCore.QSize(84, 47)            # a scene card's picture (16:9)
 PAGE_THUMB = QtCore.QSize(150, 84)      # a page card's
 MIME = "application/x-arqsynth-scene"   # a scene card dragged to another place
-RAIL = (("layers", "layers"), None, ("scenes", "film"), ("environment", "sun"), ("labels", "tag"),
-        ("images", "pano"), ("effects", "camera"), None, ("walk", "walk"))
+RAIL = (("layers", "layers"), None, ("scenes", "film"), ("cuts", "section"), ("environment", "sun"),
+        ("labels", "tag"), ("images", "pano"), ("effects", "camera"), None, ("walk", "walk"))
 
 
 def vertical_fov(pygfx_fov, aspect):
@@ -922,6 +922,88 @@ class _Caption(QtWidgets.QPlainTextEdit):
             self.page.mode.change(caption=text)
 
 
+class CutsPage(_Form):
+    """(0.484) CORTES, as the Presentation's: the section planes seen now — Horizontal, Vertical X, Vertical Z —, each
+    at its exact position (m), its side turned or not, removed; non-destructive; kept in the scene with «Criar cena» /
+    «Atualizar» (the Presentation: «os cortes guardam-se na cena ao Criar/Actualizar»)."""
+
+    def __init__(self, mode):
+        super().__init__(mode)
+        self.form.addRow(_label(t("pmode.cuts_planes").upper(), "pm_head"))
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(4)
+        self.add_buttons = {}
+        for kind in pm.CUT_TYPES:
+            button = QtWidgets.QPushButton(t("pmode.cut." + kind))
+            button.setToolTip(t("pmode.cut_tip." + kind))
+            button.clicked.connect(lambda _on=False, k=kind: self.mode.add_cut(k))
+            row.addWidget(button)
+            self.add_buttons[kind] = button
+        self.form.addRow(row)
+        self.holder = QtWidgets.QWidget()
+        self.rows = QtWidgets.QVBoxLayout(self.holder)
+        self.rows.setContentsMargins(0, 0, 0, 0)
+        self.rows.setSpacing(6)
+        self.form.addRow(self.holder)
+        self.empty = self.note("pmode.cuts_empty")
+        self.note("pmode.cuts_saved")
+        self.spins = []
+
+    def show_scene(self, _scene):
+        """The rows again (a plane added or removed, another scene chosen)."""
+        while self.rows.count():
+            item = self.rows.takeAt(0)
+            if item.widget() is not None:
+                item.widget().hide()
+                item.widget().deleteLater()
+        self.spins = []
+        cuts = self.mode.live["cuts"]
+        for k, (kind, position, flip) in enumerate(cuts):
+            self.rows.addWidget(self._row(k, kind, position, flip))
+        self.empty.setVisible(not cuts)
+        for button in self.add_buttons.values():
+            button.setEnabled(len(cuts) < pm.MAX_CUTS)
+
+    def _row(self, k, kind, position, flip):
+        box = QtWidgets.QFrame()
+        box.setObjectName("pm_card")
+        lay = QtWidgets.QVBoxLayout(box)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(4)
+        lay.addWidget(_label(t("pmode.cut." + kind), "pm_name"))
+        lo, hi = self.mode.cut_range(kind)
+        line = QtWidgets.QHBoxLayout()
+        slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setRange(int(round(lo * 100)), int(round(hi * 100)))       # (cm)
+        slider.setValue(int(round(position * 100)))
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(lo, hi)
+        spin.setDecimals(2)
+        spin.setSingleStep(0.05)
+        spin.setSuffix(" m")
+        spin.setValue(position)
+        spin.setToolTip(t("pmode.cut_position"))
+        slider.valueChanged.connect(lambda v, s=spin: s.setValue(v / 100.0))
+        spin.valueChanged.connect(lambda v, s=slider, i=k: (s.blockSignals(True), s.setValue(int(round(v * 100))),
+                                                            s.blockSignals(False), self.mode.move_cut(i, v)))
+        line.addWidget(slider, 1)
+        line.addWidget(spin)
+        lay.addLayout(line)
+        buttons = QtWidgets.QHBoxLayout()
+        turn = QtWidgets.QPushButton(t("pmode.cut_flip"))
+        turn.setCheckable(True)
+        turn.setChecked(flip)
+        turn.toggled.connect(lambda on, i=k: self.mode.flip_cut(i, on))
+        gone = QtWidgets.QPushButton(t("pmode.cut_remove"))
+        gone.clicked.connect(lambda _on=False, i=k: self.mode.remove_cut(i))
+        buttons.addWidget(turn)
+        buttons.addWidget(gone)
+        buttons.addStretch(1)
+        lay.addLayout(buttons)
+        self.spins.append(spin)
+        return box
+
+
 class EnvironmentPage(_Form):
     """AMBIENTE: the scene's sun (the site's, on a day at an hour; still, through the day or the year), the exposure,
     the sky — «Ver sol» shows it in the 3D view with its shadows."""
@@ -1132,7 +1214,8 @@ class SidePanel(QtWidgets.QDockWidget):
         self.rail_box.setContentsMargins(3, 6, 3, 6)
         self.rail_box.setSpacing(4)
         self.stack = QtWidgets.QStackedWidget()
-        self.pages = {"layers": LayersPage(mode), "scenes": ScenesPage(mode), "environment": EnvironmentPage(mode),
+        self.pages = {"layers": LayersPage(mode), "scenes": ScenesPage(mode), "cuts": CutsPage(mode),
+                      "environment": EnvironmentPage(mode),
                       "labels": _OptionPage(mode, "labels", "present.labels", "pmode.labels_note"),
                       "images": ImagesPage(mode), "effects": EffectsPage(mode),
                       "walk": _OptionPage(mode, "walk", "present.walk", "pmode.walk_note")}
@@ -1478,7 +1561,7 @@ class PresentationMode(QtCore.QObject):
         self.playing = None                 # "move" | "sun" while one is played in the 3D view
         self.apply_all = False              # «Aplicar a todas as cenas» (the look menu)
         self.live = {"hidden": set(), "style": "", "quality": "auto", "ao": True, "ao_intensity": 1.0,
-                     "locked": False, "ortho": False}
+                     "locked": False, "ortho": False, "cuts": []}      # (0.484: [[type, position, flipped]])
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
         self._layers_stale = True
         self._entered_once = False
@@ -1659,6 +1742,7 @@ class PresentationMode(QtCore.QObject):
                             QtCore.Qt.Orientation.Horizontal)
         self.vp.camera_locked = self.live["locked"]
         self.vp.set_hidden_elements(self.live["hidden"])
+        self.apply_cuts()
         if self.scene_key is None or self.scene(self.scene_key) is None:
             self.scene_key = pm.initial(self.doc)
         for w in (self.look_button, self.sun_button, self.player):
@@ -1680,6 +1764,7 @@ class PresentationMode(QtCore.QObject):
         for w in (self.look_button, self.sun_button, self.player):
             w.hide()
         self.vp.set_hidden_elements(set())
+        self.vp.set_cuts([])                              # (0.484: the BIM's 3D view whole)
         self.vp.camera_locked = False
         self.pages.hide()
         self.side.hide()
@@ -1693,12 +1778,13 @@ class PresentationMode(QtCore.QObject):
     def reset(self):
         """Another project: nothing chosen, nothing hidden."""
         self.scene_key = None
-        self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False)
+        self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False, cuts=[])
         self._entered_once = False
         self.came_from = None
         self._layers_stale = True
         if self.active:
             self.vp.set_hidden_elements(set())
+            self.vp.set_cuts([])
             self.vp.camera_locked = False
 
     def restyle(self):
@@ -1781,9 +1867,11 @@ class PresentationMode(QtCore.QObject):
         self.scene_key = key
         vp = self.vp
         self.live.update(hidden=set(scene.hidden_layers), style=scene.style, quality=scene.quality, ao=scene.ao,
-                         ao_intensity=scene.ao_intensity, locked=scene.locked)
+                         ao_intensity=scene.ao_intensity, locked=scene.locked,
+                         cuts=[list(c) for c in scene.cuts])                   # (0.484)
         ortho = self.ortho_of(scene)
         vp.camera_locked = False                          # (placed by the program, not the mouse)
+        self.apply_cuts()
 
         def place():
             if scene.kind == "view3d":
@@ -1862,7 +1950,8 @@ class PresentationMode(QtCore.QObject):
         fields = {"projection": "orthographic" if ortho else "perspective",
                   "fov": 0.0 if ortho else round(self.current_fov(), 2), "locked": self.live["locked"],
                   "style": self.live["style"], "quality": self.live["quality"], "ao": self.live["ao"],
-                  "ao_intensity": self.live["ao_intensity"], "hidden_layers": sorted(self.live["hidden"])}
+                  "ao_intensity": self.live["ao_intensity"], "hidden_layers": sorted(self.live["hidden"]),
+                  "cuts": [tuple(c) for c in self.live["cuts"]]}                # (0.484)
         if scene is None or scene.kind != "view3d":
             fields.update(eye=tuple(float(c) for c in vp.camera_position()), target=tuple(float(c) for c in vp._focus))
         return fields
@@ -2149,6 +2238,53 @@ class PresentationMode(QtCore.QObject):
     def live_view_style(self):
         """The BIM view style the 3D view is drawn with in the tab (None: the 3D view's own)."""
         return pm.STYLE_VIEW.get(self.live["style"]) if self.active and self.live["style"] else None
+
+    # ------------------------------------------------------------ (0.484) the cuts (the right column's «Cortes»)
+
+    def cut_range(self, kind):
+        """Where a plane of that kind may go: the model's extent along its axis, half a metre beyond each side."""
+        axis = {"horizontal": 2, "transversal": 0, "longitudinal": 1}[kind]
+        box = self.vp.bounds()
+        if box is None:
+            return -10.0, 10.0
+        return round(float(box[0][axis]) - 0.5, 2), round(float(box[1][axis]) + 0.5, 2)
+
+    def apply_cuts(self):
+        """The planes seen now on the 3D view (none when the tab is put away)."""
+        self.vp.set_cuts([pm.cut_plane(*c) for c in self.live["cuts"]] if self.active else [])
+
+    def add_cut(self, kind):
+        """A plane more: a horizontal one at the height a plan cuts (1,20 m over the lowest floor), a vertical one
+        through the middle of the model."""
+        if len(self.live["cuts"]) >= pm.MAX_CUTS:
+            return None
+        lo, hi = self.cut_range(kind)
+        if kind == "horizontal":
+            from ..model import view_templates
+            levels = [z for _g, _n, z in self.doc.storeys()]
+            position = min(max((min(levels) if levels else lo + 0.5) + view_templates.CUT_HEIGHT, lo), hi)
+        else:
+            position = (lo + hi) / 2.0
+        self.live["cuts"].append([kind, round(position, 2), False])
+        self.apply_cuts()
+        self.side.show_tab("cuts")
+        return len(self.live["cuts"]) - 1
+
+    def move_cut(self, k, position):
+        if 0 <= k < len(self.live["cuts"]):
+            self.live["cuts"][k][1] = round(float(position), 3)
+            self.apply_cuts()
+
+    def flip_cut(self, k, on):
+        if 0 <= k < len(self.live["cuts"]):
+            self.live["cuts"][k][2] = bool(on)
+            self.apply_cuts()
+
+    def remove_cut(self, k):
+        if 0 <= k < len(self.live["cuts"]):
+            del self.live["cuts"][k]
+            self.apply_cuts()
+            self.side.show_scene(self.scene())
 
     def set_layers_hidden(self, ids, hide):
         """The eyes of the layers: these elements not seen (live, as in the Presentation: kept in a scene when it is

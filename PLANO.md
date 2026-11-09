@@ -991,9 +991,12 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       dentro da camada do elemento — o Presentation dava ao vidro dono próprio pelo material e fazia dele «Window»).
    2. ~~**Transições animadas entre as cenas**~~ (0.483.0: um clique num cartão ou o leitor voam até à cena no tempo
       da sua chegada, com a lente, como o «Voo suave» do Presentation; «Corte seco» chega de uma vez).
-   3. **Cortes** (o separador «Cortes» do Presentation): por cena, planos de corte horizontais (à altura escolhida) e
-      verticais (por um eixo e uma posição) e a caixa de corte, vistos no 3D do BIM enquanto se escolhem; vão nas cenas
-      como `section.planes` (o importador do Presentation já os lê).
+   3. ~~**Cortes** (o separador «Cortes» do Presentation): por cena, planos de corte horizontais (à altura escolhida) e
+      verticais (por um eixo e uma posição), vistos no 3D do BIM enquanto se escolhem; vão nas cenas como
+      `section.planes` (o importador do Presentation já os lê)~~ (0.484.0: Horizontal, Vertical X, Vertical Z, até 6,
+      com a posição exata, inverter e remover; guardados ao Criar/Atualizar). Ficam por fazer o plano inclinado e a
+      caixa de corte própria da cena (hoje vai a da vista 3D com nome), e o aspeto do corte do Presentation (cor,
+      padrão, «Sólido / Poché / Categoria»).
    4. **Etiquetas** (o separador «Etiquetas»): texto num ponto do modelo — além das dos ambientes, que já vão —, vistas
       no 3D; vão como etiquetas da página 3D (o importador do Presentation passa a lê-las).
    5. **Efeitos**: ver no BIM, antes de exportar, a construção peça a peça e a explosão como o Presentation as toca (o

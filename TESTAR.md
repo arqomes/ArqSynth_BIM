@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.484 — Cortes na interface do Presentation
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.484.0**.
+
+1. Faça Ctrl+N e desenhe uma casa: 4 paredes, uma porta, duas janelas e, se quiser, uma laje por cima.
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
+3. Na barra de ícones da direita, clique no terceiro (o bloco com uma linha a tracejado): **CORTES**.
+4. Clique em **Horizontal**: a casa aparece cortada a 1,20 m, com o corte das paredes a escuro.
+5. Arraste o deslizador do plano, ou escreva `0,8` na caixa dos metros e carregue Enter: o corte desce.
+6. Clique em **Inverter lado**: fica a parte de cima. Clique outra vez: volta a de baixo.
+7. Clique em **Vertical X**: aparece um segundo corte, de pé, a meio da casa. Experimente o seu deslizador.
+8. Clique em **Remover** no corte Vertical X: desaparece.
+9. Em baixo, à esquerda, clique em **+ Criar cena**: a cena «Cena 1» fica com o corte horizontal.
+10. Clique no cartão **Vista geral**: a casa aparece inteira (essa cena não tem cortes). Clique em **Cena 1**: o corte
+    volta.
+11. Clique em **Exportar / atualizar**, grave o ZIP e importe-o no Presentation (botão **ArqSynth BIM**). A cena
+    «Cena 1» aparece cortada; no separador **Cortes** do Presentation está o plano «Horizontal».
+12. Clique no ícone **ArqSynth Presentation** da barra da esquerda para voltar ao BIM: o 3D está inteiro.
+
 ## 0.483 — Uma camada por janela e transições animadas
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.483.0**. Para a parte do Presentation,

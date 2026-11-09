@@ -159,6 +159,15 @@ def _draw(p, kind):
             p.drawEllipse(QtCore.QPointF(x, y + 5.6), 1.9, 1.6)
     elif kind == "play":
         p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(7, 4.5), QtCore.QPointF(19, 12), QtCore.QPointF(7, 19.5)]))
+    elif kind == "section":                                 # Cortes: a block cut by a plane
+        p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(4, 9), QtCore.QPointF(12, 5), QtCore.QPointF(20, 9),
+                                       QtCore.QPointF(20, 18), QtCore.QPointF(12, 22), QtCore.QPointF(4, 18)]))
+        _line(p, (4, 9), (12, 13), (20, 9))
+        _line(p, (12, 13), (12, 22))
+        pen = QtGui.QPen(p.pen())
+        pen.setStyle(QtCore.Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        _line(p, (2, 14), (22, 14))
     elif kind == "pause":
         p.drawRoundedRect(QtCore.QRectF(6, 5, 4, 14), 1, 1)
         p.drawRoundedRect(QtCore.QRectF(14, 5, 4, 14), 1, 1)
@@ -199,4 +208,4 @@ def icon(kind, colour, size=18, on_colour=None):
 KINDS = ("layers", "scene", "camera", "sun", "tag", "pano", "upload", "plus", "eye", "eye_off", "star", "star_on",
          "refresh", "copy", "pencil", "trash", "cube", "cover", "text", "plan", "concept", "split", "tabs", "film",
          "expand", "focus", "lock", "unlock", "palette", "auto", "search", "down", "right", "play", "rotate_l",
-         "rotate_r", "walk", "pause")
+         "rotate_r", "walk", "pause", "section")
