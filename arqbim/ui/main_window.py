@@ -824,6 +824,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_fin_plate = self._action(t("act.fin_plate"), lambda: self.beam_connections("fin_plate"),
                                           icon=icons.fin_plate_icon())
         self.act_fin_plate.setToolTip(t("tip.fin_plate"))
+        self.act_gusset = self._action(t("act.gusset"), lambda: self.gussets(), icon=icons.gusset_icon())  # (0.503)
+        self.act_gusset.setToolTip(t("tip.gusset"))
         self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
                                             icon=icons.steel_mitre_icon())                              # (0.496)
         self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
@@ -2105,6 +2107,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if any(isinstance(g, str) and self.doc.ifc.kind_of(g) in ("beam", "steel_member")
                and self.doc.ifc.steel_section(g) is not None for g in list(self.viewport.selection)[:20]):
             acts += [self.act_end_plate, self.act_fin_plate]          # (0.498) steel beams: their ends' connections
+        if "IfcMember" in counts and any(isinstance(g, str) and self.doc.ifc.kind_of(g) == "steel_member"
+                                         and (self.doc.ifc.steel_section(g) or "")[:1] == "L"
+                                         for g in list(self.viewport.selection)[:20]):
+            acts.append(self.act_gusset)                              # (0.503) braces of angles: their gussets
         if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
                 counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
                     isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
@@ -5124,6 +5130,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.beam_connections", n=len(made), what=t("connection." + kind)))
         else:
             self.message(t("info.beam_connections_none"), warning=True)
+        return made
+
+    def gussets(self):
+        """(0.503) Estrutura ▸ Ligação ▸ Gousset: at the ends of the braces selected (angles) that reach steel
+        columns — none selected: of every brace —, a gusset welded to the column, the brace bolted to it."""
+        braces = [g for g in self.viewport.selection if isinstance(g, str) and self.doc.ifc.kind_of(g) == "steel_member"]
+        made = bim.add_gussets(self.doc, braces or None)
+        if made:
+            self.message(t("info.gussets", n=len(made)))
+        else:
+            self.message(t("info.gussets_none"), warning=True)
         return made
 
     def steel_mitre(self):

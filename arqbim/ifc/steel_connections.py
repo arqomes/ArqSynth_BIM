@@ -24,9 +24,10 @@ import ifcopenshell.util.element
 from .edit import EditRefused
 
 api = ifcopenshell.api
-KINDS = ("base_plate", "end_plate", "fin_plate")
+KINDS = ("base_plate", "end_plate", "fin_plate", "gusset")
 NAMES = {"base_plate": ("Chapa de base", "Base plate"), "end_plate": ("Chapa de topo", "End plate"),
-         "fin_plate": ("Cutelo", "Fin plate")}
+         "fin_plate": ("Cutelo", "Fin plate"), "gusset": ("Gousset", "Gusset plate")}
+ANGLE_FAMILIES = ("L", "LU")
 # (mm) A × B its plate (0: the column's size + 2 × MARGIN), tp its thickness, n its anchor bolts (2, 4, 6, 8), d their
 # diameter, e their distance to the plate's edges, proj how far they stand over the plate, embed how deep in the
 # concrete, grout under the plate, a the weld's throat
@@ -39,11 +40,17 @@ DEFAULTS = {"base_plate": {"A": 0.0, "B": 0.0, "tp": 20.0, "n": 4, "d": 20.0, "e
             # …the fin plate welded to the column, the beam's web bolted to it: its width along the beam, its rows,
             # their pitch, the edges, the bolts' distance from the column
             "fin_plate": {"end": 1, "tp": 10.0, "w": 115.0, "rows": 3, "p": 75.0, "e": 38.0, "eh": 65.0, "d": 20.0,
-                          "a": 6.0}}
+                          "a": 6.0},
+            # (0.503) a brace's end (an angle's leg) bolted to a gusset welded to the column: the plate's thickness,
+            # the bolts along the brace (rows), their pitch, the end distance, the brace's end clear of the column
+            # (gap), the bolts' gauge from the angle's heel (0: about half its leg), the plate past the leg (edge)
+            "gusset": {"end": 1, "tp": 10.0, "rows": 2, "p": 60.0, "e": 35.0, "d": 16.0, "gap": 20.0, "g": 0.0,
+                       "edge": 25.0, "a": 5.0}}
 LIMITS = {"A": (100.0, 3000.0), "B": (100.0, 3000.0), "tp": (5.0, 100.0), "n": (2, 8), "d": (12.0, 48.0),
           "e": (20.0, 300.0), "proj": (20.0, 300.0), "embed": (100.0, 2000.0), "grout": (0.0, 100.0), "a": (3.0, 20.0),
           "end": (0, 1), "W": (0.0, 1000.0), "top": (0.0, 300.0), "bottom": (0.0, 300.0), "rows": (1, 12),
-          "p": (40.0, 300.0), "g": (0.0, 600.0), "w": (60.0, 400.0), "eh": (30.0, 300.0)}
+          "p": (40.0, 300.0), "g": (0.0, 600.0), "w": (60.0, 400.0), "eh": (30.0, 300.0), "gap": (0.0, 200.0),
+          "edge": (15.0, 150.0)}
 MARGIN = 100.0                # mm round the column, its plate's default
 BOLT_SIZES = (12.0, 16.0, 20.0, 24.0, 27.0, 30.0, 36.0, 42.0, 48.0)
 
@@ -132,6 +139,25 @@ def fin_plate_layout(params, beam):
     return H, spots, warnings
 
 
+def gusset_layout(params, brace):
+    """(0.503) A brace's end bolted to a gusset through its angle's leg (sections, mm): (the bolts' gauge from the
+    angle's heel, their distances from the brace's end, warnings) — EN 1993-1-8 Table 3.3, and the hole clear of the
+    angle's root (else no washer seats)."""
+    leg = brace.h
+    g = params["g"] or round(leg * 0.55 / 5.0) * 5.0
+    rows, p, e, d = int(params["rows"]), params["p"], params["e"], params["d"]
+    along = [e + k * p for k in range(rows)]
+    d0 = hole(d)
+    warnings = []
+    if e < 1.2 * d0 or leg - g < 1.2 * d0:
+        warnings.append(("edge", round(1.2 * d0, 1)))
+    if rows > 1 and p < 2.2 * d0:
+        warnings.append(("pitch", round(2.2 * d0, 1)))
+    if g - d0 / 2.0 < brace.tw + brace.r:
+        warnings.append(("root", round(brace.tw + brace.r + d0 / 2.0, 1)))
+    return g, along, warnings
+
+
 def base_plate_layout(params, b, h):
     """The base plate of a column of section b × h (mm): its size, its bolts' spots — (A, B, spots, warnings)."""
     A = params["A"] or math.ceil((b + 2 * MARGIN) / 10.0) * 10.0
@@ -207,6 +233,10 @@ class SteelConnectionMixin:
             raise EditRefused("connection_kind")
         if any(self.steel_section(m) is None for m in members):
             raise EditRefused("connection_not_steel")
+        if kind == "gusset":                             # (0.503: an angle's leg bolted to it — a tube needs a slot)
+            from ..core import steel
+            if steel.get(self.steel_section(members[0])).family not in ANGLE_FAMILIES:
+                raise EditRefused("connection_brace_angle")
         f = self.file
         label = NAMES[kind][0 if lang == "pt" else 1]
         column = self.by_guid(members[0])
@@ -249,7 +279,7 @@ class SteelConnectionMixin:
     def release_connection(self, assembly):
         """What a connection did to its pieces undone, before it goes: an end plate's beam back to its line's end."""
         kind, members, params = self.connection_params(assembly.GlobalId)
-        if kind == "end_plate" and self.by_guid(members[0]) is not None:
+        if kind in ("end_plate", "gusset") and self.by_guid(members[0]) is not None:     # (0.503: a brace too)
             self._beam_end_drawn(members[0], int(params["end"]), 0.0)
 
     def release_connections(self, guids):
@@ -296,10 +326,12 @@ class SteelConnectionMixin:
         if abs(ext[end] - amount) < 1e-9:
             return
         ext[end] = amount
-        self.set_steel_cuts(e, ext=ext)
         if self.kind_of(beam) == "steel_member":
-            self.set_steel_member(beam)
+            line = self.steel_member_params(beam)          # (0.503: its line read before — its length is the body's
+            self.set_steel_cuts(e, ext=ext)                # less what it is drawn out, the new amount not yet in it)
+            self.set_steel_member(beam, start=line["start"], end=line["end"])
         else:
+            self.set_steel_cuts(e, ext=ext)
             self.rebuild_beam(beam)
 
     def connections_to_remove(self, guids):
@@ -333,7 +365,7 @@ class SteelConnectionMixin:
                 continue
             self._build_connection(assembly)
             out += [p.GlobalId for p in self.connection_parts(assembly)]
-            if _kind == "end_plate":                     # (its beam held back to the plate: drawn again too)
+            if _kind in ("end_plate", "gusset"):         # (its beam / brace held back: drawn again too)
                 out.append(members[0])
         return out
 
@@ -353,6 +385,8 @@ class SteelConnectionMixin:
         if kind == "end_plate":
             frame = self._beam_end_frame(members[0], int(params["end"]))
             return end_plate_layout(params, secs[0], secs[1], self._onto_flange(members[1], frame[1]))[5]
+        if kind == "gusset":
+            return gusset_layout(params, secs[0])[2]
         return fin_plate_layout(params, secs[0])[2]
 
     # ------------------------------------------------------------ its parts
@@ -382,6 +416,8 @@ class SteelConnectionMixin:
             parts = self._end_plate_parts(members[0], members[1], params, lang)
         elif kind == "fin_plate":
             parts = self._fin_plate_parts(members[0], members[1], params, lang)
+        elif kind == "gusset":
+            parts = self._gusset_parts(members[0], members[1], params, lang)
         else:
             parts = []
         if parts:
@@ -576,6 +612,121 @@ class SteelConnectionMixin:
             api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
         return parts
 
+    # ------------------------------------------------------------ (0.503) a brace's gusset
+
+    def brace_frame(self, brace):
+        """A steel piece's frame: (its line's start, end, along, its section's x and y — unit vectors —, the middle
+        of its section from its line (x, y) mm)."""
+        start, end = self._beam_line(brace) if self.kind_of(brace) != "steel_member" else \
+            (self.steel_member_params(brace)["start"], self.steel_member_params(brace)["end"])
+        m = self.placement(brace)
+        xl = m[:3, 0] / np.linalg.norm(m[:3, 0])
+        yl = m[:3, 1] / np.linalg.norm(m[:3, 1])
+        cx, cy = self.section_middle(self.by_guid(brace))
+        along = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
+        along /= max(float(np.linalg.norm(along)), 1e-12)
+        return np.asarray(start, dtype=float), np.asarray(end, dtype=float), along, xl, yl, (cx * 1000.0, cy * 1000.0)
+
+    def _gusset_parts(self, brace, column, params, lang):
+        """The gusset in the brace's plane against the back of the angle's leg that lies in it (the angle's own y), its
+        edge welded to the column's face — its web between the flanges, when it fits there —, the brace held back
+        clear of the column (`gap`), its leg bolted to the plate (a row of bolts along it)."""
+        from shapely.geometry import MultiPoint, Point, Polygon, box
+        from ..core import steel
+        f = self.file
+        end = int(params["end"])
+        bsec = steel.get(self.steel_section(brace))
+        start, stop, along, xl, yl, (cx, cy) = self.brace_frame(brace)
+        point = stop if end == 1 else start
+        u = -along if end == 1 else along                       # (into the brace from its end)
+        out = -np.array((u[0], u[1], 0.0))                     # (level, into the column)
+        if float(np.linalg.norm(out)) < 1e-6:
+            return []
+        out /= np.linalg.norm(out)
+        b, h, tp = bsec.b, bsec.h, params["tp"]
+        g, distances, _w = gusset_layout(params, bsec)
+        # the brace's end clear of the column's outside (its flanges' tips), every corner of its section
+        face_box = self._column_face(column, point, out, 1e9)
+        reach = float(u @ -out)
+        if reach < 0.05:
+            return []
+        corners = [(x, y) for x in (cx - b / 2, cx + b / 2) for y in (cy - h / 2, cy + h / 2)]
+        hold = max((-face_box + params["gap"] / 1000.0 - (x * float(xl @ -out) + y * float(yl @ -out)) / 1000.0)
+                   / reach for x, y in corners)
+        self._beam_end_drawn(brace, end, -hold)
+        # the plate's frame: in the plane of the leg's back, x level towards the brace, z through the leg
+        back = (cx - b / 2.0 - tp) / 1000.0                    # (its far face from the brace's line, along x)
+        z2 = xl
+        x2 = -out - float(-out @ z2) * z2
+        x2 /= np.linalg.norm(x2)
+        y2 = np.cross(z2, x2)
+        origin = point + xl * back
+        m = self._frame(origin, x2, y2, z2)
+
+        def flat(w):
+            r = (np.asarray(w, dtype=float) - origin) * 1000.0
+            return float(r @ x2), float(r @ y2)
+
+        def on_brace(dist_mm, y_mm):
+            return point + u * (hold + dist_mm / 1000.0) + yl * (y_mm / 1000.0)
+        last = distances[-1] + params["e"]
+        lo_y, hi_y = cy - h / 2.0 - params["edge"], cy + h / 2.0 + params["edge"]
+        region = [flat(on_brace(s, y)) for s in (-params["gap"] / 2.0, last) for y in (lo_y, hi_y)]
+        width = 2.0 * (abs(back * 1000.0) + tp)
+        face = self._column_face(column, point, out, width)
+        weld_x = flat(point + out * face)[0]
+        ys = [p[1] for p in region]
+        outline = MultiPoint(region + [(weld_x, min(ys)), (weld_x, max(ys))]).convex_hull
+        _c, _x, _half, base, top = self.column_box(column)
+        clear = abs(back * 1000.0) + 10.0                      # (under a mitred top, clear of the rafter)
+        level = [flat(np.array((point[0], point[1], z)))[1] for z in (base, top - clear / 1000.0)]
+        outline = outline.intersection(box(weld_x, min(level), 1e6, max(level)))
+        if outline.is_empty or outline.geom_type != "Polygon":
+            return []
+        outline = Polygon([(round(x, 1), round(y, 1)) for x, y in outline.exterior.coords]).buffer(0)
+        spots = [flat(on_brace(s, cy - h / 2.0 + g)) for s in distances]
+        d0 = hole(params["d"])
+        spots = [s for s in spots if outline.contains(Point(s).buffer(d0 / 2.0))]
+        # the plate
+        x0, y0, x1, y1 = outline.bounds
+        L, W = x1 - x0, y1 - y0
+        mid = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+        material = self._column_material(column, lang)
+        plate = api.root.create_entity(f, ifc_class="IfcPlate", name="{} {}×{}×{}".format(
+            "Gousset" if lang == "pt" else "Gusset", _mm(round(L)), _mm(round(W)), _mm(tp)),
+            predefined_type="USERDEFINED")
+        plate.ObjectType = "GUSSET_PLATE"
+        self._place(plate, m)
+        ring = list(outline.exterior.coords)
+        self._extrusion_body(plate, [self._polygon_profile(ring, spots, d0)], [(0.0, 0.0, 0.0)], [tp / 1000.0])
+        area = outline.area - len(spots) * math.pi * d0 * d0 / 4.0
+        net = area * tp * 1e-9
+        self._plate_record(plate, L, W, tp, [(x - mid[0], y - mid[1], d0) for x, y in spots], column,
+                           contour=[(x - mid[0], y - mid[1]) for x, y in ring[:-1]])
+        self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
+                                                         "NetWeight": net * steel.DENSITY,
+                                                         "GrossArea": outline.area * 1e-6})
+        parts = [plate]
+        for k, (x, y) in enumerate(spots, 1):
+            parts.append(self._bolt(m, x, y, 0.0, tp + bsec.tw, params["d"], k, lang))
+        edge = outline.intersection(box(weld_x - 0.5, -1e6, weld_x + 0.5, 1e6))
+        weld_len = (edge.bounds[3] - edge.bounds[1]) if not edge.is_empty else 0.0
+        parts.append(self._weld(m, params["a"], 2.0 * weld_len / 1000.0, lang))
+        api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
+        storey = self.storey_of(column)
+        if storey:
+            api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
+        return parts
+
+    def brace_end_columns(self, brace):
+        """(0.503) {end: column} — the steel columns a brace's ends reach."""
+        out = {}
+        for end in (0, 1):
+            found = self.beam_end_column(brace, end)
+            if found is not None:
+                out[end] = found
+        return out
+
     def _bolt(self, m, x, y, head_face, nut_face, d, k, lang):
         """A bolt (IfcMechanicalFastener BOLT) along the frame's z at (x, y) mm: its head against `head_face`, its
         washer and nut against `nut_face` (mm), its rod a little past the nut."""
@@ -611,16 +762,19 @@ class SteelConnectionMixin:
         api.pset.edit_pset(f, pset=pset, properties={"a": a / 1000.0 / self.unit_scale, "l": length / self.unit_scale})
         return weld
 
-    def _plate_record(self, plate, length, width, thickness, holes, piece):
-        """(0.501) A plate's sizes and holes kept on it (mm; holes [(x, y, d0)] from its middle) — its NC1's."""
+    def _plate_record(self, plate, length, width, thickness, holes, piece, contour=None):
+        """(0.501) A plate's sizes and holes kept on it (mm; holes [(x, y, d0)] from its middle) — its NC1's; (0.503)
+        an outline that is not its rectangle (a gusset's): its corners from its middle too."""
         import re
         material = ifcopenshell.util.element.get_material(self.by_guid(piece), should_skip_usage=True)
         name = material.MaterialProfiles[0].Material.Name if material is not None and \
             material.is_a("IfcMaterialProfileSet") and material.MaterialProfiles[0].Material else ""
         found = re.search(r"S\d{3}", name or "")
-        self._set_params(plate, {"Chapa": json.dumps({"L": float(length), "W": float(width), "t": float(thickness),
-                                                      "grade": found.group(0) if found else "",
-                                                      "furos": [[float(x), float(y), float(d)] for x, y, d in holes]})})
+        record = {"L": float(length), "W": float(width), "t": float(thickness), "grade": found.group(0) if found else "",
+                  "furos": [[float(x), float(y), float(d)] for x, y, d in holes]}
+        if contour:
+            record["contorno"] = [[round(float(x), 1), round(float(y), 1)] for x, y in contour]
+        self._set_params(plate, {"Chapa": json.dumps(record)})
 
     def _column_material(self, column, lang):
         material = ifcopenshell.util.element.get_material(self.by_guid(column), should_skip_usage=True)
@@ -652,6 +806,19 @@ class SteelConnectionMixin:
         corners = [(cx - A / 2, cy - B / 2), (cx + A / 2, cy - B / 2), (cx + A / 2, cy + B / 2),
                    (cx - A / 2, cy + B / 2), (cx - A / 2, cy - B / 2)]
         outer = f.createIfcPolyline([f.createIfcCartesianPoint((float(x * u), float(y * u))) for x, y in corners])
+        holes = [f.createIfcCircle(self._axis2d(x, y), float(d0 / 2 * u)) for x, y in spots]
+        if not holes:
+            return f.createIfcArbitraryClosedProfileDef("AREA", None, outer)
+        return f.createIfcArbitraryProfileDefWithVoids("AREA", None, outer, holes)
+
+    def _polygon_profile(self, ring, spots, d0):
+        """(0.503) A plate's outline of any shape (its corners mm, closed), with its holes."""
+        f = self.file
+        u = 0.001 / self.unit_scale
+        pts = [(float(x), float(y)) for x, y in ring]
+        if pts[0] != pts[-1]:
+            pts.append(pts[0])
+        outer = f.createIfcPolyline([f.createIfcCartesianPoint((x * u, y * u)) for x, y in pts])
         holes = [f.createIfcCircle(self._axis2d(x, y), float(d0 / 2 * u)) for x, y in spots]
         if not holes:
             return f.createIfcArbitraryClosedProfileDef("AREA", None, outer)

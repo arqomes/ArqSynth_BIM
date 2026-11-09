@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.503.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: o gousset dos contraventamentos.**
+
+- Ligação nova **Gousset** (separador **Estrutura**, painel **Ligação**, na lista da Chapa de topo e do Cutelo; também
+  na barra da seleção quando se escolhe um contraventamento em cantoneira): em cada ponta do contraventamento que chega
+  a um pilar de aço,
+  - uma **chapa recortada** (o gousset) no plano do contraventamento, encostada às costas da aba da cantoneira,
+    **soldada à alma do pilar** entre os banzos (ou à face, quando não cabe);
+  - o contraventamento **recuado** para ficar a 20 mm dos banzos do pilar (a folga muda-se nas Propriedades);
+  - **dois parafusos M16** ao longo do contraventamento, pela chapa e pela aba.
+  Sem nada escolhido, põe-se em todos os contraventamentos em cantoneira. Os tubos não levam gousset (precisam de
+  outra ligação — vem depois).
+- O **Pórtico de nave** já põe os gousset nos contraventamentos das paredes (os do telhado não chegam a pilares).
+- Nas Propriedades de um gousset: espessura, parafusos ao longo, passo, distância ao bordo, diâmetro, **folga ao
+  pilar**, parafusos ao canto da cantoneira, chapa para além da aba e a soldadura; avisos do EN 1993-1-8 e do furo na
+  raiz da cantoneira.
+- Os gousset entram nas listas (marca **Ch**, parafusos M16), no **NC1** com o seu contorno recortado e no desenho de
+  fabrico **Peças de aço**, a 1:10, com o contorno e as cotas acumuladas dos furos a partir da borda.
+- Corrigido: uma peça metálica com as duas pontas recuadas (chapa de topo ou gousset nas duas) recuava o dobro na
+  segunda ponta.
+
 ## 0.502.0 — 2026-11-09
 
 **Estrutura metálica, passo 6 (primeira parte): o desenho de fabrico das peças.**

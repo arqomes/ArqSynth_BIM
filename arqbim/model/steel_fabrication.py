@@ -54,7 +54,9 @@ def nc1_files(doc):
             header = dict(order="1", drawing=mark, phase="1", mark=mark, grade=plate.get("grade") or "S275",
                           quantity=len(members), profile="PL{:g}*{:g}".format(t, W), code="B", length=L, h=W, b=0.0,
                           tf=0.0, tw=t, r=0.0, kg_m=t * W * 1e-6 * steel.DENSITY, paint_m=2.0 * W / 1000.0)
-            out[mark] = dstv.nc1(header, holes, [(0.0, 0.0), (L, 0.0), (L, W), (0.0, W)])
+            contour = [(x + L / 2.0, y + W / 2.0) for x, y in plate.get("contorno") or ()] or \
+                [(0.0, 0.0), (L, 0.0), (L, W), (0.0, W)]                         # (0.503: a gusset's own outline)
+            out[mark] = dstv.nc1(header, holes, contour)
             continue
         sec = steel.get(p["signature"][0])
         if sec is None:

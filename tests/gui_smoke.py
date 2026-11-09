@@ -658,6 +658,7 @@ def bim_flow():
     steel_shed_flow()
     steel_lists_flow()
     steel_sheet_flow()
+    steel_gusset_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20170,7 +20171,8 @@ def steel_shed_flow():
     rafters = [g for g in made if doc.get(g).ifc_class == "IfcBeam"]
     members = [g for g in made if doc.get(g).ifc_class == "IfcMember"]
     plates = [g for g in made if doc.get(g).ifc_class == "IfcPlate"]
-    built = len(columns) == 6 and len(rafters) == 6 and len(plates) == 6 and len(members) > 10
+    built = len(columns) == 6 and len(rafters) == 6 and len(plates) == 6 + 16 and len(members) > 10   # (0.503: the
+    # 8 wall braces' gussets, at both ends)
     win.set_tool("select")
     win.set_view("iso")
     vp.zoom_extents()
@@ -20208,7 +20210,8 @@ def steel_lists_flow():
     shot("500_lista_de_material.png")
     win.open_table("bolts")
     pump(300)
-    bolts = panel.table.rowCount() == 1 and "M20 × 530" in panel.text()
+    bolts = panel.table.rowCount() == 2 and "M20 × 530" in panel.text() and "M16" in panel.text()   # (0.503: and
+    # the gussets')
     win.open_table("cutting")                                            # (0.501) the bars to buy
     pump(300)
     cutting = panel.table.rowCount() >= 3 and "HEB 200" in panel.text()
@@ -20221,6 +20224,63 @@ def steel_lists_flow():
           and win.ribbon_item("steel_nc") is not None,
           "fita={} marcas={} lista={} parafusos={} corte={} nc1={} ({} ficheiros)".format(
               in_ribbon, tagged, listed, bolts, cutting, nc, len(paths)))
+
+
+def steel_gusset_flow():
+    """0.503 — Gussets: a shed without its plates; a wall brace selected: the selection bar offers «Gousset»; clicked:
+    a gusset at both its ends (2 bolts each); one of them chosen: its fields in the Properties — the gap typed 40: the
+    brace held back more —; nothing selected, «Gousset» again: the other braces' (8 in all). Captured: 503_gousset.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                           plates=False)
+    pump(300)
+    braces = [g for g in (o.id for o in doc.objects.values() if o.is_bim)
+              if doc.get(g).ifc_class == "IfcMember" and bim_actions.gusset_ends(doc, [g])]
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection({braces[0]} if braces else set())
+    pump(300)
+    offered = win.act_gusset in win._selection_actions({"IfcMember": 1})
+    win.act_gusset.trigger()
+    pump(400)
+
+    def gussets(on=None):
+        found = doc.ifc.connections_on(on) if on else [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                                                       if doc.ifc.kind_of(a.GlobalId) == "steel_connection"]
+        return [a for a in found if doc.ifc.connection_params(a.GlobalId)[0] == "gusset"]
+    mine = gussets([braces[0]]) if braces else []
+    bolts = sum(1 for a in mine for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    made = len(mine) == 2 and bolts == 4
+    plate = next((p.GlobalId for p in doc.ifc.connection_parts(mine[0]) if p.is_a("IfcPlate")), None) if mine else None
+    vp.set_selection({plate} if plate else set())
+    pump(300)
+    edit = win.props.editors.get("connection.gap")
+    shown = edit is not None and "connection.edge" in win.props.editors and "connection.rows" in win.props.editors
+    end = int(doc.ifc.connection_params(mine[0].GlobalId)[2]["end"]) if mine else 0
+    before = doc.ifc.steel_cuts(doc.ifc.by_guid(braces[0]))[2][end] if braces else 0.0
+    if edit is not None:
+        edit.setText("40")
+        edit.editingFinished.emit()
+        pump(400)
+    after = doc.ifc.steel_cuts(doc.ifc.by_guid(braces[0]))[2][end] if braces else 0.0
+    held = after < before - 0.015
+    vp.set_selection(set())
+    pump(200)
+    win.act_gusset.trigger()
+    pump(400)
+    total = len(gussets())
+    vp.zoom_box((np.array((-0.06, -0.14, 0.04)), np.array((0.34, 0.06, 0.34))))
+    pump(400)
+    shot("503_gousset.png")
+    doc.modified = False
+    check("gousset", offered and made and shown and held and total == 8 and win.ribbon_item("gusset") is not None,
+          "oferecido={} feitos={} ({} parafusos) propriedades={} folga40={} ({:.3f}→{:.3f}) todos={}".format(
+              offered, made, bolts, shown, held, before, after, total))
 
 
 def steel_sheet_flow():

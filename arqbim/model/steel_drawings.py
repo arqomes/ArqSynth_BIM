@@ -10,7 +10,7 @@ import numpy as np
 
 from ..core import steel, steel_marks
 from ..i18n import decimal_sep, t
-from .rebar_drawings import _dim, _room_for_texts, _text
+from .rebar_drawings import TEXT, _dim, _room_for_texts, _text
 
 SCALE = 50
 ROW = 0.55                      # m (at 1:50: 11 mm) between one piece and the next, its text and dimension under it
@@ -103,18 +103,31 @@ def _profile(doc, drawing, lines, ann, mark, members, y):
     return y - depth - TEXT_DROP - ROW
 
 
+FIT = 3.5 * 0.55 * TEXT * SCALE / 1000.0   # m drawn: what a dimension's text («0,05») needs between its ends
+
+
 def _chain(drawing, stops, at, along, offset, zoom):
     """A chain of dimensions through `stops` (sorted, drawn), on the line `at`: edge to hole to hole to edge, and
-    the whole further out; `along` "x" (under the plate) or "y" (on its right)."""
+    the whole further out; `along` "x" (under the plate) or "y" (on its right). (0.503) When a piece of the chain is
+    too short for its text (a gusset's holes on a slant), from the first edge to each stop instead, each further out."""
     def pt(s):
         return (s, at) if along == "x" else (at, s)
-    for a, b in zip(stops[:-1], stops[1:]):
-        if b - a > 1e-6:
-            p, q = (pt(a), pt(b)) if along == "x" else (pt(b), pt(a))
-            _dim(drawing, p, q, offset, value=(b - a) / zoom)
+
+    def dim(a, b, off):
+        p, q = (pt(a), pt(b)) if along == "x" else (pt(b), pt(a))
+        _dim(drawing, p, q, off, value=(b - a) / zoom)
+    pieces = [(a, b) for a, b in zip(stops[:-1], stops[1:]) if b - a > 1e-6]
+    if any(b - a < FIT for a, b in pieces):
+        k = -1
+        for k, s in enumerate(s for s in stops[1:] if s - stops[0] > 1e-6):
+            dim(stops[0], s, offset * (1.0 + 1.4 * k))
+        return abs(offset) * (1.0 + 1.4 * max(k, 0))
+    for a, b in pieces:
+        dim(a, b, offset)
     if len(stops) > 2:
-        p, q = (pt(stops[0]), pt(stops[-1])) if along == "x" else (pt(stops[-1]), pt(stops[0]))
-        _dim(drawing, p, q, offset * 2.2, value=(stops[-1] - stops[0]) / zoom)
+        dim(stops[0], stops[-1], offset * 2.2)
+        return abs(offset) * 2.2
+    return abs(offset)
 
 
 def _plate(doc, drawing, lines, ann, mark, members, y):
@@ -128,7 +141,11 @@ def _plate(doc, drawing, lines, ann, mark, members, y):
     z = PLATE_ZOOM
     L, W, tp = float(plate["L"]) / 1000.0, float(plate["W"]) / 1000.0, float(plate["t"])
     Lz, Wz = L * z, W * z
-    corners = np.array(((0.0, y - Wz), (Lz, y - Wz), (Lz, y), (0.0, y)))
+    if plate.get("contorno"):                           # (0.503: a gusset's own outline, from its middle)
+        corners = np.array([(Lz / 2.0 + cx / 1000.0 * z, y - Wz / 2.0 + cy / 1000.0 * z)
+                            for cx, cy in plate["contorno"]])
+    else:
+        corners = np.array(((0.0, y - Wz), (Lz, y - Wz), (Lz, y), (0.0, y)))
     lines.append(np.stack((corners, np.roll(corners, -1, axis=0)), axis=1))
     xs = []
     for x, h, d in plate.get("furos", []):
@@ -139,12 +156,14 @@ def _plate(doc, drawing, lines, ann, mark, members, y):
         xs.append((cx, cy))
     along = sorted({0.0, Lz} | {round(cx, 5) for cx, _cy in xs})
     up = sorted({y - Wz, y} | {round(cy, 5) for _cx, cy in xs})
-    _chain(drawing, along, y - Wz, "x", -0.12, z)
+    under = _chain(drawing, along, y - Wz, "x", -0.12, z)
     _chain(drawing, up, Lz, "y", 0.12, z)
     d0 = plate["furos"][0][2] if plate.get("furos") else 0.0
     weight = sum(q["weight"] for q in members)
-    drop = Wz + 0.27 + TEXT_DROP
-    ann.append(_text((0.0, y - drop), t("sdraw.plate", mark=mark, l=_n(L * 1000, 0), w=_n(W * 1000, 0),
+    drop = Wz + under + 0.01 + TEXT_DROP                 # (its line of text under its dimensions)
+    shaped = bool(plate.get("contorno"))
+    ann.append(_text((0.0, y - drop), t("sdraw.gusset" if shaped else "sdraw.plate", mark=mark, l=_n(L * 1000, 0),
+                                        w=_n(W * 1000, 0),
                                         t=_n(tp, 0), holes=len(xs), d=_n(d0, 0), n=len(members),
                                         kg=_n(weight, 1), s=SCALE // z)))
     return y - drop - ROW

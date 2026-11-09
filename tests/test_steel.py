@@ -461,7 +461,7 @@ class Shed(unittest.TestCase):
         made = bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, hea, ipe, catalog.BY_KEY["madre_c160"],
                               catalog.BY_KEY["contrav_l80"])
         kinds = [doc.ifc.kind_of(g) for g in made]
-        self.assertEqual(kinds.count("steel_connection"), 4)
+        self.assertEqual(kinds.count("steel_connection"), 4 + 8)            # (0.503: the wall braces' 8 gussets)
         columns = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcColumn")]
         rafters = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcBeam")]
         self.assertEqual((len(columns), len(rafters)), (4, 4))
@@ -519,7 +519,8 @@ class Marks(unittest.TestCase):
         self.assertGreater(sum(r["weight"] for r in rows), 1000.0)
         self.assertEqual([r["mark"][0] for r in rows][:2], ["P", "V"])
         bolts = schedules.rows(doc, "bolts")
-        self.assertEqual([(b["bolt"], b["count"]) for b in bolts], [("M20 × 530", 16)])
+        self.assertEqual([(b["bolt"], b["count"]) for b in bolts], [("M20 × 530", 16), ("M16 × 35", 16)])  # (0.503:
+        # the gussets' — 2 at each end of the 8 wall braces)
         self.assertGreater(bim.number_steel(doc), 0)
         tags = {doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]}
         self.assertEqual(tags, set(by_mark))
@@ -528,7 +529,7 @@ class Marks(unittest.TestCase):
         doc.undo()
         self.assertTrue(all(not doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]))
         counts = schedules.counts(doc)
-        self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 1))
+        self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 2))
 
 
 class Fabrication(unittest.TestCase):
@@ -614,6 +615,92 @@ class ShopDrawing(unittest.TestCase):
         self.assertGreater(len(drawing.lines), 30)
         self.assertIn("steel_parts", sheets.KINDS)
         self.assertEqual(sheets.USUAL_SCALES["steel_parts"], 50)
+
+
+class Gussets(unittest.TestCase):
+    """(0.503) The braces' gussets."""
+
+    def _gussets(self, doc):
+        return [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                if doc.ifc.kind_of(a.GlobalId) == "steel_connection" and doc.ifc.connection_params(a.GlobalId)[0] ==
+                "gusset"]
+
+    def test_shed_gussets(self):
+        """A shed's wall braces (L 80×8) get a gusset at each end on the HEB 200 columns — 8 in its two walls' end bay
+        —: the brace held back the same at both ends, clear of the column's flanges' tips by the 20 mm gap; the plate
+        10 mm thick in the brace's plane against the back of its leg, two M16 bolts through both, a weld; no warnings;
+        the gussets alike share one mark, their NC1 with their own outline; the gap made 40: held back more."""
+        import json
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, steel_fabrication
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        gussets = self._gussets(doc)
+        self.assertEqual(len(gussets), 8)
+        for a in gussets:
+            _kind, (brace, column), params = doc.ifc.connection_params(a.GlobalId)
+            parts = doc.ifc.connection_parts(a)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcMechanicalFastener")), 2)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcFastener")), 1)
+            self.assertEqual(doc.ifc.connection_warnings(a.GlobalId), [])
+            e0, e1 = doc.ifc.steel_cuts(doc.ifc.by_guid(brace))[2]
+            self.assertAlmostEqual(e0, e1, places=6)
+            self.assertLess(e0, -0.15)
+            centre = doc.ifc.column_box(column)[0]
+            verts = doc.get(brace).mesh.verts
+            self.assertGreaterEqual(float(np.abs(verts[:, 0] - centre[0]).min()), 0.10 + 0.02 - 1e-3)
+            plate = next(p for p in parts if p.is_a("IfcPlate"))
+            pv = doc.get(plate.GlobalId).mesh.verts
+            self.assertAlmostEqual(float(pv[:, 1].max() - pv[:, 1].min()), 0.010, places=4)     # (10 mm, across)
+            self.assertAlmostEqual(float(pv[:, 1].max()), float(verts[:, 1].min()), places=4)  # (on the leg's back)
+            record = json.loads(doc.ifc._params(plate)["Chapa"])
+            self.assertEqual(len(record["furos"]), 2)
+            self.assertGreaterEqual(len(record["contorno"]), 4)
+        marks, _pieces = doc.ifc.steel_marks()
+        plates = [p.GlobalId for a in gussets for p in doc.ifc.connection_parts(a) if p.is_a("IfcPlate")]
+        self.assertEqual(len({marks[g] for g in plates}), 1)
+        text = steel_fabrication.nc1_files(doc)[marks[plates[0]]]
+        ak = text.split("AK\n", 1)[1].split("BO\n", 1)[0].strip().splitlines()
+        self.assertEqual(len(ak), len(record["contorno"]) + 1)              # (its own outline, closed)
+        brace = doc.ifc.connection_params(gussets[0].GlobalId)[1][0]
+        before = doc.ifc.steel_cuts(doc.ifc.by_guid(brace))[2]
+        bim.set_connection(doc, gussets[0].GlobalId, gap=40.0)
+        after = doc.ifc.steel_cuts(doc.ifc.by_guid(brace))[2]
+        end = int(doc.ifc.connection_params(gussets[0].GlobalId)[2]["end"])
+        self.assertLess(after[end], before[end] - 0.015)
+        self.assertAlmostEqual(after[1 - end], before[1 - end], places=6)
+
+    def test_add_gussets_and_tubes(self):
+        """A shed without its plates: no gussets; «Gousset» on all its braces: the wall braces' 8 (the roof's reach no
+        column); again: none more; a tube brace is refused; deleting a brace takes its gussets; undone, back."""
+        from arqbim.ifc import catalog
+        from arqbim.ifc.edit import EditRefused
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                       plates=False)
+        self.assertEqual(self._gussets(doc), [])
+        made = bim.add_gussets(doc)
+        self.assertEqual(len(made), 8)
+        self.assertEqual(bim.add_gussets(doc), [])
+        columns = bim.steel_columns(doc)
+        tube = bim.add_steel_member(doc, (0.0, 0.0, 0.0), (6.0, 0.0, 3.0), catalog.BY_KEY["contrav_chs76"],
+                                    function="brace")
+        self.assertEqual(bim.gusset_ends(doc, [tube]), [])
+        with self.assertRaises(EditRefused):
+            doc.ifc.add_connection("gusset", [tube, columns[0]])
+        brace = doc.ifc.connection_params(made[0])[1][0]
+        n = len(doc.ifc.connections_on([brace]))
+        self.assertEqual(n, 2)
+        bim.delete(doc, [brace])
+        self.assertEqual(len(self._gussets(doc)), 6)
+        doc.undo()
+        self.assertEqual(len(self._gussets(doc)), 8)
 
 
 def dataclasses_replace(spec, **fields):

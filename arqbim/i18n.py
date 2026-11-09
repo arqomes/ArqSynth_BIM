@@ -3389,6 +3389,27 @@ _STRINGS = {
                                                                                "({v} mm)."),
     "connection.warn.tall": ("⚠ O cutelo não cabe entre os banzos da viga ({v} mm).",
                              "⚠ The fin plate does not fit between the beam's flanges ({v} mm)."),
+    "connection.gusset": ("Gousset", "Gusset plate"),                                                 # (0.503)
+    "cmd.gusset": ("Gousset", "Gusset plate"),
+    "act.gusset": ("Gousset", "Gusset plate"),
+    "tip.gusset": ("Nos contraventamentos em cantoneira escolhidos (nenhum escolhido: em todos), em cada ponta que chega "
+                   "a um pilar de aço: um gousset soldado ao pilar, o contraventamento recuado e aparafusado a ele.",
+                   "On the angle braces selected (none selected: on all of them), at each end reaching a steel column: "
+                   "a gusset plate welded to the column, the brace held back and bolted to it."),
+    "info.gussets": ("{n} gousset(s) nas pontas dos contraventamentos que chegam a pilares de aço.",
+                     "{n} gusset plate(s) at the ends of the braces reaching steel columns."),
+    "info.gussets_none": ("Nenhum contraventamento em cantoneira chega a um pilar de aço sem gousset.",
+                          "No angle brace reaches a steel column without a gusset plate."),
+    "connection.field.gap": ("Folga do contraventamento ao pilar (mm)", "Brace clear of the column (mm)"),
+    "connection.field.edge": ("Chapa para além da aba (mm)", "Plate past the leg (mm)"),
+    "connection.field.gusset.g": ("Parafusos ao canto da cantoneira (mm; 0: automático)",
+                                  "Bolts from the angle's heel (mm; 0: automatic)"),
+    "connection.field.gusset.rows": ("Parafusos ao longo do contraventamento", "Bolts along the brace"),
+    "connection.field.gusset.p": ("Passo entre parafusos (mm)", "Pitch (mm)"),
+    "connection.warn.root": ("⚠ O furo fica na raiz da cantoneira: os parafusos a pelo menos {v} mm do canto.",
+                             "⚠ The hole falls in the angle's root: the bolts at least {v} mm from its heel."),
+    "refuse.connection_brace_angle": ("o gousset liga contraventamentos em cantoneira (um tubo precisa de outra ligação)",
+                                      "a gusset plate joins angle braces (a tube needs another connection)"),
     "connection.field.A": ("Largura da chapa (mm; 0: automática)", "Plate width (mm; 0: automatic)"),
     "connection.field.B": ("Comprimento da chapa (mm; 0: automático)", "Plate length (mm; 0: automatic)"),
     "connection.field.tp": ("Espessura da chapa (mm)", "Plate thickness (mm)"),
@@ -9499,6 +9520,9 @@ _STRINGS = {
                     "{mark} — {section} {grade} — {n} piece(s) {l} m long — {kg} kg"),
     "sdraw.plate": ("{mark} — chapa {l} × {w} × {t} mm, {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
                     "{mark} — plate {l} × {w} × {t} mm, {holes} holes Ø{d} — {n} piece(s) — {kg} kg (1:{s})"),
+    "sdraw.gusset": ("{mark} — gousset {t} mm (cabe em {l} × {w}), {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
+                     "{mark} — gusset plate {t} mm (within {l} × {w}), {holes} holes Ø{d} — {n} piece(s) — {kg} kg "
+                     "(1:{s})"),                                                                        # (0.503)
     "tree.rebar_details_view": ("Pormenores tipo de armaduras", "Typical reinforcement details"),
     "rdet.joint": ("Nó viga-pilar — {beam} / {column}", "Beam-column joint — {beam} / {column}"),
     "rdet.splices": ("Emendas por sobreposição", "Lap splices"),

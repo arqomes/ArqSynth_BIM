@@ -2707,7 +2707,7 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
     purlins of `purlin`, X bracing of `brace` in its end bays; its knees and ridges mitred, base plates under its
     columns. options: span, eave, slope (degrees), spacing, purlins (their spacing), bracing, plates. One undo step.
     The GlobalIds of what it made."""
-    from ..core import steel_shed as core_shed
+    from ..core import steel as core_steel, steel_shed as core_shed
     language = lang()
     shed = core_shed.layout(origin, direction, length, rafter_depth=float(rafter.profile[1]),
                             **{k: v for k, v in options.items() if k in core_shed.DEFAULTS})
@@ -2728,6 +2728,14 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
         for k in shed.plates:
             a = ifc.add_connection("base_plate", [made[k]], None, language)
             extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
+        if shed.plates and getattr(brace, "section", None) and \
+                core_steel.get(brace.section).family in ("L", "LU"):      # (0.503: the walls' braces on gussets)
+            for k, piece in enumerate(shed.pieces):
+                if piece.role != "brace":
+                    continue
+                for end, col in ifc.brace_end_columns(made[k]).items():
+                    a = ifc.add_connection("gusset", [made[k], col], {"end": end}, language)
+                    extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
         return made + extra
 
     return doc.execute(IfcCommand(t("cmd.steel_shed"), action)).result
@@ -2770,6 +2778,44 @@ def add_beam_connections(doc, kind, beams, params=None):
                 for b, c, end in todo]
 
     return doc.execute(IfcCommand(t("cmd." + kind), action, changed=list({b for b, _c, _e in todo}))).result
+
+
+def gusset_ends(doc, braces=None):
+    """(0.503) [(brace, column, end)] — the ends of the steel braces given (None: every one) that reach a steel column
+    and have no gusset there yet; braces not of an angle left out."""
+    from ..core import steel
+    from ..ifc.steel_connections import ANGLE_FAMILIES
+    if braces is None:
+        braces = [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcMember"]
+    out = []
+    for brace in braces:
+        if doc.ifc.kind_of(brace) != "steel_member":
+            continue
+        sec = steel.get(doc.ifc.steel_section(brace) or "")
+        if sec is None or sec.family not in ANGLE_FAMILIES:
+            continue
+        taken = {int(doc.ifc.connection_params(a.GlobalId)[2].get("end", -1)) for a in doc.ifc.connections_on([brace])
+                 if doc.ifc.connection_params(a.GlobalId)[0] == "gusset"}
+        for end, column in doc.ifc.brace_end_columns(brace).items():
+            if end not in taken:
+                out.append((brace, column, end))
+    return out
+
+
+def add_gussets(doc, braces=None, params=None):
+    """(0.503) A gusset at each end of the steel braces given (None: every one) that reaches a steel column: the plate
+    welded to the column, the brace held back clear of it and bolted to the plate. One undo step. The connections'
+    GlobalIds."""
+    language = lang()
+    todo = gusset_ends(doc, braces)
+    if not todo:
+        return []
+
+    def action(ifc):
+        return [ifc.add_connection("gusset", [b, c], dict(params or {}, end=end), language).GlobalId
+                for b, c, end in todo]
+
+    return doc.execute(IfcCommand(t("cmd.gusset"), action, changed=list({b for b, _c, _e in todo}))).result
 
 
 def set_connection(doc, guid, **values):

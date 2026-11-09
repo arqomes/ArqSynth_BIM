@@ -306,6 +306,25 @@ def fin_plate_icon():
     return theme.icon(pm)
 
 
+def gusset_icon():
+    """(0.503) Gousset: a column, a plate standing out of it, a brace coming up to it, two bolts along the brace."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawRect(QtCore.QRectF(3, 2, 6, 28))                                        # (the column)
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in
+                                   ((9, 12), (17, 12), (23, 19), (23, 27), (9, 27))]))     # (the gusset)
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in
+                                   ((13, 23), (17, 19), (30, 6), (30, 10), (21, 23))]))     # (the brace, rising)
+    p.setBrush(QtGui.QColor(INK))
+    for x, y in ((17.5, 21.0), (21.5, 17.0)):
+        p.drawEllipse(QtCore.QPointF(x, y), 1.3, 1.3)
+    p.end()
+    return theme.icon(pm)
+
+
 def steel_shed_icon():
     """(0.499) Pórtico de nave: two portal frames, one behind the other, with their ridges."""
     pm, p = _canvas()

@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.503 — Gousset dos contraventamentos (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.503.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (separador **Estrutura**): dois cliques, por exemplo 6 m.
+2. Aproxime-se (roda do rato) do pé de um pilar de uma parede com a cruz dos contraventamentos: a cantoneira acaba
+   antes do pilar e está aparafusada (2 parafusos) a uma chapa recortada, o **gousset**, soldada à alma do pilar entre
+   os banzos. O mesmo no topo do pilar.
+3. Clique no gousset: nas Propriedades aparece **Gousset** com a espessura, os parafusos, a **Folga do contraventamento
+   ao pilar** e as outras medidas.
+4. Escreva **40** na Folga e carregue Enter: a cantoneira recua mais (20 mm) e o gousset cresce com ela.
+5. Ctrl+Z: volta aos 20 mm.
+6. Faça Ctrl+N e outra nave, desta vez com **Chapas de base** desligado na barra de parâmetros do Pórtico de nave:
+   não leva chapas nem gousset. Clique num contraventamento de uma parede e, na barra da seleção, em **Gousset**: esse
+   leva gousset nas duas pontas. Clique no vazio (nada escolhido) e use **Estrutura** ▸ painel **Ligação** ▸ a seta ao
+   lado de **Chapa de topo** ▸ **Gousset**: a mensagem diz que pôs nos outros (6).
+7. Abra a vista **Peças de aço (fabrico)** (navegador do projeto) numa folha: no fim aparece o gousset (Ch2) com o seu
+   contorno, os 2 furos e as cotas a partir da borda.
+
 ## 0.502 — Desenho de fabrico das peças de aço (estrutura metálica, passo 6)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.502.0**.

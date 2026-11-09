@@ -1944,7 +1944,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
 
     CONNECTION_FIELDS = {"base_plate": ("A", "B", "tp", "n", "d", "e", "proj", "embed", "grout", "a"),
                          "end_plate": ("tp", "W", "top", "bottom", "rows", "p", "g", "d", "e", "a"),      # (0.498)
-                         "fin_plate": ("tp", "w", "rows", "p", "e", "eh", "d", "a")}
+                         "fin_plate": ("tp", "w", "rows", "p", "e", "eh", "d", "a"),
+                         "gusset": ("tp", "rows", "p", "e", "d", "gap", "g", "edge", "a")}                # (0.503)
 
     def _connection_rows(self, guid, p):
         """(0.497) A steel connection's values (mm; a plate's 0: from the column), each changed here — the whole
@@ -1969,18 +1970,20 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             return parse
 
         for k in self.CONNECTION_FIELDS.get(kind, ()):
+            own = "connection.field.{}.{}".format(kind, k)              # (0.503: a field its kind words its own way)
+            label = t(own if has(own) else "connection.field." + k)
             if k == "n":
-                self._choice_combo(t("connection.field.n"), "connection.n", guid,
+                self._choice_combo(label, "connection.n", guid,
                                    [(str(n), n) for n in (2, 4, 6, 8)], int(p.get("n") or 4))
             elif k == "rows":                              # (0.498) rows of bolts
-                self._choice_combo(t("connection.field.rows"), "connection.rows", guid,
+                self._choice_combo(label, "connection.rows", guid,
                                    [(str(n), n) for n in range(1, 11)], int(p.get("rows") or 3))
             elif k == "d":
-                self._choice_combo(t("connection.field.d"), "connection.d", guid,
+                self._choice_combo(label, "connection.d", guid,
                                    [("M{:g}".format(d), d) for d in sc.BOLT_SIZES], float(p.get("d") or 20.0))
             else:
                 value = float(p.get(k) or 0.0)
-                self._text_editor(t("connection.field." + k), "{:g}".format(value).replace(".", sep), "connection." + k,
+                self._text_editor(label, "{:g}".format(value).replace(".", sep), "connection." + k,
                                   guid, parse=number(k), least=0.0)
         for code, value in p.get("warnings") or ():
             warn = self._row(t("connection.warn." + code, v="{:g}".format(value).replace(".", sep)))
