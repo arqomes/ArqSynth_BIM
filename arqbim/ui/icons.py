@@ -374,6 +374,24 @@ def number_steel_icon():
     return theme.icon(pm)
 
 
+def steel_truss_icon():
+    """(0.507) Treliça: two chords, the verticals and the diagonals of a Pratt truss between them."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.8))
+    p.drawLine(QtCore.QPointF(2, 9), QtCore.QPointF(30, 9))
+    p.drawLine(QtCore.QPointF(2, 23), QtCore.QPointF(30, 23))
+    p.setPen(_pen(INK, 1.2))
+    xs = (2, 9, 16, 23, 30)
+    for x in xs:
+        p.drawLine(QtCore.QPointF(x, 9), QtCore.QPointF(x, 23))
+    for a, b in ((2, 9), (9, 16)):
+        p.drawLine(QtCore.QPointF(a, 9), QtCore.QPointF(b, 23))
+    for a, b in ((16, 23), (23, 30)):
+        p.drawLine(QtCore.QPointF(b, 9), QtCore.QPointF(a, 23))
+    p.end()
+    return theme.icon(pm)
+
+
 def steel_nc_icon():
     """(0.501) Exportar para fabrico: a sheet of the NC file going out, a drilled hole on a bar."""
     pm, p = _canvas()
@@ -2909,6 +2927,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "column": column_icon, "beam": beam_icon, "footing": footing_icon, "pipe": pipe_icon, "duct": duct_icon,
               "steel_member": steel_member_icon,                                              # (0.495)
               "steel_shed": steel_shed_icon,                                                  # (0.499)
+              "steel_truss": steel_truss_icon,                                                # (0.507)
               "grid": grid_icon,
               "door": door_icon, "window": window_icon, "section": section_icon, "dimension": dimension_icon,
               "orbit": orbit_icon, "pan": pan_icon, "zoom": zoom_icon, "zoom_window": zoom_window_icon,

@@ -2749,6 +2749,28 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
     return doc.execute(IfcCommand(t("cmd.steel_shed"), action)).result
 
 
+def steel_truss(doc, start, end, chord, web, storey=None, **options):
+    """(0.507) A steel truss (core/steel_truss) from `start` to `end` (seen from above): its chords of `chord`, its
+    verticals and diagonals of `web` (steel types). options: kind (pratt, howe, warren), height, panel, elevation. One
+    undo step. The GlobalIds of its pieces."""
+    from ..core import steel_truss as core_truss
+    language = lang()
+    truss = core_truss.layout(start, end, **{k: v for k, v in options.items() if k in core_truss.DEFAULTS})
+    words = {"chord": "elem.chord", "vertical": "elem.truss_vertical", "diagonal": "elem.truss_diagonal"}
+
+    def action(ifc):
+        made = []
+        for piece in truss.pieces:
+            spec = chord if piece.role == "chord" else web
+            name = "{} {}".format(t(words[piece.role]), ifc.count("IfcMember") + 1)
+            made.append(ifc.add_steel_member(spec, piece.start, piece.end, name, language, storey=storey,
+                                             function=piece.function, cardinal=piece.cardinal,
+                                             rotation=piece.rotation).GlobalId)
+        return made
+
+    return doc.execute(IfcCommand(t("cmd.steel_truss"), action)).result
+
+
 def number_steel(doc, renumber=False):
     """(0.500) The steel pieces' marks written (their IFC Tag): the same mark for the same pieces, kept where they can
     be (renumber: all anew). One undo step. How many marks changed."""

@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.507 — Treliça (estrutura metálica, passo 4)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.507.0**.
+
+1. Faça Ctrl+N. No separador **Estrutura**, clique na **seta** ao lado de **Pórtico de nave** e escolha **Treliça**.
+2. Na barra de parâmetros: **Tipo** Pratt, **Altura** 1,2 m, **Painéis de** 1,5 m, **Banzo inferior a** 3 m (deixe
+   como está).
+3. Clique num ponto da planta (o primeiro apoio) e afaste o rato: vê a treliça desenhada a acompanhar o rato. Clique
+   12 m ao lado (ou escreva **12** e carregue Enter).
+4. Rode a vista (3D): uma treliça de 12 m com 8 painéis — os banzos em SHS, os montantes e as diagonais em tubo; as
+   diagonais descem das pontas para o meio.
+5. Ctrl+Z desfaz a treliça toda. Repita com **Tipo** Howe (as diagonais sobem para o meio) e Warren (em ziguezague,
+   só com os montantes das pontas).
+6. Clique numa diagonal: nas Propriedades aparece como «Diagonal …», com o perfil e o peso.
+
 ## 0.506 — Viga apoiada noutra viga (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.506.0**.

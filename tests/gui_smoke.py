@@ -662,6 +662,7 @@ def bim_flow():
     purlin_cleat_flow()
     equal_nodes_flow()
     beam_on_girder_flow()
+    steel_truss_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20422,6 +20423,46 @@ def beam_on_girder_flow():
     doc.modified = False
     check("viga_viga", offered and on_girder and bolts >= 2,
           "oferecido={} na_principal={} parafusos={}".format(offered, on_girder, bolts))
+
+
+def steel_truss_flow():
+    """0.507 — The «Treliça» tool (Estrutura, in the list of the Pórtico de nave): Pratt, height 1,2 m; two clicks
+    12 m apart along X: 2 chords, 9 verticals, 8 diagonals; one undo takes it all. Captured: 507_trelica.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("top")
+    vp.zoom_box((np.array((-2.0, -4.0, 0.0)), np.array((14.0, 4.0, 1.0))))
+    pump(300)
+    in_ribbon = win.ribbon_item("steel_truss") is not None
+    win.set_tool("steel_truss")
+    pump(100)
+    tool = win.tool
+    tool.set_option("kind", "pratt")
+    tool.set_option("height", 1.2)
+    before = {o.id for o in doc.objects.values() if o.is_bim}
+    for p in ((0.0, 0.0, 0.0), (12.0, 0.0, 0.0)):
+        move(vp.project(np.array(p)), 3)
+        click()
+        pump(200)
+    pump(400)
+    made = [g for g in (o.id for o in doc.objects.values() if o.is_bim) if g not in before]
+    names = [doc.ifc.by_guid(g).Name.split(" ")[0] for g in made]
+    built = len(made) == 19 and names.count("Banzo") == 2 and names.count("Montante") == 9 \
+        and names.count("Diagonal") == 8
+    win.set_tool("select")
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("507_trelica.png")
+    doc.undo()
+    pump(300)
+    undone = all(doc.get(g) is None for g in made)
+    doc.modified = False
+    check("trelica", in_ribbon and built and undone,
+          "fita={} pecas={} ({} banzos, {} montantes, {} diagonais) desfeito={}".format(
+              in_ribbon, len(made), names.count("Banzo"), names.count("Montante"), names.count("Diagonal"), undone))
 
 
 def steel_sheet_flow():

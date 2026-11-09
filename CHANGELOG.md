@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.507.0 — 2026-11-09
+
+**Estrutura metálica, passo 4: a treliça.**
+
+- Ferramenta nova **Treliça** (separador **Estrutura**, na lista da seta ao lado do **Pórtico de nave**): com dois
+  cliques — os dois apoios — faz uma treliça de banzos paralelos: o **banzo inferior** (por omissão a 3 m do nível),
+  o **banzo superior** (1,2 m acima), os **montantes** e as **diagonais**, em painéis de cerca de 1,5 m (sempre um
+  número par, para ficar igual dos dois lados do meio).
+- Três tipos na barra de parâmetros: **Pratt** (as diagonais descem para o meio — à tração), **Howe** (sobem para o
+  meio) e **Warren** (em ziguezague, só com os montantes das pontas).
+- Também na barra: a altura, o comprimento dos painéis, a altura do banzo inferior e os perfis — **Banzos** (por
+  omissão SHS 150×150×8) e **Montantes e diagonais** (CHS Ø76,1×4).
+- Cada barra é uma peça metálica (IfcMember) com o seu nome (Banzo, Montante, Diagonal) e marca; um só Ctrl+Z desfaz
+  a treliça toda.
+
 ## 0.506.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: viga apoiada noutra viga.**

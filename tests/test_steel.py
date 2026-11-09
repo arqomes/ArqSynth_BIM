@@ -902,6 +902,62 @@ class BeamOnGirder(unittest.TestCase):
         self.assertEqual(doc.ifc.connection_params(fins[0].GlobalId)[2]["rows"], 3)
 
 
+class Truss(unittest.TestCase):
+    """(0.507) The truss."""
+
+    def test_layout(self):
+        """12 m in panels of 1,5 m: 8 panels; a Pratt: 2 chords, 9 verticals, 8 diagonals falling towards the middle
+        (from the top on the support's side to the bottom on the middle's); a Howe: rising towards it; a Warren: only
+        its 2 end verticals, its diagonals in a zigzag; 10,5 m: 7 panels made 8 (an even number)."""
+        import numpy as np
+        from arqbim.core import steel_truss
+        pratt = steel_truss.layout((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), "pratt", 1.2, 1.5, 3.0)
+        roles = [p.role for p in pratt.pieces]
+        self.assertEqual((pratt.panels, roles.count("chord"), roles.count("vertical"), roles.count("diagonal")),
+                         (8, 2, 9, 8))
+        chords = [p for p in pratt.pieces if p.role == "chord"]
+        self.assertEqual(sorted(round(float(c.start[2]), 6) for c in chords), [3.0, 4.2])
+        for d in (p for p in pratt.pieces if p.role == "diagonal"):
+            middle_side = d.end if abs(d.end[0] - 6.0) < abs(d.start[0] - 6.0) else d.start
+            support_side = d.start if middle_side is d.end else d.end
+            self.assertLess(middle_side[2], support_side[2])                 # (Pratt: down towards the middle)
+        howe = steel_truss.layout((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), "howe", 1.2, 1.5, 3.0)
+        for d in (p for p in howe.pieces if p.role == "diagonal"):
+            middle_side = d.end if abs(d.end[0] - 6.0) < abs(d.start[0] - 6.0) else d.start
+            support_side = d.start if middle_side is d.end else d.end
+            self.assertGreater(middle_side[2], support_side[2])              # (Howe: up towards the middle)
+        warren = steel_truss.layout((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), "warren", 1.2, 1.5, 3.0)
+        self.assertEqual([p.role for p in warren.pieces].count("vertical"), 2)
+        ups = [bool(d.end[2] > d.start[2]) for d in warren.pieces if d.role == "diagonal"]
+        self.assertTrue(all(a != b for a, b in zip(ups, ups[1:])))           # (a zigzag)
+        self.assertEqual(steel_truss.layout((0.0, 0.0, 0.0), (10.5, 0.0, 0.0), panel=1.5).panels, 8)
+        np.testing.assert_allclose(pratt.pieces[0].end, (12.0, 0.0, 3.0))
+        with self.assertRaises(ValueError):
+            steel_truss.layout((0.0, 0.0, 0.0), (12.0, 0.0, 0.0), "fink")
+
+    def test_made(self):
+        """Made in the model, SHS 150 chords and CHS 76 web, 12 m: 19 members (IfcMember), the chords of SHS, the web
+        of CHS, named Banzo / Montante / Diagonal; marks for them; the file valid; one undo takes it all."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        made = bim.steel_truss(doc, (0.0, 0.0, 0.0), (12.0, 0.0, 0.0), catalog.BY_KEY["pilar_shs150"],
+                               catalog.BY_KEY["contrav_chs76"], kind="pratt", height=1.2, panel=1.5, elevation=3.0)
+        self.assertEqual(len(made), 19)
+        self.assertTrue(all(doc.ifc.by_guid(g).is_a("IfcMember") for g in made))
+        sections = [doc.ifc.steel_section(g) for g in made]
+        self.assertEqual(sum(1 for s in sections if s.startswith("SHS")), 2)
+        self.assertEqual(sum(1 for s in sections if s.startswith("CHS")), 17)
+        names = [doc.ifc.by_guid(g).Name.split(" ")[0] for g in made]
+        self.assertEqual({names[0], names[2], names[-1]}, {"Banzo", "Montante", "Diagonal"})
+        marks, _pieces = doc.ifc.steel_marks()
+        self.assertTrue(all(marks.get(g) for g in made))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        doc.undo()
+        self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)
