@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.490 — «Atualizar» também para as etiquetas dos ambientes e o Passeio
+
+Precisa do Presentation local (`http://127.0.0.1:3002`) e do programa por **`C:\BIM\ArqSynth BIM.bat`** (o título deve
+dizer **0.490.0**). Use a casa da 0.488 (duas divisões com portas e os ambientes «Sala» e «Cozinha»).
+
+1. No BIM, clique em **Exportar / atualizar** e grave o ZIP; no Presentation importe-o (botão **ArqSynth BIM**).
+2. No Presentation, na página 3D:
+   - mude a cor da etiqueta «Sala» e arraste-a um pouco, sem sair da sala;
+   - no Passeio, mude o movimento de câmara de um caminho (por exemplo **Cinemático**).
+3. No BIM, mude o nome do ambiente «Sala» para «Sala de estar». Na interface do Presentation, separador **Passeio**,
+   escolha a **Cozinha** como **Início** e ponha o **Tempo em cada ambiente** em `5` s.
+4. Exporte outra vez e, no Presentation, importe o ZIP e escolha **Atualizar**:
+   - a etiqueta diz «SALA DE ESTAR», com a cor que lhe deu e no sítio para onde a arrastou;
+   - no Passeio, a zona chama-se «Sala de estar», o início é a Cozinha, a visita guiada começa por ela e espera 5 s
+     em cada ambiente;
+   - o caminho continua com o movimento **Cinemático**.
+5. No BIM, desligue **Passeio Virtual pelos ambientes**, exporte e atualize: no Presentation o passeio fica desligado,
+   mas o que lá fez continua guardado (volte a ligá-lo no BIM e atualize: volta igual).
+
 ## 0.489 — «Atualizar» no Presentation leva as mudanças do BIM às cenas
 
 Precisa do Presentation local a correr (`http://127.0.0.1:3002`) e do programa aberto por

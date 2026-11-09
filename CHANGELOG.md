@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.490.0 — 2026-11-09
+
+**A mesma regra do «Atualizar» para as etiquetas dos ambientes e o Passeio Virtual** (o dono: «Sim, também»).
+
+Ao exportar outra vez do BIM e escolher **Atualizar** no Presentation, **o que se prepara no BIM manda; o que só se faz
+no Presentation fica** — agora também aqui:
+
+- **Etiquetas dos ambientes**: o nome, a área e o número vêm do BIM. O aspeto escolhido no Presentation (forma, cores,
+  tamanho, colocação) fica. O sítio também fica, enquanto estiver dentro do ambiente; se o ambiente mudou de sítio no
+  BIM, a etiqueta vai com ele. A etiqueta de um ambiente apagado no BIM sai. As etiquetas feitas no Presentation ficam.
+- **Passeio Virtual**:
+  - vêm do BIM: os pisos, as zonas dos ambientes (contorno, nome, tipo, piso, se entram no passeio), os caminhos pelas
+    portas e as ligações pelas escadas, o **início**, a **visita guiada** e o **tempo em cada ambiente**, e se o passeio
+    está ligado;
+  - ficam do Presentation: as zonas, caminhos e ligações desenhados lá, os apartamentos, quem vê cada zona, o movimento
+    de câmara de cada caminho, a câmara de uma zona (enquanto o ambiente não mudar de sítio), o mini-mapa e as
+    permissões;
+  - um início ou uma visita guiada escolhidos no Presentation com zonas feitas lá ficam;
+  - o que pertencia a um ambiente apagado no BIM sai, também os caminhos feitos lá que iam para ele.
+- Com o passeio desligado no BIM, o Presentation desliga-o sem apagar o que lá se fez.
+- A mudança é só no Presentation (o importador, ramo `integracao-arqsynth-bim`).
+
 ## 0.489.0 — 2026-11-09
 
 **«Atualizar» no Presentation leva as mudanças do BIM às cenas que já lá estão** (o dono: «O "Atualizar" primeiro»).
