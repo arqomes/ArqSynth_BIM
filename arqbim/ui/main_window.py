@@ -8922,6 +8922,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return t("tree.steel_parts")
         if kind == "steel_erection":                                   # (0.510: the steel's erection plan)
             return t("tree.steel_erection")
+        if kind == "steel_assemblies":                                 # (0.515: the steel assemblies' drawing)
+            return t("tree.steel_assemblies")
         if kind == "schedule":                                         # (a schedule's table, 0.132)
             if str(ref).startswith("def:"):
                 own = next((d for d in self.doc.schedule_defs if "def:" + d.uid == ref), None)

@@ -9625,6 +9625,9 @@ _STRINGS = {
     "sdraw.plate": ("{mark} — chapa {l} × {w} × {t} mm, {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
                     "{mark} — plate {l} × {w} × {t} mm, {holes} holes Ø{d} — {n} piece(s) — {kg} kg (1:{s})"),
     "sdraw.holes": (" — {n} furos Ø{d}", " — {n} holes Ø{d}"),                                       # (0.512)
+    "sdraw.assembly": ("Conjunto {mark} — {n} un. — {piece} + {parts} — {kg} kg cada",
+                       "Assembly {mark} — {n} off — {piece} + {parts} — {kg} kg each"),                # (0.515)
+    "tree.steel_assemblies": ("Conjuntos de aço (fabrico)", "Steel assemblies (fabrication)"),
     "sdraw.gusset": ("{mark} — gousset {t} mm (cabe em {l} × {w}), {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
                      "{mark} — gusset plate {t} mm (within {l} × {w}), {holes} holes Ø{d} — {n} piece(s) — {kg} kg "
                      "(1:{s})"),                                                                        # (0.503)

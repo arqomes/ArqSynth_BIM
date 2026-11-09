@@ -1266,6 +1266,9 @@ def of_view(doc, kind, ref, title):
     if kind == "steel_parts":                                       # (0.502: the steel pieces' fabrication drawing)
         from .steel_drawings import parts_drawing
         return parts_drawing(doc, title)
+    if kind == "steel_assemblies":                                  # (0.515: the assemblies, with their welds)
+        from .steel_drawings import assemblies_drawing
+        return assemblies_drawing(doc, title)
     if kind == "steel_erection":                                    # (0.510: the steel's erection plan)
         from .steel_erection import erection_plan
         return erection_plan(doc, title)

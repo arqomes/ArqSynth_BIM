@@ -1624,9 +1624,10 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
 6. **Desenhos de fabrico e de montagem.** (0.502.0: a vista **Peças de aço (fabrico)** — cada marca de perfil de lado
    com os cortes e recortes como estão, comprimento e altura cotados e a linha de texto; as chapas a 1:10 com os furos e
    as cotas em cadeia — numa folha a 1:50. 0.510.0: a **Planta de montagem (aço)** — tudo visto de cima, os eixos, a
-   marca de cada peça num lugar livre —, a 1:100. Faltam: a planta do banzo com furos nos perfis, os cortes das
-   secções, o desenho de conjunto com as soldaduras ISO 2553, os alçados de montagem e os pormenores tipo das
-   ligações.)
+   marca de cada peça num lugar livre —, a 1:100. 0.515.0: os **Conjuntos de aço (fabrico)** — cada conjunto com as
+   chapas soldadas e os símbolos ISO 2553 (garganta, dos dois lados, toda a volta). Faltam: a planta do banzo com
+   furos nos perfis, os cortes das secções, a lista de peças em cada conjunto, os alçados de montagem e os pormenores
+   tipo das ligações.)
    Desenho de peça (como o do DetailCraft), desenho de conjunto (a mais: a peça
    principal com as chapas soldadas, símbolos de soldadura ISO 2553, lista de peças) e planta de montagem (plantas e
    alçados com as marcas dos conjuntos, eixos e níveis); os pormenores tipo de cada ligação (1:10) com chamadas nas

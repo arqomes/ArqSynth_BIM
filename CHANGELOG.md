@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.515.0 — 2026-11-09
+
+**Estrutura metálica, passo 6: o desenho de conjuntos com as soldaduras.**
+
+- Vista nova **Conjuntos de aço (fabrico)** no navegador do projeto: cada **conjunto** uma vez — a peça com as chapas
+  soldadas a ela (o pilar com a chapa de base, os gousset e a chapa do joelho; a asna com as orelhas e as chapas de
+  topo…), os conjuntos iguais contados juntos —, desenhado de lado como no desenho de peças, com as chapas no sítio.
+- Cada soldadura com o **símbolo ISO 2553** do cordão de ângulo: a seta até à chapa, a linha de referência, o
+  triângulo (dos dois lados, quando a chapa é soldada dos dois lados — cutelo, gousset, orelha), a garganta «a6»
+  antes dele e o **círculo de «toda a volta»** quando a peça é soldada à chapa a toda a volta (chapa de base, chapa
+  de topo). Os símbolos afastam-se uns dos outros para não se sobreporem.
+- Por baixo de cada conjunto: «Conjunto P1 — 4 un. — HEB 200 + Ch1, Ch3, Ch4 — 410 kg cada» e o comprimento cotado.
+- Botão direito ▸ **Pôr numa folha nova**: a 1:50.
+
 ## 0.514.0 — 2026-11-09
 
 **Estrutura metálica, passo 10 (primeira parte): a montagem.**

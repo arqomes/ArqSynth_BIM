@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.515 — Desenho de conjuntos com soldaduras (estrutura metálica, passo 6)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.515.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave**, com **Joelhos** em **Aparafusados** (dois cliques, 6 m).
+2. No navegador do projeto, em **Vistas**, aparece **Conjuntos de aço (fabrico)**. Botão direito ▸ **Pôr numa folha
+   nova**: abre a folha a 1:50.
+3. **Conjunto P1** (o pilar deitado): a chapa de base numa ponta, a chapa do joelho na outra (inclinada) e os gousset;
+   em cima, os símbolos de soldadura — um círculo com «a6» (soldadura a toda a volta da chapa de base e da chapa do
+   joelho) e um triângulo dos dois lados da linha com «a5» (os gousset, soldados dos dois lados).
+4. **Conjunto V1** (a asna): as orelhas das madres (pequenos traços em cima) com «a4» e as chapas de topo das pontas
+   com «a6».
+5. Por baixo de cada um: «Conjunto P1 — 4 un. — HEB 200 + Ch1, Ch3, Ch4 — … kg cada».
+
 ## 0.514 — Montagem (estrutura metálica, passo 10)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.514.0**.

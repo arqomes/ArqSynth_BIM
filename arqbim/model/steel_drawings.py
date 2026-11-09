@@ -135,6 +135,117 @@ def _profile(doc, drawing, lines, ann, mark, members, y):
 
 FIT = 3.5 * 0.55 * TEXT * SCALE / 1000.0   # m drawn: what a dimension's text («0,05») needs between its ends
 
+# ------------------------------------------------------------------ (0.515) the assemblies, with their welds
+
+ALL_ROUND = ("base_plate", "end_plate", "knee_plate")   # welded all round the piece's section (ISO 2553's circle)
+BOTH_SIDES = ("fin_plate", "gusset", "purlin_cleat")    # a fillet on each side of the plate (the symbol both ways)
+SYMBOL = 0.12                   # m drawn (at 1:50: 2,4 mm) — a weld symbol's triangle
+LEADER = (0.30, 0.35)           # m: its arrow's run (across, up) from the weld to the reference line
+REFERENCE = 0.70                # m: the reference line's length
+
+
+def _weld_symbol(lines, ann, at, a, kind, taken=None):
+    """ISO 2553's symbol of a fillet weld (`a` its throat, mm) pointing at `at` (m, drawn): the arrow from it up to the
+    reference line, the triangle on the line (both sides of it for a weld each side of the plate), «a6» before it, the
+    circle at the bend for a weld all round. taken: the reference lines already drawn at that height ([(x0, x1)]) —
+    this one starts past them (its arrow longer) — and this one's added."""
+    p = np.asarray(at, dtype=float)
+    knee = p + np.array(LEADER)
+    for x0, x1 in sorted(taken or ()):
+        if knee[0] < x1 + 0.10 and knee[0] + REFERENCE > x0 - 0.10:
+            knee[0] = x1 + 0.10
+    if taken is not None:
+        taken.append((float(knee[0]), float(knee[0] + REFERENCE)))
+    end = knee + np.array((REFERENCE, 0.0))
+    segs = [(p, knee), (knee, end)]
+    tip = (p - knee) / np.linalg.norm(p - knee) * 0.08              # (the arrowhead: two short strokes)
+    for turn in (0.35, -0.35):
+        c, s = np.cos(turn), np.sin(turn)
+        back = np.array((c * tip[0] - s * tip[1], s * tip[0] + c * tip[1]))
+        segs.append((p, p - back))
+    x = knee[0] + 0.30
+    for sign in ((-1.0, 1.0) if kind in BOTH_SIDES else (-1.0,)):    # (under the line: the arrow's side)
+        apex = np.array((x, knee[1] + sign * SYMBOL))
+        foot = np.array((x + SYMBOL, knee[1]))
+        segs += [(np.array((x, knee[1])), apex), (apex, foot)]
+    if kind in ALL_ROUND:
+        ring = np.array([knee + 0.05 * np.array((np.cos(t_), np.sin(t_))) for t_ in np.linspace(0, 2 * np.pi, 13)])
+        segs += [(ring[k], ring[k + 1]) for k in range(len(ring) - 1)]
+    lines.append(np.array([np.stack((a_, b_)) for a_, b_ in segs]))
+    ann.append(_text((knee[0] + 0.04, knee[1] - SYMBOL - 0.02), "a{:g}".format(float(a)), size=TEXT * 0.8))
+
+
+def assemblies_drawing(doc, title):
+    """(0.515) The steel assemblies' drawing — «Conjuntos de aço» (the assembly drawings DetailCraft has not): each
+    assembly once — a piece with the plates welded to it (a column with its base plate and gussets…), alike ones
+    counted —, the piece side on as in the parts drawing with its plates seen the same way, each plate's weld by ISO
+    2553's symbol (a fillet: its throat «a», all round or both sides), its length dimensioned and its line of text —
+    the assembly's mark (its piece's), how many, its parts, its weight. None without an assembly."""
+    from .drawings import Drawing
+    from .schedules import erection_rows
+    rows = [r for r in erection_rows(doc) if r["parts_n"]]
+    if not rows:
+        return None
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["mark"], r["parts"]), []).append(r)
+    drawing = Drawing(title)
+    lines, ann = [], []
+    y = 0.0
+    for key in sorted(groups, key=lambda k: (steel_marks.sort_key(k[0]), k[1])):
+        y = _assembly(doc, drawing, lines, ann, groups[key], y)
+    if not lines:
+        return None
+    drawing.lines = np.concatenate(lines)
+    drawing.annotations = ann
+    _room_for_texts(drawing, SCALE)
+    return drawing
+
+
+def _assembly(doc, drawing, lines, ann, members, y):
+    """An assembly drawn with its top at y: its piece and its plates side on, the welds' symbols, its length, its
+    line of text; returns the next y."""
+    first = members[0]
+    g = first["guid"]
+    y -= LEADER[1] + SYMBOL                         # (room over it for its welds' symbols)
+    m = doc.ifc.placement(g)
+    axis = m[:3, 2] / np.linalg.norm(m[:3, 2])
+    depth_dir = m[:3, 1] / np.linalg.norm(m[:3, 1])
+    shapes = [(g, _outline(doc, g, axis, depth_dir))]
+    shapes += [(p, _outline(doc, p, axis, depth_dir)) for p in first["guids"][1:]]
+    shapes = [(guid, s) for guid, s in shapes if s is not None]
+    if not shapes:
+        return y
+    x0 = min(s.bounds[0] for _g, s in shapes)
+    x1 = max(s.bounds[2] for _g, s in shapes)
+    v0 = min(s.bounds[1] for _g, s in shapes)
+    v1 = max(s.bounds[3] for _g, s in shapes)
+    shift = np.array((-x0, y - v1))
+    said, taken = set(), []
+    for guid, shape in sorted(shapes, key=lambda gs: gs[1].representative_point().x):   # (left to right: each
+        # symbol starts past the one before)
+        ring = np.asarray(shape.exterior.coords) + shift
+        lines.append(np.stack((ring[:-1], ring[1:]), axis=1))
+        if guid == g:
+            continue
+        found = doc.ifc.connection_params(guid)
+        if found is None:
+            continue
+        kind, _members, params = found
+        name = doc.ifc.by_guid(guid).Name or ""
+        if (kind, name) in said:                     # (one symbol a kind of plate: the others are alike)
+            continue
+        said.add((kind, name))
+        c = shape.representative_point()
+        _weld_symbol(lines, ann, (c.x + shift[0], c.y + shift[1]), params.get("a", 6.0), kind, taken)
+    length, depth = x1 - x0, v1 - v0
+    _dim(drawing, (0.0, y - depth), (length, y - depth), -0.12, value=length)
+    weight = sum(r["weight"] for r in members)
+    ann.append(_text((0.0, y - depth - TEXT_DROP), t("sdraw.assembly", mark=first["mark"], n=len(members),
+                                                      piece=first["type"], parts=first["parts"],
+                                                      kg=_n(weight / len(members), 0))))
+    return y - depth - TEXT_DROP - ROW
+
 
 def _chain(drawing, stops, at, along, offset, zoom):
     """A chain of dimensions through `stops` (sorted, drawn), on the line `at`: edge to hole to hole to edge, and

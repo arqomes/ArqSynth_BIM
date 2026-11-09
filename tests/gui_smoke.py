@@ -667,6 +667,7 @@ def bim_flow():
     steel_stair_flow()
     steel_erection_flow()
     knee_plate_flow()
+    steel_assemblies_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20627,6 +20628,39 @@ def knee_plate_flow():
     doc.modified = False
     check("joelho_aparafusado", offered and built and shown and win.ribbon_item("knee_plate") is not None,
           "oferecido={} feito={} ({} parafusos) propriedades={}".format(offered, built, bolts, shown))
+
+
+def steel_assemblies_flow():
+    """0.515 — The assemblies' drawing: a shed; «Conjuntos de aço (fabrico)» in the Project browser; put on a new
+    sheet: at 1:50, an assembly a line, the welds' symbols. Captured: 515_conjuntos.png (the sheet)."""
+    import shutil
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                           knees="bolted")
+    pump(300)
+    win.tree_panel.raise_()
+    pump(400)
+    listed = "Conjuntos de aço (fabrico)" in win.tree_panel.text()
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "steel_assemblies", "")
+    pump(800)
+    sheet = doc.sheets[-1] if len(doc.sheets) > before else None
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawing, frame, label = pages[0][1][0] if pages and pages[0][1] else (None, None, "")
+    paths = pdf_out.write_images(OUT, pages, "png") if drawing is not None else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "515_conjuntos.png"))
+    texts = [a[3] for a in drawing.annotations if a[0] == "text"] if drawing is not None else []
+    doc.modified = False
+    check("conjuntos", listed and label == "Conjuntos de aço (fabrico)" and frame is not None and frame.scale == 50
+          and any(s.startswith("Conjunto P1") for s in texts) and "a6" in texts and bool(paths),
+          "listado={} rotulo={!r} escala={} textos={}".format(listed, label, frame.scale if frame else None,
+                                                             [s for s in texts if s.startswith("Conjunto")]))
 
 
 def steel_sheet_flow():

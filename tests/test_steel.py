@@ -1229,6 +1229,32 @@ class Erection(unittest.TestCase):
         self.assertEqual(schedules.counts(doc)["erection"], 26)
 
 
+class AssemblyDrawing(unittest.TestCase):
+    """(0.515) The assemblies' drawing, with the welds."""
+
+    def test_drawing(self):
+        """A shed: an assembly line each — «Conjunto P1 — 4 un.» (a column with its base plate and gussets), «Conjunto
+        V1» (a rafter with its cleats) —, the welds' throats by their symbols (a6 the base plate's, a5 the gussets', a4
+        the cleats'), its view at 1:50; none for a model whose pieces have no plates welded to them."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, drawings, sheets
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_truss(doc, (0.0, 0.0, 0.0), (6.0, 0.0, 0.0), catalog.BY_KEY["pilar_shs150"],
+                        catalog.BY_KEY["contrav_chs76"])
+        self.assertIsNone(drawings.of_view(doc, "steel_assemblies", "", "Conjuntos"))
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        drawing = drawings.of_view(doc, "steel_assemblies", "", "Conjuntos de aço")
+        texts = [a[3] for a in drawing.annotations if a[0] == "text"]
+        self.assertTrue(any(s.startswith("Conjunto P1 — 4 un.") for s in texts), texts)
+        self.assertTrue(any(s.startswith("Conjunto V1") for s in texts))
+        self.assertTrue({"a6", "a5", "a4"} <= set(texts))
+        self.assertGreater(len(drawing.lines), 40)
+        self.assertEqual(sheets.USUAL_SCALES["steel_assemblies"], 50)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)
