@@ -589,6 +589,33 @@ class Fabrication(unittest.TestCase):
         self.assertTrue(any(p.endswith("P1.nc1") for p in paths) and any(p.endswith(".csv") for p in paths))
 
 
+class ShopDrawing(unittest.TestCase):
+    """(0.502) The steel pieces' fabrication drawing."""
+
+    def test_parts_drawing(self):
+        """A shed's pieces drawn once a mark: a line of text for each mark (P1, V1, M1, CV…, Ch1), each piece's outline
+        side on — the column with its mitred top (an outline of more than 4 sides) —, its length and depth dimensioned;
+        the plates flat with their 4 holes; on a sheet at 1:50; none for a model without steel."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, drawings, sheets
+        from arqbim.model.document import Document
+        doc = Document()
+        self.assertIsNone(drawings.of_view(doc, "steel_parts", "", "Peças"))
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        drawing = drawings.of_view(doc, "steel_parts", "", "Peças de aço")
+        texts = [a[3] for a in drawing.annotations if a[0] == "text"]
+        for mark in ("P1", "V1", "M1", "Ch1"):
+            self.assertTrue(any(s.startswith(mark + " —") for s in texts), mark)
+        self.assertTrue(any("4 furos Ø22" in s and s.endswith("(1:10)") for s in texts))
+        self.assertGreater(len(drawing.dims), 8)
+        plate_dims = [d for d in drawing.dims if d[4] in ("0,05", "0,30", "0,40")]    # edge, holes, whole: real sizes
+        self.assertGreaterEqual(len(plate_dims), 4)
+        self.assertGreater(len(drawing.lines), 30)
+        self.assertIn("steel_parts", sheets.KINDS)
+        self.assertEqual(sheets.USUAL_SCALES["steel_parts"], 50)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

@@ -30,11 +30,12 @@ KINDS = ("plan", "section", "elevation", "schedule", "detail", "3d",       # (0.
          "rebar", "structure", "rebar_cut",    # (0.234: kept in the file too — a member's reinforcement, its section)
          "structure_below",                    # (0.235: a storey's formwork seen from below)
          "rebar_details",                      # (0.237: the project's typical reinforcement details)
-         "openings")                           # (0.293: the project's mapa de vãos)
+         "openings",                           # (0.293: the project's mapa de vãos)
+         "steel_parts")                        # (0.502: the steel pieces' fabrication drawing)
 # (0.234) the scale a kind of view takes when it has none of its own and fits the sheet so: a member's reinforcement
 # at 1:50, its section at 1:20 (their labels and dimensions spaced for it) — (0.237) the typical details at 1:20 —
 # (0.293) the mapa de vãos at 1:50
-USUAL_SCALES = {"rebar": 50, "rebar_cut": 20, "rebar_details": 20, "openings": 50}
+USUAL_SCALES = {"rebar": 50, "rebar_cut": 20, "rebar_details": 20, "openings": 50, "steel_parts": 50}
 
 
 @dataclass

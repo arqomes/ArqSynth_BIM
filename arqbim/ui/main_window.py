@@ -8862,12 +8862,26 @@ class MainWindow(QtWidgets.QMainWindow):
             return t("tree.rebar_details_view")
         if kind == "openings":                                         # (the mapa de vãos, 0.293)
             return t("tree.openings")
+        if kind == "steel_parts":                                      # (0.502: the steel pieces' drawing)
+            return t("tree.steel_parts")
         if kind == "schedule":                                         # (a schedule's table, 0.132)
             if str(ref).startswith("def:"):
                 own = next((d for d in self.doc.schedule_defs if "def:" + d.uid == ref), None)
                 return own.name if own is not None else ref
             return t("sched.cat." + ref) if ref in schedules_model.CATEGORIES else ref
         return ref
+
+    def _has_steel(self):
+        """(0.502) Whether the model has steel pieces (its fabrication drawing offered in the browser)."""
+        for o in self.doc.objects.values():
+            if not o.is_bim or o.ifc_class not in ("IfcColumn", "IfcBeam", "IfcMember", "IfcPlate"):
+                continue
+            kind = self.doc.ifc.kind_of(o.id)
+            if kind in ("steel_member", "steel_part"):
+                return True
+            if kind in ("column", "beam") and self.doc.ifc.steel_section(o.id) is not None:
+                return True
+        return False
 
     def _structural_storeys(self):
         """[(GlobalId, name)] of the storeys with columns, beams or footings (0.168: their structure plans)."""
@@ -9222,7 +9236,8 @@ class MainWindow(QtWidgets.QMainWindow):
                  "details": [(d.uid, d.name) for d in self.doc.details],                   # (0.133)
                  "rebars": self._reinforced(), "structure": self._structural_storeys(),  # (0.168)
                  "openings": any(o.is_bim and o.ifc_class in ("IfcDoor", "IfcWindow")              # (0.293: of
-                                 for o in self.doc.objects.values())}                                # the model's)
+                                 for o in self.doc.objects.values()),                                # the model's)
+                 "steel": self._has_steel()}                                                         # (0.502)
         lib = self.doc.ifc.library()
         library = {"components": [(g, name, len(inst), placeable) for g, name, inst, placeable in lib["components"]],
                    "groups": [(m, name, len(copies)) for m, name, copies in lib["groups"]]}

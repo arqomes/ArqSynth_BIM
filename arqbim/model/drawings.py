@@ -1263,4 +1263,7 @@ def of_view(doc, kind, ref, title):
     if kind == "openings":                                          # (the project's mapa de vãos, 0.293)
         from .openings_map import openings_map
         return openings_map(doc, title)
+    if kind == "steel_parts":                                       # (0.502: the steel pieces' fabrication drawing)
+        from .steel_drawings import parts_drawing
+        return parts_drawing(doc, title)
     return None

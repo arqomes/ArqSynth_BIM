@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.502.0 — 2026-11-09
+
+**Estrutura metálica, passo 6 (primeira parte): o desenho de fabrico das peças.**
+
+- Vista nova **Peças de aço (fabrico)** no navegador do projeto (secção Vistas, só quando o modelo tem aço): cada marca
+  desenhada uma vez, como a serralharia a corta —
+  - os **perfis** de lado, com os ângulos das meias-esquadrias e os recortes como estão no modelo, o comprimento e a
+    altura cotados e uma linha de texto: marca, perfil, aço, quantas, comprimento, peso
+    (por exemplo «P1 — HEB 200 S275 — 4 peça(s) de 6,08 m — 1569 kg»);
+  - as **chapas** vistas de frente e ampliadas (a 1:10), com os **furos** e as cotas em cadeia da borda aos furos,
+    entre furos e o total, e a linha «Ch1 — chapa 400 × 400 × 20 mm, 4 furos Ø22 — 4 peça(s) — 99,5 kg (1:10)».
+- Botão direito ▸ **Pôr numa folha nova**: a folha sai a **1:50** com o carimbo, pronta a imprimir ou a exportar em PDF.
+
 ## 0.501.0 — 2026-11-09
 
 **Estrutura metálica, passo 7: fabrico — DSTV NC1 e o corte das barras.**

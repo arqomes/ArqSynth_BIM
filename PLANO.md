@@ -1607,7 +1607,11 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    conjuntos em maiúsculas) e estáveis: guardadas no IFC, só mudam quando a peça muda; «Renumerar» à mão. Listas:
    material (marca, perfil, comprimento, quantidade, kg/m, peso, área de pintura), parafusos, chapas, conjuntos com peso
    — no painel Tabelas e em XLSX/CSV.
-6. **Desenhos de fabrico e de montagem.** Desenho de peça (como o do DetailCraft), desenho de conjunto (a mais: a peça
+6. **Desenhos de fabrico e de montagem.** (0.502.0: a vista **Peças de aço (fabrico)** — cada marca de perfil de lado
+   com os cortes e recortes como estão, comprimento e altura cotados e a linha de texto; as chapas a 1:10 com os furos e
+   as cotas em cadeia — numa folha a 1:50. Faltam: a planta do banzo com furos nos perfis, os cortes das secções, o
+   desenho de conjunto com as soldaduras ISO 2553, a planta de montagem e os pormenores tipo das ligações.)
+   Desenho de peça (como o do DetailCraft), desenho de conjunto (a mais: a peça
    principal com as chapas soldadas, símbolos de soldadura ISO 2553, lista de peças) e planta de montagem (plantas e
    alçados com as marcas dos conjuntos, eixos e níveis); os pormenores tipo de cada ligação (1:10) com chamadas nas
    plantas, como os pormenores tipo do betão (0.237). Folhas de tipos novos, com o carimbo da empresa.

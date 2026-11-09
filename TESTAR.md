@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.502 — Desenho de fabrico das peças de aço (estrutura metálica, passo 6)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.502.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (separador **Estrutura**): dois cliques, por exemplo 6 m.
+2. Abra o **navegador do projeto** (ícone da barra da esquerda). Em **Vistas** aparece **Peças de aço (fabrico)** (num
+   projeto sem aço não aparece).
+3. Clique com o botão direito em **Peças de aço (fabrico)** ▸ **Pôr numa folha nova**. Abre-se a folha a **1:50**.
+4. Veja na folha, de cima para baixo: o pilar **P1** de lado, com o topo cortado na inclinação do telhado; a asna **V1**
+   com as duas pontas em ângulo (a do joelho e a da cumeeira); os contraventamentos **CV1** e **CV2**; a madre **M1**.
+   Cada um com o comprimento cotado por baixo, a altura à direita e a linha «P1 — HEB 200 S275 — 4 peça(s) de … m —
+   … kg».
+5. No fim, a chapa de base **Ch1** maior (a 1:10): o quadrado com os **4 furos**, as cotas por baixo e à direita da borda
+   ao furo (0,05), entre furos (0,30) e o total (0,40), e a linha «Ch1 — chapa 400 × 400 × 20 mm, 4 furos Ø22 — … (1:10)».
+6. Aproxime (roda do rato) para ver as cotas de perto; exporte a folha em PDF como as outras.
+
 ## 0.501 — Fabrico: DSTV NC1 e corte das barras (estrutura metálica, passo 7)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.501.0**.
