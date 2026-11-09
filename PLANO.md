@@ -1599,7 +1599,10 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    diagonais em cantoneira ou tubo), madres em C ou Z pelo espaçamento (como a carpintaria do telhado), estrutura de piso
    metálica (principais e secundárias, como o sistema de vigas) e escada metálica (vigas de escada em UPN, degraus em
    chapa xadrez ou grelha). Cada uma um `IfcElementAssembly` que se edita pelos parâmetros.
-5. **Marcas e listas.** Marcas de peça e de conjunto pela regra do DetailCraft (perfil, material, comprimento, furos,
+5. **Marcas e listas.** (0.500.0: marcas de peça P/V/CV/M/E/Ch pela regra do DetailCraft com as voltas das peças
+   simétricas, guardadas na `Tag` e mantidas enquanto a peça não muda — «Numerar peças» —; tabelas «Estrutura
+   metálica: lista de material» com peso e pintura reais e «… parafusos». Faltam: as marcas de conjunto, os furos na
+   regra (vêm com os desenhos de fabrico) e «Renumerar» à mão.) Marcas de peça e de conjunto pela regra do DetailCraft (perfil, material, comprimento, furos,
    recortes, cortes; virada), com os prefixos daqui (proposta: P pilar, V viga, CV contraventamento, M madre, Ch chapa;
    conjuntos em maiúsculas) e estáveis: guardadas no IFC, só mudam quando a peça muda; «Renumerar» à mão. Listas:
    material (marca, perfil, comprimento, quantidade, kg/m, peso, área de pintura), parafusos, chapas, conjuntos com peso

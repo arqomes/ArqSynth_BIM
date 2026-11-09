@@ -377,6 +377,80 @@ class SteelMemberMixin:
             self.set_steel_member(guid, start=start, end=end, lang=lang)
         return True
 
+    # ------------------------------------------------------------ (0.500) the pieces, their marks
+
+    def steel_pieces(self):
+        """Every steel piece — columns, beams and members of a steel section, the plates of the connections —, each
+        a dict: guid, prefix (P V CV M E Ch), signature (what makes two pieces the same), mark (its IFC Tag), section
+        (as written), grade, cut length (m), kg/m, weight (kg), paint (m²)."""
+        import re
+        from ..core import steel
+        out = []
+        for cls in ("IfcColumn", "IfcBeam", "IfcMember"):
+            for e in self.file.by_type(cls):
+                g = e.GlobalId
+                kind = self.kind_of(g)
+                if kind not in ("column", "beam", "steel_member"):
+                    continue
+                name = self.steel_section(g)
+                if name is None:
+                    continue
+                sec = steel.get(name)
+                material = ifcopenshell.util.element.get_material(e, should_skip_usage=True)
+                matname = material.MaterialProfiles[0].Material.Name if material is not None and \
+                    material.is_a("IfcMaterialProfileSet") and material.MaterialProfiles[0].Material else ""
+                found = re.search(r"S\d{3}", matname or "")
+                grade = found.group(0) if found else ""
+                cuts, copes, (e0, e1) = self.steel_cuts(e)
+                if kind == "steel_member":
+                    length = self.steel_length(e) + e0 + e1
+                else:
+                    q = ifcopenshell.util.element.get_psets(e).get(
+                        "Qto_BeamBaseQuantities" if cls == "IfcBeam" else "Qto_ColumnBaseQuantities", {})
+                    length = float(q.get("Length") or 0.0) * self.unit_scale + e0 + e1
+                if cls == "IfcColumn":
+                    prefix = "P"
+                elif cls == "IfcBeam":
+                    prefix = "V"
+                else:
+                    predefined = ifcopenshell.util.element.get_predefined_type(e)
+                    prefix = {"BRACE": "CV", "PURLIN": "M"}.get(predefined, "E")
+                props = steel.properties(sec.name)
+                from ..core import steel_marks
+                symmetric = sec.family in steel.I_FAMILIES + ("SHS", "RHS", "CHS")
+                shape = steel_marks.shape_signature(cuts, copes, (e0, e1), symmetric)
+                out.append({"guid": g, "prefix": prefix, "signature": (sec.name, grade, round(length * 1000.0), shape),
+                            "mark": e.Tag or "", "section": steel.display(sec.name), "grade": grade, "length": length,
+                            "kg_m": props["mass"], "weight": props["mass"] * length, "paint": props["paint"] * length})
+        for e in self.file.by_type("IfcPlate"):
+            if self.kind_of(e.GlobalId) != "steel_part":
+                continue
+            q = ifcopenshell.util.element.get_psets(e).get("Qto_PlateBaseQuantities", {})
+            weight = float(q.get("NetWeight") or 0.0)
+            label = (e.Name or "").split(" ", 1)[-1] if e.Name else ""
+            out.append({"guid": e.GlobalId, "prefix": "Ch", "signature": (e.Name or "", round(weight, 2)),
+                        "mark": e.Tag or "", "section": label, "grade": "", "length": 0.0, "kg_m": None,
+                        "weight": weight, "paint": 2.0 * float(q.get("GrossArea") or 0.0)})
+        return out
+
+    def steel_marks(self, renumber=False):
+        """{guid: mark} the steel pieces get (core/steel_marks.assign): kept where they can be; renumber: all anew."""
+        from ..core import steel_marks
+        pieces = self.steel_pieces()
+        return steel_marks.assign([(p["guid"], p["prefix"], p["signature"], "" if renumber else p["mark"])
+                                   for p in pieces]), pieces
+
+    def set_steel_marks(self, renumber=False):
+        """The marks written on the pieces (their IFC Tag). Returns the GlobalIds whose mark changed."""
+        marks, _pieces = self.steel_marks(renumber)
+        changed = []
+        for g, mark in marks.items():
+            e = self.by_guid(g)
+            if (e.Tag or "") != mark:
+                e.Tag = mark
+                changed.append(g)
+        return changed
+
     def rebuild_beam(self, guid):
         """A beam's body made again as it is (its copes, after they are set)."""
         self.resize_beam(guid)

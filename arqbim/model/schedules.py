@@ -29,6 +29,10 @@ CATEGORIES = {
     # (0.279) the roofs' tiles: a line a roof (its tile, the tiles and those cut, the ridge tiles, kg, m²)
     "tiles": ((), ("roof", "tile", "tiles", "cut", "caps", "weight", "area")),
     "columns": (("IfcColumn",), ("name", "type", "storey", "height", "volume")),
+    # (0.500) the steel structure: a line a mark (its pieces, their section, grade, cut length, kg/m, kg, paint m²); the
+    # bolts and anchor bolts: a line a kind and size
+    "steel": ((), ("mark", "piece", "section", "grade", "pieces", "cut_length", "metres", "kg_m", "weight", "paint")),
+    "bolts": ((), ("bolt", "bolt_kind", "count")),
     "doors": (("IfcDoor",), ("name", "type", "storey", "width", "height", "host")),
     "windows": (("IfcWindow",), ("name", "type", "storey", "width", "height", "host")),
     # (0.125) the rooms: their areas, their finishes (read from the IFC's spaces, not from the shapes on screen)
@@ -43,16 +47,17 @@ CATEGORIES = {
     "keynotes": ((), ("code", "keynote_text", "count")),
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
-ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "doors", "windows", "rooms", "finishes",
-         "circuits", "electrical", "keynotes", "other")
+ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "doors", "windows", "rooms",
+         "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
-NUMBERS = {"length", "height", "thickness", "width", "area", "volume", "perimeter", "projected", *EDGES}
+NUMBERS = {"length", "height", "thickness", "width", "area", "volume", "perimeter", "projected", "cut_length", *EDGES}
 SUMMED = {"length", "area", "volume", "power", "conduit", "metres", "projected", "pieces", "tiles", "cut", "caps",
-          "weight", *EDGES}
+          "weight", "paint", *EDGES}
 UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "section": "{:g} mm²",   # (0.144)
          "conduit": "{:.2f} m", "metres": "{:.2f} m",                                        # (its conduits, 0.146)
-         "weight": "{:.0f} kg"}                                                              # (tiles, 0.279)
+         "weight": "{:.0f} kg",                                                              # (tiles, 0.279)
+         "kg_m": "{:.1f} kg/m", "paint": "{:.2f} m²"}                                       # (0.500: steel)
 COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps")
 # column -> (Properties panel action, element kinds it applies to) for the cells one can edit
 EDITABLE = {"name": ("name", None), "length": ("length", ("wall",)), "height": ("height", ("wall",))}
@@ -93,6 +98,8 @@ def counts(doc):
     out["circuits"] = len(circuit_rows(doc))
     out["carpentry"] = len(carpentry_rows(doc))
     out["tiles"] = len(tiles_rows(doc))
+    out["steel"] = len(steel_rows(doc))                # (0.500)
+    out["bolts"] = len(bolt_rows(doc))
     out["electrical"] = len(electrical_rows(doc))
     out["keynotes"] = len(keynote_rows(doc))
     return out
@@ -138,6 +145,83 @@ def carpentry_rows(doc):
                         "section": "{:g} × {:g} cm".format(round(w * 100, 1), round(h * 100, 1)).replace(".", ","),
                         "pieces": n, "metres": length, "volume": volume})
     return out
+
+
+def steel_rows(doc):
+    """(0.500) The steel structure: a line a mark — dicts with "guid" (its first piece's), "kind" "steel", "mark",
+    "piece" (what it is), "section", "grade", "pieces", "cut_length" (m, each), "metres" (all), "kg_m", "weight" (kg,
+    all), "paint" (m², all) —, in the marks' order. The marks the pieces get (kept where they can be: see
+    core/steel_marks), whether or not they are written on them yet (Numerar peças)."""
+    from ..core import steel_marks
+    from ..i18n import t
+    try:
+        marks, pieces = doc.ifc.steel_marks()
+    except Exception:                                  # (the IFC still being read)
+        return []
+    words = {"P": "steel_piece.column", "V": "steel_piece.beam", "CV": "steel_piece.brace", "M": "steel_piece.purlin",
+             "E": "steel_piece.member", "Ch": "steel_piece.plate"}
+    from ..core import steel
+    rows_ = {}
+    for p in pieces:
+        mark = marks.get(p["guid"], "")
+        obj = doc.get(p["guid"])
+        if p["kg_m"] and obj is not None and obj.mesh is not None and obj.mesh.is_closed():
+            volume = abs(obj.mesh.volume())               # (its real body: the mitres' and copes' offcuts left out)
+            area = p["kg_m"] / steel.DENSITY             # (m²)
+            if volume > 0 and area > 0:
+                ratio = (volume / area) / max(p["length"], 1e-9)
+                p = dict(p, length=volume / area, weight=volume * steel.DENSITY, paint=p["paint"] * ratio)
+        r = rows_.get(mark)
+        if r is None:
+            r = rows_[mark] = {"guid": p["guid"], "guids": [], "kind": "steel", "mark": mark, "name": mark,
+                               "type": p["section"], "storey": "", "piece": t(words.get(p["prefix"], words["E"])),
+                               "section": p["section"], "grade": p["grade"], "pieces": 0,
+                               "cut_length": p["length"] or None, "metres": 0.0, "kg_m": p["kg_m"], "weight": 0.0,
+                               "paint": 0.0}
+        r["guids"].append(p["guid"])
+        r["pieces"] += 1
+        r["metres"] += p["length"]
+        r["weight"] += p["weight"]
+        r["paint"] += p["paint"]
+    for r in rows_.values():
+        if not r["metres"]:
+            r["metres"] = None
+    return sorted(rows_.values(), key=lambda r: steel_marks.sort_key(r["mark"]))
+
+
+def bolt_rows(doc):
+    """(0.500) The bolts and anchor bolts of the connections: a line a kind and size — dicts with "guid" (the first's),
+    "kind" "bolt", "bolt" («M20 × 80»), "bolt_kind", "count"."""
+    import ifcopenshell.util.element
+    from ..i18n import t
+    try:
+        fasteners = [e for e in doc.ifc.file.by_type("IfcMechanicalFastener") if doc.ifc.kind_of(e.GlobalId) ==
+                     "steel_part"]
+    except Exception:
+        return []
+    s = doc.ifc.unit_scale
+    groups = {}
+    for e in fasteners:
+        predefined = ifcopenshell.util.element.get_predefined_type(e) or ""
+        psets = ifcopenshell.util.element.get_psets(e)
+        if predefined == "ANCHORBOLT":
+            p = psets.get("Pset_MechanicalFastenerAnchorBolt", {})
+            d, length = p.get("AnchorBoltDiameter"), p.get("AnchorBoltLength")
+        else:
+            p = psets.get("Pset_MechanicalFastenerBolt", {})
+            d, length = p.get("ThreadDiameter"), p.get("ThreadLength")
+        d_mm = round(float(d or 0.0) * s * 1000.0)
+        l_mm = int(5 * round(float(length or 0.0) * s * 1000.0 / 5.0))          # (to 5 mm)
+        key = (predefined, d_mm, l_mm)
+        g = groups.get(key)
+        if g is None:
+            words = t("steel_piece.anchor" if predefined == "ANCHORBOLT" else "steel_piece.bolt")
+            g = groups[key] = {"guid": e.GlobalId, "guids": [], "kind": "bolt", "bolt": "M{} × {}".format(d_mm, l_mm),
+                               "bolt_kind": words, "name": "M{} × {}".format(d_mm, l_mm), "type": words, "storey": "",
+                               "count": 0}
+        g["guids"].append(e.GlobalId)
+        g["count"] += 1
+    return sorted(groups.values(), key=lambda g: (g["bolt_kind"], _natural(g["bolt"])))
 
 
 def tiles_rows(doc):
@@ -212,6 +296,10 @@ def rows(doc, category):
         return carpentry_rows(doc)
     if category == "tiles":                            # (0.279)
         return tiles_rows(doc)
+    if category == "steel":                            # (0.500)
+        return steel_rows(doc)
+    if category == "bolts":
+        return bolt_rows(doc)
     objs =[o for o in doc.objects.values() if o.is_bim and category_of(o.ifc_class) == category]
     info = doc.ifc.schedule_info([o.id for o in objs])
     levels = {name: z for _g, name, z in doc.storeys()}

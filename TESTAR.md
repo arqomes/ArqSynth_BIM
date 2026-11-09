@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.500 — Marcas e listas da estrutura metálica (passo 5)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.500.0**.
+
+1. Faça Ctrl+N e faça uma nave com o **Pórtico de nave** (separador Estrutura): dois cliques, por exemplo 12 m.
+2. Abra as **Tabelas** (ícone da barra da esquerda, ou Ctrl+T) e clique em **Estrutura metálica: lista de material**:
+   uma linha por marca — P1 os pilares (todos iguais), V1 as asnas, CV1/CV2 os contraventamentos (das paredes e do
+   telhado), M1 as madres, Ch1 as chapas de base —, com o peso e a pintura, e os totais em baixo.
+3. Clique em **Estrutura metálica: parafusos**: os chumbadouros M20 × 530, quantos são.
+4. No separador **Estrutura**, painel **Ligação**, clique em **Numerar peças**: a mensagem diz quantas marcas escreveu.
+   Clique num pilar: nas Propriedades, em Materiais, aparece **Marca** P1 (antes de numerar dizia «— (Numerar
+   peças)»).
+5. Mude o perfil de **uma** asna (Propriedades, tipo **Viga IPE 200**). Volte à lista: essa asna tem agora uma marca
+   nova (V2); as outras continuam V1. Carregue outra vez em **Numerar peças**.
+6. Na tabela, clique em **Exportar** e grave em Excel: a lista abre no Excel com os pesos.
+
 ## 0.499 — Pórtico de nave (estrutura metálica, passo 4)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.499.0**.

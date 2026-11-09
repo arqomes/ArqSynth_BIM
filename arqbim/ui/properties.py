@@ -2540,6 +2540,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._begin(t("props.g.materials"))               # (the type's: "do tipo" — every one of it)
         if info.get("steel"):                                # (0.494) a steel piece: its section, grade, weight
             section, material, per_metre, weight = info["steel"]
+            self._row(t("props.steel_mark"), info.get("steel_mark") or t("props.steel_mark_none"))     # (0.500)
             self._row(t("props.steel_section"), "{} — {}".format(section, material))
             mass = "{:.1f} kg/m".format(per_metre).replace(".", decimal_sep())
             if weight:

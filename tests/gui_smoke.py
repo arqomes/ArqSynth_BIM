@@ -656,6 +656,7 @@ def bim_flow():
     base_plate_flow()
     beam_connections_flow()
     steel_shed_flow()
+    steel_lists_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20181,6 +20182,36 @@ def steel_shed_flow():
     check("portico_de_nave", in_ribbon and built and undone,
           "fita={} pilares={} asnas={} madres_e_contraventamentos={} chapas={} desfeito={}".format(
               in_ribbon, len(columns), len(rafters), len(members), len(plates), undone))
+
+
+def steel_lists_flow():
+    """0.500 — Marks and lists: a shed (2 frames); «Numerar peças» (Estrutura ▸ Ligação): the marks written; the table
+    «Estrutura metálica: lista de material» on the canvas: a line a mark (P1, V1…), with its kg; «… parafusos»: the
+    anchor bolts. Captured: 500_lista_de_material.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+    pump(300)
+    in_ribbon = win.ribbon_item("number_steel") is not None
+    win.act_number_steel.trigger()
+    pump(300)
+    tagged = sum(1 for e in doc.ifc.file.by_type("IfcColumn") if e.Tag == "P1") == 4
+    panel = win.schedules_panel
+    win.open_table("steel")
+    pump(400)
+    text = panel.text()
+    listed = panel.table.rowCount() >= 5 and "P1" in text and "Marca" in text and "kg" in text
+    shot("500_lista_de_material.png")
+    win.open_table("bolts")
+    pump(300)
+    bolts = panel.table.rowCount() == 1 and "M20 × 530" in panel.text()
+    doc.modified = False
+    check("marcas_e_listas", in_ribbon and tagged and listed and bolts,
+          "fita={} marcas={} lista={} ({} linhas) parafusos={}".format(in_ribbon, tagged, listed,
+                                                                      panel.table.rowCount(), bolts))
 
 
 def camera_move_flow():

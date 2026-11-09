@@ -812,6 +812,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_base_plate = self._action(t("act.base_plate"), lambda: self.base_plates(),
                                            icon=icons.base_plate_icon())                                # (0.497)
         self.act_base_plate.setToolTip(t("tip.base_plate"))
+        self.act_number_steel = self._action(t("act.number_steel"), lambda: self.number_steel(),
+                                             icon=icons.number_steel_icon())                            # (0.500)
+        self.act_number_steel.setToolTip(t("tip.number_steel"))
         self.act_end_plate = self._action(t("act.end_plate"), lambda: self.beam_connections("end_plate"),
                                           icon=icons.end_plate_icon())                                  # (0.498)
         self.act_end_plate.setToolTip(t("tip.end_plate"))
@@ -5086,6 +5089,12 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.message(t("info.base_plates_none"), warning=True)
         return made
+
+    def number_steel(self):
+        """(0.500) Estrutura ▸ Ligação ▸ Numerar peças: the steel pieces' marks written on them."""
+        n = bim.number_steel(self.doc)
+        self.message(t("info.number_steel", n=n) if n else t("info.number_steel_none"))
+        return n
 
     def beam_connections(self, kind):
         """(0.498) Estrutura ▸ Ligação ▸ Chapa de topo / Cutelo: at the ends of the steel beams selected that reach

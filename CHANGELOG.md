@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.500.0 — 2026-11-09
+
+**Estrutura metálica, passo 5: marcas e listas.**
+
+- Cada peça de aço tem uma **marca**, como nos desenhos de estrutura metálica: **P** pilar, **V** viga, **CV**
+  contraventamento, **M** madre, **E** elemento, **Ch** chapa — a mesma para as peças iguais (perfil, aço, comprimento ao
+  milímetro, os cortes e recortes das pontas; uma peça igual a outra rodada ou virada de ponta para ponta conta como
+  igual, como no DetailCraft: o pilar da esquerda e o da direita de um pórtico têm a mesma marca).
+- As marcas **guardam-se**: uma peça que não mudou guarda a sua; uma nova, ou que mudou, recebe o primeiro número livre.
+  O comando **Numerar peças** (separador **Estrutura**, painel **Ligação**) escreve-as nas peças (no IFC, a `Tag` de cada
+  peça, que o Tekla e o Revit leem como a marca).
+- Tabelas novas (painel **Tabelas**):
+  - **Estrutura metálica: lista de material** — uma linha por marca: a peça, o perfil, o aço, quantas, o comprimento
+    (o real, já sem o que as meias-esquadrias e os recortes tiram), os metros, kg/m, o **peso** e a **área de pintura**,
+    com os totais; exporta-se para Excel como as outras;
+  - **Estrutura metálica: parafusos** — os parafusos e chumbadouros por diâmetro e comprimento (M20 × 530…), quantos.
+
 ## 0.499.0 — 2026-11-09
 
 **Estrutura metálica, passo 4: estruturas prontas — o pórtico de nave.**

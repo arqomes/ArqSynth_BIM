@@ -317,6 +317,24 @@ def steel_shed_icon():
     return theme.icon(pm)
 
 
+def number_steel_icon():
+    """(0.500) Numerar peças: an I section with its mark in a box beside it."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    for x0, y0, x1, y1 in ((3, 6, 15, 9), (7.5, 9, 10.5, 23), (3, 23, 15, 26)):
+        p.drawRect(QtCore.QRectF(x0, y0, x1 - x0, y1 - y0))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawRect(QtCore.QRectF(17, 10, 13, 11))
+    font = p.font()
+    font.setPixelSize(8)
+    font.setBold(True)
+    p.setFont(font)
+    p.drawText(QtCore.QRectF(17, 10, 13, 11), QtCore.Qt.AlignmentFlag.AlignCenter, "V1")
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()

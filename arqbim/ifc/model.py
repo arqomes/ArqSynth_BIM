@@ -2344,6 +2344,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 if sec is not None:
                     info["steel"] = (steel.display(sec.name), p.Material.Name if p.Material else "?",
                                      steel.properties(sec.name)["mass"], weight)
+                    info["steel_mark"] = getattr(e, "Tag", None) or ""          # (0.500: its part mark)
             elif prof.is_a("IfcCircleProfileDef"):                      # (a pipe, a round column: its diameter)
                 info["profile"] = (p.Material.Name if p.Material else "?", 2 * prof.Radius * scale, None)
             elif prof.is_a() in ("IfcRectangleProfileDef", "IfcLShapeProfileDef", "IfcTShapeProfileDef"):

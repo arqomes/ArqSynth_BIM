@@ -474,6 +474,63 @@ class Shed(unittest.TestCase):
         self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
 
 
+class Marks(unittest.TestCase):
+    """(0.500) Part marks and the steel lists."""
+
+    def test_assign_keeps_marks(self):
+        """The same pieces share a mark; numbered by prefix; a piece that stays the same keeps its mark; one that
+        changed gets the next free number; renumbered: all anew."""
+        from arqbim.core import steel_marks
+        first = steel_marks.assign([("a", "V", ("IPE300", 5000), ""), ("b", "V", ("IPE300", 5000), ""),
+                                    ("c", "V", ("IPE200", 4000), ""), ("d", "P", ("HEB200", 3000), "")])
+        self.assertEqual(first["a"], first["b"])
+        self.assertEqual(sorted(first.values()), ["P1", "V1", "V2", "V2"])          # (IPE 200 V1, IPE 300 V2)
+        again = steel_marks.assign([("a", "V", ("IPE300", 5000), first["a"]), ("b", "V", ("IPE300", 5100), first["b"]),
+                                    ("c", "V", ("IPE200", 4000), first["c"]), ("d", "P", ("HEB200", 3000), "P1")])
+        self.assertEqual((again["a"], again["c"], again["d"]), (first["a"], first["c"], "P1"))   # (kept)
+        self.assertNotIn(again["b"], (again["a"], again["c"]))                                   # (b changed: new)
+        self.assertEqual(again["b"], "V3")
+        cut = [{"end": 1, "p": [0.0, 0.1, 0.0], "n": [0.0, 0.7, 0.7]}]
+        mirrored = [{"end": 1, "p": [0.0, -0.1, 0.0], "n": [0.0, -0.7, 0.7]}]
+        flipped = [{"end": 0, "p": [0.0, 0.1, 0.0], "n": [0.0, 0.7, -0.7]}]
+        sig = steel_marks.shape_signature
+        self.assertEqual(sig(cut, [], (0.2, 0.0), True), sig(mirrored, [], (0.2, 0.0), True))   # (turned round)
+        self.assertEqual(sig(cut, [], (0.0, 0.2), True), sig(flipped, [], (0.2, 0.0), True))    # (end for end)
+        self.assertNotEqual(sig(cut, [], (0.2, 0.0), False), sig(mirrored, [], (0.2, 0.0), False))
+        self.assertEqual(sorted(steel_marks.sort_key(m) for m in ("V10", "P2", "V2", "Ch1", "CV1")),
+                         sorted(steel_marks.sort_key(m) for m in ("P2", "V2", "V10", "CV1", "Ch1")))
+
+    def test_lists_of_a_shed(self):
+        """A shed of 2 frames: the bill of materials — the columns one mark (4 alike), the rafters another (4 alike:
+        mitred alike), the purlins, the braces, the plates; kg and m² totals; the bolts list — anchor bolts M20 × 530
+        (4 per plate); numbered: the marks written on the pieces (their Tag), one undo step; again: none changes."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, schedules
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        rows = schedules.rows(doc, "steel")
+        by_mark = {r["mark"]: r for r in rows}
+        self.assertEqual((by_mark["P1"]["pieces"], by_mark["P1"]["section"]), (4, "HEB 200"))
+        self.assertEqual((by_mark["V1"]["pieces"], by_mark["V1"]["section"]), (4, "IPE 300"))
+        self.assertTrue(any(m.startswith("M") for m in by_mark) and any(m.startswith("CV") for m in by_mark))
+        self.assertEqual(by_mark["Ch1"]["pieces"], 4)
+        self.assertGreater(sum(r["weight"] for r in rows), 1000.0)
+        self.assertEqual([r["mark"][0] for r in rows][:2], ["P", "V"])
+        bolts = schedules.rows(doc, "bolts")
+        self.assertEqual([(b["bolt"], b["count"]) for b in bolts], [("M20 × 530", 16)])
+        self.assertGreater(bim.number_steel(doc), 0)
+        tags = {doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]}
+        self.assertEqual(tags, set(by_mark))
+        self.assertEqual(doc.ifc.describe(by_mark["P1"]["guids"][0])["steel_mark"], "P1")      # (the Properties')
+        self.assertEqual(bim.number_steel(doc), 0)
+        doc.undo()
+        self.assertTrue(all(not doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]))
+        counts = schedules.counts(doc)
+        self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 1))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

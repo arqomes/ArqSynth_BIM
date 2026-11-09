@@ -2733,6 +2733,21 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
     return doc.execute(IfcCommand(t("cmd.steel_shed"), action)).result
 
 
+def number_steel(doc, renumber=False):
+    """(0.500) The steel pieces' marks written (their IFC Tag): the same mark for the same pieces, kept where they can
+    be (renumber: all anew). One undo step. How many marks changed."""
+    out = {}
+
+    def action(ifc):
+        out["changed"] = ifc.set_steel_marks(renumber)
+
+    marks, _pieces = doc.ifc.steel_marks(renumber)
+    if not any((doc.ifc.by_guid(g).Tag or "") != m for g, m in marks.items()):
+        return 0
+    doc.execute(IfcCommand(t("cmd.number_steel"), action, touched=list(marks)))
+    return len(out.get("changed") or ())
+
+
 def add_beam_connections(doc, kind, beams, params=None):
     """(0.498) An end plate or a fin plate at each end of the steel beams given that reaches a steel column (and has
     no connection there yet). One undo step. The connections' GlobalIds."""
