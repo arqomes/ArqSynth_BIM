@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.501.0 — 2026-11-09
+
+**Estrutura metálica, passo 7: fabrico — DSTV NC1 e o corte das barras.**
+
+- Comando **Exportar para fabrico** (separador **Estrutura**, painel **Ligação**): escolhe-se uma pasta e grava-se:
+  - um ficheiro **DSTV NC1** por marca (P1.nc1, V1.nc1, Ch1.nc1…), o formato que as máquinas de corte e furação das
+    serralharias leem: a marca, o aço, quantas, o perfil e o seu código, o comprimento total, as medidas da secção, kg/m,
+    a área de pintura por metro e os **ângulos dos cortes** de cada ponta (os das meias-esquadrias); as **chapas** com o
+    contorno e os **furos**;
+  - o **plano de corte das barras** (corte_de_barras.csv, abre no Excel): para cada perfil, quantas barras de 12 m
+    comprar, os metros comprados e os das peças, o desperdício, e que peças saem de cada barra (o maior primeiro, 3 mm
+    por corte).
+- Tabela nova **Estrutura metálica: corte das barras** (painel Tabelas): o mesmo plano, por perfil.
+- As chapas das ligações guardam as suas medidas e furos (para o NC1).
+
 ## 0.500.0 — 2026-11-09
 
 **Estrutura metálica, passo 5: marcas e listas.**

@@ -1611,7 +1611,9 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    principal com as chapas soldadas, símbolos de soldadura ISO 2553, lista de peças) e planta de montagem (plantas e
    alçados com as marcas dos conjuntos, eixos e níveis); os pormenores tipo de cada ligação (1:10) com chamadas nas
    plantas, como os pormenores tipo do betão (0.237). Folhas de tipos novos, com o carimbo da empresa.
-7. **Fabrico.** DSTV NC1 por peça (ST, AK, BO, EN e a marcação SI; os recortes no contorno AK de cada face, as
+7. **Fabrico.** (0.501.0: NC1 por marca — ST com os ângulos dos cortes, chapas com AK e BO — e o corte das barras de
+   12 m, em ficheiros e na tabela. Faltam: os recortes no AK dos perfis, a marcação SI, o DXF das chapas e barras de
+   6 m por perfil.) DSTV NC1 por peça (ST, AK, BO, EN e a marcação SI; os recortes no contorno AK de cada face, as
    aberturas interiores por IK), o DXF das chapas para laser ou
    plasma (o escritor do `model/fabrication.py`) e o corte das barras (primeiro o maior que cabe; barras de 6 e 12 m,
    serra 3 mm, sobras aproveitáveis) com a lista de barras a comprar e o desperdício.

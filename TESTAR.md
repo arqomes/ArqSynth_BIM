@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.501 — Fabrico: DSTV NC1 e corte das barras (estrutura metálica, passo 7)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.501.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (por exemplo 24 m).
+2. Abra as **Tabelas** e clique em **Estrutura metálica: corte das barras**: para cada perfil, as barras de 12 m a
+   comprar, os metros comprados e os que vão para as peças, e o desperdício em %.
+3. No separador **Estrutura**, painel **Ligação**, clique em **Exportar para fabrico** e escolha uma pasta (por exemplo
+   uma pasta nova no Ambiente de Trabalho).
+4. Abra a pasta: há um ficheiro **.nc1** por marca (P1.nc1, V1.nc1, M1.nc1, CV1.nc1, Ch1.nc1…) e o
+   **corte_de_barras.csv**.
+5. Abra o P1.nc1 com o Bloco de Notas: começa por «ST», tem a marca P1, o aço S275, a quantidade, «HEB200», «I», o
+   comprimento em mm e, mais abaixo, o ângulo do corte do topo (a meia-esquadria); acaba em «EN». O Ch1.nc1 (a chapa de
+   base) tem um bloco «AK» (o contorno) e um «BO» com os 4 furos de 22 mm.
+6. Abra o corte_de_barras.csv no Excel: uma linha por perfil, com o plano de corte de cada barra.
+
 ## 0.500 — Marcas e listas da estrutura metálica (passo 5)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.500.0**.

@@ -33,6 +33,8 @@ CATEGORIES = {
     # bolts and anchor bolts: a line a kind and size
     "steel": ((), ("mark", "piece", "section", "grade", "pieces", "cut_length", "metres", "kg_m", "weight", "paint")),
     "bolts": ((), ("bolt", "bolt_kind", "count")),
+    # (0.501) the bars to buy: a line a section (bars of 12 m, metres bought, metres of pieces, waste)
+    "cutting": ((), ("section", "grade", "bars", "bought", "used", "waste")),
     "doors": (("IfcDoor",), ("name", "type", "storey", "width", "height", "host")),
     "windows": (("IfcWindow",), ("name", "type", "storey", "width", "height", "host")),
     # (0.125) the rooms: their areas, their finishes (read from the IFC's spaces, not from the shapes on screen)
@@ -47,8 +49,8 @@ CATEGORIES = {
     "keynotes": ((), ("code", "keynote_text", "count")),
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
-ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "doors", "windows", "rooms",
-         "finishes", "circuits", "electrical", "keynotes", "other")
+ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "doors", "windows",
+         "rooms", "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
 NUMBERS = {"length", "height", "thickness", "width", "area", "volume", "perimeter", "projected", "cut_length", *EDGES}
@@ -57,7 +59,8 @@ SUMMED = {"length", "area", "volume", "power", "conduit", "metres", "projected",
 UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "section": "{:g} mm²",   # (0.144)
          "conduit": "{:.2f} m", "metres": "{:.2f} m",                                        # (its conduits, 0.146)
          "weight": "{:.0f} kg",                                                              # (tiles, 0.279)
-         "kg_m": "{:.1f} kg/m", "paint": "{:.2f} m²"}                                       # (0.500: steel)
+         "kg_m": "{:.1f} kg/m", "paint": "{:.2f} m²",                                       # (0.500: steel)
+         "bought": "{:.2f} m", "used": "{:.2f} m", "waste": "{:.1f} %"}                     # (0.501: the bars)
 COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps")
 # column -> (Properties panel action, element kinds it applies to) for the cells one can edit
 EDITABLE = {"name": ("name", None), "length": ("length", ("wall",)), "height": ("height", ("wall",))}
@@ -100,6 +103,7 @@ def counts(doc):
     out["tiles"] = len(tiles_rows(doc))
     out["steel"] = len(steel_rows(doc))                # (0.500)
     out["bolts"] = len(bolt_rows(doc))
+    out["cutting"] = len(cutting_rows(doc))            # (0.501)
     out["electrical"] = len(electrical_rows(doc))
     out["keynotes"] = len(keynote_rows(doc))
     return out
@@ -224,6 +228,18 @@ def bolt_rows(doc):
     return sorted(groups.values(), key=lambda g: (g["bolt_kind"], _natural(g["bolt"])))
 
 
+def cutting_rows(doc):
+    """(0.501) The bars to buy (model/steel_fabrication.cutting): dicts with "guid" (None), "kind" "cutting",
+    "section", "grade", "bars", "bought", "used" (m), "waste" (%)."""
+    from . import steel_fabrication
+    try:
+        found = steel_fabrication.cutting(doc)
+    except Exception:                                  # (the IFC still being read)
+        return []
+    return [{"guid": None, "kind": "cutting", "name": r["section"], "type": r["section"], "storey": "",
+             **{k: r[k] for k in ("section", "grade", "bars", "bought", "used", "waste")}} for r in found]
+
+
 def tiles_rows(doc):
     """(0.279) The roofs' tiles: dicts with "guid" (the roof's), "kind" "tiles", "roof", "tile", "tiles", "cut",
     "caps", "weight" (kg), "area" (m², along the slope) — a roof each."""
@@ -300,6 +316,8 @@ def rows(doc, category):
         return steel_rows(doc)
     if category == "bolts":
         return bolt_rows(doc)
+    if category == "cutting":                          # (0.501)
+        return cutting_rows(doc)
     objs =[o for o in doc.objects.values() if o.is_bim and category_of(o.ifc_class) == category]
     info = doc.ifc.schedule_info([o.id for o in objs])
     levels = {name: z for _g, name, z in doc.storeys()}

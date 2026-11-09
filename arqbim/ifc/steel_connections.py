@@ -387,8 +387,14 @@ class SteelConnectionMixin:
         if parts:
             api.aggregate.assign_object(self.file, products=parts, relating_object=assembly)
             for part in parts:
-                self._mark(part, "steel_part")
-                self._set_params(part, {"Ligacao": assembly.GlobalId})
+                if self._params(part):                  # (a plate keeps its sizes already: its set made once)
+                    self._set_params(part, {"Elemento": "steel_part", "Ligacao": assembly.GlobalId})
+                    for listed in (self.created, getattr(self, "made", None)):
+                        if listed is not None:
+                            listed.append(part.GlobalId)
+                else:
+                    self._mark(part, "steel_part")
+                    self._set_params(part, {"Ligacao": assembly.GlobalId})
 
     def _base_plate_parts(self, column, params, lang):
         from ..core import steel
@@ -413,6 +419,7 @@ class SteelConnectionMixin:
         self._place(plate, m)
         self._extrusion_body(plate, [self._plate_profile(A, B, spots, d0)], [(0.0, 0.0, -tp / 1000.0)],
                              [tp / 1000.0])
+        self._plate_record(plate, A, B, tp, [(x, y, d0) for x, y in spots], column)        # (0.501: for the NC1)
         net = (A * B - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9                    # (m³)
         self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
                                                          "NetWeight": net * steel.DENSITY,
@@ -521,6 +528,7 @@ class SteelConnectionMixin:
         self._extrusion_body(plate, [self._plate_profile(W, H, spots, d0, centre=(0.0, middle))], [(0.0, 0.0, 0.0)],
                              [tp / 1000.0])
         net = (W * H - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9
+        self._plate_record(plate, W, H, tp, [(x, y - middle, d0) for x, y in spots], beam)    # (0.501)
         self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
                                                          "NetWeight": net * steel.DENSITY, "GrossArea": W * H * 1e-6})
         parts.append(plate)
@@ -555,6 +563,7 @@ class SteelConnectionMixin:
         self._extrusion_body(plate, [self._plate_profile(w, H, spots, d0, centre=(w / 2.0, 0.0))],
                              [(0.0, 0.0, z0 / 1000.0)], [tp / 1000.0])
         net = (w * H - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9
+        self._plate_record(plate, w, H, tp, [(x - w / 2.0, y, d0) for x, y in spots], column)   # (0.501)
         self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
                                                          "NetWeight": net * steel.DENSITY, "GrossArea": w * H * 1e-6})
         parts.append(plate)
@@ -601,6 +610,17 @@ class SteelConnectionMixin:
         pset = api.pset.add_pset(f, product=weld, name="Pset_FastenerWeld")
         api.pset.edit_pset(f, pset=pset, properties={"a": a / 1000.0 / self.unit_scale, "l": length / self.unit_scale})
         return weld
+
+    def _plate_record(self, plate, length, width, thickness, holes, piece):
+        """(0.501) A plate's sizes and holes kept on it (mm; holes [(x, y, d0)] from its middle) — its NC1's."""
+        import re
+        material = ifcopenshell.util.element.get_material(self.by_guid(piece), should_skip_usage=True)
+        name = material.MaterialProfiles[0].Material.Name if material is not None and \
+            material.is_a("IfcMaterialProfileSet") and material.MaterialProfiles[0].Material else ""
+        found = re.search(r"S\d{3}", name or "")
+        self._set_params(plate, {"Chapa": json.dumps({"L": float(length), "W": float(width), "t": float(thickness),
+                                                      "grade": found.group(0) if found else "",
+                                                      "furos": [[float(x), float(y), float(d)] for x, y, d in holes]})})
 
     def _column_material(self, column, lang):
         material = ifcopenshell.util.element.get_material(self.by_guid(column), should_skip_usage=True)

@@ -311,6 +311,20 @@ _STRINGS = {
     # (0.500) the steel structure's lists
     "sched.cat.steel": ("Estrutura metálica: lista de material", "Steel structure: bill of materials"),
     "sched.cat.bolts": ("Estrutura metálica: parafusos", "Steel structure: bolts"),
+    "sched.cat.cutting": ("Estrutura metálica: corte das barras", "Steel structure: bar cutting"),      # (0.501)
+    "sched.col.bars": ("Barras de 12 m", "12 m bars"),
+    "sched.col.bought": ("Comprados", "Bought"),
+    "sched.col.used": ("Nas peças", "In pieces"),
+    "sched.col.waste": ("Desperdício", "Waste"),
+    "act.steel_nc": ("Exportar para fabrico", "Export for fabrication"),
+    "tip.steel_nc": ("Grava numa pasta um ficheiro DSTV NC1 por marca (para as máquinas de corte e furação) e o plano "
+                     "de corte das barras (CSV).",
+                     "Writes in a folder a DSTV NC1 file per mark (for the sawing and drilling machines) and the bars' "
+                     "cutting plan (CSV)."),
+    "steel_nc.folder": ("Pasta para os ficheiros de fabrico", "Folder for the fabrication files"),
+    "info.steel_nc": ("{n} ficheiros NC1 e o plano de corte gravados em {folder}.",
+                      "{n} NC1 files and the cutting plan written in {folder}."),
+    "info.steel_nc_none": ("Não há peças de aço para fabricar.", "No steel pieces to fabricate."),
     "sched.col.mark": ("Marca", "Mark"),
     "sched.col.grade": ("Aço", "Grade"),
     "sched.col.cut_length": ("Comprimento", "Length"),

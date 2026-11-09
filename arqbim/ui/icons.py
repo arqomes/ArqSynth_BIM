@@ -335,6 +335,23 @@ def number_steel_icon():
     return theme.icon(pm)
 
 
+def steel_nc_icon():
+    """(0.501) Exportar para fabrico: a sheet of the NC file going out, a drilled hole on a bar."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#ffffff"))
+    p.drawRect(QtCore.QRectF(5, 3, 16, 21))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawRect(QtCore.QRectF(9, 22, 20, 6))
+    p.setBrush(QtGui.QColor("#ffffff"))
+    p.drawEllipse(QtCore.QPointF(15, 25), 1.6, 1.6)
+    p.drawEllipse(QtCore.QPointF(23, 25), 1.6, 1.6)
+    for y in (8, 12, 16):
+        p.drawLine(QtCore.QPointF(8, y), QtCore.QPointF(18, y))
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()

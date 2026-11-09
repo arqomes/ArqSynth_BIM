@@ -20208,10 +20208,18 @@ def steel_lists_flow():
     win.open_table("bolts")
     pump(300)
     bolts = panel.table.rowCount() == 1 and "M20 × 530" in panel.text()
+    win.open_table("cutting")                                            # (0.501) the bars to buy
+    pump(300)
+    cutting = panel.table.rowCount() >= 3 and "HEB 200" in panel.text()
+    import tempfile
+    folder = tempfile.mkdtemp(prefix="arqsynth_dstv_")
+    paths = win.export_steel_nc(folder)                                  # (0.501) the NC1 files
+    nc = any(p.endswith("P1.nc1") for p in paths) and os.path.exists(os.path.join(folder, "corte_de_barras.csv"))
     doc.modified = False
-    check("marcas_e_listas", in_ribbon and tagged and listed and bolts,
-          "fita={} marcas={} lista={} ({} linhas) parafusos={}".format(in_ribbon, tagged, listed,
-                                                                      panel.table.rowCount(), bolts))
+    check("marcas_e_listas", in_ribbon and tagged and listed and bolts and cutting and nc
+          and win.ribbon_item("steel_nc") is not None,
+          "fita={} marcas={} lista={} parafusos={} corte={} nc1={} ({} ficheiros)".format(
+              in_ribbon, tagged, listed, bolts, cutting, nc, len(paths)))
 
 
 def camera_move_flow():

@@ -531,6 +531,64 @@ class Marks(unittest.TestCase):
         self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 1))
 
 
+class Fabrication(unittest.TestCase):
+    """(0.501) DSTV NC1 files and the bars' cutting."""
+
+    def test_nc1_and_parse(self):
+        """An NC1 written and read back: its ST values in the standard's order, its holes, a plate's outline."""
+        from arqbim.core import dstv
+        text = dstv.nc1(dict(order="1", drawing="V1", phase="1", mark="V1", grade="S275", quantity=4, profile="IPE300",
+                             code="I", length=5980.5, h=300, b=150, tf=10.7, tw=7.1, r=15, kg_m=42.2, paint_m=1.16,
+                             cuts=(0.0, 45.0, 0.0, 0.0)), [("v", 50.0, 100.0, 22.0)], None)
+        self.assertTrue(text.startswith("ST\n") and text.rstrip().endswith("EN"))
+        back = dstv.parse(text)
+        self.assertEqual(back["ST"][:9], ["1", "V1", "1", "V1", "S275", "4", "IPE300", "I", "5980.50"])
+        self.assertEqual(back["ST"][16:20], ["0.00", "45.00", "0.00", "0.00"])
+        self.assertEqual(back["BO"], [("v", 50.0, 100.0, 22.0)])
+        plate = dstv.parse(dstv.nc1(dict(order="1", drawing="Ch1", phase="1", mark="Ch1", grade="S275", quantity=1,
+                                         profile="PL20*400", code="B", length=400, h=400, b=0, tf=0, tw=20, r=0,
+                                         kg_m=62.8, paint_m=0.8), [], [(0, 0), (400, 0), (400, 400), (0, 400)]))
+        self.assertEqual(len(plate["AK"]), 5)                                      # (closed)
+
+    def test_cutting(self):
+        """Pieces of 5,9 m, 5,9 m, 3 m and 2 m out of 12 m bars: first fit, longest first — 2 bars; each cut loses
+        3 mm; a piece longer than a bar: a bar of its own."""
+        from arqbim.core import bar_cutting
+        bars = bar_cutting.plan([("V1", 5900.0), ("V1", 5900.0), ("V2", 3000.0), ("V3", 2000.0)])
+        self.assertEqual(len(bars), 2)
+        self.assertEqual([m for m, _l in bars[0]["pieces"]], ["V1", "V1"])
+        self.assertAlmostEqual(bars[0]["left"], 12000 - 5900 * 2 - 3)
+        n, bought, used, waste, offcuts = bar_cutting.summary(bars)
+        self.assertEqual((n, bought), (2, 24.0))
+        self.assertAlmostEqual(used, 16.8)
+        self.assertEqual(len(bar_cutting.plan([("P1", 13000.0)])), 1)
+
+    def test_shed_files(self):
+        """A shed's NC1 files: one per mark (P1, V1, M1, CV1, CV2, Ch1…), the columns' with their mitre angle at
+        the top, the base plates' with their outline and 4 holes Ø22; and the bars to buy, a section each."""
+        import tempfile
+        from arqbim.core import dstv
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, steel_fabrication
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        files = steel_fabrication.nc1_files(doc)
+        self.assertTrue({"P1", "V1", "M1", "Ch1"} <= set(files))
+        column = dstv.parse(files["P1"])
+        self.assertEqual((column["ST"][3], column["ST"][5], column["ST"][6], column["ST"][7]), ("P1", "4", "HEB200", "I"))
+        self.assertGreater(abs(float(column["ST"][17])), 1.0)                          # (its top cut at an angle)
+        plate = dstv.parse(files["Ch1"])
+        self.assertEqual((plate["ST"][7], len(plate["BO"]), plate["BO"][0][3]), ("B", 4, 22.0))
+        rows = steel_fabrication.cutting(doc)
+        self.assertEqual({r["section"] for r in rows} >= {"HEB 200", "IPE 300"}, True)
+        self.assertTrue(all(r["bars"] >= 1 and r["bought"] >= r["used"] for r in rows))
+        folder = tempfile.mkdtemp(prefix="arqsynth_nc1_")
+        paths = steel_fabrication.write(doc, folder)
+        self.assertTrue(any(p.endswith("P1.nc1") for p in paths) and any(p.endswith(".csv") for p in paths))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

@@ -815,6 +815,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_number_steel = self._action(t("act.number_steel"), lambda: self.number_steel(),
                                              icon=icons.number_steel_icon())                            # (0.500)
         self.act_number_steel.setToolTip(t("tip.number_steel"))
+        self.act_steel_nc = self._action(t("act.steel_nc"), lambda: self.export_steel_nc(),
+                                         icon=icons.steel_nc_icon())                                    # (0.501)
+        self.act_steel_nc.setToolTip(t("tip.steel_nc"))
         self.act_end_plate = self._action(t("act.end_plate"), lambda: self.beam_connections("end_plate"),
                                           icon=icons.end_plate_icon())                                  # (0.498)
         self.act_end_plate.setToolTip(t("tip.end_plate"))
@@ -5089,6 +5092,21 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.message(t("info.base_plates_none"), warning=True)
         return made
+
+    def export_steel_nc(self, folder=None):
+        """(0.501) Estrutura ▸ Ligação ▸ Exportar para fabrico: the DSTV NC1 files (a mark each) and the bars' cutting
+        plan, in a folder chosen."""
+        from ..model import steel_fabrication
+        if not any(True for _ in steel_fabrication.nc1_files(self.doc)):
+            self.message(t("info.steel_nc_none"), warning=True)
+            return []
+        if folder is None:
+            folder = QtWidgets.QFileDialog.getExistingDirectory(self, t("steel_nc.folder"))
+        if not folder:
+            return []
+        paths = steel_fabrication.write(self.doc, folder)
+        self.message(t("info.steel_nc", n=sum(1 for p in paths if p.endswith(".nc1")), folder=folder))
+        return paths
 
     def number_steel(self):
         """(0.500) Estrutura ▸ Ligação ▸ Numerar peças: the steel pieces' marks written on them."""
