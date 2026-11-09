@@ -1507,6 +1507,105 @@ distância etc». As formas já estão em ícones na barra de parâmetros (0.450
    `core/outline_shapes.py`, os contornos como `core/outline_loops` (arcos e Bézier). Falta: a Cobertura (as suas
    formas são outras), a elipse parcial e os polígonos na Parede e na Linha (passo 5).
 
+### Estrutura metálica e pormenores de fabrico (pedido do dono do projeto, 2026-11-09)
+«Faça plano para inserir a parte metálica e detalhes estruturais», com o DetailCraft como referência
+(getcadcraft.com/apps/detailcraft; código em github.com/getcadcraft/detailcraft, licença Apache 2.0, JavaScript, versão
+0.9). Estudado a 2026-11-09 (a página, a pasta `app/` e os ficheiros `connections.js`, `profiles.js`, `marks.js`,
+`shop.js`, `nc1.js`, `rebar.js`, `rc/*`, `nest.js`, `erection.js`, `constructability.js`). A Apache 2.0 deixa aproveitar
+ideias e código; o que se traduzir de perto leva o aviso de autoria (NOTICE) num ficheiro de terceiros, como o Hestia.
+
+**O que o DetailCraft faz** («modela-se uma vez, os desenhos de fabrico seguem»):
+- perfis de catálogos (AISC; europeus IPE, HEA, HEB, UPN; ingleses UB, UC, tubos SHS/RHS/CHS — 2311 secções; sem HEM,
+  UPE nem as cantoneiras e tubos EN), chapas paramétricas «PL t×l»;
+- seis ligações, cada uma guardada só como {tipo, peças, parâmetros} e refeita a cada mudança (as chapas, os furos, os
+  parafusos, as soldaduras e os recortes vão atrás das peças): chapa de topo (rente ou estendida), cutelo de alma (fin
+  plate), chapa de base (chumbadouros, nervuras, argamassa, cutelo de corte), gousset de contraventamento (cantoneira,
+  chapa ou tubo), emenda com cobrejuntas, meia-esquadria com chapas; os nós achados sozinhos (ponta de viga num pilar,
+  diagonal num elemento, pontas em linha, dois perfis num nó, pilar sem pilar por baixo) e «copiar para os nós iguais»
+  (mesmos perfis, mesma face); avisos pelo EN 1993-1-8 Quadro 3.3 (e1, e2 ≥ 1,2 d0; p1 ≥ 2,2 d0; p2 ≥ 2,4 d0) e de
+  encaixe — sem cálculo de resistência;
+- marcas de peça e de conjunto: a mesma marca quando perfil, material, comprimento, furos, recortes e cortes são iguais
+  (1 mm), também virada; conjuntos = peça principal + as soldadas; numeradas de novo a cada vez (sem marcas estáveis);
+- desenho de cada peça (alçado, planta do banzo com furos, corte; cotas dos furos em cadeia, recortes, ângulos; «n × Ø d»;
+  carimbo com marca, perfil, material, comprimento, quantidade, peso) — sem desenhos de conjunto nem símbolos de
+  soldadura;
+- DSTV NC1 para as máquinas de corte e furação (blocos ST, AK, BO, EN), corte de barras (6/12 m, serra 3 mm, sobras
+  ≥ 500 mm aproveitáveis), listas de material e de parafusos;
+- armaduras: varões à mão e por elemento (viga, pilar, laje, parede, sapata), formas BS 8666, amarrações e emendas pelo
+  EC2, verificações de recobrimento e espaçamento, mapa de armaduras;
+- montagem (pesos, centro de gravidade, ordem pelas fases e pelos apoios, grua) e construtibilidade (espaço para a
+  chave, soldaduras, furos de escoamento para a galvanização).
+
+**O que o ArqSynth tem (0.493):** toda a parte de betão armado — modelo analítico, ações, pórtico 3D e cascas, EC2,
+armaduras `IfcReinforcingBar` com formas BS 8666 e emendas a 12 m, mapa de armaduras, desenhos de estrutura e de
+armaduras, pormenores tipo (Fase 9). Da metálica só há o material «Aço estrutural S275», o Steel/Wood frame (0.437,
+com montantes que são caixas) e as chapas de base dos guardas-corpos. Os pilares e as vigas só têm secções retangular,
+circular, L e T (`ifc/catalog.py` `TypeSpec`, `ifc/model.py` `ensure_type`); não há perfis I/U/tubos, `IfcPlate`,
+parafusos, soldaduras, cortes 3D nas pontas, vigas inclinadas, contraventamentos, treliças, marcas, desenhos de fabrico
+nem DSTV. O modelo analítico avisa «fora do dimensionamento do EC2» nos elementos que não são de betão. O addon também
+não tem metálica (só o Steel frame e as ideias do Profile Pen, dos cortes da carpintaria e do corte das barras de 12 m).
+
+**Onde o ArqSynth deve ser melhor:** em IFC nativo (as peças, as ligações e os conjuntos lidos pelo Revit e pelo
+Tekla); ligações que nunca se partem ao mexer nas peças, como as paredes; marcas estáveis (não mudam enquanto a peça não
+muda); desenhos de conjunto com símbolos de soldadura (ISO 2553); verificação pelo EC3 sobre o modelo analítico que já
+existe; tudo em português e pelas normas europeias.
+
+Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a recomendada é esta):
+1. **Catálogo de perfis e classes de aço.** Perfis pela EN 10365 (IPE, HEA, HEB, HEM, UPN, UPE), EN 10056-1
+   (cantoneiras de abas iguais e desiguais) e EN 10210/10219 (tubos quadrados, retangulares e redondos), perfis
+   enformados a frio C, Z e Ω
+   (madres) e chapa. Cada um com h, b, tw, tf, r, área, kg/m, área de pintura, Iy, Iz, Wel, Wpl, It, Iw, raios de
+   giração (o que o EC3 vai pedir). Classes S235, S275, S355 e S460 com fy e fu pela espessura (EN 10025-2; EC3-1-1
+   Quadro 3.1). Tipos «Viga IPE 300 — S275» em Gerenciar ▸ Tipos e no Editar tipo, com a escolha no catálogo (família ▸
+   tamanho). IFC: `IfcIShapeProfileDef`, `IfcUShapeProfileDef`, `IfcLShapeProfileDef`, `IfcRectangleHollowProfileDef`,
+   `IfcCircleHollowProfileDef`, `IfcCShapeProfileDef`, `IfcZShapeProfileDef` com o nome normalizado («IPE300») num
+   `IfcMaterialProfileSet`. Nas plantas e cortes, o perfil cortado cheio a preto (a forma real em 1:20/1:50, uma linha
+   grossa em 1:100+). Os dados são das normas (medidas não têm autor); não se copia a tabela do DetailCraft.
+2. **Peças metálicas.** Pilar e viga com perfil (as ferramentas que já existem, com o catálogo), viga inclinada (dois
+   pontos com cotas, ou pela inclinação), contraventamento (diagonal, em X, em K, entre pilares ou na cobertura), o ponto
+   de inserção (os 9 e o eixo) e a rotação do perfil. As pontas como no Tekla: a viga pára na face do pilar (banzo ou
+   alma) com uma folga, recorte (cope) quando o banzo bate, meia-esquadria entre duas vigas (joelho de pórtico), corte
+   por um plano. Arrastar um pilar leva as vigas ligadas (como as paredes). `IfcBeam`, `IfcColumn`, `IfcMember`
+   (BRACE, PURLIN), peso nas Propriedades e nas Tabelas (categoria nova «Estrutura metálica»).
+3. **Ligações.** Como as seis do DetailCraft, com os nomes daqui — chapa de base, chapa de topo (rente ou estendida),
+   cutelo de alma, cantoneiras de alma (a mais), emenda com cobrejuntas, gousset de contraventamento, joelho com chapas —
+   e a ligação madre–asna (cantoneira de apoio). Guardadas como {tipo, peças, parâmetros} e refeitas quando as peças
+   mudam; os nós achados sozinhos; «Aplicar a todos os nós iguais»; avisos de disposição do EC3-1-8 (Quadro 3.3) e de
+   encaixe (chapa mais larga que o banzo, espaço para a chave). Parafusos M12–M30 classe 8.8/10.9 com anilhas e porcas
+   (comprimento pelo aperto), chumbadouros, soldaduras de ângulo com a espessura. IFC: `IfcPlate`,
+   `IfcMechanicalFastener` (BOLT, ANCHORBOLT), `IfcFastener` (WELD), os furos como `IfcOpeningElement` nas peças, tudo
+   num `IfcElementAssembly` por conjunto. Uma ligação escolhida mostra os parâmetros nas Propriedades (com «Editar
+   tipo» para os tipos de ligação, como no Revit).
+4. **Estruturas prontas** (o prático e rápido): pórtico de nave (pilares, vigas de cobertura inclinadas com joelho e
+   cumeeira, madres, contraventamentos de cobertura e de fachada, ligações postas), treliça (Pratt, Warren, Howe; banzos e
+   diagonais em cantoneira ou tubo), madres em C ou Z pelo espaçamento (como a carpintaria do telhado), estrutura de piso
+   metálica (principais e secundárias, como o sistema de vigas) e escada metálica (vigas de escada em UPN, degraus em
+   chapa xadrez ou grelha). Cada uma um `IfcElementAssembly` que se edita pelos parâmetros.
+5. **Marcas e listas.** Marcas de peça e de conjunto pela regra do DetailCraft (perfil, material, comprimento, furos,
+   recortes, cortes; virada), com os prefixos daqui (proposta: P pilar, V viga, CV contraventamento, M madre, Ch chapa;
+   conjuntos em maiúsculas) e estáveis: guardadas no IFC, só mudam quando a peça muda; «Renumerar» à mão. Listas:
+   material (marca, perfil, comprimento, quantidade, kg/m, peso, área de pintura), parafusos, chapas, conjuntos com peso
+   — no painel Tabelas e em XLSX/CSV.
+6. **Desenhos de fabrico e de montagem.** Desenho de peça (como o do DetailCraft), desenho de conjunto (a mais: a peça
+   principal com as chapas soldadas, símbolos de soldadura ISO 2553, lista de peças) e planta de montagem (plantas e
+   alçados com as marcas dos conjuntos, eixos e níveis); os pormenores tipo de cada ligação (1:10) com chamadas nas
+   plantas, como os pormenores tipo do betão (0.237). Folhas de tipos novos, com o carimbo da empresa.
+7. **Fabrico.** DSTV NC1 por peça (ST, AK, BO, EN e a marcação SI; os recortes no contorno AK de cada face, as
+   aberturas interiores por IK), o DXF das chapas para laser ou
+   plasma (o escritor do `model/fabrication.py`) e o corte das barras (primeiro o maior que cabe; barras de 6 e 12 m,
+   serra 3 mm, sobras aproveitáveis) com a lista de barras a comprar e o desperdício.
+8. **Verificação pelo EC3** (pré-dimensionamento, no modelo analítico que já existe): o aço com E = 210 GPa e as
+   secções do catálogo no pórtico 3D; EN 1993-1-1 — classe da secção, resistência (N, V, M e interação), encurvadura
+   por flexão (curvas a–d), encurvadura lateral, flechas; EN 1993-1-8 — parafusos ao corte e ao esmagamento, soldaduras
+   de ângulo; memória de cálculo como a do EC2. O aviso «fora do dimensionamento» passa a dizer o que falta.
+9. **Armaduras à mão e malhas** (o lado de betão do DetailCraft que aqui falta): varão desenhado (reto, L, U, estribo,
+   livre) com o código de forma BS 8666 (o que o ArqSynth já usa), malhas eletrossoldadas (`IfcReinforcingMesh`, as
+   designações comerciais portuguesas), verificação de recobrimento, espaçamento livre e congestionamento (EC2 4.4.1.2,
+   8.2), no mapa de armaduras que já existe.
+10. **Montagem e construtibilidade** (depois): fases de montagem, peso e centro de gravidade de cada conjunto, ordem
+    pelos apoios; espaço para a chave, furos de escoamento e respiro para a galvanização, peças maiores que o transporte
+    ou que a tina de galvanização, choques entre peças.
+
 ### Transversal (ao longo das fases)
 - Confirmar no Revit, elemento a elemento, os IFC gravados.
 - ~~Investigar: no papel, o contorno grosso das paredes falhou uma vez num canto (a união dos contornos pelo Qt, `pdf._paths`); não se repetiu ao desenhar de novo.~~ (0.253.0: os contornos saíam do corte num sentido ou noutro; agora orientados por elemento; 0.254.0: o pilar recorta a parede no papel.)
