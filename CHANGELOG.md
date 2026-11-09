@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.509.0 — 2026-11-09
+
+**Estrutura metálica, passo 4: a escada metálica.**
+
+- Ferramenta nova **Escada metálica** (separador **Estrutura**, na lista da seta ao lado do **Pórtico de nave**): como
+  a Escada, um clique no pé (o meio do primeiro degrau, no chão) e outro para onde sobe — uma escada reta de
+  **degraus abertos** entre duas **vigas de escada em UPN**:
+  - os degraus em **grelha** (30 mm) ou em **chapa xadrez dobrada** (6 mm, com uma aba de 4 cm no focinho), cada um
+    3 cm por cima do de baixo; espelhos de 18 cm no máximo, como na Escada;
+  - as vigas de escada com a **alma virada para os degraus** e os banzos para fora, o topo 3 cm acima dos focinhos,
+    **cortadas** rente ao chão no pé e a prumo e rente ao piso de cima no topo;
+  - na barra: o desnível (até ao piso de cima, se não se escrever outro), a largura, o cobertor, os degraus e as
+    vigas (UPN 160 a 240).
+- As vigas de escada são peças metálicas (marcas — uma para a da esquerda, outra para a da direita —, lista de
+  material, NC1, corte das barras); apagar a escada leva as vigas; um só Ctrl+Z desfaz tudo.
+
 ## 0.508.0 — 2026-11-09
 
 **Estrutura metálica, passo 4: o piso metálico.**

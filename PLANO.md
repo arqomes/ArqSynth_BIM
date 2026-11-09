@@ -1601,9 +1601,11 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
 4. **Estruturas prontas** (0.499.0: o **pórtico de nave** — ferramenta com dois cliques, pórticos com joelhos e
    cumeeira em meia-esquadria, madres, contraventamentos em X nas pontas, chapas de base. 0.507.0: a **treliça** de
    banzos paralelos — Pratt, Howe, Warren — com dois cliques. 0.508.0: o **piso metálico** pelo Sistema de vigas com
-   um tipo de aço (secundárias nas almas das principais, recortadas, com cutelo, a seguirem o vão). Faltam: a treliça
-   de duas águas, as ligações dos nós da treliça (gousset), a escada metálica, e a nave e a treliça como conjuntos
-   editáveis pelos parâmetros depois de feitas.)
+   um tipo de aço (secundárias nas almas das principais, recortadas, com cutelo, a seguirem o vão). 0.509.0: a
+   **escada metálica** reta — degraus abertos em grelha ou chapa xadrez entre vigas de escada em UPN, cortadas no
+   chão e no piso de cima. Faltam: a treliça de duas águas, as ligações dos nós da treliça (gousset), a escada
+   metálica em L/U com patamar e as ligações dos degraus às vigas, e a nave, a treliça e a escada como conjuntos
+   editáveis pelos parâmetros depois de feitos.)
    (o prático e rápido): pórtico de nave (pilares, vigas de cobertura inclinadas com joelho e
    cumeeira, madres, contraventamentos de cobertura e de fachada, ligações postas), treliça (Pratt, Warren, Howe; banzos e
    diagonais em cantoneira ou tubo), madres em C ou Z pelo espaçamento (como a carpintaria do telhado), estrutura de piso

@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.509 — Escada metálica (estrutura metálica, passo 4)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.509.0**.
+
+1. Faça Ctrl+N. No separador **Estrutura**, clique na **seta** ao lado de **Pórtico de nave** e escolha **Escada
+   metálica**.
+2. Na barra de parâmetros: **Desnível** 3 m, **Largura** 1 m, **Cobertor** 0,28 m, **Degraus** «Chapa xadrez
+   dobrada», **Vigas de escada** UPN 200.
+3. Clique num ponto da planta (o pé da escada) e afaste o rato: vê o contorno da escada com os degraus. Clique para o
+   lado para onde sobe.
+4. Rode a vista: 16 degraus abertos entre duas vigas UPN; as vigas assentam no chão, cortadas a direito, e acabam a
+   prumo à altura do piso de cima (3 m).
+5. Clique numa viga de escada: nas Propriedades, «Viga de escada …», UPN 200, com o peso. Na lista de material
+   (Tabelas ▸ Estrutura metálica: lista de material) aparecem duas marcas (a viga da esquerda e a da direita são
+   simétricas).
+6. Apague a escada (clique nos degraus e Delete): as vigas vão com ela. Ctrl+Z repõe tudo.
+7. Repita com **Degraus** «Grelha (30 mm)».
+
 ## 0.508 — Piso metálico (estrutura metálica, passo 4)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.508.0**.

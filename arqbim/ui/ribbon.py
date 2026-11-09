@@ -76,7 +76,7 @@ PANELS = {
     "structure": (("select", ("select",)),
                   # (0.495) the steel pieces after the floor, as Revit's Truss and Brace in its Structure panel
                   ("structure", ("beam", "wall", "column", "slab", "steel_member",
-                                 ["steel_shed", "steel_truss"],                                  # (0.499, 0.507)
+                                 ["steel_shed", "steel_truss", "steel_stair"],                   # (0.499–0.509)
                                  ("beam_system", "param_surface", "steel_mitre"))),
                   ("foundation", ("footing", ("combined_footing", "footings_under"))),
                   ("connection", ("base_plate", ["end_plate", "fin_plate", "gusset", "purlin_cleat"],

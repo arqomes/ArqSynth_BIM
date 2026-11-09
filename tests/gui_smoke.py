@@ -664,6 +664,7 @@ def bim_flow():
     beam_on_girder_flow()
     steel_truss_flow()
     steel_floor_flow()
+    steel_stair_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20508,6 +20509,46 @@ def steel_floor_flow():
     doc.modified = False
     check("piso_metalico", len(system) == 3 and len(fins) == 6 and at_webs,
           "vigas={} cutelos={} nas_almas={}".format(len(system), len(fins), at_webs))
+
+
+def steel_stair_flow():
+    """0.509 — The «Escada metálica» tool (Estrutura, in the list of the Pórtico de nave): rise 3 m, chequered plate;
+    a click on its foot, one 3 m along X: a stair of 16 treads between two UPN 200 stringers; one undo takes it all.
+    Captured: 509_escada_metalica.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("top")
+    vp.zoom_box((np.array((-2.0, -3.0, 0.0)), np.array((7.0, 3.0, 1.0))))
+    pump(300)
+    in_ribbon = win.ribbon_item("steel_stair") is not None
+    win.set_tool("steel_stair")
+    pump(100)
+    tool = win.tool
+    tool.set_option("rise", 3.0)
+    tool.set_option("tread", "chapa")
+    before = {o.id for o in doc.objects.values() if o.is_bim}
+    for p in ((0.0, 0.0, 0.0), (3.0, 0.0, 0.0)):
+        move(vp.project(np.array(p)), 3)
+        click()
+        pump(200)
+    pump(400)
+    made = [g for g in (o.id for o in doc.objects.values() if o.is_bim) if g not in before]
+    stairs = [g for g in made if doc.ifc.kind_of(g) == "steel_stair"]
+    stringers = [g for g in made if doc.ifc.steel_section(g) == "UPN200"]
+    built = len(stairs) == 1 and len(stringers) == 2
+    win.set_tool("select")
+    win.set_view("front")
+    vp.zoom_box((np.array((-0.5, -1.0, 0.0)), np.array((4.6, 1.0, 3.0))))
+    pump(400)
+    shot("509_escada_metalica.png")
+    doc.undo()
+    pump(300)
+    undone = all(doc.get(g) is None for g in made)
+    doc.modified = False
+    check("escada_metalica", in_ribbon and built and undone,
+          "fita={} escada={} vigas={} desfeito={}".format(in_ribbon, len(stairs), len(stringers), undone))
 
 
 def steel_sheet_flow():

@@ -3509,6 +3509,21 @@ _STRINGS = {
                   "all."),
     "info.shed_types": ("Escolha perfis de aço para os pilares, asnas, madres e contraventamentos.",
                         "Choose steel sections for the columns, rafters, purlins and bracing."),
+    "tool.steel_stair": ("Escada metálica", "Steel stair"),           # (0.509)
+    "cmd.steel_stair": ("Escada metálica", "Steel stair"),
+    "ctx.sstair_rise": ("Desnível", "Rise"),
+    "ctx.sstair_width": ("Largura", "Width"),
+    "ctx.sstair_going": ("Cobertor", "Going"),
+    "ctx.sstair_tread": ("Degraus", "Treads"),
+    "ctx.sstair_section": ("Vigas de escada", "Stringers"),
+    "sstair.grelha": ("Grelha (30 mm)", "Grating (30 mm)"),
+    "sstair.chapa": ("Chapa xadrez dobrada", "Folded chequered plate"),
+    "hint.sstair_start": ("Escada metálica: clique no pé (o meio do primeiro degrau, no chão).",
+                          "Steel stair: click its foot (the middle of its first step, on the floor)."),
+    "hint.sstair_dir": ("Escada metálica: clique para onde sobe ({n} espelhos de {h}, cobertor {g}).",
+                        "Steel stair: click the way it goes up ({n} risers of {h}, going {g})."),
+    "info.steel_stair": ("Escada metálica: {n} espelhos de {h}, {t} degraus, vigas {s}. Ctrl+Z desfaz tudo.",
+                         "Steel stair: {n} risers of {h}, {t} treads, stringers {s}. Ctrl+Z undoes it all."),
     "tool.steel_truss": ("Treliça", "Truss"),                         # (0.507)
     "cmd.steel_truss": ("Treliça", "Truss"),
     "ctx.truss_kind": ("Tipo", "Kind"),
@@ -7091,6 +7106,7 @@ _STRINGS = {
     "elem.chord": ("Banzo", "Chord"),                               # (0.507)
     "elem.truss_vertical": ("Montante", "Vertical"),
     "elem.truss_diagonal": ("Diagonal", "Diagonal"),
+    "elem.steel_stair": ("Escada metálica", "Steel stair"),          # (0.509)
     "elem.footing": ("Sapata", "Footing"),
     "elem.pipe": ("Tubo", "Pipe"),
     "elem.duct": ("Conduta", "Duct"),

@@ -1007,6 +1007,60 @@ class SteelFloor(unittest.TestCase):
         self.assertEqual(doc.ifc.validate(express_rules=True), [])
 
 
+class SteelStair(unittest.TestCase):
+    """(0.509) The steel stair."""
+
+    def test_geometry(self):
+        """3 m in risers of at most 18 cm: 17 of 17,6 cm, 16 treads; grating 30 mm thick, chequered plate 6 mm with a
+        40 mm lip; each over the one below by 3 cm; a stringer's cuts: level at the floor, plumb at the last riser's
+        line (16 × 28 cm), level at the floor above."""
+        from arqbim.core import steel_stair
+        grid = steel_stair.treads(3.0, 0.28, "grelha")
+        self.assertEqual(len(grid), 16)
+        x0, x1, top, ring = grid[0]
+        self.assertAlmostEqual(x0, -0.03)
+        self.assertAlmostEqual(top - min(z for _x, z in ring), 0.030)
+        plate = steel_stair.treads(3.0, 0.28, "chapa")
+        self.assertAlmostEqual(plate[0][2] - min(z for _x, z in plate[0][3]), 0.040)
+        start, end, cuts = steel_stair.stringer(3.0, 0.28, 0.2)
+        self.assertLess(start[1], 0.0)
+        self.assertGreater(end[0], 16 * 0.28)
+        self.assertEqual([(k, n) for k, _p, n in cuts], [(0, (0.0, -1.0)), (1, (1.0, 0.0)), (1, (0.0, 1.0))])
+        self.assertAlmostEqual(cuts[1][1][0], 16 * 0.28)
+
+    def test_made(self):
+        """A stair of 3 m, 1 m wide, chequered plate, UPN 200: an IfcStair (STRAIGHT_RUN_STAIR, 17 risers, 16 treads)
+        and two stringers — steel pieces of UPN 200, their webs' inner faces at the stair's sides (±0,50 m) and their
+        flanges out, standing on the floor (z 0) up to the floor above (z 3) and the last riser's line (4,48 m) —, of
+        two marks (left- and right-handed); the file valid; deleting the stair takes its stringers; one undo brings all
+        back."""
+        import numpy as np
+        import ifcopenshell.util.element as ue
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        stair, stringers = bim.add_steel_stair(doc, (0.0, 0.0, 0.0), (1.0, 0.0), 3.0, 1.0, 0.28, "UPN200", "chapa")
+        e = doc.ifc.by_guid(stair)
+        self.assertEqual(e.PredefinedType, "STRAIGHT_RUN_STAIR")
+        common = ue.get_psets(e)["Pset_StairCommon"]
+        self.assertEqual((common["NumberOfRiser"], common["NumberOfTreads"]), (17, 16))
+        self.assertEqual(len(stringers), 2)
+        for g, sign in zip(stringers, (1.0, -1.0)):
+            self.assertEqual(doc.ifc.steel_section(g), "UPN200")
+            v = doc.get(g).mesh.verts
+            np.testing.assert_allclose((v[:, 2].min(), v[:, 2].max(), v[:, 0].max()), (0.0, 3.0, 4.48), atol=1e-6)
+            y = v[:, 1] * sign
+            self.assertAlmostEqual(float(y.min()), 0.5, places=6)
+            self.assertTrue((np.abs(y - 0.5085) < 0.0006).any())             # (the web's back at the inner side)
+        marks, _pieces = doc.ifc.steel_marks()
+        self.assertEqual(len({marks[g] for g in stringers}), 2)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        bim.delete(doc, [stair])
+        self.assertTrue(all(doc.ifc.by_guid(g) is None for g in [stair] + stringers))
+        doc.undo()
+        self.assertTrue(all(doc.ifc.by_guid(g) is not None for g in [stair] + stringers))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

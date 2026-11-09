@@ -2771,6 +2771,20 @@ def steel_truss(doc, start, end, chord, web, storey=None, **options):
     return doc.execute(IfcCommand(t("cmd.steel_truss"), action)).result
 
 
+def add_steel_stair(doc, foot, direction, rise, width, going, section="UPN200", tread="grelha", storey=None):
+    """(0.509) A straight steel stair (ifc/steel_stairs): its treads of grating or chequered plate, its two stringers
+    of the channel `section`. One undo step. (its GlobalId, its stringers')."""
+    language = lang()
+
+    def action(ifc):
+        name = "{} {}".format(t("elem.steel_stair"), ifc.count("IfcStair") + 1)
+        stair = ifc.add_steel_stair(np.asarray(foot, dtype=float), direction, rise, width, going, section, tread,
+                                    name=name, lang=language, storey=storey)
+        return stair.GlobalId, ifc.steel_stair_params(stair.GlobalId)["stringers"]
+
+    return doc.execute(IfcCommand(t("cmd.steel_stair"), action)).result
+
+
 def number_steel(doc, renumber=False):
     """(0.500) The steel pieces' marks written (their IFC Tag): the same mark for the same pieces, kept where they can
     be (renumber: all anew). One undo step. How many marks changed."""
@@ -5280,6 +5294,7 @@ def delete(doc, obj_ids):
     for under in doc.ifc.supports_of(caps).values():
         guids += [p for p in under if p not in guids and doc.ifc.kind_of(p) == "pile"]
     guids += [c for c in doc.ifc.claddings_of(guids) if c not in guids]      # (a wall takes its finishes, 0.119)
+    guids += doc.ifc.steel_stair_parts(guids)         # (0.509: a steel stair takes its stringers)
     guids += doc.ifc.connections_to_remove(guids)     # (0.497: a connection whole; a piece takes its connections)
     # (0.178) a finish going: those over it on its face come down onto what is left
     restack = sorted({c for g in guids if doc.ifc.kind_of(g) == "cladding" for c in doc.ifc.face_claddings(g)}

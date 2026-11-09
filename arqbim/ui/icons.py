@@ -392,6 +392,20 @@ def steel_truss_icon():
     return theme.icon(pm)
 
 
+def steel_stair_icon():
+    """(0.509) Escada metálica: a stringer rising, the open treads on it."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 2.0))
+    p.drawLine(QtCore.QPointF(3, 29), QtCore.QPointF(29, 5))                     # (the stringer)
+    p.drawLine(QtCore.QPointF(7, 30), QtCore.QPointF(30, 9))
+    p.setPen(_pen(INK, 1.6))
+    for k in range(4):                                                            # (the treads)
+        x, y = 6 + 6 * k, 23 - 5.5 * k
+        p.drawLine(QtCore.QPointF(x, y), QtCore.QPointF(x + 6, y))
+    p.end()
+    return theme.icon(pm)
+
+
 def steel_nc_icon():
     """(0.501) Exportar para fabrico: a sheet of the NC file going out, a drilled hole on a bar."""
     pm, p = _canvas()
@@ -2928,6 +2942,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "steel_member": steel_member_icon,                                              # (0.495)
               "steel_shed": steel_shed_icon,                                                  # (0.499)
               "steel_truss": steel_truss_icon,                                                # (0.507)
+              "steel_stair": steel_stair_icon,                                                # (0.509)
               "grid": grid_icon,
               "door": door_icon, "window": window_icon, "section": section_icon, "dimension": dimension_icon,
               "orbit": orbit_icon, "pan": pan_icon, "zoom": zoom_icon, "zoom_window": zoom_window_icon,
