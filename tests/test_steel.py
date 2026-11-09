@@ -1061,6 +1061,33 @@ class SteelStair(unittest.TestCase):
         self.assertTrue(all(doc.ifc.by_guid(g) is not None for g in [stair] + stringers))
 
 
+class ErectionPlan(unittest.TestCase):
+    """(0.510) The erection plan."""
+
+    def test_plan(self):
+        """None for a model without steel; a shed's: its pieces seen from above (lines), the grid if there is one, a
+        mark beside each piece (the columns' P1 four times, the rafters' V1, the purlins' M1, the braces'), none for the
+        plates; at 1:100 on a sheet."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, drawings, sheets
+        from arqbim.model.document import Document
+        doc = Document()
+        self.assertIsNone(drawings.of_view(doc, "steel_erection", "", "Montagem"))
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        drawing = drawings.of_view(doc, "steel_erection", "", "Planta de montagem")
+        self.assertGreater(len(drawing.lines), 50)
+        texts = [a[3] for a in drawing.annotations if a[0] == "text"]
+        self.assertEqual(texts.count("P1"), 4)
+        self.assertEqual(texts.count("V1"), 4)
+        self.assertEqual(texts.count("M1"), 10)
+        self.assertTrue(any(s.startswith("CV") for s in texts))
+        self.assertFalse(any(s.startswith("Ch") for s in texts))
+        self.assertTrue(drawing.north)
+        self.assertEqual(sheets.USUAL_SCALES["steel_erection"], 100)
+        self.assertIn("steel_erection", sheets.KINDS)
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

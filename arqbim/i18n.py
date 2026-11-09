@@ -9595,6 +9595,7 @@ _STRINGS = {
     "omap.op.fold": ("harmónio", "folding"),
     "tree.rebar_details": ("Pormenores tipo", "Typical details"),                                    # (0.237)
     "tree.steel_parts": ("Peças de aço (fabrico)", "Steel pieces (fabrication)"),                     # (0.502)
+    "tree.steel_erection": ("Planta de montagem (aço)", "Erection plan (steel)"),                     # (0.510)
     "sdraw.piece": ("{mark} — {section} {grade} — {n} peça(s) de {l} m — {kg} kg",
                     "{mark} — {section} {grade} — {n} piece(s) {l} m long — {kg} kg"),
     "sdraw.plate": ("{mark} — chapa {l} × {w} × {t} mm, {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",

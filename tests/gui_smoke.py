@@ -665,6 +665,7 @@ def bim_flow():
     steel_truss_flow()
     steel_floor_flow()
     steel_stair_flow()
+    steel_erection_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20549,6 +20550,38 @@ def steel_stair_flow():
     doc.modified = False
     check("escada_metalica", in_ribbon and built and undone,
           "fita={} escada={} vigas={} desfeito={}".format(in_ribbon, len(stairs), len(stringers), undone))
+
+
+def steel_erection_flow():
+    """0.510 — The erection plan: a shed; «Planta de montagem (aço)» in the Project browser; put on a new sheet: at
+    1:100, a mark beside each piece. Captured: 510_planta_de_montagem.png (the sheet)."""
+    import shutil
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import pdf as pdf_out
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+    pump(300)
+    win.tree_panel.raise_()
+    pump(400)
+    listed = "Planta de montagem (aço)" in win.tree_panel.text()
+    before = len(doc.sheets)
+    win.sheet_action("put", None, "steel_erection", "")
+    pump(800)
+    sheet = doc.sheets[-1] if len(doc.sheets) > before else None
+    pages = win._sheet_pages([sheet]) if sheet else []
+    drawing, frame, label = pages[0][1][0] if pages and pages[0][1] else (None, None, "")
+    paths = pdf_out.write_images(OUT, pages, "png") if drawing is not None else []
+    if paths:
+        shutil.copyfile(paths[0], os.path.join(OUT, "510_planta_de_montagem.png"))
+    texts = [a[3] for a in drawing.annotations if a[0] == "text"] if drawing is not None else []
+    doc.modified = False
+    check("planta_de_montagem", listed and label == "Planta de montagem (aço)" and frame is not None
+          and frame.scale == 100 and texts.count("P1") == 6 and bool(paths),
+          "listado={} rotulo={!r} escala={} marcas={}".format(listed, label, frame.scale if frame else None,
+                                                             sorted(set(texts))))
 
 
 def steel_sheet_flow():

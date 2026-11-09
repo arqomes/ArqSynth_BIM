@@ -289,6 +289,7 @@ class ProjectTree(QtWidgets.QDockWidget):
             add(root, ("view", "openings", ""), t("tree.openings"), [])
         if views["steel"]:                                                    # (0.502: the steel pieces' drawing)
             add(root, ("view", "steel_parts", ""), t("tree.steel_parts"), [])
+            add(root, ("view", "steel_erection", ""), t("tree.steel_erection"), [])     # (0.510)
         if views["details"]:                                                  # (the detail views, 0.133)
             details = add(root, ("views", "details"), "{} ({})".format(t("tree.details"), len(views["details"])), [])
             for uid, name in views["details"]:
@@ -580,7 +581,7 @@ class ProjectTree(QtWidgets.QDockWidget):
             menu.addAction(t("tree.remove_grid_axis"), lambda: self._later(self.on_grid, "remove", key[1]))
         elif key[:2] in (("view", "rebar"), ("view", "structure"), ("view", "structure_below"),    # (0.168, 0.235,
                          ("view", "rebar_details"), ("view", "openings"),                          # 0.237, 0.293)
-                         ("view", "steel_parts")):                                                 # (0.502)
+                         ("view", "steel_parts"), ("view", "steel_erection")):                     # (0.502, 0.510)
             put = menu.addMenu(t("tree.put_on_sheet"))
             for k, name in enumerate(self._sheet_names):
                 put.addAction(name, lambda k=k: self._later(self.on_sheet, "put", k, key[1], key[2]))

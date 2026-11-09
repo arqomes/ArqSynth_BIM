@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.510 — Planta de montagem (estrutura metálica, passo 6)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.510.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (separador **Estrutura**): dois cliques, por exemplo 12 m.
+2. Abra o **navegador do projeto**: em **Vistas** aparece **Planta de montagem (aço)** (por baixo de Peças de aço).
+3. Botão direito em **Planta de montagem (aço)** ▸ **Pôr numa folha nova**: a folha abre a **1:100**.
+4. Na folha: a nave vista de cima, com o norte; ao lado de cada peça a sua marca — **P1** nos pilares, **V1** nas
+   asnas, **M1** nas madres, **CV1** e **CV2** nos contraventamentos —, sem marcas umas por cima das outras.
+5. Use **Numerar peças** (Estrutura ▸ Ligação) e confira na **lista de material** (Tabelas) que as marcas são as
+   mesmas.
+
 ## 0.509 — Escada metálica (estrutura metálica, passo 4)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.509.0**.

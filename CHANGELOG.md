@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.510.0 — 2026-11-09
+
+**Estrutura metálica, passo 6: a planta de montagem.**
+
+- Vista nova **Planta de montagem (aço)** no navegador do projeto (secção Vistas, só quando o modelo tem aço): toda a
+  estrutura metálica vista de cima — pilares, asnas, vigas, contraventamentos, madres, treliças, vigas de escada —, os
+  eixos (quando os há), o norte e a **marca** de cada peça ao lado dela (P1, V1, CV1, M1…, as mesmas da lista de
+  material e do desenho de fabrico): o que a equipa de montagem põe em cada sítio.
+- As marcas procuram sozinhas um lugar livre: fora das outras marcas e das linhas das outras peças (ao meio da peça,
+  ou um pouco para um lado, ou do outro lado).
+- Botão direito ▸ **Pôr numa folha nova**: a folha sai a **1:100**.
+
 ## 0.509.0 — 2026-11-09
 
 **Estrutura metálica, passo 4: a escada metálica.**
