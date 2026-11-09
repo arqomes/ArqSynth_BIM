@@ -212,6 +212,11 @@ def package(doc, name=None, thumbnails=None):
         named.append(dict(e, name=_unique(e["name"], used), storey=storeys[e["storey"]],
                           category=folders[(e["storey"], e["category"])],
                           extras=dict(e["extras"], name=e["name"])))
+    for e in named:                                     # (0.483) its glass / water in a node of its own, its layer's
+        see = [k for k in e["parts"] if materials[k]["alpha"] < 0.999]
+        if see and len(see) < len(e["parts"]):
+            word = t("gltf.water_part" if any(materials[k]["finish"] == "water" for k in see) else "gltf.glass_part")
+            e["clear_name"] = _unique("{} {}".format(e["extras"]["name"], word), used)
     gltf, binary = gltf_export.build(named, materials, root, "ArqSynth BIM " + __version__)
     for mesh in gltf["meshes"]:
         mesh.pop("name", None)
@@ -273,15 +278,28 @@ def _layers(gltf):
     meshes' own names («mesh_N») change when it compresses the file (identical meshes made one):
     {id, name, globalId, ifcClass, type, storey, category, nodeIds}."""
     out = []
-    for node in gltf["nodes"]:
+    nodes = gltf["nodes"]
+    for node in nodes:
         extras = node.get("extras") or {}
         guid = extras.get("GlobalId")
         if "mesh" not in node or not guid:
             continue
-        out.append({"id": LAYER_ID + guid, "name": extras.get("name") or node["name"], "globalId": guid,
-                    "ifcClass": extras.get("ifcClass", ""), "type": extras.get("type", ""),
+        parts = [three_name(nodes[c]["name"]) for c in node.get("children", ())   # (0.483: its glass / water node —
+                 if (nodes[c].get("extras") or {}).get("part") == "clear"]           #  the Presentation sorts a part by
+        out.append({"id": LAYER_ID + guid, "name": extras.get("name") or node["name"], "globalId": guid,  # its own
+                    "ifcClass": extras.get("ifcClass", ""), "type": extras.get("type", ""),        # material first)
                     "storey": extras.get("storey", ""), "category": extras.get("category", ""),
-                    "nodeIds": [three_name(node["name"])]})
+                    "nodeIds": [three_name(node["name"])] + parts})
+    return out
+
+
+def _meshes_of(gltf, node):
+    """(0.483) An element's meshes: its node's and its glass / water child's."""
+    nodes = gltf["nodes"]
+    out = [gltf["meshes"][node["mesh"]]] if "mesh" in node else []
+    for c in node.get("children", ()):
+        if (nodes[c].get("extras") or {}).get("part") == "clear" and "mesh" in nodes[c]:
+            out.append(gltf["meshes"][nodes[c]["mesh"]])
     return out
 
 
@@ -321,7 +339,7 @@ def _lights(doc, gltf):
         except (AttributeError, TypeError, ValueError):
             lumens = 0.0
         used = []
-        for prim in gltf["meshes"][node["mesh"]]["primitives"]:
+        for prim in (p for mesh in _meshes_of(gltf, node) for p in mesh["primitives"]):   # (0.483: its glass too)
             name = names[prim["material"]] if "material" in prim else ""
             if name and name not in used:
                 used.append(name)
@@ -584,7 +602,7 @@ def _layer_bounds(gltf, layer_ids):
     found = []
     for node in gltf["nodes"]:
         if "mesh" in node and (node.get("extras") or {}).get("GlobalId") in wanted:
-            for prim in gltf["meshes"][node["mesh"]]["primitives"]:
+            for prim in (p for mesh in _meshes_of(gltf, node) for p in mesh["primitives"]):
                 a = gltf["accessors"][prim["attributes"]["POSITION"]]
                 found += [a["min"], a["max"]]
     if not found:

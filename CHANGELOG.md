@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.483.0 — 2026-11-09
+
+**Uma camada por janela no Presentation e transições animadas entre as cenas** (o dono, depois de importar o pacote no
+Presentation: «há 2 camadas de janela, um é window (vidro) e outro janela (estrutura) mas poderia ser apenas 1… o BIM
+ainda não tem animação de transição entre as cenas como acontece no AP»).
+
+- **Uma camada por janela.** O Presentation separava o vidro das janelas numa camada «WINDOW», à parte da camada da
+  janela, porque classificava o vidro pelo material. Agora o vidro (e a água) de cada elemento vai para o Presentation
+  com nome próprio («Janela 1 vidro») e dentro da camada da janela: no Presentation fica uma só camada por janela.
+  Para corrigir um projeto já importado, exporte de novo e use «Importar / atualizar».
+- **Transições animadas entre as cenas.** Na interface do Presentation, um clique num cartão de cena, ou as setas do
+  leitor, levam a câmara até à cena **a voar**, no tempo da sua chegada (1,2 s, ou o da Transição), com a lente a
+  mudar pelo caminho, como o «Voo suave» do Presentation. Uma cena com «Corte seco» chega de uma vez.
+- No PLANO ficou a lista do que falta preparar no BIM: cortes, etiquetas, efeitos, diagramas e passeio virtual.
+
 ## 0.482.0 — 2026-11-09
 
 **A fita organizada como a do Revit** (o dono: «gostaria que trabalhasse a organização das ferramentas como do revit…

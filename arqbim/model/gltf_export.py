@@ -110,7 +110,10 @@ def gather(doc, objects):
 
 
 def build(elements, materials, name="ArqSynth BIM", generator="ArqSynth BIM"):
-    """(the glTF JSON as a dict, the binary buffer as bytes) of these elements and materials (gather's)."""
+    """(the glTF JSON as a dict, the binary buffer as bytes) of these elements and materials (gather's). (0.483) An
+    element given a «clear_name» (the Presentation's export) has its see-through parts (glass, water) in a child node of
+    that name — a viewer that sorts a part by its own material (the Presentation's layers: glass is «Window») finds it
+    by name, as one of the element's."""
     pts = [c.reshape(-1, 3) for e in elements for c in e["parts"].values() if len(c)]
     if not pts:
         raise ValueError("empty")
@@ -134,7 +137,7 @@ def build(elements, materials, name="ArqSynth BIM", generator="ArqSynth BIM"):
     count_p = 0
     tree = {}                                           # storey -> category -> [node index]
     for e in elements:
-        prims = []
+        prims, clear = [], []
         for k, corners in e["parts"].items():
             if not len(corners):
                 continue
@@ -155,12 +158,21 @@ def build(elements, materials, name="ArqSynth BIM", generator="ArqSynth BIM"):
                               "type": "VEC3", "min": p.min(axis=0).tolist(), "max": p.max(axis=0).tolist()})
             accessors.append({"bufferView": 1, "byteOffset": base * 12, "componentType": FLOAT, "count": len(p),
                               "type": "VEC3"})
-            prims.append({"attributes": {"POSITION": len(accessors) - 2, "NORMAL": len(accessors) - 1},
-                          "material": mat_index[k]})
+            prim = {"attributes": {"POSITION": len(accessors) - 2, "NORMAL": len(accessors) - 1},
+                    "material": mat_index[k]}
+            (clear if e.get("clear_name") and materials[k]["alpha"] < 0.999 else prims).append(prim)
+        if clear and not prims:                         # (all of it see-through: one node, as before)
+            prims, clear = clear, []
         if not prims:
             continue
+        node = {"name": e["name"], "extras": e["extras"]}
+        if clear:                                       # (0.483) its glass, its water: a child node of its own
+            meshes.append({"name": e["clear_name"], "primitives": clear})
+            nodes.append({"name": e["clear_name"], "mesh": len(meshes) - 1, "extras": {"part": "clear"}})
+            node["children"] = [len(nodes) - 1]
         meshes.append({"name": e["name"], "primitives": prims})
-        nodes.append({"name": e["name"], "mesh": len(meshes) - 1, "extras": e["extras"]})
+        node["mesh"] = len(meshes) - 1
+        nodes.append(node)
         tree.setdefault(e["storey"], {}).setdefault(e["category"], []).append(len(nodes) - 1)
     storey_nodes = []
     for storey, categories in tree.items():

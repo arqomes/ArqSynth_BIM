@@ -644,6 +644,28 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.483 — Uma camada por janela e transições animadas
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.483.0**. Para a parte do Presentation,
+tenha-o aberto em http://127.0.0.1:3002 (peça-me para o pôr a correr, se não estiver).
+
+**Transições animadas**
+1. Faça Ctrl+N e desenhe uma casa pequena: 4 paredes, uma porta e duas janelas.
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
+3. Rode a vista e clique em **+ Criar cena** (em baixo, à esquerda). Rode a vista para outro lado e clique outra vez
+   em **+ Criar cena**: tem «Cena 1» e «Cena 2».
+4. Clique no cartão **Cena 1**: a câmara voa da vista atual para a Cena 1 em pouco mais de um segundo, sem saltar.
+5. Clique no cartão **Vista geral**: voa para lá.
+6. Arraste o deslizador **TRANSIÇÃO** (em baixo, à esquerda) até **4.0s** e clique outra vez nos cartões: o voo
+   demora agora 4 segundos.
+7. No leitor por baixo do 3D, clique em **›** e **‹**: as cenas seguem-se, cada uma a voar.
+
+**Uma camada por janela no Presentation**
+8. Clique em **Exportar / atualizar** e grave o ZIP (fica em Documentos).
+9. No Presentation, num projeto novo, clique em **ArqSynth BIM** e escolha esse ZIP.
+10. No separador **Camadas** (à direita): há **JANELAS · TÉRREO** com as janelas, e **já não há** a pasta «WINDOW».
+    Clique no olho de uma janela: desaparecem o caixilho e o vidro juntos.
+
 ## 0.482 — A fita organizada como a do Revit
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.482.0** (ou uma versão mais recente). Faça Ctrl+N.

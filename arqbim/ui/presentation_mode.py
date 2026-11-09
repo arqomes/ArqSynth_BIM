@@ -299,7 +299,7 @@ class _SceneCard(QtWidgets.QFrame):
     def mouseReleaseEvent(self, event):  # noqa: N802
         if self._press is not None and event.button() == QtCore.Qt.MouseButton.LeftButton:
             self._press = None
-            self.panel.mode.activate(self.key)
+            self.panel.mode.activate(self.key, fly=True)    # (0.483: flown there, as in the Presentation)
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):  # noqa: N802
@@ -1802,13 +1802,13 @@ class PresentationMode(QtCore.QObject):
                 self._frame_storey(scene.view[1])
             elif scene.kind == "section":
                 self._frame_section(scene.view[1])
+            if scene.fov > 0 and not vp.is_ortho():
+                vp.camera.fov = pygfx_fov(scene.fov, self.aspect())
 
         if fly and scene.transition != "cut" and ortho == vp.is_ortho():
-            vp._animate(place)                            # (the viewport's own smooth turn, there)
+            vp.fly(place, scene.transition_s)             # (0.483: as the Presentation's — its time, its lens too)
         else:
-            place()
-        if scene.fov > 0 and not vp.is_ortho():
-            vp.camera.fov = pygfx_fov(scene.fov, self.aspect())
+            vp.fly(place, 0)                              # (a cut: there at once)
         self.live["ortho"] = ortho
         vp.set_axonometric(ortho)
         vp.camera_locked = self.live["locked"]

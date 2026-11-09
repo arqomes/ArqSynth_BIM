@@ -19264,9 +19264,12 @@ def presentation_tab_flow():
     sequence = [s.key for s in pm.scenes(doc) if not s.hidden]
     at = sequence.index(scene.key)
     QtTest.QTest.mouseClick(mode.player.next, Qt.MouseButton.LeftButton)
-    pump(700)
+    pump(60)
+    flown = vp.flying()                              # (0.483: flown there in the scene's 1,2 s, as the Presentation)
+    pump(1600)
+    flown = flown and not vp.flying()
     nxt = sequence[(at + 1) % len(sequence)]
-    stepped = mode.scene_key == nxt and mode.player.label.text().startswith(
+    stepped = flown and mode.scene_key == nxt and mode.player.label.text().startswith(
         "{}/{}".format(sequence.index(nxt) + 1, len(sequence)))
     QtTest.QTest.mouseClick(mode.player.prev, Qt.MouseButton.LeftButton)
     pump(700)

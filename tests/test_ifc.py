@@ -9835,9 +9835,23 @@ class GltfExport(unittest.TestCase):
         self.assertFalse(any("name" in m for m in gltf["meshes"]) or "name" in gltf["scenes"][0])
         model = description["presentation"]["model3d"]
         offset = np.asarray(model["offset"])
-        node_of = {n["extras"]["GlobalId"]: n for n in gltf["nodes"] if "mesh" in n}
+        node_of = {n["extras"]["GlobalId"]: n for n in gltf["nodes"] if "mesh" in n and "GlobalId" in n["extras"]}
         layers = {l["globalId"]: l for l in model["layers"]}
         self.assertEqual(set(layers), set(node_of))
+        # (0.483) the window's glass: a child node of its own, named, in the window's layer (the Presentation made it a
+        # layer «Window» of its own when it was a part of the window's mesh)
+        window = next(g for g, n in node_of.items() if n["extras"]["ifcClass"] == "IfcWindow")
+        glass = [gltf["nodes"][c] for c in node_of[window].get("children", ())]
+        self.assertEqual(len(glass), 1)
+        self.assertEqual(glass[0]["extras"], {"part": "clear"})
+        self.assertTrue(glass[0]["name"].endswith(" vidro"))
+        self.assertEqual(layers[window]["nodeIds"], [pe.three_name(node_of[window]["name"]),
+                                                     pe.three_name(glass[0]["name"])])
+        see = [gltf["materials"][p["material"]] for p in gltf["meshes"][glass[0]["mesh"]]["primitives"]]
+        self.assertTrue(see and all(m.get("alphaMode") == "BLEND" for m in see))
+        self.assertTrue(all(gltf["materials"][p["material"]].get("alphaMode") != "BLEND"
+                            for p in gltf["meshes"][node_of[window]["mesh"]]["primitives"]))
+        self.assertTrue(all(len(l["nodeIds"]) == 1 for g, l in layers.items() if g != window))
         self.assertTrue(set(walls) | set(above) | {slab} <= set(layers))
         self.assertTrue(all(l["id"] == "bim_" + g and l["nodeIds"][0] == pe.three_name(node_of[g]["name"])
                             for g, l in layers.items()))

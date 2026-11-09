@@ -982,6 +982,26 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
    - os separadores do Presentation que o BIM ainda não prepara: Biblioteca, Material, Textos, Cortes (planos de corte
      por cena), Diagramas, Fluxos e zonas, Áudio, Notas;
    - a «Página final» do Presentation.
+9. **Preparar no BIM o que o Presentation faz** (o dono, 2026-11-09, depois de importar o pacote no Presentation local:
+   «o que é importante fazer no BIM é criar cenas… o BIM ainda não tem animação de transição entre as cenas como
+   acontece no AP, não tem ainda ferramentas de cortes, passeio virtual… é importante criar cortes, ter diagramas,
+   etiqueta, efeitos»; e «há 2 camadas de janela, uma é window (vidro) e outra janela (estrutura), mas poderia ser
+   apenas 1»). Por passos, um por versão:
+   1. ~~**Uma camada por janela**~~ (0.483.0: o vidro e a água de cada elemento num nó próprio do GLB, com nome,
+      dentro da camada do elemento — o Presentation dava ao vidro dono próprio pelo material e fazia dele «Window»).
+   2. ~~**Transições animadas entre as cenas**~~ (0.483.0: um clique num cartão ou o leitor voam até à cena no tempo
+      da sua chegada, com a lente, como o «Voo suave» do Presentation; «Corte seco» chega de uma vez).
+   3. **Cortes** (o separador «Cortes» do Presentation): por cena, planos de corte horizontais (à altura escolhida) e
+      verticais (por um eixo e uma posição) e a caixa de corte, vistos no 3D do BIM enquanto se escolhem; vão nas cenas
+      como `section.planes` (o importador do Presentation já os lê).
+   4. **Etiquetas** (o separador «Etiquetas»): texto num ponto do modelo — além das dos ambientes, que já vão —, vistas
+      no 3D; vão como etiquetas da página 3D (o importador do Presentation passa a lê-las).
+   5. **Efeitos**: ver no BIM, antes de exportar, a construção peça a peça e a explosão como o Presentation as toca (o
+      sol do dia e o movimento de câmara já se veem).
+   6. **Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D
+      (o importador do Presentation passa a lê-los).
+   7. **Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
+      Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar).
 
 ### Alvenaria por tipo de parede (decidido pelo dono do projeto, 2026-11-02)
 «Alvenaria por tipo.» Até aqui a alvenaria do cálculo (os blocos, o seu grupo, a sua resistência fb, a argamassa)

@@ -7035,6 +7035,8 @@ _STRINGS = {
     "gltf.sketches": ("Esboços", "Sketches"),
     "gltf.sketch_material": ("Esboço", "Sketch"),
     "gltf.no_storey": ("Sem pavimento", "No storey"),
+    "gltf.glass_part": ("vidro", "glass"),                # (0.483) a window's glass, in a node of its own
+    "gltf.water_part": ("água", "water"),
     "info.gltf": ("Modelo 3D gravado em {f}: {n} elementos, {tri} triângulos, {mb} MB.",
                   "3D model saved to {f}: {n} elements, {tri} triangles, {mb} MB."),
     "info.gltf_empty_selection": ("Nada escolhido: escolha os elementos a exportar (ou escolha «O que está à vista»).",

@@ -828,15 +828,30 @@ class Viewport:
         h = np.array((f[0], f[1], 0.0))
         return tuple(normalize(h)) if np.linalg.norm(h) > 1e-6 else None
 
-    def _animate(self, change):
-        """A camera change made smoothly: `change()` sets where the camera ends; it turns there in TURN_S."""
+    def _animate(self, change, seconds=None):
+        """A camera change made smoothly: `change()` sets where the camera ends; it turns there in TURN_S — (0.483)
+        or in `seconds` (a scene's arrival in the Presentation's interface), its lens too."""
         self.remember_view()
         start = self.camera_snapshot()
         change()
         end = self.camera_snapshot()
         self.restore_camera(start)
-        self._anim = (time.monotonic(), start, end)
+        self._anim = (time.monotonic(), start, end, float(seconds) if seconds else TURN_S)
         self.redraw()
+
+    def fly(self, change, seconds):
+        """(0.483) A camera change flown in `seconds`, eased at both ends — the Presentation's «Voo suave» between two
+        scenes (the projection the same at both ends); 0: at once."""
+        if seconds and seconds > 0:
+            self._animate(change, seconds)
+        else:
+            self._anim = None
+            change()
+            self.redraw()
+
+    def flying(self):
+        """(0.483) A smooth turn or a flight in progress."""
+        return self._anim is not None
 
     def look_from(self, direction, animate=True, up=None):
         """The camera on the side `direction` points to (from the model to the eye), framing the model;
@@ -915,11 +930,14 @@ class Viewport:
         """A smooth turn in progress (look_from): the camera a step further, and another image asked for."""
         if self._anim is None:
             return
-        t0, start, end = self._anim
-        s = min((time.monotonic() - t0) / TURN_S, 1.0)
+        t0, start, end, seconds = self._anim
+        s = min((time.monotonic() - t0) / max(seconds, 1e-3), 1.0)
         s = s * s * (3 - 2 * s)                       # (eased at both ends)
         cam = self.camera
         cam.local.position = tuple(np.asarray(start["position"]) * (1 - s) + np.asarray(end["position"]) * s)
+        f0, f1 = float(start.get("fov") or 0.0), float(end.get("fov") or 0.0)
+        if f0 > 0 and f1 > 0 and abs(f1 - f0) > 1e-6:  # (0.483: a scene's lens reached as it flies)
+            cam.fov = f0 * (1 - s) + f1 * s
         q0, q1 = np.asarray(start["rotation"], float), np.asarray(end["rotation"], float)
         if q0 @ q1 < 0:
             q1 = -q1                                  # (the short way round)
