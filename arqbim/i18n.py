@@ -317,13 +317,13 @@ _STRINGS = {
     "sched.col.used": ("Nas peças", "In pieces"),
     "sched.col.waste": ("Desperdício", "Waste"),
     "act.steel_nc": ("Exportar para fabrico", "Export for fabrication"),
-    "tip.steel_nc": ("Grava numa pasta um ficheiro DSTV NC1 por marca (para as máquinas de corte e furação) e o plano "
-                     "de corte das barras (CSV).",
-                     "Writes in a folder a DSTV NC1 file per mark (for the sawing and drilling machines) and the bars' "
-                     "cutting plan (CSV)."),
+    "tip.steel_nc": ("Grava numa pasta um ficheiro DSTV NC1 por marca (para as máquinas de corte e furação, com a "
+                     "marca a gravar na peça), o plano de corte das barras (CSV) e as chapas em DXF (laser ou plasma).",
+                     "Writes in a folder a DSTV NC1 file per mark (for the sawing and drilling machines, with the mark "
+                     "to scribe on the piece), the bars' cutting plan (CSV) and the plates as DXF (laser or plasma)."),
     "steel_nc.folder": ("Pasta para os ficheiros de fabrico", "Folder for the fabrication files"),
-    "info.steel_nc": ("{n} ficheiros NC1 e o plano de corte gravados em {folder}.",
-                      "{n} NC1 files and the cutting plan written in {folder}."),
+    "info.steel_nc": ("{n} ficheiros NC1, o plano de corte e as chapas (chapas.dxf) gravados em {folder}.",
+                      "{n} NC1 files, the cutting plan and the plates (chapas.dxf) written in {folder}."),
     "info.steel_nc_none": ("Não há peças de aço para fabricar.", "No steel pieces to fabricate."),
     "sched.col.mark": ("Marca", "Mark"),
     "sched.col.grade": ("Aço", "Grade"),

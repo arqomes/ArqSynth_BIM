@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.511.0 — 2026-11-09
+
+**Estrutura metálica, passo 7: a marcação e o DXF das chapas.**
+
+- **Exportar para fabrico** (separador **Estrutura**, painel **Ligação**) grava agora também:
+  - em cada ficheiro **NC1** o bloco **SI** — a **marca** que a máquina grava na peça (P1, V1…): nos perfis na alma,
+    a 10 cm do início; nas chapas num ponto livre, longe dos furos;
+  - o ficheiro **chapas.dxf** para o corte a laser ou plasma: cada marca de chapa uma vez, lado a lado, em
+    milímetros — o contorno (o do gousset recortado, quando o tem), os furos e, por baixo, a marca, quantas e a
+    espessura e o aço (por exemplo «4 x PL20 S275»), em camadas próprias (CONTORNO, FUROS, TEXTOS).
+
 ## 0.510.0 — 2026-11-09
 
 **Estrutura metálica, passo 6: a planta de montagem.**

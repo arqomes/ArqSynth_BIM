@@ -20225,7 +20225,8 @@ def steel_lists_flow():
     import tempfile
     folder = tempfile.mkdtemp(prefix="arqsynth_dstv_")
     paths = win.export_steel_nc(folder)                                  # (0.501) the NC1 files
-    nc = any(p.endswith("P1.nc1") for p in paths) and os.path.exists(os.path.join(folder, "corte_de_barras.csv"))
+    nc = any(p.endswith("P1.nc1") for p in paths) and os.path.exists(os.path.join(folder, "corte_de_barras.csv")) \
+        and os.path.exists(os.path.join(folder, "chapas.dxf"))          # (0.511: and the plates' DXF)
     doc.modified = False
     check("marcas_e_listas", in_ribbon and tagged and listed and bolts and cutting and nc
           and win.ribbon_item("steel_nc") is not None,

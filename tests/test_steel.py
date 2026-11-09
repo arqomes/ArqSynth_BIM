@@ -591,6 +591,21 @@ class Fabrication(unittest.TestCase):
         folder = tempfile.mkdtemp(prefix="arqsynth_nc1_")
         paths = steel_fabrication.write(doc, folder)
         self.assertTrue(any(p.endswith("P1.nc1") for p in paths) and any(p.endswith(".csv") for p in paths))
+        # (0.511) each NC1 marked (SI: its mark, on the web near its start; a plate's clear of its holes) and the
+        # plates' DXF: each plate mark's outline (a gusset's own), its holes, its texts
+        self.assertEqual(column["SI"], ["P1"])
+        self.assertEqual(plate["SI"], ["Ch1"])
+        import math
+        si = files["Ch1"].split("SI\n", 1)[1].split()
+        x, y = float(si[1].rstrip("u")), float(si[2])
+        self.assertTrue(all(math.hypot(x - hx, y - hy) >= 2 * d for _f, hx, hy, d in plate["BO"]))
+        dxf_path = next(p for p in paths if p.endswith("chapas.dxf"))
+        with open(dxf_path, encoding="ascii") as f:
+            text = f.read()
+        self.assertTrue(text.startswith("0\nSECTION") and text.rstrip().endswith("EOF"))
+        self.assertEqual(text.count("\nCIRCLE\n"), 4 + 2 + 2)                # (base plate 4, gusset 2, cleat 2)
+        self.assertEqual(text.count("\nPOLYLINE\n"), 3)
+        self.assertIn("\nCh2\n", text)
 
 
 class ShopDrawing(unittest.TestCase):

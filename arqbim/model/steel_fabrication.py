@@ -56,7 +56,7 @@ def nc1_files(doc):
                           tf=0.0, tw=t, r=0.0, kg_m=t * W * 1e-6 * steel.DENSITY, paint_m=2.0 * W / 1000.0)
             contour = [(x + L / 2.0, y + W / 2.0) for x, y in plate.get("contorno") or ()] or \
                 [(0.0, 0.0), (L, 0.0), (L, W), (0.0, W)]                         # (0.503: a gusset's own outline)
-            out[mark] = dstv.nc1(header, holes, contour)
+            out[mark] = dstv.nc1(header, holes, contour, ("v",) + _mark_spot(contour, holes) + (mark,))
             continue
         sec = steel.get(p["signature"][0])
         if sec is None:
@@ -67,8 +67,66 @@ def nc1_files(doc):
                       quantity=len(members), profile=sec.name, code=dstv.CODES.get(sec.family, "SO"),
                       length=_overall(doc, p["guid"]) or p["length"] * 1000.0, h=sec.h, b=sec.b, tf=sec.tf,
                       tw=sec.tw, r=sec.r, kg_m=props["mass"], paint_m=props["paint"], cuts=_angles(cuts))
-        out[mark] = dstv.nc1(header)
-    return out
+        out[mark] = dstv.nc1(header, marking=("v", MARK_FROM_END, sec.h / 2.0, mark))   # (0.511: on the web, near
+    return out                                                                          # its start)
+
+
+MARK_FROM_END = 100.0           # mm: (0.511) a section's marking this far from its start, on its web (face v)
+
+
+def _mark_spot(contour, holes):
+    """(0.511) Where a plate's marking goes (mm, its NC1's x, y): its middle, or else a point inside it clear of its
+    holes (twice a hole's diameter off it, its letters' height off its edge)."""
+    from shapely.geometry import Point, Polygon
+    shape = Polygon(contour)
+    if not shape.is_valid or shape.area <= 0.0:
+        return 0.0, 0.0
+    x0, y0, x1, y1 = shape.bounds
+    tries = [((x0 + x1) / 2, (y0 + y1) / 2)] + [(x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy)
+                                                for fy in (0.5, 0.3, 0.7, 0.15, 0.85) for fx in (0.3, 0.5, 0.7, 0.15)]
+    inner = shape.buffer(-dstv.MARK_HEIGHT)
+    for x, y in tries:
+        if inner.contains(Point(x, y)) and all(math.hypot(x - hx, y - hy) >= 2.0 * d for _f, hx, hy, d in holes):
+            return round(x, 1), round(y, 1)
+    c = shape.representative_point()
+    return round(c.x, 1), round(c.y, 1)
+
+
+GAP_DXF = 50.0                  # mm: (0.511) between the plates laid side by side in their DXF
+TEXT_DXF = 10.0                 # mm: their texts' height
+
+
+def plates_dxf(doc):
+    """(0.511) The plates for the laser or the plasma, as DXF (mm, R12): each plate mark once, side by side — its
+    outline (layer CONTORNO), its holes (FUROS), its mark, how many, its thickness and grade (TEXTOS) under it. None when
+    the model has no plate."""
+    from . import dxf
+    marks, pieces = doc.ifc.steel_marks()
+    groups = {}
+    for p in pieces:
+        if p["prefix"] == "Ch":
+            groups.setdefault(marks.get(p["guid"], ""), []).append(p)
+    if not groups:
+        return None
+    from ..core import steel_marks
+    w = dxf._Writer()
+    x = 0.0
+    for mark in sorted(groups, key=steel_marks.sort_key):
+        members = groups[mark]
+        plate = json.loads(doc.ifc._params(doc.ifc.by_guid(members[0]["guid"])).get("Chapa") or "{}")
+        if not plate:
+            continue
+        L, W, t = float(plate["L"]), float(plate["W"]), float(plate["t"])
+        ring = [(x + cx + L / 2.0, cy + W / 2.0) for cx, cy in plate.get("contorno") or ()] or \
+            [(x, 0.0), (x + L, 0.0), (x + L, W), (x, W)]
+        w.polyline("CONTORNO", ring, closed=True)
+        for hx, hy, d in plate.get("furos", []):
+            w.circle("FUROS", (x + hx + L / 2.0, hy + W / 2.0), d / 2.0)
+        w.text("TEXTOS", (x, -2.0 * TEXT_DXF), TEXT_DXF, mark)
+        w.text("TEXTOS", (x, -3.6 * TEXT_DXF), TEXT_DXF * 0.7, "{} x PL{:g} {}".format(        # (ASCII: R12)
+            len(members), t, plate.get("grade") or "S275"))
+        x += L + GAP_DXF
+    return w.document({"CONTORNO": 7, "FUROS": 1, "TEXTOS": 3})
 
 
 def cutting(doc, stock=bar_cutting.STOCK):
@@ -109,4 +167,10 @@ def write(doc, folder):
             f.write("{};{};{};{};{}\n".format(r["section"], r["grade"], r["bars"],
                                               ";".join(n.replace(".", ",") for n in numbers), plan))
     paths.append(path)
+    text = plates_dxf(doc)                              # (0.511) the plates for the laser / the plasma
+    if text:
+        path = os.path.join(folder, "chapas.dxf")
+        with open(path, "w", encoding="ascii", errors="replace", newline="\n") as f:
+            f.write(text)
+        paths.append(path)
     return paths

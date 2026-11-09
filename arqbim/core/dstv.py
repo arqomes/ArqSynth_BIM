@@ -23,9 +23,13 @@ def header_lines(order, drawing, phase, mark, grade, quantity, profile, code, le
     return lines
 
 
-def nc1(header, holes=(), contour=None):
+MARK_HEIGHT = 10.0             # mm: (0.511) the marking's letters
+
+
+def nc1(header, holes=(), contour=None, marking=None):
     """A whole NC1 file's text: header — header_lines' arguments as a dict —, holes [(face, x, y, d)], contour (a plate's
-    outline [(x, y)] on face v), closed."""
+    outline [(x, y)] on face v), closed; (0.511) marking: (face, x, y, text) — the SI block, the piece's mark the
+    machine punches or scribes on it (its letters MARK_HEIGHT high, along the piece)."""
     lines = header_lines(**header)
     if contour:
         lines.append("AK")
@@ -36,13 +40,17 @@ def nc1(header, holes=(), contour=None):
     if holes:
         lines.append("BO")
         lines += ["  {}  {:>10} {:>10} {:>8}".format(face, _n(x), _n(y), _n(d)) for face, x, y, d in holes]
+    if marking and marking[3]:
+        face, x, y, text = marking
+        lines.append("SI")
+        lines.append("  {}  {:>10}u{:>10}  0.00r{:g}{}".format(face, _n(x), _n(y), MARK_HEIGHT, text))
     lines.append("EN")
     return "\n".join(lines) + "\n"
 
 
 def parse(text):
     """An NC1 read back (DetailCraft reads them too): {"ST": [values], "BO": [(face, x, y, d)], "AK": [(x, y)]}."""
-    out, block = {"ST": [], "BO": [], "AK": []}, None
+    out, block = {"ST": [], "BO": [], "AK": [], "SI": []}, None
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("**"):
@@ -58,4 +66,8 @@ def parse(text):
         elif block == "AK":
             parts = line.split()
             out["AK"].append((float(parts[1]), float(parts[2])))
+        elif block == "SI":                                    # (0.511) the marking: its text after «r<height>»
+            import re
+            found = re.match(r"\s*\S+\s+\S+u\s*\S+\s+\S+r([\d.]+)(.*)$", line)
+            out["SI"].append(found.group(2).strip() if found else line)
     return out

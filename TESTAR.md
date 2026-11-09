@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.511 — Marcação SI e DXF das chapas (estrutura metálica, passo 7)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.511.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (dois cliques, por exemplo 6 m).
+2. Separador **Estrutura**, painel **Ligação**, **Exportar para fabrico**: escolha uma pasta nova.
+3. Abra a pasta: além dos .nc1 e do corte_de_barras.csv há o **chapas.dxf**.
+4. Abra o P1.nc1 com o Bloco de Notas: perto do fim há um bloco **SI** com «P1» (a marca a gravar na peça).
+5. Abra o chapas.dxf no AutoCAD (ou noutro programa de CAD, ou importe-o numa folha do ArqSynth): as chapas lado a
+   lado em milímetros — a chapa de base 400 × 400 com 4 furos, o gousset recortado com 2 furos, a orelha 100 × 110
+   com 2 furos —, cada uma com a marca e «n x PL… S275» por baixo.
+
 ## 0.510 — Planta de montagem (estrutura metálica, passo 6)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.510.0**.
