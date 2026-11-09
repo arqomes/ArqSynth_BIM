@@ -44,7 +44,13 @@ DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effec
             # (0.486) its effect as the Presentation's: played when the scene is entered, how far an explosion starts
             # (× the model's radius), the elements left out of a construction (GlobalIds: they stay where they are)
             "effect_auto": True, "effect_spread": 1.2, "effect_static": (),
-            "diagrams": ()}                               # (0.487) its volumes (model/presentation_diagrams)
+            "diagrams": (),                               # (0.487) its volumes (model/presentation_diagrams)
+            # (0.491) how what its cuts go through is filled: CUT_LOOKS, its colour (Poché, Sólido)
+            "cut_look": "material", "cut_colour": "#1f1f1f"}
+# (0.491) the cut's look, as the Presentation's «Superfície cortada»: each element's materials' hatches (there «Mat./cat.»:
+# a material by category), «Poché» (a colour, hatched), «Sólido» (a colour), «Aberto» (none) — and its modes
+CUT_LOOKS = ("material", "poche", "solid", "open")
+CUT_MODES = {"material": "category_material", "poche": "solid_poche", "solid": "solid_fill", "open": "open"}
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
           "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
           "ao_intensity": (0.0, 2.0), "effect_spread": (0.3, 3.0)}
@@ -103,6 +109,8 @@ class Scene:
     effect_spread: float = 1.2  # …an explosion's distance (× the model's radius)…
     effect_static: tuple = ()   # …the elements left out of a construction (GlobalIds): seen still from the start
     diagrams: tuple = ()        # (0.487) its volumes for diagrams (model/presentation_diagrams' dicts)
+    cut_look: str = "material"  # (0.491) how its cuts are filled (CUT_LOOKS)…
+    cut_colour: str = "#1f1f1f"  # …in which colour (Poché, Sólido)
 
 
 def empty():
@@ -255,6 +263,11 @@ def _value(name, value):
         return value if value == "" or value in STYLES else None
     if name == "quality":
         return value if value in QUALITIES else None
+    if name == "cut_look":                              # (0.491)
+        return value if value in CUT_LOOKS else None
+    if name == "cut_colour":
+        text = value.strip().lower()
+        return text if len(text) == 7 and text[0] == "#" and all(c in "0123456789abcdef" for c in text[1:]) else None
     return value.strip()
 
 

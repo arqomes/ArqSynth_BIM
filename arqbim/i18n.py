@@ -7377,6 +7377,23 @@ _STRINGS = {
                          "Add a plane and move it with the slider. The cut is non-destructive."),
     "pmode.cuts_saved": ("Os cortes guardam-se na cena ao Criar/Actualizar.",
                          "The cuts are kept in the scene on Create/Update."),
+    # (0.491) the cut's look (the Presentation's «Superfície cortada»)
+    "pmode.cut_look": ("Aspeto do corte", "Cut look"),
+    "pmode.cut_look.material": ("Material", "Material"),
+    "pmode.cut_look.poche": ("Poché", "Poché"),
+    "pmode.cut_look.solid": ("Sólido", "Solid"),
+    "pmode.cut_look.open": ("Aberto", "Open"),
+    "pmode.cut_look_tip.material": ("Cada parede, laje ou pilar cortado com a trama dos seus materiais (alvenaria, "
+                                    "betão, isolamento, reboco…), como nas plantas e cortes do BIM. No Presentation: o "
+                                    "material de cada categoria.",
+                                    "Each wall, slab or column cut with its materials' hatches (masonry, concrete, "
+                                    "insulation, plaster…), as in the BIM's plans and sections. In the Presentation: "
+                                    "each category's material."),
+    "pmode.cut_look_tip.poche": ("Tudo o que é cortado numa cor, tracejado.", "All that is cut in one colour, hatched."),
+    "pmode.cut_look_tip.solid": ("Tudo o que é cortado numa cor lisa.", "All that is cut in one plain colour."),
+    "pmode.cut_look_tip.open": ("Sem enchimento: vê-se o interior das peças cortadas.",
+                                "No fill: the inside of the parts cut is seen."),
+    "pmode.cut_colour": ("Cor do corte", "Cut colour"),
     # (0.488) the Presentation's «Passeio» (its Virtual Walk)
     "pmode.walk_room": ("Ambiente", "Room"),
     "pmode.walk_counts": ("Ambientes: {rooms} · portas entre eles: {doors} · escadas: {stairs}",

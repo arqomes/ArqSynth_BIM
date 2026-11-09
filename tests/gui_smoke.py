@@ -19266,6 +19266,20 @@ def presentation_tab_flow():
     planes = [tuple(round(c, 6) for c in p) for p in vp.clipping_planes()]
     cut_live = len(vp.extra_cuts) == 1 and (0.0, 0.0, -1.0, -1.0) in planes and mode.side.windowTitle() == "CORTES"
     shot("484_cortes.png")
+    # (0.491) the cut filled with the walls' materials (a moment after the plane stops); Aberto: none, no poché;
+    # Poché: one colour hatched (its colour offered) — kept by «Atualizar»
+    pump(500)
+    filled = cuts_page.looks["material"].isChecked() and len(vp._hatch_objects) > 0 \
+        and all(w.visible for w in vp._hatch_objects) and not cuts_page.colour.isVisible()
+    shot("491_corte_preenchido.png")
+    QtTest.QTest.mouseClick(cuts_page.looks["open"], Qt.MouseButton.LeftButton)
+    pump(300)
+    opened = vp.cut_look[0] == "open" and not vp._hatch_objects and not vp.bim.cutting and bool(vp.bim._planes)
+    QtTest.QTest.mouseClick(cuts_page.looks["poche"], Qt.MouseButton.LeftButton)
+    pump(400)
+    poched = vp.cut_look[0] == "poche" and len(vp._hatch_objects) > 0 and cuts_page.colour.isVisible() \
+        and vp.bim.cutting
+    cut_filled = filled and opened and poched
     # (0.485) Etiquetas: «Piso», a click on the floor of the room — «Ambiente 1» put there, chosen, drawn; its name, note
     # and shape; «Parede», Esc: none; one on a wall (it takes the first one's look), its eye off
     QtTest.QTest.mouseClick(mode.side.buttons["labels"], Qt.MouseButton.LeftButton)
@@ -19325,7 +19339,9 @@ def presentation_tab_flow():
     kept = next(s for s in pm.scenes(doc) if s.key == scene.key)
     updated = kept.projection == "orthographic" and kept.locked and kept.style == "white_concept" \
         and kept.hidden_layers == (walls[1],) and cut_live and kept.cuts == (("horizontal", 1.0, False),) \
-        and kept.hidden_tags == (second,)                                         # (0.485: the label turned off)
+        and kept.hidden_tags == (second,) \
+        and cut_filled and kept.cut_look == "poche"                               # (0.485: the label turned off;
+    # 0.491: the cut's look)
     QtTest.QTest.mouseClick(mode.camera.lock, Qt.MouseButton.LeftButton)        # (unlocked, in perspective)
     QtTest.QTest.mouseClick(mode.camera.persp, Qt.MouseButton.LeftButton)
     pump(300)
@@ -19334,8 +19350,10 @@ def presentation_tab_flow():
     lens = not vp.is_ortho() and abs(mode.current_fov() - 50.0) < 0.6 and mode.camera.fov_slider.isVisible()
     check("aba_presentation_criar_cena_camadas_camera", created and rows >= 5 and hidden and ortho and locked
           and styled and updated and lens,
-          "criada={} camadas={} escondida={} orto={} bloqueada={} estilo={} ({}) atualizada={} ({}) fov={} ({:.1f})"
-          .format(created, rows, hidden, ortho, locked, styled, vp.look, updated, kept, lens, mode.current_fov()))
+          "criada={} camadas={} escondida={} orto={} bloqueada={} estilo={} ({}) atualizada={} ({}) fov={} ({:.1f}) "
+          "corte_preenchido={} (material={} aberto={} poche={})"
+          .format(created, rows, hidden, ortho, locked, styled, vp.look, updated, kept, lens, mode.current_fov(),
+                  cut_filled, filled, opened, poched))
     # the scenes' player under the 3D view: the next scene and back, ▶ / ❚❚
     sequence = [s.key for s in pm.scenes(doc) if not s.hidden]
     at = sequence.index(scene.key)
@@ -19409,6 +19427,7 @@ def presentation_tab_flow():
         and mode.active and any(p["id"] == "cut_{}_1".format(scene.key) and p["type"] == "horizontal"
                                 for p in (mine.get("section") or {}).get("planes", ())) \
         and mine.get("hiddenLabels") == ["bim_tag_" + second] \
+        and (mine.get("section") or {}).get("display", {}).get("mode") == "solid_poche" \
         and [(g["title"], g["shape"]) for g in (found or {}).get("presentation", {}).get("model3d", {}).get(
             "labels", [])] == [("Sala", "circle"), ("Ambiente 1", "circle")]          # (0.484: its cut; 0.485 labels)
     check("aba_presentation_exporta_as_configuracoes", timed and exported,
@@ -19423,7 +19442,8 @@ def presentation_tab_flow():
         and win.props.isVisible() == props_before and all(d.isVisible() for d in left_before) \
         and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.camera_locked and not vp.extra_cuts \
         and not mode.player.isVisible() and not mode.look_button.isVisible() and not mode.sun_button.isVisible() \
-        and vp.tags_shown() == 0                                                      # (0.485: the labels too)
+        and vp.tags_shown() == 0 and vp.cut_look[0] == "material"                     # (0.485: the labels too;
+    # 0.491: the BIM's own cut look)
     same = abs(canvas.width() - width) <= 2 and win.size() == size
     doc.modified = False
     check("aba_presentation_volta_ao_bim", restored and same,

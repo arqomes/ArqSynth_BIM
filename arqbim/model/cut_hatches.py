@@ -13,6 +13,9 @@ WHITE = "#ffffff"
 INK = "#000000"
 DOT = 0.25            # mm on paper: a dot drawn as a stroke this long
 SEAMS = "~seams"      # (0.428) the owner of the lines between materials inside what is cut (None: the outline round it)
+POCHE = "poche:"      # (0.491) a fill's key: one colour (after it) hatched at 45° — the 3D cut's «Poché», as the
+#                       Presentation's
+POCHE_SPACING = 2.5   # mm on paper between its lines
 
 
 def layers_of(key, own, gstyle):
@@ -26,6 +29,11 @@ def layers_of(key, own, gstyle):
         return out + [layer for layer in (background, foreground) if layer]
     if isinstance(key, str) and key.startswith("colour:"):  # (a graphic rule's colour, an empty cut)
         return [(core_patterns.SOLID, key[len("colour:"):])]
+    if isinstance(key, str) and key.startswith(POCHE):      # (0.491: one colour hatched, its lines light or dark)
+        colour = key[len(POCHE):]
+        r, g, b = _rgb(colour)
+        ink = WHITE if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5 else INK
+        return [(core_patterns.SOLID, colour), (((45.0, 0.0, 0.0, 0.0, POCHE_SPACING, ()),), ink)]
     fill, angles, spacing = styles_model.hatch(gstyle, key)
     out = [(core_patterns.SOLID, fill)]
     library = styles_model.library_pattern(gstyle, key)

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.491.0 — 2026-11-09
+
+**Corte preenchido** (o dono: «seria bom termos o preenchimento das paredes nos cortes aqui no BIM»).
+
+- Nos cortes do 3D — os planos do separador **Cortes** da interface do Presentation e a **caixa de corte** da vista 3D
+  — o que é cortado deixa de ser só escuro: cada parede, laje ou pilar aparece com a **trama dos seus materiais**
+  (alvenaria, betão, isolamento, reboco…), como nas plantas e cortes do BIM.
+- No separador **Cortes** há uma secção nova, **ASPETO DO CORTE**, como a «Superfície cortada» do Presentation:
+  - **Material** — as tramas dos materiais (é o que vem por omissão);
+  - **Poché** — tudo o que é cortado numa cor, tracejado;
+  - **Sólido** — numa cor lisa;
+  - **Aberto** — sem enchimento: vê-se o interior das peças.
+  Em Poché e Sólido escolhe-se a **cor do corte**. Como os planos, o aspeto guarda-se na cena ao **Criar cena /
+  Atualizar**.
+- Enquanto se arrasta um plano, o preenchimento esconde-se e volta logo que o plano para (para o arrastar continuar
+  fluido).
+- Vai para o Presentation: Material como «Mat./cat.» — cada categoria (Paredes, Lajes…) com o material de que a maior
+  parte das suas peças é feita: betão, bloco de cimento, bloco cerâmico, madeira, metal, pedra ou gravilha —; Poché,
+  Sólido e Aberto como os do Presentation, com a cor.
+- Os botões de escolha da coluna da direita (Material/Poché…, Piso/Parede…, Caixa/Cilindro…) mostram agora qual está
+  escolhido.
+- **No Presentation** (ramo `integracao-arqsynth-bim`): o importador lê o aspeto do corte; no «Atualizar», o que o BIM
+  escolheu entra e o resto do aspeto afinado lá (a linha do corte, …) fica.
+
 ## 0.490.0 — 2026-11-09
 
 **A mesma regra do «Atualizar» para as etiquetas dos ambientes e o Passeio Virtual** (o dono: «Sim, também»).

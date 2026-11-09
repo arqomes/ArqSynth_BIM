@@ -10091,6 +10091,35 @@ class GltfExport(unittest.TestCase):
         self.assertGreater(np.dot(flat["normal"], under) + flat["constant"], 0.0)
         self.assertIsNone(model["scenes"][1]["section"]["planes"][1:] or None)      # (the plan: its own cut only)
 
+    def test_presentation_cut_look(self):
+        """0.491: how a scene's cuts are filled — the materials' hatches (the Presentation's «Mat./cat.», each category
+        the material most of its elements are made of), «Poché» or «Sólido» in a colour, «Aberto» —, kept with the
+        scene and sent with its planes."""
+        from arqbim.model import presentation as pm, presentation_export as pe
+        doc = Document()
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        bim.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+        self.assertEqual([pe.cut_material(n) for n in ("Betão C25/30", "Bloco de cimento 20", "Tijolo cerâmico",
+                                                       "Pinho", "Aço S275", "Granito", "Brita", "Vidro")],
+                         ["concrete", "cement_block", "ceramic_block", "wood", "aluminum", "stone", "gravel_8_16",
+                          None])
+        self.assertEqual(pe.cut_material("Isolamento", "masonry"), "ceramic_block")
+        doc.set_presentation(pm.changed(doc.presentation, "geral", cuts=[["horizontal", 1.2, False]]))
+        self.assertEqual((pm.scenes(doc)[0].cut_look, pm.scenes(doc)[0].cut_colour), ("material", "#1f1f1f"))
+        _gltf, _bin, model = pe.package(doc)
+        scenes = model["presentation"]["model3d"]["scenes"]
+        display = scenes[0]["section"]["display"]
+        self.assertEqual(display["mode"], "category_material")
+        self.assertTrue(display["materials"])
+        self.assertEqual(set(display["materials"].values()), {"ceramic_block"})       # (masonry walls)
+        self.assertTrue(all(k.startswith("Paredes") for k in display["materials"]))
+        doc.set_presentation(pm.changed(doc.presentation, "geral", cut_look="poche", cut_colour="#AA3300"))
+        self.assertEqual(pm.changed(doc.presentation, "geral", cut_look="estranho")["scenes"]["geral"]["cut_look"],
+                         "poche")
+        _gltf, _bin, model = pe.package(doc)
+        self.assertEqual(model["presentation"]["model3d"]["scenes"][0]["section"]["display"],
+                         {"mode": "solid_poche", "color": "#aa3300"})
+
     def test_presentation_tags(self):
         """0.485: the labels put in the Presentation tab — the model's (kept with the file), each scene with those it
         hides (labels gone left out); in the GLB as the Presentation's SpaceLabels (its fields, «bim_tag_<id>», the

@@ -644,6 +644,28 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.491 — Corte preenchido
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.491.0**.
+
+1. Faça Ctrl+N e desenhe uma casa: 4 paredes de alvenaria, uma laje e, se quiser, um pilar de betão.
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda e, na barra de ícones da direita, em **Cortes** (o
+   bloco cortado).
+3. Clique em **Horizontal**: a casa aparece cortada a 1,20 m. Aproxime a vista do corte (roda do rato): o topo cortado
+   das paredes tem a **trama da alvenaria**; o de um pilar, a do betão. Em **ASPETO DO CORTE** está aceso
+   **Material**.
+4. Arraste o deslizador do plano: enquanto arrasta, a trama some-se; quando larga, volta à nova altura.
+5. Clique em **Poché**: o corte fica escuro e tracejado e aparece a **Cor do corte**. Clique nela e escolha um
+   vermelho: o corte fica vermelho tracejado.
+6. Clique em **Sólido**: fica vermelho liso. Clique em **Aberto**: deixa de haver enchimento e vê-se o interior das
+   paredes. Volte a **Material**.
+7. Clique em **+ Criar cena**: a cena guarda o corte e o aspeto. Escolha **Poché**, clique no cartão **Vista geral** e
+   depois no da cena nova: volta **Material**.
+8. Clique no ícone **ArqSynth Presentation** da barra da esquerda para voltar ao BIM. Ligue a **caixa de corte** da
+   vista 3D (botão da caixa na barra do 3D) e encolha-a contra as paredes: o corte da caixa também tem as tramas.
+9. Exporte (**Exportar / atualizar** na interface) e importe no Presentation local: no separador **Cortes** de lá, a
+   Superfície cortada está em **Mat./cat.**, com as paredes em bloco cerâmico.
+
 ## 0.490 — «Atualizar» também para as etiquetas dos ambientes e o Passeio
 
 Precisa do Presentation local (`http://127.0.0.1:3002`) e do programa por **`C:\BIM\ArqSynth BIM.bat`** (o título deve

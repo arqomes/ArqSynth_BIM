@@ -1027,10 +1027,12 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
     podem ser editáveis usando as ferramentas de Modelagem, e podemos incluir ferramentas de adição, subtração,
     interseção etc. nativo mesmo para este caso, quando exportamos para o ArqSynth, já vai pronto. Também seria bom
     termos o preenchimento das paredes nos cortes aqui no BIM»):
-    1. **Corte preenchido**: nos cortes da interface do Presentation (e na caixa de corte do 3D), o que é cortado
+    1. ~~**Corte preenchido**: nos cortes da interface do Presentation (e na caixa de corte do 3D), o que é cortado
        preenchido como no papel — cada parede com a trama dos seus materiais (alvenaria, betão, isolamento, reboco),
        como nas plantas e cortes do BIM — em vez do escuro liso de hoje; e o aspeto do corte do Presentation (Sólido /
-       Poché / Categoria, a cor), que vai na cena.
+       Poché / Categoria, a cor), que vai na cena~~ (0.491.0: Material / Poché / Sólido / Aberto e a cor, na cena;
+       no Presentation «Mat./cat.» com o material de cada categoria). Fica por fazer: a «Categoria» do Presentation
+       (uma cor por categoria) e a cor e espessura da linha do corte.
     2. **Volumes de diagrama editáveis com a Modelagem**: escolher um volume no 3D com o rato e mexer-lhe com Mover,
        Rodar, Escala (e as pegas das faces, como no Presentation), sem passar pelos campos.
     3. **Combinar volumes, nativo**: União, Subtrair, Interseção e Diferença de dois volumes, calculados no BIM com o

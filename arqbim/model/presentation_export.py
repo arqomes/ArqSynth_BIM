@@ -565,6 +565,49 @@ def _tuned_style(scene, style):
     return out
 
 
+# (0.491) the Presentation's cut materials (its CutMaterial) by the words of a material's name, the first that matches
+CUT_MATERIAL_WORDS = (("cement_block", ("bloco de cimento", "bloco cimento", "blocos de cimento", "cement block",
+                                        "betao leve", "concrete block")),
+                      ("gravel_8_16", ("brita", "gravilha", "gravel", "seixo")),
+                      ("stone", ("pedra", "granito", "marmore", "calcario", "stone", "granite", "marble", "xisto")),
+                      ("aluminum", ("aco", "alumin", "metal", "steel", "ferro", "zinco", "cobre")),
+                      ("wood", ("madeira", "wood", "pinho", "carvalho", "cortica", "osb", "mdf", "contraplacado")),
+                      ("ceramic_block", ("tijolo", "ceramic", "alvenaria", "brick", "masonry", "bloco ceramico")),
+                      ("concrete", ("betao", "concrete", "beton", "cimento", "argamassa", "reboco", "estuque")))
+CUT_MATERIAL_OF_HATCH = {"concrete": "concrete", "masonry": "ceramic_block", "wood": "wood"}
+
+
+def cut_material(name, hatch=None):
+    """(0.491) The Presentation's cut material for a material (its name; else what the BIM hatches it with: concrete,
+    masonry, wood…), or None (the Presentation's own: concrete)."""
+    import unicodedata
+    text = "".join(c for c in unicodedata.normalize("NFD", str(name or "").lower()) if not 0x300 <= ord(c) <= 0x36f)
+    for material, words in CUT_MATERIAL_WORDS:
+        if any(w in text for w in words):
+            return material
+    return CUT_MATERIAL_OF_HATCH.get(hatch)
+
+
+def cut_materials(doc, layers):
+    """(0.491) {the Presentation's category («Paredes · Piso 0»): its cut material} — the one most of its elements are
+    made of (their main material: of layers, the thickest)."""
+    ids = [l["globalId"] for l in layers]
+    try:
+        names = doc.ifc.property_values(ids, ("material",)) if ids else {}
+        hatches = doc.ifc.hatches(ids, own=False) if ids else {}
+    except (AttributeError, RuntimeError):
+        return {}
+    votes = {}
+    for l in layers:
+        material = cut_material(names.get(l["globalId"]), hatches.get(l["globalId"]))
+        if material is None:
+            continue
+        category = " · ".join(c for c in (l.get("category"), l.get("storey")) if c)
+        votes.setdefault(category, {}).setdefault(material, 0)
+        votes[category][material] += 1
+    return {cat: max(counts, key=lambda m: (counts[m], m)) for cat, counts in votes.items()}
+
+
 def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     """The scenes in the order chosen (model/presentation.scenes): the general view, the named 3D views, the plans,
     the sections — as the description's scenes."""
@@ -581,6 +624,17 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
     scenes = []
     known = {l["id"] for l in layers}
     tag_ids = {t["id"] for t in presentation_model.tags(doc)}
+    materials = []                                       # (0.491) each category's cut material, worked out once
+
+    def display(scene):
+        """(0.491) How the scene's cut is filled, as the Presentation's cutDisplay: its mode, its colour and — the
+        materials' — each category's material."""
+        if not materials:
+            materials.append(cut_materials(doc, layers))
+        out = {"mode": presentation_model.CUT_MODES[scene.cut_look], "color": scene.cut_colour}
+        if scene.cut_look == "material" and materials[0]:
+            out["materials"] = materials[0]
+        return out
 
     def add(scene, camera, hidden=(), planes=(), style=None):
         hidden = list(hidden)
@@ -589,7 +643,7 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
         labels = ["bim_tag_" + i for i in scene.hidden_tags if i in tag_ids]                                # (0.485)
         scenes.append(dict({"id": SCENE_ID + scene.key, "name": scene.name, "order": len(scenes), "kind": scene.kind,
                             "camera": _tuned_camera(scene, camera, offset), "hiddenLayers": hidden,
-                            "section": {"planes": list(planes)} if planes else None,
+                            "section": {"planes": list(planes), "display": display(scene)} if planes else None,
                             "style": _tuned_style(scene, style or {"mode": "material", "edges": True,
                                                                    "shadows": False})},
                            **({"hiddenLabels": labels} if labels else {}),

@@ -83,6 +83,7 @@ QToolButton#pm_seg:checked { background: %(chip_on)s; color: %(chip_on_text)s; }
 QToolButton#pm_page { border: 1px solid %(line)s; border-radius: 6px; padding: 5px 6px; color: %(text)s;
                       font-weight: 600; background: %(button)s; }
 QToolButton#pm_page:hover { background: %(button_hover)s; }
+QToolButton#pm_page:checked { background: %(chip_on)s; color: %(chip_on_text)s; border-color: %(accent)s; }
 QToolButton#pm_page:disabled { color: %(hint)s; border-style: dashed; background: transparent; }
 QFrame#pm_card { background: %(card)s; border: 1px solid %(line)s; border-radius: 8px; }
 QFrame#pm_card[active="true"] { border: 2px solid %(accent)s; background: %(select_soft)s; }
@@ -940,8 +941,34 @@ class CutsPage(_Form):
         self.rows.setSpacing(6)
         self.form.addRow(self.holder)
         self.empty = self.note("pmode.cuts_empty")
+        # (0.491) ASPETO DO CORTE — the Presentation's «Superfície cortada»: the materials' hatches, Poché, Sólido, Aberto
+        self.form.addRow(_label(t("pmode.cut_look").upper(), "pm_head"))
+        tiles = QtWidgets.QGridLayout()
+        tiles.setSpacing(4)
+        self.looks = {}
+        for k, look in enumerate(pm.CUT_LOOKS):
+            button = QtWidgets.QToolButton()
+            button.setObjectName("pm_page")
+            button.setCheckable(True)
+            button.setText(t("pmode.cut_look." + look))
+            button.setToolTip(t("pmode.cut_look_tip." + look))
+            button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
+            button.clicked.connect(lambda _on=False, k_=look: self.mode.set_cut_look(k_))
+            tiles.addWidget(button, k // 2, k % 2)
+            self.looks[look] = button
+        self.form.addRow(tiles)
+        self.colour = QtWidgets.QPushButton()
+        self.colour.setToolTip(t("pmode.cut_colour"))
+        self.colour.clicked.connect(self._pick_colour)
+        self.form.addRow(t("pmode.cut_colour"), self.colour)
         self.note("pmode.cuts_saved")
         self.spins = []
+
+    def _pick_colour(self):
+        colour = QtWidgets.QColorDialog.getColor(QtGui.QColor(self.mode.live["cut_colour"]), self,
+                                                 t("pmode.cut_colour"))
+        if colour.isValid():
+            self.mode.set_cut_colour(colour.name())
 
     def show_scene(self, _scene):
         """The rows again (a plane added or removed, another scene chosen)."""
@@ -957,6 +984,14 @@ class CutsPage(_Form):
         self.empty.setVisible(not cuts)
         for button in self.add_buttons.values():
             button.setEnabled(len(cuts) < pm.MAX_CUTS)
+        look, colour = self.mode.live["cut_look"], self.mode.live["cut_colour"]
+        for name, button in self.looks.items():
+            button.setChecked(name == look)
+        pixmap = QtGui.QPixmap(14, 14)
+        pixmap.fill(QtGui.QColor(colour))
+        self.colour.setIcon(QtGui.QIcon(pixmap))
+        self.colour.setText(colour)
+        self.form.setRowVisible(self.colour, look in ("poche", "solid"))
 
     def _row(self, k, kind, position, flip):
         box = QtWidgets.QFrame()
@@ -1826,7 +1861,8 @@ class PresentationMode(QtCore.QObject):
         self.apply_all = False              # «Aplicar a todas as cenas» (the look menu)
         self.live = {"hidden": set(), "style": "", "quality": "auto", "ao": True, "ao_intensity": 1.0,
                      "locked": False, "ortho": False, "cuts": [],      # (0.484: [[type, position, flipped]])
-                     "hidden_tags": set()}                             # (0.485: the labels' eyes)
+                     "hidden_tags": set(),                             # (0.485: the labels' eyes)
+                     "cut_look": "material", "cut_colour": "#1f1f1f"}  # (0.491: how the cuts are filled)
         self.tag_key = None                 # (0.485) the label chosen (its editor open in «Etiquetas»)
         self.label_placement = None         # (0.485) how the next one is put (Piso, Parede, Em pé, Chamada)
         self._tags_drawn = None             # (what the 3D view shows of them: drawn again only when it changed)
@@ -2042,7 +2078,7 @@ class PresentationMode(QtCore.QObject):
         for w in (self.look_button, self.sun_button, self.player):
             w.hide()
         self.vp.set_hidden_elements(set())
-        self.vp.set_cuts([])                              # (0.484: the BIM's 3D view whole)
+        self.apply_cuts()                                 # (0.484: the BIM's 3D view whole; 0.491: its own cut look)
         self.apply_tags()                                 # (0.485: none)
         self.apply_diagrams()                             # (0.487: none)
         self.apply_walk()                                 # (0.488: none)
@@ -2060,7 +2096,7 @@ class PresentationMode(QtCore.QObject):
         """Another project: nothing chosen, nothing hidden."""
         self.scene_key = None
         self.live.update(hidden=set(), style="", quality="auto", ao=True, ao_intensity=1.0, locked=False, cuts=[],
-                         hidden_tags=set())
+                         hidden_tags=set(), cut_look="material", cut_colour="#1f1f1f")
         self.tag_key = None
         self._tags_drawn = None
         self.diagram_key = None
@@ -2071,7 +2107,7 @@ class PresentationMode(QtCore.QObject):
         self._layers_stale = True
         if self.active:
             self.vp.set_hidden_elements(set())
-            self.vp.set_cuts([])
+            self.apply_cuts()
             self.vp.camera_locked = False
             self.apply_tags()
             self.apply_diagrams()
@@ -2173,7 +2209,8 @@ class PresentationMode(QtCore.QObject):
         self.live.update(hidden=set(scene.hidden_layers), style=scene.style, quality=scene.quality, ao=scene.ao,
                          ao_intensity=scene.ao_intensity, locked=scene.locked,
                          cuts=[list(c) for c in scene.cuts],                   # (0.484)
-                         hidden_tags=set(scene.hidden_tags))                   # (0.485)
+                         hidden_tags=set(scene.hidden_tags),                   # (0.485)
+                         cut_look=scene.cut_look, cut_colour=scene.cut_colour)  # (0.491)
         ortho = self.ortho_of(scene)
         vp.camera_locked = False                          # (placed by the program, not the mouse)
         self.apply_cuts()
@@ -2265,6 +2302,7 @@ class PresentationMode(QtCore.QObject):
                   "style": self.live["style"], "quality": self.live["quality"], "ao": self.live["ao"],
                   "ao_intensity": self.live["ao_intensity"], "hidden_layers": sorted(self.live["hidden"]),
                   "cuts": [tuple(c) for c in self.live["cuts"]],                # (0.484)
+                  "cut_look": self.live["cut_look"], "cut_colour": self.live["cut_colour"],   # (0.491)
                   "hidden_tags": [g["id"] for g in self.tags() if g["id"] in self.live["hidden_tags"]]}   # (0.485)
         if scene is None or scene.kind != "view3d":
             fields.update(eye=tuple(float(c) for c in vp.camera_position()), target=tuple(float(c) for c in vp._focus))
@@ -2564,8 +2602,25 @@ class PresentationMode(QtCore.QObject):
         return round(float(box[0][axis]) - 0.5, 2), round(float(box[1][axis]) + 0.5, 2)
 
     def apply_cuts(self):
-        """The planes seen now on the 3D view (none when the tab is put away)."""
+        """The planes seen now on the 3D view (none when the tab is put away) — (0.491) filled as chosen (the BIM's 3D
+        view's own: the materials' hatches)."""
+        self.vp.set_cut_look(*((self.live["cut_look"], self.live["cut_colour"]) if self.active else
+                               ("material", "#1f1f1f")))
         self.vp.set_cuts([pm.cut_plane(*c) for c in self.live["cuts"]] if self.active else [])
+
+    def set_cut_look(self, look):
+        """(0.491) ASPETO DO CORTE: Material, Poché, Sólido, Aberto (live, kept in the scene with Criar / Atualizar)."""
+        if look in pm.CUT_LOOKS:
+            self.live["cut_look"] = look
+            self.apply_cuts()
+            self.side.show_scene(self.scene())
+
+    def set_cut_colour(self, colour):
+        text = str(colour or "").lower()
+        if len(text) == 7 and text.startswith("#"):
+            self.live["cut_colour"] = text
+            self.apply_cuts()
+            self.side.show_scene(self.scene())
 
     def add_cut(self, kind):
         """A plane more: a horizontal one at the height a plan cuts (1,20 m over the lowest floor), a vertical one

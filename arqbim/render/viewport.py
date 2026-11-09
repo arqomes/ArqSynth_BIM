@@ -470,6 +470,11 @@ class Viewport:
         self._hatch_parts = {}
         self._hatch_objects = []
         self._hatch_later = False         # (0.320) made again after the next image (an edit, many elements cut)
+        # (0.491) the 3D view's cut (the Presentation tab's planes, the section box): "material" (each element's
+        # materials' hatches, as on paper), "poche" (one colour, hatched), "solid" (one colour), "open" (none, the
+        # inside seen); its colour. Made again a moment after a plane stops moving (_hatch_due)
+        self.cut_look = ("material", "#1f1f1f")
+        self._hatch_due = None
         self._shown_dressed = set()       # (0.317) the elements shown dressed by their materials now
         # (0.320) the seams between elements of one material in one plane, left out of their edges: each element's
         # (its mesh, seen_joins.seams), the elements' boxes on a grid, their planes and materials as last read
@@ -577,6 +582,7 @@ class Viewport:
         self._follow_view()
         self._follow_tags()                          # (0.485)
         self._step_effect()                          # (0.486)
+        self._due_hatches()                          # (0.491)
         if self.cube is not None and not self.cutting():
             self.renderer.render(self.scene, self.camera, flush=False)
             self.cube.follow(self.camera.local.rotation)       # the view cube in its corner (0.79)
@@ -2443,6 +2449,7 @@ class Viewport:
             return
         self.extra_cuts = cuts
         self._apply_clipping()                            # (only the clipping: a plane dragged stays fluid)
+        self._hatches_later()                             # (0.491: its fills when it stops)
         self.redraw()
 
     def clipping_planes(self):
@@ -2501,6 +2508,7 @@ class Viewport:
         self.box = (lo, hi)
         self._show_box()
         self._apply_clipping()
+        self._hatches_later()                             # (0.491: its fills when it stops)
         self.redraw()
 
     def _show_box(self):
@@ -2536,12 +2544,13 @@ class Viewport:
             for w in extras:
                 w.material.clipping_planes = []
         cut = self.cutting() or self.box is not None or (bool(self.extra_cuts) and not self.cutting())
-        if self.bim.cutting or cut:
+        if self.bim.cutting or cut or self.bim._planes:       # (0.491: an open cut leaves planes without the poché)
             kept = self.kept_side()
             # the poché a hair towards the viewer, who looks along the kept side's normal (see batches)
             lift = tuple(-kept[0] * POCHE_LIFT) if kept is not None else \
                 tuple(float(c) for c in np.round(-self.view_direction() * POCHE_LIFT, 4)) if cut else (0.0, 0.0, 0.0)
-            self.bim.set_cut(cut, self.clipping_planes(), lift)
+            open_3d = not self.cutting() and self.cut_look[0] == "open"       # (0.491: no fill, the inside seen)
+            self.bim.set_cut(cut and not open_3d, self.clipping_planes(), lift)
 
     def set_plan(self, on):
         """Plan of the active storey (Phase 3, step 1): seen from above without perspective, cut
@@ -2664,6 +2673,9 @@ class Viewport:
         view style's cut —, drafting patterns at the view's scale (1:50 when it has none), its outline. A hair beyond
         the cutting plane, drawn after the dark poché and not picked (a click still picks what is cut). Made again only
         when what is cut, or how, changes."""
+        if not self.cutting():                       # (0.491: the 3D view's cuts)
+            self._cut_hatches_3d()
+            return
         view = self.current_view() if self.cutting() else None
         kept = self.kept_side()
         if view is None or kept is None or getattr(self.doc, "loading", False):
@@ -2705,6 +2717,86 @@ class Viewport:
             self._hatch_parts = cut_hatches.build(fills, whose, own, gstyle, settings.scale or HATCH_SCALE,
                                                   origin, u, v, n * HATCH_DEPTH)
         self._assemble_cut_hatches()
+
+    def _cut_hatches_3d(self):
+        """(0.491) In the 3D view, what its cuts go through — the Presentation tab's planes, the section box — filled as
+        on paper, each plane its own fills (a hair inside what it keeps, cut by the others): cut_look "material" each
+        element with its materials' hatches (as a plan or a section has them), "poche" one colour hatched, "solid" one
+        colour; "open" (or no cut) none. Made again only when what is cut, or how, changes."""
+        planes = [] if getattr(self.doc, "loading", False) else list(self.kept_planes() or [])
+        mode, colour = self.cut_look
+        if not planes or mode not in ("material", "poche", "solid"):
+            self._hatch_key = None
+            self._hatch_parts = {}
+            self._assemble_cut_hatches()
+            return
+        from ..ifc import catalog
+        from ..model import cut_hatches, drawings
+        objects = [o for o in self.shown_objects() if o.is_bim and o.mesh is not None]
+        settings = self.doc.view_settings(("3d",))
+        key = ("3d", tuple((tuple(np.round(np.asarray(n, dtype=float), 6)), round(float(off), 6)) for n, off in planes),
+               mode, colour, catalog.GENERATION, repr(getattr(self.doc, "graphic_style", None)),
+               tuple(sorted((settings.elements or {}).items())), frozenset((o.id, id(o.mesh)) for o in objects))
+        if key != self._hatch_key:
+            self._hatch_key = key
+            self._cut_scale = float(settings.scale or HATCH_SCALE)
+            gstyle = styles_model.clean(getattr(self.doc, "graphic_style", None))
+            parts = {}
+            for n, off in planes:
+                n, off = normalize(np.asarray(n, dtype=float)), float(off)
+                crossed = []
+                for obj in objects:                   # (only those the plane goes through: a door's plan pieces too)
+                    box = obj.mesh.bounds()
+                    if box is None:
+                        continue
+                    depths = np.array([(x, y, z) for x in (box[0][0], box[1][0]) for y in (box[0][1], box[1][1])
+                                       for z in (box[0][2], box[1][2])]) @ n
+                    if depths.max() >= off > depths.min():
+                        crossed.append(obj)
+                if not crossed:
+                    continue
+                origin = n * off
+                if abs(float(n[2])) > 0.9:
+                    u, v = np.array((1.0, 0.0, 0.0)), np.array((0.0, 1.0, 0.0))
+                else:
+                    u, v = normalize(np.cross(n, (0.0, 0.0, 1.0))), np.array((0.0, 0.0, 1.0))
+                fills, own, whose = drawings.cut_fills(self.doc, crossed, n, off, origin, u, v, settings.rule, "fine",
+                                                       None, settings.elements)
+                if mode != "material":
+                    fills = [(ring, (cut_hatches.POCHE if mode == "poche" else "colour:") + colour) for ring, _k in fills]
+                built = cut_hatches.build(fills, whose, own, gstyle, self._cut_scale, origin, u, v, n * HATCH_DEPTH)
+                for owner, arrays in built.items():
+                    before = parts.get(owner)
+                    parts[owner] = arrays if before is None else tuple(
+                        b if not len(a) else a if not len(b) else np.concatenate((b, a)) for b, a in zip(before, arrays))
+            self._hatch_parts = parts
+        self._assemble_cut_hatches()
+
+    def set_cut_look(self, mode, colour="#1f1f1f"):
+        """(0.491) How the 3D view's cuts are filled (cut_look); its poché off when "open" (the inside seen)."""
+        look = (mode if mode in ("material", "poche", "solid", "open") else "material", str(colour or "#1f1f1f"))
+        if look == self.cut_look:
+            return
+        self.cut_look = look
+        self._apply_clipping()
+        self._show_cut_hatches()
+        self.redraw()
+
+    def _due_hatches(self):
+        """(0.491) The 3D cut's hatches made again once its planes stopped moving (set_cuts, a box face dragged)."""
+        if self._hatch_due is None:
+            return
+        if time.monotonic() >= self._hatch_due:
+            self._hatch_due = None
+            self._show_cut_hatches()
+        else:
+            self.redraw()
+
+    def _hatches_later(self):
+        """(0.491) A plane moved: its fills put away until it stops (they would be where it was)."""
+        for wobj in self._hatch_objects:
+            wobj.visible = False
+        self._hatch_due = time.monotonic() + 0.25
 
     def _hatches_again(self):
         """(0.320) The cut's hatches made again after an edit's image (_show_cut_hatches: many elements cut)."""
