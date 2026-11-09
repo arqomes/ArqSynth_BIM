@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.512.0 — 2026-11-09
+
+**Estrutura metálica, passos 5 e 7: os furos nas próprias peças.**
+
+- Os parafusos das ligações passam a **furar as peças** por onde passam, não só as chapas: a alma da viga no cutelo,
+  a aba da cantoneira no gousset, a alma da madre na orelha, o banzo do pilar na chapa de topo. Cada furo com o
+  diâmetro de furação (M16 → Ø18), a sua face (alma, banzo de cima ou de baixo) e a posição ao longo da peça.
+- Os ficheiros **NC1** dos perfis levam esses furos (bloco BO), para a máquina furar.
+- As **marcas** contam com os furos (como no DetailCraft): duas peças só têm a mesma marca se tiverem os mesmos
+  furos (também viradas de ponta a ponta).
+- O desenho **Peças de aço (fabrico)** mostra os furos da alma em cada perfil e diz «— 4 furos Ø18» na linha da
+  marca.
+
 ## 0.511.0 — 2026-11-09
 
 **Estrutura metálica, passo 7: a marcação e o DXF das chapas.**

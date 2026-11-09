@@ -419,7 +419,9 @@ class SteelMemberMixin:
                 from ..core import steel_marks
                 symmetric = sec.family in steel.I_FAMILIES + ("SHS", "RHS", "CHS")
                 shape = steel_marks.shape_signature(cuts, copes, (e0, e1), symmetric)
-                out.append({"guid": g, "prefix": prefix, "signature": (sec.name, grade, round(length * 1000.0), shape),
+                holes = steel_marks.holes_signature(self.member_holes(g), length * 1000.0, steel.size(sec)[0])
+                out.append({"guid": g, "prefix": prefix, "signature": (sec.name, grade, round(length * 1000.0), shape,
+                                                                       holes),
                             "mark": e.Tag or "", "section": steel.display(sec.name), "grade": grade, "length": length,
                             "kg_m": props["mass"], "weight": props["mass"] * length, "paint": props["paint"] * length})
         for e in self.file.by_type("IfcPlate"):

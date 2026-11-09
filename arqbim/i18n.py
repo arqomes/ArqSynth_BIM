@@ -9600,6 +9600,7 @@ _STRINGS = {
                     "{mark} — {section} {grade} — {n} piece(s) {l} m long — {kg} kg"),
     "sdraw.plate": ("{mark} — chapa {l} × {w} × {t} mm, {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
                     "{mark} — plate {l} × {w} × {t} mm, {holes} holes Ø{d} — {n} piece(s) — {kg} kg (1:{s})"),
+    "sdraw.holes": (" — {n} furos Ø{d}", " — {n} holes Ø{d}"),                                       # (0.512)
     "sdraw.gusset": ("{mark} — gousset {t} mm (cabe em {l} × {w}), {holes} furos Ø{d} — {n} peça(s) — {kg} kg (1:{s})",
                      "{mark} — gusset plate {t} mm (within {l} × {w}), {holes} holes Ø{d} — {n} piece(s) — {kg} kg "
                      "(1:{s})"),                                                                        # (0.503)

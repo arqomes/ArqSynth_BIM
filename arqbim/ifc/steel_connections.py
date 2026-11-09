@@ -734,6 +734,63 @@ class SteelConnectionMixin:
             api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
         return parts
 
+    # ------------------------------------------------------------ (0.512) the holes the bolts make in the pieces
+
+    def member_holes(self, guid):
+        """The holes the bolts of its connections make in a steel piece: [(face, x, y, d0, world point)] — face «v»
+        its web (a channel's, an angle's leg along its depth), «o» / «u» its upper / lower flange (DSTV's faces); x mm
+        along it from where its body starts, y mm across that face from its edge (the web: from the section's bottom;
+        a flange: from its left edge); d0 the hole's diameter. A bolt along the piece (an end plate's) makes none in it,
+        nor one that misses it; a tube none (it would be slotted)."""
+        from ..core import steel
+        e = self.by_guid(guid)
+        sec = steel.get(self.steel_section(guid) or "") if e is not None else None
+        if sec is None or sec.family in ("SHS", "RHS", "CHS", "OMEGA"):
+            return []
+        m = self.placement(guid)
+        rot = m[:3, :3] / np.linalg.norm(m[:3, :3], axis=0)
+        origin = m[:3, 3]
+        cx, cy = (v * 1000.0 for v in self.section_middle(e))
+        _cuts, _copes, (e0, e1) = self.steel_cuts(e)
+        length = (self.steel_length(e) + e0 + e1) * 1000.0
+        b, h = steel.size(sec)
+        if sec.family in steel.I_FAMILIES or sec.family == "Z":
+            web_x = cx
+        else:                                                   # (a channel's, a C's, an angle's: on its left)
+            web_x = cx - b / 2.0 + sec.tw / 2.0
+        flange_t = sec.tf if sec.tf else sec.tw
+        out = []
+        for a in self.connections_on([guid]):
+            for part in self.connection_parts(a):
+                if not part.is_a("IfcMechanicalFastener") or part.PredefinedType != "BOLT":
+                    continue
+                raw = self._params(part).get("Eixo")
+                if not raw:
+                    continue
+                p, direction, d = json.loads(raw)
+                pl = rot.T @ (np.asarray(p, dtype=float) - origin) * 1000.0
+                dl = rot.T @ np.asarray(direction, dtype=float)
+                if abs(dl[0]) > 0.9:                            # (through the web)
+                    q = pl + dl * ((web_x - pl[0]) / dl[0])
+                    face, y = "v", q[1] - (cy - h / 2.0)
+                    inside = 0.0 <= y <= h
+                elif abs(dl[1]) > 0.9 and sec.family not in ("L", "LU"):     # (through a flange)
+                    top = cy + h / 2.0 - flange_t / 2.0
+                    bottom = cy - h / 2.0 + flange_t / 2.0
+                    level = top if abs(pl[1] - top) <= abs(pl[1] - bottom) else bottom
+                    q = pl + dl * ((level - pl[1]) / dl[1])
+                    face, y = ("o" if level == top else "u"), q[0] - (cx - b / 2.0)
+                    inside = 0.0 <= y <= b
+                else:
+                    continue
+                x = q[2] + e0 * 1000.0
+                if not inside or not -1e-6 <= x <= length + 1e-6:
+                    continue
+                world = origin + rot @ (q / 1000.0)
+                out.append((face, round(float(x), 1), round(float(y), 1), hole(float(d)), world))
+        out.sort(key=lambda r: (r[0], r[1], r[2]))
+        return out
+
     # ------------------------------------------------------------ (0.503) a brace's gusset
 
     def brace_frame(self, brace):
@@ -966,6 +1023,10 @@ class SteelConnectionMixin:
         bolt = api.root.create_entity(f, ifc_class="IfcMechanicalFastener", predefined_type="BOLT",
                                       name="{} M{} {}".format("Parafuso" if lang == "pt" else "Bolt", _mm(d), k))
         self._place(bolt, m)
+        # (0.512) its axis kept (world, m) — the holes it makes in the pieces it goes through are found from it
+        axis_point = m[:3, 3] + m[:3, 0] * (x / 1000.0) + m[:3, 1] * (y / 1000.0)
+        self._set_params(bolt, {"Eixo": json.dumps([[round(float(v), 6) for v in axis_point],
+                                                    [round(float(v), 6) for v in m[:3, 2]], float(d)])})
         self._extrusion_body(bolt, profiles, [(0.0, 0.0, min(a, b) / 1000.0) for a, b in ranges],
                              [abs(b - a) / 1000.0 for a, b in ranges])
         pset = api.pset.add_pset(f, product=bolt, name="Pset_MechanicalFastenerBolt")

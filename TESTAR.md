@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.512 — Furos nas peças (estrutura metálica, passos 5 e 7)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.512.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (dois cliques, por exemplo 6 m).
+2. Abra a vista **Peças de aço (fabrico)** numa folha (navegador do projeto, botão direito ▸ Pôr numa folha nova).
+3. Na madre **M1**: dois pares de pequenos círculos na alma (os furos das orelhas, a 15 cm de cada ponta), e a linha
+   diz «… — 4 furos Ø14». No contraventamento **CV1**: dois furos em cada ponta, «4 furos Ø18». Os pilares e as
+   asnas não têm furos (são soldados).
+4. **Exportar para fabrico** (Estrutura ▸ Ligação) para uma pasta nova; abra o M1.nc1 no Bloco de Notas: tem um
+   bloco **BO** com os 4 furos (face v, a 150 e 6150 mm).
+5. As marcas continuam iguais para peças iguais: na **lista de material**, M1 com 10 peças.
+
 ## 0.511 — Marcação SI e DXF das chapas (estrutura metálica, passo 7)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.511.0**.

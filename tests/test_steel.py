@@ -1103,6 +1103,41 @@ class ErectionPlan(unittest.TestCase):
         self.assertIn("steel_erection", sheets.KINDS)
 
 
+class MemberHoles(unittest.TestCase):
+    """(0.512) The holes the connections' bolts make in the pieces."""
+
+    def test_holes(self):
+        """A shed: each purlin (C 160) has the 2 holes Ø14 of each cleat in its web — at 150 mm from its start (it goes
+        15 cm past the end frame) and 25 / 85 mm up —, each wall brace those of its gussets (Ø18, 35 and 95 mm from
+        its end), the columns and rafters none (welded); the purlins all one mark still; the NC1 of M1 with its 4 holes
+        on face v; a piece turned end for end: the same holes' signature."""
+        from arqbim.core import dstv, steel_marks
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, steel_fabrication
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        marks, pieces = doc.ifc.steel_marks()
+        by = {}
+        for p in pieces:
+            by.setdefault(marks[p["guid"]], []).append(p["guid"])
+        self.assertEqual(len(by["M1"]), 10)
+        purlin = [(f, x, y, d) for f, x, y, d, _w in doc.ifc.member_holes(by["M1"][0])]
+        self.assertEqual(purlin, [("v", 150.0, 25.0, 14.0), ("v", 150.0, 85.0, 14.0), ("v", 6150.0, 25.0, 14.0),
+                                  ("v", 6150.0, 85.0, 14.0)])
+        brace = doc.ifc.member_holes(by["CV1"][0])
+        self.assertEqual([(f, x, d) for f, x, _y, d, _w in brace][:2], [("v", 35.0, 18.0), ("v", 95.0, 18.0)])
+        self.assertEqual(doc.ifc.member_holes(by["P1"][0]), [])
+        self.assertEqual(doc.ifc.member_holes(by["V1"][0]), [])
+        nc1 = dstv.parse(steel_fabrication.nc1_files(doc)["M1"])
+        self.assertEqual(nc1["BO"], [("v", 150.0, 25.0, 14.0), ("v", 150.0, 85.0, 14.0), ("v", 6150.0, 25.0, 14.0),
+                                     ("v", 6150.0, 85.0, 14.0)])
+        turned = [("v", 6300.0 - x, y, d) for f, x, y, d in purlin]
+        self.assertEqual(steel_marks.holes_signature(purlin, 6300.0, 60.0),
+                         steel_marks.holes_signature(turned, 6300.0, 60.0))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

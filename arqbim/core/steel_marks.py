@@ -84,6 +84,20 @@ def shape_signature(cuts, copes, ext, symmetric):
     return min(_turned(cuts, copes, ext, v) for v in variants)
 
 
+def holes_signature(holes, length, width):
+    """(0.512) A piece's holes as its mark sees them — [(face, x, y, d0, …)] mm — to the millimetre, the same for the
+    piece turned end for end (x → its length − x; a flange's y → its width − y): the smaller of the two."""
+    def ways(flip):
+        out = []
+        for face, x, y, d, *_rest in holes:
+            if flip:
+                x = length - x
+                y = width - y if face in ("o", "u") else y
+            out.append((face, int(round(x)), int(round(y)), int(round(d))))
+        return tuple(sorted(out))
+    return min(ways(False), ways(True)) if holes else ()
+
+
 def _number(mark, prefix):
     rest = mark[len(prefix):]
     return int(rest) if rest.isdigit() else None

@@ -117,9 +117,19 @@ def _profile(doc, drawing, lines, ann, mark, members, y):
     _dim(drawing, (length, y), (length, y - depth), 0.12, value=depth)
     sec = steel.get(p["signature"][0])
     weight = sum(q["weight"] for q in members)
-    ann.append(_text((0.0, y - depth - TEXT_DROP), t("sdraw.piece", mark=mark, section=steel.display(sec.name)
-                                                      if sec else p["section"], grade=p["grade"], n=len(members),
-                                                      l=_n(length), kg=_n(weight, 0))))
+    holes = doc.ifc.member_holes(g)                      # (0.512) its holes: the web's seen as circles
+    for face, _hx, _hy, d0, world in holes:
+        if face != "v":
+            continue
+        cx_, cy_ = float(world @ axis) - x0, float(world @ depth_dir) + shift[1]
+        r = d0 / 2000.0
+        ring_h = np.array([(cx_ + r * np.cos(a), cy_ + r * np.sin(a)) for a in np.linspace(0, 2 * np.pi, 17)])
+        lines.append(np.stack((ring_h[:-1], ring_h[1:]), axis=1))
+    words = t("sdraw.piece", mark=mark, section=steel.display(sec.name) if sec else p["section"], grade=p["grade"],
+              n=len(members), l=_n(length), kg=_n(weight, 0))
+    if holes:
+        words += t("sdraw.holes", n=len(holes), d=_n(holes[0][3], 0))
+    ann.append(_text((0.0, y - depth - TEXT_DROP), words))
     return y - depth - TEXT_DROP - ROW
 
 

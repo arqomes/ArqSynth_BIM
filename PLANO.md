@@ -1613,8 +1613,9 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    chapa xadrez ou grelha). Cada uma um `IfcElementAssembly` que se edita pelos parâmetros.
 5. **Marcas e listas.** (0.500.0: marcas de peça P/V/CV/M/E/Ch pela regra do DetailCraft com as voltas das peças
    simétricas, guardadas na `Tag` e mantidas enquanto a peça não muda — «Numerar peças» —; tabelas «Estrutura
-   metálica: lista de material» com peso e pintura reais e «… parafusos». Faltam: as marcas de conjunto, os furos na
-   regra (vêm com os desenhos de fabrico) e «Renumerar» à mão.) Marcas de peça e de conjunto pela regra do DetailCraft (perfil, material, comprimento, furos,
+   metálica: lista de material» com peso e pintura reais e «… parafusos». 0.512.0: os **furos nas peças** (pelos
+   eixos dos parafusos das ligações) entram na regra das marcas, nos NC1 (BO) e no desenho de fabrico. Faltam: as
+   marcas de conjunto e «Renumerar» à mão.) Marcas de peça e de conjunto pela regra do DetailCraft (perfil, material, comprimento, furos,
    recortes, cortes; virada), com os prefixos daqui (proposta: P pilar, V viga, CV contraventamento, M madre, Ch chapa;
    conjuntos em maiúsculas) e estáveis: guardadas no IFC, só mudam quando a peça muda; «Renumerar» à mão. Listas:
    material (marca, perfil, comprimento, quantidade, kg/m, peso, área de pintura), parafusos, chapas, conjuntos com peso

@@ -67,8 +67,9 @@ def nc1_files(doc):
                       quantity=len(members), profile=sec.name, code=dstv.CODES.get(sec.family, "SO"),
                       length=_overall(doc, p["guid"]) or p["length"] * 1000.0, h=sec.h, b=sec.b, tf=sec.tf,
                       tw=sec.tw, r=sec.r, kg_m=props["mass"], paint_m=props["paint"], cuts=_angles(cuts))
-        out[mark] = dstv.nc1(header, marking=("v", MARK_FROM_END, sec.h / 2.0, mark))   # (0.511: on the web, near
-    return out                                                                          # its start)
+        holes = [(f, x, y, d) for f, x, y, d, _w in doc.ifc.member_holes(p["guid"])]   # (0.512: its own holes)
+        out[mark] = dstv.nc1(header, holes, marking=("v", MARK_FROM_END, sec.h / 2.0, mark))   # (0.511: on the web,
+    return out                                                                                  # near its start)
 
 
 MARK_FROM_END = 100.0           # mm: (0.511) a section's marking this far from its start, on its web (face v)
