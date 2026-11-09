@@ -648,6 +648,7 @@ def bim_flow():
     presentation_tab_flow()
     scene_effects_flow()
     scene_diagrams_flow()
+    diagram_editing_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -19640,6 +19641,143 @@ def scene_diagrams_flow():
           "vazio={} criada={} editada={} ({}) segundo={} olho={} bloqueado={} enquadrou={} outra_cena={} voltou={} "
           "duplicada={} exportado={} ({}) saiu={}".format(empty, created, edited, caixa, second, eye, locked, framed,
                                                         apart, back, duplicated, exported, shapes, gone))
+
+
+def diagram_editing_flow():
+    """0.492 — The Presentation tab's volumes edited with the mouse and the Modelagem's tools (the owner: «elas podem
+    ser editáveis usando as ferramentas de Modelagem»): a room of four walls, a box beside it; a click on it in the 3D
+    view chooses it (the Diagramas tab shown, its grips); dragged it moves (by 10 cm); its east face's grip dragged out
+    widens it (the west face stays); Mover: moved; Rodar 90 typed: turned about the vertical; Escala 2 typed: twice as
+    big; Copiar: a second one «… cópia» (Ctrl+Z: gone); Delete: gone; Ctrl+Z: back. Captured: 492_diagramas_rato.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_diagrams as dia
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.show_presentation_tab()
+    pump(600)
+    mode = win.presentation_mode
+    mode.activate("geral")
+    pump(200)
+    QtTest.QTest.mouseClick(mode.side.buttons["layers"], Qt.MouseButton.LeftButton)
+    pump(150)
+    d_id = mode.add_diagram("box")
+    mode.update_diagram(d_id, position=(3.0, -2.5, 0.0), opacity=1.0)   # (in front of the house, as seen from here)
+    mode.choose_diagram(None)
+    QtTest.QTest.mouseClick(mode.side.buttons["layers"], Qt.MouseButton.LeftButton)
+    pump(200)
+    vp.zoom_box((np.array((-2.0, -5.0, 0.0)), np.array((8.0, 5.0, 3.0))))
+    pump(300)
+
+    def volume():
+        return next((d for d in next(s for s in pm.scenes(doc) if s.key == "geral").diagrams if d["id"] == d_id), None)
+
+    def middle(d):
+        pts = dia.shape(d)[0]
+        return (pts.min(axis=0) + pts.max(axis=0)) / 2.0
+
+    first = volume()
+    move(vp.project(middle(first)), 2)
+    click()
+    pump(300)
+    chosen = mode.diagram_key == d_id and mode.side.tab == "diagrams" and len(vp._diagram_handles) == 6
+    p = np.array(vp.project(middle(first)))
+    drag([tuple(p), tuple(p + (70.0, 10.0))])
+    pump(300)
+    after = volume()
+    step = np.array(after["position"]) - np.array(first["position"])
+    dragged = float(np.linalg.norm(step)) > 0.05 and np.allclose(step * 10, np.round(step * 10), atol=1e-6) \
+        and after["position"][2] == first["position"][2]
+    shot("492_diagramas_rato.png")
+    grip = next(q for k, side, q in dia.handles(after) if (k, side) == (0, 1))
+    west = dia.shape(after)[0][:, 0].min()
+    out = np.asarray(grip) + dia.face_axis(after, 0) * 1.0
+    drag([vp.project(grip), vp.project(out)])
+    pump(300)
+    wide = volume()
+    widened = wide["dimensions"][0] > after["dimensions"][0] + 0.3 and abs(dia.shape(wide)[0][:, 0].min() - west) < 1e-6
+    # Mover: from its middle to 1,5 m further north
+    win.set_tool("move")
+    pump(100)
+    c = middle(wide)
+    move(vp.project(c), 2)
+    click()
+    pump(100)
+    move(vp.project(c + np.array((0.0, 1.5, 0.0))), 3)
+    click()
+    pump(300)
+    moved = volume()
+    moved_ok = float(np.linalg.norm(np.array(moved["position"]) - np.array(wide["position"]))) > 0.3 \
+        and moved["dimensions"] == wide["dimensions"]
+    # Rodar: its middle, a point east of it, 90 typed
+    win.set_tool("rotate")
+    pump(100)
+    c = middle(moved)
+    move(vp.project(c), 2)
+    click()
+    pump(100)
+    move(vp.project(c + np.array((1.0, 0.0, 0.0))), 2)
+    click()
+    pump(100)
+    type_text("90")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    turned = volume()
+    turned_ok = abs(abs(turned["rotation"][1]) - 90.0) < 0.5
+    # Escala: 2 typed (about the middle of its base)
+    win.set_tool("scale")
+    pump(100)
+    type_text("2")
+    key(Qt.Key.Key_Return)
+    pump(300)
+    big = volume()
+    scaled = np.allclose(big["scale"], (2.0, 2.0, 2.0), atol=1e-6)
+    # Copiar: from its middle to 3 m further west — a second volume «… cópia», the same size; Ctrl+Z: gone
+    scene_volumes = lambda: next(s for s in pm.scenes(doc) if s.key == "geral").diagrams   # noqa: E731
+    before = len(scene_volumes())
+    win.set_tool("copy")
+    pump(100)
+    c = middle(big)
+    move(vp.project(c), 2)
+    click()
+    pump(100)
+    move(vp.project(c + np.array((-3.0, 0.0, 0.0))), 3)
+    click()
+    pump(300)
+    twin = scene_volumes()[-1]
+    copied = len(scene_volumes()) == before + 1 and twin["id"] != d_id and twin["name"].endswith("cópia") \
+        and np.allclose(twin["scale"], big["scale"]) and abs(twin["position"][0] - big["position"][0]) > 1.0
+    win.set_tool("select")
+    pump(100)
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    copied = copied and len(scene_volumes()) == before
+    win.set_tool("select")
+    pump(100)
+    mode.choose_diagram(d_id)
+    _active()
+    key(Qt.Key.Key_Delete)
+    pump(300)
+    gone = volume() is None
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    back = volume() is not None
+    doc.modified = False
+    win.close_presentation()
+    pump(300)
+    check("diagramas_com_o_rato_e_a_modelagem", chosen and dragged and widened and moved_ok and turned_ok and scaled
+          and copied and gone and back,
+          "escolhido={} arrastado={} ({}) face={} ({}) mover={} rodar={} ({}) escala={} ({}) copiar={} apagado={} "
+          "voltou={}".format(chosen, dragged, step, widened, wide and wide["dimensions"], moved_ok, turned_ok,
+                             turned and turned["rotation"], scaled, big and big["scale"], copied, gone, back))
 
 
 def camera_move_flow():

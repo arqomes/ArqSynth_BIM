@@ -72,6 +72,7 @@ class _TransformTool(Tool):
         self._lines = None      # (0.373) …or the loose lines picked alone (viewport.line_selection)
         self._loose = None      # (0.373) …or sketches not in the document, pasted (copies of lines / faces alone)
         self._segs = None       # world segment ends of the objects' edges, (2N, 3)
+        self._volume = None     # (0.492) …or the Presentation tab's volume chosen (its id)
         self._last = None
         self.copy = False       # Ctrl switches it
 
@@ -91,6 +92,9 @@ class _TransformTool(Tool):
         they (the lines joined to their ends stretch)."""
         ids = [i for i in self.viewport.selection if self.doc.get(i) is not None]
         self._loose = None
+        self._volume = None
+        if not ids and self._take_volume(x, y):           # (0.492) the Presentation tab's volume
+            return True
         self._lines = dict(self.viewport.line_selection) if not ids else None
         if self._lines:
             self._parts, self._ids = None, []
@@ -115,6 +119,27 @@ class _TransformTool(Tool):
                 segs += [world[a], world[b]]
         self._segs = np.array(segs, dtype=float).reshape(-1, 3)
         return bool(ids)
+
+    def _take_volume(self, x, y):
+        """(0.492) In the Presentation tab, nothing of the model selected: the volume chosen — or the one under the
+        first click (chosen) — is what moves or turns, as a sketch would."""
+        mode = getattr(self.host, "presentation_mode", None)
+        if mode is None or not mode.active:
+            return False
+        volume = mode.chosen_volume()
+        if volume is None:
+            d_id = self.viewport.diagram_at(x, y)
+            if d_id is None:
+                return False
+            mode.choose_diagram(d_id, show=True)
+            volume = mode.chosen_volume()
+            if volume is None:
+                return False
+        from ..model import presentation_diagrams as dia
+        self._volume = volume["id"]
+        self._ids, self._parts, self._lines = [], None, None
+        self._segs = np.array([p for edge in dia.outline(volume) for p in edge], dtype=float).reshape(-1, 3)
+        return True
 
     def _take_annotations(self, plan_only=False):
         """(0.120) The lines, regions and texts selected in the view shown, when nothing else is: they are what
@@ -174,6 +199,15 @@ class _TransformTool(Tool):
         """Move / rotate (or copy, n copies) `ids`. Returns True if done."""
         factors = [k / n for k in range(1, n + 1)] if divide else list(range(1, n + 1))
         steps = [self._scaled(step, f) for f in factors]
+        volume = getattr(self, "_volume", None)
+        if volume is not None and not ids:              # (0.492) the Presentation tab's volume (or copies of it)
+            mode = self.host.presentation_mode
+            if not mode.transform_diagram(volume, [self._matrix(origin, s) for s in steps], copy):
+                return False
+            self._last = _Last(self.doc.last_command(), [], origin, step, copy)
+            if copy:
+                self.host.message(t("info.copied", n=len(steps)))
+            return True
         picked = getattr(self, "_parts", None)
         lines = getattr(self, "_lines", None)
         loose = getattr(self, "_loose", None)
@@ -378,7 +412,9 @@ class MoveTool(_TransformTool):
             return
         dist = float(np.linalg.norm(delta))
         self.host.set_vcb(_fmt(dist))
-        if not copy and not ids and getattr(self, "_lines", None):
+        if not copy and not ids and getattr(self, "_volume", None):
+            self.host.message(t("pmode.dia_moved", d=_fmt(dist)))        # (0.492)
+        elif not copy and not ids and getattr(self, "_lines", None):
             self.host.message(t("info.lines_moved", d=_fmt(dist)))
         elif not copy and not ids and self._parts:
             self.host.message(t("info.part_moved", d=_fmt(dist)))
@@ -400,6 +436,7 @@ class CopyTool(MoveTool):
     def paste(self, ids, base, sketches=None):
         """Ctrl+V: the elements copied follow the cursor from their base point; a click puts the copy there.
         (0.373) sketches: lines or faces picked alone that were copied (sketches of their own, not in the document)."""
+        self._volume = None
         if sketches:
             self.viewport.set_selection(set())
             self._ids, self._parts, self._lines, self._loose = [], None, None, list(sketches)
@@ -741,7 +778,9 @@ class RotateTool(_TransformTool):
         if not self._commit(ids, center, float(angle), copy):
             return
         self.host.set_vcb(_angle(angle))
-        if not copy and not ids and self._lines:
+        if not copy and not ids and self._volume:
+            self.host.message(t("pmode.dia_rotated", a=_angle(angle)))        # (0.492)
+        elif not copy and not ids and self._lines:
             self.host.message(t("info.lines_rotated", a=_angle(angle)))
         elif not copy and not ids and self._parts:
             self.host.message(t("info.part_rotated", a=_angle(angle)))

@@ -2688,6 +2688,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 return self.doc.get(i) is not None and not self.doc.get(i).is_bim
         if any(accept(i) for i in self.viewport.selection):
             return False
+        if name == "scale" and self.presentation_mode is not None \
+                and self.presentation_mode.chosen_volume() is not None:
+            return False                                  # (0.492: the Presentation tab's volume chosen is scaled)
         act = self.tool_actions.get(name)
         self.ask_pick(t("tool." + name), t("pick." + name), accept, lambda: self.set_tool(name),
                       icon=act.icon() if act is not None else None)
@@ -4058,8 +4061,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.finish_pick()
             return
         vp = self.viewport
-        if self.tool.name == "select" and not (vp.selection or vp.face_selection or vp.line_selection or vp.selected_dims
-                                               or vp.selected_annotations or vp.selected_axes or vp.selected_rooms):
+        volume = self.presentation_mode is not None and self.presentation_mode.chosen_volume() is not None   # (0.492)
+        if self.tool.name == "select" and not volume and not (
+                vp.selection or vp.face_selection or vp.line_selection or vp.selected_dims or vp.selected_annotations
+                or vp.selected_axes or vp.selected_rooms):
             self.ask_pick(self._delete_title(), t("pick.delete"), lambda i: self.doc.get(i) is not None,
                           lambda: self.tool.delete())             # (0.325, as Revit's: what to delete, asked for)
             return

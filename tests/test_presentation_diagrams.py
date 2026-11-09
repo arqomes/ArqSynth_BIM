@@ -73,6 +73,41 @@ class Volumes(unittest.TestCase):
         lo, hi = dia.bounds([box(), box(id="b", position=(0, 0, 0), visible=False)])
         np.testing.assert_allclose(lo, (8, 4, 1))
 
+    def test_transformed_handles_resized(self):
+        """0.492 — Moved, turned and scaled by a matrix of the model's axes (the BIM's Mover, Rodar, Escala): the base's
+        middle taken, the turn and the scale the Presentation's numbers again; the faces' grips at their middles; a face
+        dragged out, the opposite one kept."""
+        m = np.eye(4)
+        m[:3, 3] = (1.0, -2.0, 0.5)
+        moved = dia.transformed(box(), m)
+        self.assertEqual((moved["position"], moved["rotation"], moved["scale"]), ((11.0, 3.0, 1.5), (0, 0, 0),
+                                                                                   (1.0, 1.0, 1.0)))
+        c, s = math.cos(math.radians(90)), math.sin(math.radians(90))
+        turn = np.eye(4)
+        turn[:2, :2] = ((c, -s), (s, c))                                  # (90° about the vertical, round the origin)
+        turned = dia.transformed(box(), turn)
+        np.testing.assert_allclose(turned["position"], (-5.0, 10.0, 1.0), atol=1e-6)
+        np.testing.assert_allclose(turned["rotation"], (0.0, 90.0, 0.0), atol=1e-6)
+        np.testing.assert_allclose(dia.shape(turned)[0].min(axis=0), (-6.0, 8.0, 1.0), atol=1e-6)
+        twice = dia.transformed(box(), np.diag((2.0, 2.0, 2.0, 1.0)))
+        np.testing.assert_allclose((twice["position"], twice["scale"]), ((20.0, 10.0, 2.0), (2.0, 2.0, 2.0)))
+        self.assertEqual(dia.euler_of(np.eye(3)), (0.0, 0.0, 0.0))
+        grips = dia.handles(box())
+        self.assertEqual(len(grips), 6)
+        top = next(p for k, side, p in grips if (k, side) == (1, 1))
+        np.testing.assert_allclose(top, (10.0, 5.0, 4.0))
+        east = next(p for k, side, p in grips if (k, side) == (0, 1))
+        np.testing.assert_allclose(east, (12.0, 5.0, 2.5))
+        self.assertEqual(len(dia.handles(box(type="plane"))), 4)
+        wider = dia.resized(box(), 0, 1, 1.0)                              # (the east face 1 m out: the west stays)
+        lo, hi = dia.shape(wider)[0].min(axis=0), dia.shape(wider)[0].max(axis=0)
+        np.testing.assert_allclose((lo[0], hi[0]), (8.0, 13.0))
+        taller = dia.resized(box(), 1, -1, 0.5)                            # (the bottom 0,5 m down: the top stays)
+        lo, hi = dia.shape(taller)[0].min(axis=0), dia.shape(taller)[0].max(axis=0)
+        np.testing.assert_allclose((lo[2], hi[2]), (0.5, 4.0))
+        self.assertAlmostEqual(dia.resized(box(), 2, 1, -9.0)["dimensions"][2], 0.01)   # (never through itself)
+        np.testing.assert_allclose(dia.face_axis(turned, 0), (0.0, 1.0, 0.0), atol=1e-9)
+
     def test_volume_and_presentation(self):
         """Its volume (box w·h·d, cylinder ×π/4, sphere ×π/6, cone ×π/12, plane 0); as the Presentation's
         DiagramObject — «bim_dia_<id>», the base's middle in the GLB's axes, the rest its own numbers."""

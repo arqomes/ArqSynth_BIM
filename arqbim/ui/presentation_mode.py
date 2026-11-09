@@ -1868,6 +1868,7 @@ class PresentationMode(QtCore.QObject):
         self._tags_drawn = None             # (what the 3D view shows of them: drawn again only when it changed)
         self.diagram_key = None             # (0.487) the volume chosen in «Diagramas» (its editor open)
         self._diagrams_drawn = None
+        self._diagram_preview = None        # (0.492) a volume being dragged: drawn where it goes, not kept yet
         self._walk_data = None              # (0.488) the walk as it goes (worked out again after each change)
         self._walk_drawn = False
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
@@ -2779,11 +2780,16 @@ class PresentationMode(QtCore.QObject):
         self._keep_diagrams(items + [copy_], "pmode.cmd_dia_dup")
         return copy_["id"]
 
-    def choose_diagram(self, d_id):
-        """A volume chosen in the list (its editor, its outline in the 3D view), or none."""
+    def choose_diagram(self, d_id, show=False):
+        """A volume chosen in the list (its editor, its outline in the 3D view), or none; (0.492) show: in the 3D view —
+        the right column's «Diagramas» shown with its editor."""
         self.diagram_key = d_id if self.diagram(d_id) is not None else None
+        self._diagram_preview = None
         self.apply_diagrams()
-        self.side.show_scene(self.scene())
+        if show and self.diagram_key is not None and self.side.tab != "diagrams":
+            self.side.show_tab("diagrams")
+        else:
+            self.side.show_scene(self.scene())
 
     def frame_diagrams(self, ids=None):
         """«Enquadrar volumes» / «Focar volume»: those shown in view (the direction of view kept)."""
@@ -2794,25 +2800,81 @@ class PresentationMode(QtCore.QObject):
         return box is not None
 
     def apply_diagrams(self):
-        """The scene chosen's volumes on the 3D view (those shown), the one chosen outlined; none when the tab is put
-        away. Drawn again only when they changed."""
+        """The scene chosen's volumes on the 3D view (those shown), the one chosen outlined with its faces' grips (not
+        when locked); (0.492) a volume being dragged drawn where it goes; none when the tab is put away. Drawn again
+        only when they changed."""
         if not self.active:
             if self._diagrams_drawn is not None:
                 self._diagrams_drawn = None
                 self.vp.set_diagrams([])
             return
-        items = [d for d in self.diagrams() if d["visible"]]
-        chosen = self.diagram(self.diagram_key)
-        key = repr((items, chosen if chosen is not None and chosen["visible"] else None))
+        preview = self._diagram_preview
+        items = [preview if preview is not None and d["id"] == preview["id"] else d
+                 for d in self.diagrams() if d["visible"]]
+        chosen = next((d for d in items if d["id"] == self.diagram_key), None)
+        key = repr((items, chosen))
         if key == self._diagrams_drawn:
             return
         self._diagrams_drawn = key
         draw = []
         for d in items:
             points, normals, triangles = diagrams_model.shape(d)
-            draw.append((points, normals, triangles, d["color"], d["opacity"], d["wireframe"]))
-        outline = diagrams_model.outline(chosen) if chosen is not None and chosen["visible"] else ()
-        self.vp.set_diagrams(draw, outline, theme.colour("accent").name())
+            draw.append((points, normals, triangles, d["color"], d["opacity"], d["wireframe"], d["id"]))
+        outline = diagrams_model.outline(chosen) if chosen is not None else ()
+        grips = diagrams_model.handles(chosen) if chosen is not None and not chosen["locked"] else ()
+        self.vp.set_diagrams(draw, outline, theme.colour("accent").name(), grips)
+
+    def chosen_volume(self):
+        """(0.492) The volume chosen in the 3D view or the list, when the interface is in front and it may be changed
+        (shown, not locked) — what Mover, Rodar, Escala and the grips act on; else None."""
+        if not self.active:
+            return None
+        d = self.diagram(self.diagram_key)
+        return d if d is not None and d["visible"] and not d["locked"] else None
+
+    def preview_diagram(self, d):
+        """(0.492) A volume drawn as it would be (a grip or the volume being dragged), nothing kept yet; None: as it
+        is."""
+        self._diagram_preview = diagrams_model.clean(d) if d is not None else None
+        self.apply_diagrams()
+
+    def keep_preview(self):
+        """(0.492) The volume dragged kept where it was dropped: one undo step."""
+        d, self._diagram_preview = self._diagram_preview, None
+        if d is None or not self.update_diagram(d["id"], **{k: v for k, v in d.items() if k != "id"}):
+            self.apply_diagrams()
+
+    def transform_diagram(self, d_id, matrices, copy=False):
+        """(0.492) Mover / Rodar (and their copies, one a matrix) on a volume: it is moved or turned, or copies of it
+        are made (the last chosen). One undo step."""
+        d = self.diagram(d_id)
+        if d is None or not matrices:
+            return False
+        items = self.diagrams()
+        if copy:
+            made = []
+            for m in matrices:
+                twin = diagrams_model.duplicate(d, items + made, t("pmode.copy_word"))
+                twin = diagrams_model.transformed(dict(twin, position=d["position"]), m)
+                made.append(twin)
+            if len(items) + len(made) > diagrams_model.MAX:
+                self.win.message(t("pmode.dia_full", n=diagrams_model.MAX), warning=True)
+                return False
+            self.diagram_key = made[-1]["id"]
+            return self._keep_diagrams(items + made, "pmode.cmd_dia_dup")
+        return self.update_diagram(d_id, **{k: v for k, v in diagrams_model.transformed(d, matrices[0]).items()
+                                            if k != "id"})
+
+    def scale_diagram(self, d_id, base, factors):
+        """(0.492) Escala on a volume: about `base`, by `factors` along the model's axes. One undo step."""
+        d = self.diagram(d_id)
+        if d is None:
+            return False
+        b, f = np.asarray(base, dtype=float), np.asarray(factors, dtype=float)
+        m = np.eye(4)
+        m[:3, :3] = np.diag(f)
+        m[:3, 3] = b - f * b
+        return self.update_diagram(d_id, **{k: v for k, v in diagrams_model.transformed(d, m).items() if k != "id"})
 
     # ------------------------------------------------------------ (0.486) the effects (the right column's «Efeitos»)
 

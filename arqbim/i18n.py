@@ -7441,8 +7441,12 @@ _STRINGS = {
     "pmode.dia_shape.sphere": ("Esfera", "Sphere"),
     "pmode.dia_shape.cone": ("Cone", "Cone"),
     "pmode.dia_shape.plane": ("Plano", "Plane"),
-    "pmode.dia_new_hint": ("Novos volumes aparecem ao lado do modelo. Use Enquadrar volumes para os ver.",
-                           "New volumes appear beside the model. Use Frame volumes to see them."),
+    "pmode.dia_new_hint": ("Novos volumes aparecem ao lado do modelo. Use Enquadrar volumes para os ver. Clique num "
+                           "volume no 3D para o escolher: arraste-o, puxe as pegas das faces, ou use Mover, Rodar e "
+                           "Escala da Modelagem.",
+                           "New volumes appear beside the model. Use Frame volumes to see them. Click a volume in the "
+                           "3D view to choose it: drag it, pull its faces' grips, or use the Modelagem's Move, Rotate "
+                           "and Scale."),
     "pmode.dia_frame_all": ("Enquadrar volumes nesta cena", "Frame the volumes of this scene"),
     "pmode.dia_empty": ("Ainda não há volumes nesta cena.", "No volumes in this scene yet."),
     "pmode.dia_hide_named": ("Ocultar {name}", "Hide {name}"),
@@ -7490,6 +7494,16 @@ _STRINGS = {
     "pmode.cmd_dia": ("Editar volume", "Edit volume"),
     "pmode.cmd_dia_remove": ("Remover volume", "Remove volume"),
     "pmode.cmd_dia_dup": ("Duplicar volume", "Duplicate volume"),
+    # (0.492) the volumes edited with the mouse and the Modelagem's tools
+    "pmode.dia_chosen": ("Volume «{name}»: arraste-o para o mover; as pegas mudam uma face (a oposta fica). A grelha "
+                         "anda de 10 em 10 cm; Shift: sem grelha. Mover, Rodar e Escala da Modelagem também o mudam.",
+                         "Volume «{name}»: drag it to move it; the grips change one face (the opposite one stays). The "
+                         "grid goes by 10 cm; Shift: no grid. The Modelagem's Move, Rotate and Scale change it too."),
+    "hint.dia_face": ("Arraste a face: só ela se mexe, a oposta fica. Shift: sem a grelha de 10 cm.",
+                      "Drag the face: only it moves, the opposite one stays. Shift: without the 10 cm grid."),
+    "pmode.dia_moved": ("Volume movido {d}.", "Volume moved {d}."),
+    "pmode.dia_rotated": ("Volume rodado {a}.", "Volume rotated {a}."),
+    "pmode.dia_scaled": ("Volume em escala × {f}.", "Volume scaled × {f}."),
     # (0.486) the Presentation's «Efeitos» (its EffectsTab, its words)
     "pmode.effects_model": ("Modelo", "Model"),
     "pmode.effects_camera": ("Câmara", "Camera"),

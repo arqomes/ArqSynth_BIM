@@ -407,6 +407,8 @@ class Viewport:
         self._effect = None         # (0.486) the Presentation's effect being played (play_effect)
         self._diagram_objects = []  # (0.487) the Presentation tab's scene's volumes on screen
         self._walk_objects = []     # (0.488) its Virtual Walk's zones and ways on screen
+        self._diagram_ids = {}      # (0.492) id(world object) -> the volume it draws (diagram_at)
+        self._diagram_handles = []  # (0.492) the chosen volume's faces' grips [(axis, side, point)]
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -2311,15 +2313,18 @@ class Viewport:
 
     # ------------------------------------------------------------ (0.487) the Presentation's volumes for diagrams
 
-    def set_diagrams(self, items, outline=(), outline_colour="#2f6fe4"):
+    def set_diagrams(self, items, outline=(), outline_colour="#2f6fe4", handles=()):
         """The volumes of the Presentation tab's scene drawn over the model: [(points (N, 3), normals (N, 3),
-        triangles (M, 3), colour "#rrggbb", opacity 0–1, wireframe)] — lit, see-through when their opacity is under 1,
-        only their triangles' lines when wireframe —; outline: [(a, b)] the edges of the one chosen, in
-        outline_colour. Not cut by the cuts, not picked. [] none."""
+        triangles (M, 3), colour "#rrggbb", opacity 0–1, wireframe, (0.492) its id)] — lit, see-through when their
+        opacity is under 1, only their triangles' lines when wireframe; picked (diagram_at) —; outline: [(a, b)] the
+        edges of the one chosen, in outline_colour, and (0.492) its faces' grips [(axis, side, point)]. Not cut by the
+        cuts. [] none."""
         for wobj in self._diagram_objects:
             self.scene.remove(wobj)
         self._diagram_objects = []
-        for points, normals, triangles, colour, opacity, wireframe in items:
+        self._diagram_ids = {}
+        self._diagram_handles = list(handles)
+        for points, normals, triangles, colour, opacity, wireframe, *rest in items:
             if not len(triangles):
                 continue
             geometry = gfx.Geometry(positions=_f32(points), normals=_f32(normals),
@@ -2328,16 +2333,23 @@ class Viewport:
             kw = {"alpha_mode": "blend", "depth_write": False} if clear else {}
             if wireframe:
                 material = _mat(gfx.MeshBasicMaterial, color=colour, opacity=float(opacity), wireframe=True,
-                                wireframe_thickness=1.5, side="both", pick_write=False, **kw)
+                                wireframe_thickness=1.5, side="both", pick_write=True, **kw)
             else:
                 material = _mat(gfx.MeshPhongMaterial, color=colour, opacity=float(opacity), specular="#000",
-                                side="both", pick_write=False, **kw)
-            self._diagram_objects.append(gfx.Mesh(geometry, material))
+                                side="both", pick_write=True, **kw)
+            wobj = gfx.Mesh(geometry, material)
+            self._diagram_objects.append(wobj)
+            if rest:
+                self._diagram_ids[id(wobj)] = rest[0]
         segments = [p for edge in outline for p in edge]
         if segments:
             self._diagram_objects.append(gfx.Line(gfx.Geometry(positions=_f32(segments)),
                                                   _mat(gfx.LineSegmentMaterial, thickness=2.5, color=outline_colour,
                                                        aa=True, depth_test=False)))
+        if self._diagram_handles:                         # (0.492: the faces' grips, over everything)
+            self._diagram_objects.append(gfx.Points(
+                gfx.Geometry(positions=_f32([p for _k, _s, p in self._diagram_handles])),
+                _mat(gfx.PointsMaterial, size=11.0, color=outline_colour, depth_test=False, pick_write=False)))
         for wobj in self._diagram_objects:
             self.scene.add(wobj)
         self.redraw()
@@ -2345,6 +2357,24 @@ class Viewport:
     def diagrams_shown(self):
         """(0.487) How many volumes are drawn."""
         return sum(1 for w in self._diagram_objects if isinstance(w, gfx.Mesh))
+
+    def diagram_at(self, x, y):
+        """(0.492) The id of the volume under the pixel (the one in front), or None."""
+        if not self._diagram_ids:
+            return None
+        info = self.renderer.get_pick_info((x, y))
+        wobj = info.get("world_object") if info else None
+        return self._diagram_ids.get(id(wobj)) if wobj is not None else None
+
+    def diagram_handle_at(self, x, y):
+        """(0.492) (axis, side, point) of the chosen volume's face grip under the cursor, or None."""
+        if not self._diagram_handles:
+            return None
+        xy = self.project_many(np.array([p for _k, _s, p in self._diagram_handles]))
+        d = np.linalg.norm(xy - np.array((x, y)), axis=1)
+        d = np.where(np.isnan(d), np.inf, d)
+        k = int(np.argmin(d))
+        return self._diagram_handles[k] if d[k] <= BOX_HANDLE_PX else None
 
     # ------------------------------------------------------------ (0.486) the Presentation's scene effects
 

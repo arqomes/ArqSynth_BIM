@@ -131,6 +131,71 @@ def linear(d):
     return TO_MODEL @ _euler(d["rotation"]) @ np.diag(d["scale"]) @ np.diag(d["dimensions"])
 
 
+def euler_of(r):
+    """(0.492) three.js's Euler «XYZ» (degrees) of a rotation matrix (its setFromRotationMatrix)."""
+    m13 = min(max(float(r[0][2]), -1.0), 1.0)
+    y = math.asin(m13)
+    if abs(m13) < 0.9999999:
+        x, z = math.atan2(-float(r[1][2]), float(r[2][2])), math.atan2(-float(r[0][1]), float(r[0][0]))
+    else:
+        x, z = math.atan2(float(r[2][1]), float(r[1][1])), 0.0
+    return tuple(round(math.degrees(a), 6) + 0.0 for a in (x, y, z))
+
+
+def transformed(d, matrix):
+    """(0.492) The volume moved, turned or scaled by a 4 × 4 matrix of the model's axes (the BIM's Mover, Rodar,
+    Escala): the middle of its base taken by it; its turn and its scale the Presentation's numbers again (the shape's
+    own axes kept: a scale along the model's axes of a turned volume is taken along its own)."""
+    m = np.asarray(matrix, dtype=float)
+    p = m[:3, :3] @ np.asarray(d["position"], dtype=float) + m[:3, 3]
+    a = TO_MODEL.T @ m[:3, :3] @ TO_MODEL @ _euler(d["rotation"]) @ np.diag(d["scale"])
+    scale = np.linalg.norm(a, axis=0)
+    r = a / np.where(scale > 1e-12, scale, 1.0)
+    u, _s, vt = np.linalg.svd(r)                      # (the nearest rotation)
+    r = u @ vt
+    if np.linalg.det(r) < 0:                          # (a mirror: not a turn — the shape's last axis turned back)
+        u[:, -1] *= -1
+        r = u @ vt
+    return clean(dict(d, position=tuple(float(c) for c in p), rotation=euler_of(r),
+                      scale=tuple(float(s) for s in scale)))
+
+
+def handles(d):
+    """(0.492) Its faces' grips, as the Presentation's: [(axis of the shape — 0 width, 1 height, 2 depth —, side ±1,
+    the face's middle in the model's axes)] — a plane's four sides only."""
+    m, p = linear(d), np.asarray(d["position"], dtype=float)
+    faces = [(0, -1, (-0.5, 0.5, 0.0)), (0, 1, (0.5, 0.5, 0.0)), (2, -1, (0.0, 0.5, -0.5)), (2, 1, (0.0, 0.5, 0.5)),
+             (1, -1, (0.0, 0.0, 0.0)), (1, 1, (0.0, 1.0, 0.0))]
+    if d["type"] == "plane":
+        faces = [(k, side, (c[0], 0.0, c[2])) for k, side, c in faces[:4]]
+    return [(k, side, tuple(float(v) for v in m @ np.array(c) + p)) for k, side, c in faces]
+
+
+def face_axis(d, k):
+    """(0.492) The way the shape's axis `k` goes, in the model's axes (unit)."""
+    v = TO_MODEL @ _euler(d["rotation"]) @ np.eye(3)[k]
+    return v / np.linalg.norm(v)
+
+
+def resized(d, k, side, delta):
+    """(0.492) A face dragged `delta` m out (in: negative) along its axis, the opposite one kept where it is (the
+    Presentation's face grips): the measure along it changed, the base's middle moved as much as it must."""
+    dims = list(d["dimensions"])
+    s = float(d["scale"][k])
+    extent = dims[k] * s
+    new = max(extent + float(delta), RANGES["dimensions"][0] * s)
+    moved = new - extent
+    dims[k] = new / s
+    p = np.asarray(d["position"], dtype=float)
+    axis = face_axis(d, k)
+    if k == 1:                                         # (the height: the base is the bottom face)
+        if side < 0:
+            p = p - axis * moved
+    else:
+        p = p + axis * (moved / 2.0) * side
+    return clean(dict(d, dimensions=tuple(dims), position=tuple(float(c) for c in p)))
+
+
 def unit_shape(kind):
     """(points (N, 3), normals (N, 3), triangles (M, 3)) of the unit shape in the Presentation's axes — on its base
     (y from 0), its middle on the axis, 1 × 1 × 1; the plane flat at y = 0 — as three.js's geometries."""

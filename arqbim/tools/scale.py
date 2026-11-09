@@ -72,7 +72,10 @@ class ScaleTool(Tool):
         self.host.message(t("info.scale_centre_on" if self.centre else "info.scale_centre_off"))
 
     def _centre(self):
-        """The middle of the selected sketches' box (world)."""
+        """The middle of the selected sketches' box (world) — (0.492) or of the volume's."""
+        if not self._sketches() and self._volume() is not None:
+            lo, hi = self._volume_box()
+            return (lo + hi) / 2
         corners = [np.asarray(o.matrix, float)[:3, :3] @ np.asarray(v, float) + np.asarray(o.matrix, float)[:3, 3]
                    for o in self._sketches() for v in o.mesh.verts]
         return (np.min(corners, axis=0) + np.max(corners, axis=0)) / 2 if corners else np.zeros(3)
@@ -81,8 +84,20 @@ class ScaleTool(Tool):
         return [self.doc.get(i) for i in sorted(self.viewport.selection)
                 if self.doc.get(i) is not None and not self.doc.get(i).is_bim]
 
+    def _volume(self):
+        """(0.492) In the Presentation tab, nothing of the model selected: the volume chosen (it is what scales)."""
+        mode = getattr(self.host, "presentation_mode", None)
+        if mode is None or not mode.active or self.viewport.selection:
+            return None
+        return mode.chosen_volume()
+
+    def _volume_box(self):
+        from ..model import presentation_diagrams as dia
+        pts = dia.shape(self._volume())[0]
+        return pts.min(axis=0), pts.max(axis=0)
+
     def hint(self):
-        if not self._sketches():
+        if not self._sketches() and self._volume() is None:
             return t("hint.scale.select")
         if self._base is None:
             return t("hint.scale.centre") if self.centre else t("hint.scale.base")
@@ -120,7 +135,7 @@ class ScaleTool(Tool):
             return
         if button != LEFT:
             return
-        if not self._sketches():
+        if not self._sketches() and self._volume() is None:
             self.host.message(t("hint.scale.select"), warning=True)
             return
         p, _snap = self._point(x, y, modifiers)
@@ -149,7 +164,7 @@ class ScaleTool(Tool):
         if values is None or values[0] is None:
             self.host.message(t("err.bad_value", t=text), warning=True)
             return
-        if not self._sketches():
+        if not self._sketches() and self._volume() is None:
             self.host.message(t("hint.scale.select"), warning=True)
             return
         if values[1] is None:
@@ -161,10 +176,22 @@ class ScaleTool(Tool):
         if self._base is None:                     # (typed first: about the selection's lowest corner)
             corners = [np.asarray(o.matrix, float)[:3, :3] @ np.asarray(v, float) + np.asarray(o.matrix, float)[:3, 3]
                        for o in self._sketches() for v in o.mesh.verts]
-            self._base = np.min(corners, axis=0) if corners else np.zeros(3)
+            if not corners and self._volume() is not None:      # (0.492: the volume's middle of its base)
+                self._base = np.asarray(self._volume()["position"], dtype=float)
+            else:
+                self._base = np.min(corners, axis=0) if corners else np.zeros(3)
         self._apply(factors)
 
     def _preview(self, factors):
+        volume = self._volume() if not self._sketches() else None
+        if volume is not None:                     # (0.492) the volume scaled, its edges
+            from ..model import presentation_diagrams as dia
+            b, f = np.asarray(self._base, dtype=float), np.asarray(factors, dtype=float)
+            m = np.eye(4)
+            m[:3, :3], m[:3, 3] = np.diag(f), b - f * b
+            segs = [p for edge in dia.outline(dia.transformed(volume, m)) for p in edge]
+            self.viewport.show_polygon([], segments=segs, colors=[PREVIEW] * len(segs))
+            return
         segs = []
         for o in self._sketches():
             copy = scaled_copy(o, self._base, factors)
@@ -178,6 +205,14 @@ class ScaleTool(Tool):
     def _apply(self, factors):
         if any(abs(f) < MIN_FACTOR for f in factors):
             self.host.message(t("err.scale_zero"), warning=True)
+            return
+        volume = self._volume() if not self._sketches() else None
+        if volume is not None:                     # (0.492) the Presentation tab's volume
+            if self.host.presentation_mode.scale_diagram(volume["id"], self._base, factors):
+                self.host.message(t("pmode.dia_scaled", f=" × ".join(
+                    "{:g}".format(round(f, 4)).replace(".", decimal_sep())
+                    for f in (factors if len(set(factors)) > 1 else factors[:1]))))
+            self.cancel()
             return
         sketches = self._sketches()
         scaled = [scaled_copy(o, self._base, factors) for o in sketches]

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.492.0 — 2026-11-09
+
+**Volumes de diagrama editáveis com o rato e a Modelagem** (o dono: «elas podem ser editáveis usando as ferramentas
+de Modelagem»).
+
+Na interface do Presentation, os volumes dos diagramas (caixa, cilindro, esfera, cone, plano) deixam de se mexer só
+pelos campos:
+
+- **Clicar num volume** no 3D escolhe-o: abre-se o separador **Diagramas** com ele, e aparecem as **pegas** no meio das
+  faces (seis; quatro num plano), como no Presentation. Clicar fora deixa de o escolher.
+- **Arrastar o volume** move-o ao nível em que está, de 10 em 10 cm; com **Shift**, sem grelha.
+- **Arrastar uma pega** muda só essa face — a oposta fica no sítio; a pega de cima e a de baixo mudam a altura.
+- As ferramentas **Mover**, **Copiar**, **Rodar** e **Escala** do separador **Modelagem** da fita funcionam no volume
+  escolhido, com os mesmos cliques e os valores escritos de sempre (Copiar faz um volume novo, «… cópia»).
+- **Delete** apaga o volume escolhido; **Ctrl+Z** volta atrás em qualquer destas mudanças.
+- O que se faz assim vai para o Presentation como antes: posição, rotação, escala e medidas do volume.
+
 ## 0.491.0 — 2026-11-09
 
 **Corte preenchido** (o dono: «seria bom termos o preenchimento das paredes nos cortes aqui no BIM»).

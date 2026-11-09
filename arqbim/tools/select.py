@@ -524,6 +524,8 @@ class SelectTool(Tool):
     def __init__(self, host):
         super().__init__(host)
         self._box_drag = None        # (axis, side, handle point at the start) while a box handle is dragged
+        self._dia_drag = None        # (0.492) the Presentation tab's volume being dragged: (kind, volume, grip / base
+        #                              point, press pixel)
         self._dims = []              # the temporary dimensions of the element selected alone
         self._active = None          # the one clicked, to be typed over
         self._hover = None           # (0.361) the one under the mouse (its value, or a relation's line): drawn strong
@@ -1575,6 +1577,9 @@ class SelectTool(Tool):
         if self._drag is not None:                        # (0.427) an element dragged: it follows the mouse
             self._drag.pointer_move(x, y, modifiers)
             return
+        if self._dia_drag is not None:                    # (0.492) a volume or one of its faces dragged
+            self._diagram_drag(x, y, modifiers)
+            return
         if self._box_drag is not None:
             self._drag_box(x, y)
         elif self._move is not None:
@@ -1656,6 +1661,18 @@ class SelectTool(Tool):
         self._refresh_dims(keep=False)
 
     def pointer_up(self, x, y, button, modifiers):
+        if self._dia_drag is not None and button == LEFT:     # (0.492) a volume dragged: kept there (one undo step)
+            drag, self._dia_drag = self._dia_drag, None
+            mode = self._presenting()
+            if mode is not None:
+                if moved_enough(drag[3], (x, y)):
+                    self._diagram_drag(x, y, modifiers)
+                    mode.keep_preview()
+                else:
+                    mode.preview_diagram(None)
+            self.viewport.clear_overlays()
+            self.host.set_hint(self.hint())
+            return
         if self._drag is not None and button == LEFT:     # (0.427) the dragged element put down there
             mover, self._drag = self._drag, None
             self._press = self._press_obj = None
@@ -1774,6 +1791,86 @@ class SelectTool(Tool):
         obj = self.doc.get(obj_id)
         return obj_id if obj is not None and self.viewport.selectable(obj) else None   # (0.76: its category may not be)
 
+    # ------------------------------------------------------------ (0.492) the Presentation tab's volumes
+
+    GRID_STEP = 0.1              # m: a volume dragged moves (and a face grows) by so much, as the Presentation's grid
+
+    def _presenting(self):
+        mode = getattr(self.host, "presentation_mode", None)
+        return mode if mode is not None and mode.active else None
+
+    def _diagram_press(self, x, y):
+        """In the Presentation tab, as its own volumes' editor: a face grip of the volume chosen — that face dragged (the
+        opposite one stays); a volume — chosen (its editor in «Diagramas»), and dragged it moves on its base's level;
+        a click elsewhere lets the volume chosen go (the model picked as always). True when it was a volume's."""
+        mode = self._presenting()
+        if mode is None:
+            return False
+        chosen = mode.chosen_volume()
+        grip = self.viewport.diagram_handle_at(x, y) if chosen is not None else None
+        if grip is not None:
+            self._dia_drag = ("face", chosen, grip, (x, y))
+            self.host.set_hint(t("hint.dia_face"))
+            return True
+        d_id = self.viewport.diagram_at(x, y)
+        if d_id is None:
+            if mode.diagram_key is not None:
+                mode.choose_diagram(None)
+            return False
+        self.viewport.set_selection(set())
+        mode.choose_diagram(d_id, show=True)
+        d = mode.chosen_volume()
+        if d is not None:
+            self._dia_drag = ("move", d, self._level_point(d, x, y), (x, y))
+            self.host.message(t("pmode.dia_chosen", name=d["name"]))
+        return True
+
+    def _level_point(self, d, x, y):
+        """Where the mouse meets the level of the volume's base (None: it does not)."""
+        origin, direction = self.viewport.ray(x, y)
+        z = float(d["position"][2])
+        if abs(float(direction[2])) < 1e-9:
+            return None
+        s = (z - float(origin[2])) / float(direction[2])
+        return origin + direction * s if s > 0 else None
+
+    def _diagram_drag(self, x, y, modifiers):
+        """The volume (or its face) where the mouse has it now — by 10 cm, as the Presentation's grid; Shift: free."""
+        from ..model import presentation_diagrams as dia
+        mode = self._presenting()
+        if mode is None or self._dia_drag is None:
+            return
+        kind, d, data, press = self._dia_drag
+        free = any(m in ("Shift",) for m in (modifiers or ()))
+        step = self.GRID_STEP
+
+        def snapped(v):
+            return v if free else np.round(np.asarray(v, dtype=float) / step) * step
+
+        if kind == "move":
+            start, here = data, self._level_point(d, x, y)
+            if start is None or here is None:
+                return
+            delta = snapped(np.array((here[0] - start[0], here[1] - start[1], 0.0)))
+            mode.preview_diagram(dict(d, position=tuple(np.asarray(d["position"], dtype=float) + delta)))
+            self.viewport.show_label(format_length(float(np.linalg.norm(delta)), decimal_sep()),
+                                     np.asarray(d["position"], dtype=float) + delta)
+            return
+        k, side, point = data
+        axis = dia.face_axis(d, k) * side
+        origin, direction = self.viewport.ray(x, y)
+        b = float(axis @ direction)
+        w0 = np.asarray(point, dtype=float) - origin
+        if abs(1.0 - b * b) < 1e-3:                       # (the face seen square on: up and down on the screen)
+            amount = (press[1] - y) * self.viewport.world_per_pixel(point)
+        else:
+            amount = (b * float(direction @ w0) - float(axis @ w0)) / (1.0 - b * b)
+        amount = float(snapped(amount))
+        changed = dia.resized(d, k, side, amount)
+        mode.preview_diagram(changed)
+        size = changed["dimensions"][k] * changed["scale"][k]
+        self.viewport.show_label(format_length(size, decimal_sep()), np.asarray(point, dtype=float) + axis * amount)
+
     def _clicked(self, obj_id):
         """What a click on `obj_id` selects: its whole group copy; clicking again
         inside the selected group picks just that element (to change it — in
@@ -1805,6 +1902,8 @@ class SelectTool(Tool):
         if self._move is not None:                        # a grip clicked before: this click puts it down
             self._move_to(x, y, modifiers)
             self._finish_move()
+            return
+        if self._diagram_press(x, y):                     # (0.492) the Presentation tab's volumes
             return
         handle = self.viewport.box_handle_at(x, y)        # a handle of the section box: drag that face
         if handle is not None:
@@ -2336,6 +2435,10 @@ class SelectTool(Tool):
         self.host.set_hint(self.hint())
 
     def delete(self):
+        mode = self._presenting()                         # (0.492) the Presentation tab's volume chosen, nothing else
+        if mode is not None and not self.viewport.selection and mode.chosen_volume() is not None:
+            mode.remove_diagram(mode.diagram_key)
+            return
         if self.viewport.selected_dims:
             dims = list(self.viewport.selected_dims)
             self.viewport.select_dimensions(set())

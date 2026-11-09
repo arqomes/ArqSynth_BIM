@@ -644,6 +644,32 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.492 — Volumes de diagrama editáveis com o rato e a Modelagem
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.492.0**.
+
+1. Faça Ctrl+N e desenhe 4 paredes (uma sala simples).
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda e, na barra de ícones da direita, em **Diagramas**.
+   Clique em **Caixa**: aparece uma caixa ao lado da casa. Clique em **Enquadrar volumes** para a ver bem.
+3. Clique na caixa, no 3D: fica escolhida — o separador **Diagramas** mostra-a, aparece o contorno e **seis pegas**
+   (pontos) no meio das faces. A barra de baixo explica o que se pode fazer.
+4. Carregue na caixa (não numa pega) e arraste: a caixa vai com o rato, ao mesmo nível, aos saltos de 10 cm. Largue:
+   fica. Repita com **Shift** carregado: anda sem saltos.
+5. Carregue na pega da face da direita e arraste para fora: só essa face anda; a da esquerda fica no sítio. Faça o
+   mesmo com a pega de cima: a caixa fica mais alta, a base não sai do chão.
+6. No separador **Modelagem** da fita, clique em **Mover**. Clique no meio da caixa, leve o rato para o lado e clique
+   outra vez: a caixa mudou de sítio (a barra de baixo diz «Volume movido …»).
+7. Clique em **Rodar**. Clique no meio da caixa, depois num ponto à direita dela (a direção de partida), escreva `45`
+   e carregue em Enter: a caixa fica rodada 45°. Nos campos do separador **Diagramas**, a rotação diz o mesmo.
+8. Clique em **Escala**, escreva `2` e carregue em Enter: a caixa fica com o dobro do tamanho, apoiada no mesmo sítio.
+9. Clique em **Copiar**. Clique no meio da caixa e depois uns metros ao lado: aparece uma segunda caixa, «Caixa 1
+   cópia», com o mesmo tamanho e a mesma rotação.
+10. Carregue em Ctrl+Z várias vezes: as mudanças desfazem-se uma a uma, pela ordem inversa.
+11. Clique em **Selecionar** (ou Esc), clique numa caixa e carregue em **Delete**: a caixa sai. Ctrl+Z: volta.
+12. Clique fora dos volumes (no chão vazio): deixam de estar escolhidos e as pegas somem-se.
+13. Se quiser ver no Presentation: **Exportar / atualizar** e importe o ZIP no Presentation local — a caixa aparece
+    rodada, com a escala e as medidas que lhe deu aqui.
+
 ## 0.491 — Corte preenchido
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.491.0**.

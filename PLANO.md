@@ -1015,8 +1015,8 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
    6. ~~**Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D
       (o importador do Presentation passa a lê-los)~~ (0.487.0: os «Volumes para diagramas» do Presentation — caixa,
       cilindro, esfera, cone, plano — por cena, com medidas, posição, rotação, escala, cor, opacidade, linhas, olho,
-      cadeado e descrição; o importador lê-os). Fica por fazer: mexer nos volumes com o rato no 3D (as pegas das faces
-      do Presentation), as animações dos volumes (crescer, explodir, organizar, repetir) e combinar e recortar volumes.
+      cadeado e descrição; o importador lê-os). Fica por fazer: as animações dos volumes (crescer, explodir,
+      organizar, repetir) e combinar e recortar volumes (item 10.3). Mexer com o rato: 0.492.0 (item 10.2).
    7. ~~**Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
       Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar)~~ (0.488.0: separador Passeio com as contas,
       o início, o tempo em cada ambiente e a visita guiada pela ordem em que se percorre, ambientes de fora; zonas e
@@ -1033,8 +1033,11 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
        Poché / Categoria, a cor), que vai na cena~~ (0.491.0: Material / Poché / Sólido / Aberto e a cor, na cena;
        no Presentation «Mat./cat.» com o material de cada categoria). Fica por fazer: a «Categoria» do Presentation
        (uma cor por categoria) e a cor e espessura da linha do corte.
-    2. **Volumes de diagrama editáveis com a Modelagem**: escolher um volume no 3D com o rato e mexer-lhe com Mover,
-       Rodar, Escala (e as pegas das faces, como no Presentation), sem passar pelos campos.
+    2. ~~**Volumes de diagrama editáveis com a Modelagem**: escolher um volume no 3D com o rato e mexer-lhe com Mover,
+       Rodar, Escala (e as pegas das faces, como no Presentation), sem passar pelos campos~~ (0.492.0: clicar escolhe,
+       arrastar move de 10 em 10 cm, as pegas das faces mudam uma face com a oposta fixa; Mover, Copiar, Rodar e
+       Escala da Modelagem no volume escolhido; Delete; tudo com Ctrl+Z). Fica por fazer: Espelhar e Alinhar nos
+       volumes, e escolher vários volumes de uma vez.
     3. **Combinar volumes, nativo**: União, Subtrair, Interseção e Diferença de dois volumes, calculados no BIM com o
        mesmo motor do Presentation (manifold), as origens guardadas; vão já prontos como o «volume resultante» do
        Presentation (`source: "boolean"` com a malha). Precisa da biblioteca `manifold3d` no Python do programa.
