@@ -18936,12 +18936,14 @@ def presentation_export_flow():
 
 
 def presentation_panel_flow():
-    """0.363 — Render ▸ Scenes of the presentation: a room with a named 3D view and a section; the panel from the
-    ribbon with the four scenes (the general view first, the entry); the section chosen and moved up, given a cut (no
-    seconds then), the construction effect and a caption typed (kept when it is left); the general view left out (the
-    3D view becomes the entry), Ctrl+Z puts it back; Thumbnails: a JPEG of each scene, in the list, and the tabs, the
-    view shown and its camera as they were; exported: the scenes in that order, with what was chosen and their
-    thumbnails. Captured: 363_painel.png."""
+    """0.363 (0.480: in the ArqSynth Presentation's interface — the panel that split the left column is gone) — Render
+    ▸ Scenes of the presentation: a room with a named 3D view and a section; the ribbon's command opens the interface
+    (the left bar's icon lit) with the four scenes as cards (the general view first, its star); the section put before
+    the plan, given a cut (no seconds then), the construction effect and a caption typed (kept when it is left); the
+    general view left out (the 3D view becomes the first scene), Ctrl+Z puts it back; Thumbnails: a JPEG of each scene,
+    on its card, the tabs and the interface's camera as they were; exported: the scenes in that order, with what was
+    chosen and their thumbnails; the left bar's icon again: the BIM's columns, the 3D view as wide. Captured:
+    363_painel.png."""
     import tempfile
     from arqbim.ifc import catalog
     from arqbim.model import bim as bim_actions
@@ -18965,55 +18967,53 @@ def presentation_panel_flow():
     win.open_view("3d", None)
     pump(300)
     on_ribbon = "presentation_panel" in ribbon.items_of("render")
-    view_width = canvas.width()
+    view_width, size = canvas.width(), win.size()
     win.ribbon_item("presentation_panel").trigger()
-    pump(300)
-    panel = win.presentation_panel
-    narrow = canvas.width() >= view_width - 2       # (0.364: no wider than the panels beside it — the 3D view keeps
-    #                                                 its width, and the clicks of the flows after this one their aim)
+    pump(500)
+    mode = win.presentation_mode
+    lit = win.presentation_shown() and win.module_actions["presentation"].isChecked() \
+        and not win.tree_panel.isVisible()
     keys = [s.key for s in pm.scenes(doc)]
-    listed = [panel.list.item(k).data(Qt.ItemDataRole.UserRole) for k in range(panel.list.count())]
-    shown = panel.isVisible() and listed == keys and len(keys) == 4 and "entrada" in panel.list.item(0).text()
-    panel.list.setCurrentRow(3)
-    pump(50)
-    panel.up_button.click()
+    cards = mode.pages.cards
+    shown = list(cards) == keys and len(keys) == 4 and cards[keys[0]].star.isVisibleTo(cards[keys[0]])
+    mode.move_scene(keys[3], keys[2])                # (dropped on the plan's card: before it)
     pump(150)
-    moved = [s.key for s in pm.scenes(doc)][2] == keys[3] and panel.chosen_key() == keys[3]
-    panel.transition.setCurrentIndex(panel.transition.findData("cut"))
+    moved = [s.key for s in pm.scenes(doc)][2] == keys[3]
+    mode.activate(keys[3])
+    pump(200)
+    QtTest.QTest.mouseClick(mode.side.buttons["scenes"], Qt.MouseButton.LeftButton)
+    pump(150)
+    page = mode.side.pages["scenes"]
+    page.transition.setCurrentIndex(page.transition.findData("cut"))
     pump(100)
-    panel.effect.setCurrentIndex(panel.effect.findData("construction"))
+    page.effect.setCurrentIndex(page.effect.findData("construction"))
     pump(100)
     _active()
-    panel.caption.setFocus()
+    page.caption.setFocus()
     pump(50)
-    QtTest.QTest.keyClicks(panel.caption, "O corte pela sala.")
-    panel.seconds.setFocus()                         # (the caption left: kept)
+    QtTest.QTest.keyClicks(page.caption, "O corte pela sala.")
+    page.seconds.setFocus()                          # (the caption left: kept)
     pump(150)
     cut = next(s for s in pm.scenes(doc) if s.key == keys[3])
     chosen = (cut.transition, cut.effect, cut.caption) == ("cut", "construction", "O corte pela sala.") \
-        and not panel.transition_s.isEnabled() and panel.effect_s.isEnabled()
-    panel.list.setCurrentRow(0)
-    pump(50)
-    panel.hidden_box.click()
-    pump(150)
-    entry = pm.initial(doc) == "vista_" + view and "fora" in panel.list.item(0).text() \
-        and "entrada" in panel.list.item(1).text()
-    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        and not page.transition_s.isEnabled() and page.effect_s.isEnabled()
+    QtTest.QTest.mouseClick(mode.pages.cards[keys[0]].buttons["visible"], Qt.MouseButton.LeftButton)
     pump(200)
+    entry = pm.initial(doc) == "vista_" + view and pm.scenes(doc)[0].hidden \
+        and "FORA DA APRESENTA" in mode.pages.cards[keys[0]].sub.text()
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
     undone = not pm.scenes(doc)[0].hidden and pm.initial(doc) == "geral"
     win.act_redo.trigger()
-    pump(200)
+    pump(300)
     tabs, current, camera = list(win.views.keys), win.views.current(), vp.camera_snapshot()
-    panel.thumbs_button.click()
-    pump(400)
+    mode.act_thumbs.trigger()
+    pump(500)
     thumbs = dict(win._scene_thumbs)
     jpegs = sorted(thumbs) == sorted(keys) and all(bytes(v[:2]) == b"\xff\xd8" for v in thumbs.values())
-    back = list(win.views.keys) == tabs and win.views.current() == current \
+    back = list(win.views.keys) == tabs and win.views.current() == current and win.presentation_shown() \
         and np.allclose(vp.camera_snapshot()["position"], camera["position"], atol=1e-6)
-    pictured = all(not panel.list.item(k).icon().isNull() for k in range(panel.list.count())) \
-        and "4 miniaturas" in win.last_message
-    panel.list.setCurrentRow(2)
-    pump(100)
+    pictured = set(mode.pages.cards) <= set(thumbs) and "4 miniaturas" in win.last_message
     shot("363_painel.png")
     path = win.export_presentation(os.path.join(folder, "casa.glb"))
     found = presentation_export.read(path) if path and os.path.exists(path) else None
@@ -19025,15 +19025,18 @@ def presentation_panel_flow():
         "construction" and sent[2].get("narration", {}).get("caption") == "O corte pela sala." and sent[0]["hidden"] \
         and model.get("initialSceneId") == "bim_scene_vista_" + view and list(win.views.keys) == tabs
     doc.modified = False
-    panel.hide()
-    pump(100)
-    narrow = narrow and canvas.width() >= view_width - 2
-    check("cenas_da_apresentacao", on_ribbon and shown and moved and chosen and entry and undone and jpegs and back
-          and pictured and exported and narrow,
-          "fita={} lista={} subir={} escolhas={} entrada={} desfazer={} jpeg={} voltou={} icones={} exportado={} "
-          "estreito={} ({}→{} px, painel ≥ {} px) ordem={} balao={!r}".format(
-              on_ribbon, shown, moved, chosen, entry, undone, jpegs, back, pictured, exported, narrow, view_width,
-              canvas.width(), panel.minimumSizeHint().width(), order, win.last_message))
+    button = win.module_bar.widgetForAction(win.module_actions["presentation"])
+    QtTest.QTest.mouseClick(button, Qt.MouseButton.LeftButton)          # (the left bar's icon again: the BIM)
+    pump(500)
+    left = not win.presentation_shown() and not win.module_actions["presentation"].isChecked() \
+        and win.tree_panel.isVisible() and win.views.current()[0] == "3d"
+    narrow = abs(canvas.width() - view_width) <= 2 and win.size() == size
+    check("cenas_da_apresentacao", on_ribbon and lit and shown and moved and chosen and entry and undone and jpegs
+          and back and pictured and exported and left and narrow,
+          "fita={} aceso={} cartoes={} antes_da_planta={} escolhas={} entrada={} desfazer={} jpeg={} voltou={} "
+          "miniaturas={} exportado={} saiu={} largura={} ({}→{} px) ordem={} balao={!r}".format(
+              on_ribbon, lit, shown, moved, chosen, entry, undone, jpegs, back, pictured, exported, left, narrow,
+              view_width, canvas.width(), order, win.last_message))
 
 
 def presentation_tab_flow():
@@ -19078,6 +19081,7 @@ def presentation_tab_flow():
     titles = [w.text() for w in win.context_bar.findChildren(QtWidgets.QLabel)]
     swapped = mode.active and mode.pages.isVisible() and mode.side.isVisible() and not win.props.isVisible() \
         and not any(d.isVisible() for d in win.left_panels) and vp.cube_hidden \
+        and win.module_actions["presentation"].isChecked() \
         and all(w.isVisible() for w in (mode.overlay.create, mode.overlay.camera, mode.overlay.keys,
                                         mode.overlay.look, mode.overlay.sun)) and "ArqSynth Presentation" in titles
     kept_width = abs(canvas.width() - width) <= 2 and win.size() == size
@@ -19184,11 +19188,12 @@ def presentation_tab_flow():
     check("aba_presentation_exporta_as_configuracoes", timed and exported,
           "sol={} ({!r}) exportado={} cena={}".format(timed, mode.overlay.sun_button.text(), exported,
                                                        {k: mine.get(k) for k in ("name", "camera", "style")}))
-    # another tab: the BIM's columns as they were
-    k3 = win.views.keys.index(view_tabs.THREE_D)
-    QtTest.QTest.mouseClick(bar, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, bar.tabRect(k3).center())
+    # (0.480) the left bar's ArqSynth Presentation icon again: the BIM's columns as they were, the 3D view's tab
+    button = win.module_bar.widgetForAction(win.module_actions["presentation"])
+    QtTest.QTest.mouseClick(button, Qt.MouseButton.LeftButton)
     pump(600)
     restored = not mode.active and not mode.pages.isVisible() and not mode.side.isVisible() \
+        and win.views.current() == view_tabs.THREE_D and not win.module_actions["presentation"].isChecked() \
         and win.props.isVisible() == props_before and all(d.isVisible() for d in left_before) \
         and not vp.hidden_ids and vp.is_shown(doc.get(walls[1])) and not vp.cube_hidden and not vp.camera_locked \
         and not mode.overlay.create.isVisible()
@@ -19218,50 +19223,49 @@ def camera_move_flow():
     vp.zoom_extents()
     pump(200)
     view = doc.add_view3d(vp.camera_snapshot())[1]
-    win.show_presentation_panel()
-    pump(300)
-    panel = win.presentation_panel
-    keys = [panel.list.item(k).data(Qt.ItemDataRole.UserRole) for k in range(panel.list.count())]
-    panel.list.setCurrentRow(keys.index("vista_" + view))
-    pump(50)
-    panel.move.setCurrentIndex(panel.move.findData("int_orbit_full"))
+    win.show_presentation_panel()                    # (0.480: the ArqSynth Presentation's interface, its Efeitos tab)
+    pump(500)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["effects"], Qt.MouseButton.LeftButton)
+    pump(150)
+    panel = mode.side.pages["effects"]
+    mode.activate("vista_" + view)
+    pump(200)
+    panel.move_box.setCurrentIndex(panel.move_box.findData("int_orbit_full"))
     pump(150)
     panel.move_s.setValue(10.0)
     pump(150)
     scene = next(s for s in pm.scenes(doc) if s.key == "vista_" + view)
     rooms = [panel.room.itemData(k) for k in range(panel.room.count())]
     chosen = (scene.move, scene.move_s) == ("int_orbit_full", 10.0) and panel.room.isVisible() and rooms == ["", room]
-    win.open_view("3d", view)
-    pump(300)
     before = vp.camera_snapshot()
-    panel.play_button.click()
+    panel.play.click()
     pump(700)
-    playing = win._move_play is not None and panel.play_button.text() == "Parar" \
+    playing = win._move_play is not None and panel.play.text() == "Parar" \
         and not np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-3) \
-        and win.views.current() == ("3d", view) and "10 s" in win.last_message
+        and win.views.current() == ("presentation",) and "10 s" in win.last_message
     shot("364_movimento.png")
     key(Qt.Key.Key_Escape)
     pump(150)
-    stopped = win._move_play is None and panel.play_button.text() == "Ver movimento" \
+    stopped = win._move_play is None and panel.play.text() == "Ver movimento" \
         and np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-6)
-    panel.list.setCurrentRow(keys.index("geral"))
-    pump(50)
-    panel.move.setCurrentIndex(panel.move.findData("orbit_90"))
+    mode.activate("geral")
+    pump(200)
+    panel.move_box.setCurrentIndex(panel.move_box.findData("orbit_90"))
     pump(150)
     panel.move_s.setValue(1.0)
     pump(150)
     no_room = not panel.room.isVisible()
-    win.open_view("3d", None)
-    pump(200)
     before = vp.camera_snapshot()
-    panel.play_button.click()
+    panel.play.click()
     pump(400)
     started = win._move_play is not None
     pump(1400)
     ended = started and win._move_play is None and np.allclose(vp.camera_snapshot()["position"], before["position"],
                                                                 atol=1e-6)
     doc.modified = False
-    panel.hide()
+    win.views.open(("3d",))
+    pump(300)
     check("movimento_de_camara", room is not None and chosen and playing and stopped and no_room and ended,
           "sala={} escolhido={} a_tocar={} parou={} sem_ambiente={} acabou={} ambientes={} balao={!r}".format(
               room is not None, chosen, playing, stopped, no_room, ended, rooms, win.last_message))
@@ -19286,38 +19290,42 @@ def scene_sun_flow():
     win.set_view("iso")
     vp.zoom_extents()
     pump(200)
-    win.show_presentation_panel()
-    pump(300)
-    panel = win.presentation_panel
-    panel.list.setCurrentRow(0)
-    pump(100)
-    off = not panel.sun_date.isEnabled() and panel.sun_note.isVisible() and not panel.sun_button.isEnabled()
+    win.show_presentation_panel()                    # (0.480: the ArqSynth Presentation's interface, its Ambiente tab)
+    pump(500)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["environment"], Qt.MouseButton.LeftButton)
+    pump(150)
+    panel = mode.side.pages["environment"]
+    mode.activate("geral")
+    pump(200)
+    off = not panel.date.isEnabled() and panel.site_note.isVisible() and not panel.play.isEnabled()
     refused = win.play_scene_sun("geral") is False and "Localização" in win.last_message
     bim_actions.set_site_location(doc, 38.72, -9.14)
     pump(300)
-    on = panel.sun_date.isEnabled() and not panel.sun_note.isVisible()
-    panel.sun_date.setDate(QtCore.QDate(2025, 12, 21))
+    on = panel.date.isEnabled() and not panel.site_note.isVisible()
+    panel.date.setDate(QtCore.QDate(2025, 12, 21))
     pump(100)
-    panel.sun_time.setTime(QtCore.QTime(10, 0))
+    panel.time.setTime(QtCore.QTime(10, 0))
     pump(100)
     panel.exposure.setValue(1.2)
     pump(100)
     panel.sky.setChecked(True)
     pump(150)
     scene = pm.scenes(doc)[0]
-    kept = (scene.sun_day, scene.sun_minutes, scene.exposure, scene.sky) == (355, 600, 1.2, True)
-    panel.sun_button.click()
+    kept = (scene.sun_day, scene.sun_minutes, scene.exposure, scene.sky) == (355, 600, 1.2, True) \
+        and "10:00" in mode.overlay.sun_button.text()                    # (the sun's reading over the 3D view)
+    panel.play.click()
     pump(400)
     az, alt = ps.angles(38.72, -9.14, 355, 600)
     shown = win._move_play is not None and vp._sun_preview is not None and vp.bim.shadows \
-        and panel.sun_button.text() == "Parar" and "21/12" in win.last_message \
+        and panel.play.text() == "Parar" and "21/12" in win.last_message \
         and "{}°".format(round(az)) in win.last_message and float(vp._sun_preview[2]) > 0.0
     np_dir = np.allclose(vp._sun_preview, ps.direction(38.72, -9.14, 355, 600), atol=1e-6)
     shot("365_sol.png")
     key(Qt.Key.Key_Escape)
     pump(200)
-    back = win._move_play is None and vp._sun_preview is None and panel.sun_button.text() == "Ver sol"
-    panel.sun_animate.setCurrentIndex(panel.sun_animate.findData("day"))
+    back = win._move_play is None and vp._sun_preview is None and panel.play.text() == "Ver sol"
+    panel.animate.setCurrentIndex(panel.animate.findData("day"))
     pump(150)
     seconds, win.SUN_SECONDS = win.SUN_SECONDS, 1.0
     try:
@@ -19329,7 +19337,8 @@ def scene_sun_flow():
     finally:
         win.SUN_SECONDS = seconds
     doc.modified = False
-    panel.hide()
+    win.views.open(("3d",))
+    pump(300)
     check("sol_da_cena", off and refused and on and kept and shown and np_dir and back and ended,
           "sem_lugar={} recusou={} com_lugar={} guardado={} mostrado={} direcao={} voltou={} dia={} balao={!r}".format(
               off, refused, on, kept, shown, np_dir, back, ended, win.last_message))
@@ -19358,17 +19367,23 @@ def rooms_walk_flow():
     win.open_view("3d", None)
     pump(300)
     view_width = canvas.width()
-    win.show_presentation_panel()
-    pump(300)
-    panel = win.presentation_panel
-    offered = panel.labels_box.isChecked() and panel.walk_box.isChecked() and panel.labels_box.text().endswith("(2)") \
-        and panel.walk_box.isEnabled()
-    panel.walk_box.click()
+    win.show_presentation_panel()                    # (0.480: the ArqSynth Presentation's interface)
+    pump(500)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["labels"], Qt.MouseButton.LeftButton)        # Etiquetas
+    pump(150)
+    labels = mode.side.pages["labels"].box
+    labelled = labels.isChecked() and labels.text().endswith("(2)")
+    QtTest.QTest.mouseClick(mode.side.buttons["walk"], Qt.MouseButton.LeftButton)          # Passeio
+    pump(150)
+    walk = mode.side.pages["walk"].box
+    offered = labelled and walk.isChecked() and walk.isEnabled() and walk.text().endswith("(2)")
+    walk.click()
     pump(200)
-    off = doc.presentation["walk"] is False and not panel.walk_box.isChecked()
+    off = doc.presentation["walk"] is False and not walk.isChecked()
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(300)
-    back = doc.presentation["walk"] is True and panel.walk_box.isChecked()
+    back = doc.presentation["walk"] is True and walk.isChecked()
     path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_rooms_"), "casa.glb"))
     found = (presentation_export.read(path) or {}).get("presentation", {}).get("model3d", {}).get("spaces", {}) \
         if path else {}
@@ -19376,8 +19391,8 @@ def rooms_walk_flow():
     sent = {r["id"] for r in found.get("rooms", [])} == {living, kitchen} and len(doors) == 2 \
         and any({d["from"], d["to"]} == {living, kitchen} for d in doors) \
         and any(d["to"] is None and d["from"] == living for d in doors) and found.get("start") == living
-    panel.hide()
-    pump(100)
+    win.views.open(("3d",))
+    pump(300)
     narrow = canvas.width() >= view_width - 2
     doc.modified = False
     check("ambientes_e_passeio", offered and off and back and sent and narrow,
@@ -19430,9 +19445,9 @@ def panorama_flow():
     """0.368 — Render ▸ Panorama 360°: a house of two rooms and a sheet with its plan; asked before the project is
     saved: refused, said why; in the plan: refused (the 3D in perspective); saved, the 3D view's camera in the living
     room at eye height: a tiny panorama rendered apart (its window), done — a JPEG twice as wide as high in «casa -
-    panoramas», its record kept (one undo step) and listed in the Presentation panel —; the package: the panorama as a
-    360° point on the plan's page, inside the living room's zone, its picture in the ZIP; removed from the panel's
-    list, Ctrl+Z puts it back. Captured: 368_painel_panoramas.png."""
+    panoramas», its record kept (one undo step) and listed in the Presentation's interface (0.480: its Imagens tab) —;
+    the package: the panorama as a 360° point on the plan's page, inside the living room's zone, its picture in the
+    ZIP; removed from that list, Ctrl+Z puts it back. Captured: 368_painel_panoramas.png."""
     import tempfile
     from arqbim.ifc import catalog
     from arqbim.model import bim as bim_actions
@@ -19463,8 +19478,6 @@ def panorama_flow():
     pump(300)
     vp.look_at((2.0, 2.0, 1.6), (2.0, 5.0, 1.6))
     pump(200)
-    win.show_presentation_panel()
-    pump(200)
     steps = len(doc._undo)
     window = win.render_panorama(width=64, samples=4)
     started = window is not None and window.running() and "seis vistas" in win.last_message
@@ -19481,10 +19494,14 @@ def panorama_flow():
     if window is not None:
         window.close()
         pump(200)
-    panel = win.presentation_panel
-    listed = panel.panoramas.count() == 1 and panel.panoramas.item(0).data(Qt.ItemDataRole.UserRole) == \
-        record.get("uid")
-    panel.grab().save(os.path.join(OUT, "368_painel_panoramas.png"))
+    win.show_presentation_panel()                    # (0.480: the ArqSynth Presentation's interface, its Imagens tab)
+    pump(500)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["images"], Qt.MouseButton.LeftButton)
+    pump(150)
+    panel = mode.side.pages["images"]
+    listed = panel.list.count() == 1 and panel.list.item(0).data(Qt.ItemDataRole.UserRole) == record.get("uid")
+    mode.side.grab().save(os.path.join(OUT, "368_painel_panoramas.png"))
     path = win.export_presentation(os.path.join(folder, "casa.zip"))
     found = presentation_package.read(path) if path else None
     manifest, files = found if found else ({}, {})
@@ -19498,14 +19515,15 @@ def panorama_flow():
     sent = entry.get("id") == "bim_pano_" + record.get("uid", "") and where.get("page") == page.get("id") and \
         min(xs) < where.get("x", -1) < max(xs) and min(ys) < where.get("y", -1) < max(ys) and \
         files.get(entry.get("file", ""), b"")[:2] == b"\xff\xd8" and "1 panorama 360°" in win.last_message
-    panel.panoramas.setCurrentRow(0)
-    panel.panorama_remove.click()
-    pump(200)
-    removed = doc.panoramas == [] and panel.panoramas.item(0).data(Qt.ItemDataRole.UserRole) is None
+    panel.list.setCurrentRow(0)
+    panel.remove.click()
+    pump(300)
+    removed = doc.panoramas == [] and panel.list.item(0).data(Qt.ItemDataRole.UserRole) is None
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(300)
-    back = [p["uid"] for p in doc.panoramas] == [record.get("uid")]
-    win.presentation_panel.hide()
+    back = [p["uid"] for p in doc.panoramas] == [record.get("uid")] and panel.list.count() == 1
+    win.views.open(("3d",))
+    pump(300)
     doc.modified = False
     check("panorama_360", on_ribbon and unsaved and in_plan and started and done and listed and sent and removed
           and back, "fita={} sem_guardar={} planta={} comecou={} feito={} lista={} pacote={} removido={} voltou={} "

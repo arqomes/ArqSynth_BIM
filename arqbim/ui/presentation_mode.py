@@ -164,9 +164,13 @@ class _Form(QtWidgets.QWidget):
         super().__init__()
         self.mode = mode
         self.showing = False
-        self.form = QtWidgets.QFormLayout(self)
-        self.form.setContentsMargins(10, 8, 10, 8)
+        column = QtWidgets.QVBoxLayout(self)               # (the form at the top; the room left below it, not spread
+        column.setContentsMargins(10, 8, 10, 8)            #  between its rows)
+        self.form = QtWidgets.QFormLayout()
         self.form.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.WrapLongRows)
+        self.form.setVerticalSpacing(8)
+        column.addLayout(self.form)
+        column.addStretch(1)
 
     def change(self, **fields):
         if not self.showing:
@@ -1567,6 +1571,8 @@ class PresentationMode(QtCore.QObject):
         self.overlay.restyle()
         self.overlay.show()
         win.refresh_context_bar()
+        if hasattr(win, "_presentation_module"):          # (0.480: its icon lit in the left bar)
+            win._presentation_module(True)
         if not self._entered_once:                         # (the tab's camera: the first scene's, the first time)
             self._entered_once = True
             QtCore.QTimer.singleShot(0, lambda: self.activate(self.scene_key) if self.active else None)
@@ -1586,6 +1592,8 @@ class PresentationMode(QtCore.QObject):
             d.show()
         self._put_aside = None
         self.win.refresh_context_bar()
+        if hasattr(self.win, "_presentation_module"):
+            self.win._presentation_module(False)
 
     def reset(self):
         """Another project: nothing chosen, nothing hidden."""

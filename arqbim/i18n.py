@@ -2333,6 +2333,12 @@ _STRINGS = {
     "mod.quantities": ("Tabelas e quantitativos", "Schedules and quantities"),
     "mod.materials": ("Materiais", "Materials"),
     "mod.rules": ("Regras gráficas", "Graphic rules"),
+    "mod.presentation": ("ArqSynth Presentation", "ArqSynth Presentation"),
+    "tip.mod.presentation": ("A interface do ArqSynth Presentation: as páginas e as cenas à esquerda, as camadas e os "
+                             "ajustes da cena à direita, os comandos sobre o 3D. Outra vez (ou outro ícone): o BIM.",
+                             "The ArqSynth Presentation's interface: the pages and scenes on the left, the layers and "
+                             "the scene's settings on the right, the commands over the 3D view. Again (or another "
+                             "icon): the BIM."),
     "mod.settings": ("Configurações", "Settings"),
     "tip.mod.project": ("As vistas, as folhas, a biblioteca e o modelo por pavimentos.",
                         "The views, the sheets, the library and the model by storeys."),
@@ -7040,14 +7046,12 @@ _STRINGS = {
                           "Presentation, import it into a 3D model page."),
     # (0.363) the Presentation panel: the scenes prepared here
     "act.presentation_panel": ("Cenas da apresentação", "Presentation scenes"),
-    "tip.presentation_panel": ("O painel Apresentação: as cenas que vão para o ArqSynth Presentation (a vista geral, as "
-                               "vistas 3D com nome, as plantas, os cortes), pela ordem da apresentação — a de entrada, "
-                               "as que ficam de fora, a transição, o efeito, a legenda e o tempo de cada uma, e as "
-                               "miniaturas.",
-                               "The Presentation panel: the scenes that go to the ArqSynth Presentation (the general "
-                               "view, the named 3D views, the plans, the sections), in the presentation's order — the "
-                               "first one, those left out, each one's transition, effect, caption and time, and the "
-                               "thumbnails."),
+    "tip.presentation_panel": ("Abre a interface do ArqSynth Presentation (o ícone da barra da esquerda): as cenas que vão "
+                               "para o Presentation, pela ordem da apresentação, com a câmara, as camadas, a transição, "
+                               "o efeito, o sol e a legenda de cada uma, e a exportação.",
+                               "Opens the ArqSynth Presentation's interface (the icon of the left bar): the scenes that "
+                               "go to the Presentation, in the presentation's order, with each one's camera, layers, "
+                               "transition, effect, sun and caption, and the export."),
     "present.title": ("Apresentação", "Presentation"),
     "present.hint": ("As cenas que vão para o ArqSynth Presentation, pela ordem da apresentação. Arraste para mudar a "
                      "ordem; duplo clique abre a vista.",

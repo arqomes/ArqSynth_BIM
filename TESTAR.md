@@ -644,6 +644,26 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.480 — ArqSynth Presentation na barra da esquerda
+
+Atenção: abra o programa por **`C:\BIM\ArqSynth BIM.bat`** (ou pelo atalho «ArqBIM - Shortcut» do Ambiente de
+Trabalho). A cópia de `C:\BIM-bateria` é a de outra sessão de trabalho e não tem estas versões.
+
+1. Feche o ArqSynth BIM e abra-o outra vez pelo `C:\BIM\ArqSynth BIM.bat`; o título deve dizer **0.480.0**. Faça Ctrl+N
+   e desenhe uma sala de 4 paredes com uma porta.
+2. Olhe para a barra de ícones da esquerda (a coluna estreita, encostada à margem da janela): por baixo do ícone das
+   Regras gráficas (o pincel) há um ícone novo, um ecrã com um triângulo azul. Pouse o rato nele: diz «ArqSynth
+   Presentation».
+3. Clique nele. A janela muda para a interface do Presentation: as páginas e as cenas à esquerda, a barra de ícones do
+   Presentation e as camadas à direita, os comandos sobre o 3D. O ícone fica aceso.
+4. Clique outra vez no mesmo ícone: volta o Navegador do Projeto à esquerda e as Propriedades à direita, como estavam.
+5. Clique no separador **Render** da fita e em **Cenas da apresentação**: abre-se a mesma interface do Presentation.
+   O painel antigo «Apresentação» já não aparece por baixo do Navegador.
+6. Com a interface do Presentation à frente, clique no ícone **Materiais** da barra da esquerda: volta o BIM e abre-se
+   o painel Materiais.
+7. Na interface do Presentation, na coluna da direita, clique no segundo ícone (a película, **Cenas 3D**): os campos
+   (Cena inicial, Mostrar, Movimento, Efeito, Tempo, Legenda) ficam juntos no topo da coluna.
+
 ## 0.479 — Aba «ArqSynth Presentation»
 
 1. Feche o ArqSynth BIM e abra-o outra vez; o título deve dizer **0.479.0**. Faça Ctrl+N. Com a ferramenta **Parede**

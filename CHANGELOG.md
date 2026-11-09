@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.480.0 — 2026-11-09
+
+**ArqSynth Presentation na barra da esquerda, sem o painel que dividia a coluna** (o dono, com uma captura marcada:
+«não quero essa divisão na coluna como parece. Não vi ainda a aba de ArqSynth Presentation na esquerda»).
+
+- Na barra de ícones da esquerda há um ícone novo, **ArqSynth Presentation** (um ecrã com um triângulo azul), logo a
+  seguir ao das Regras gráficas. Ao clicar nele, a janela passa à interface do Presentation (a da 0.479: as páginas e
+  as cenas à esquerda, as camadas e os ajustes à direita, os comandos sobre o 3D), e o ícone fica aceso. Outro clique
+  nele, ou noutro ícone da barra, volta ao BIM como estava.
+- O painel antigo **Apresentação** (da 0.363), que aparecia por baixo do Navegador e dividia a coluna, **saiu**. Tudo o
+  que ele fazia está na interface do Presentation: a ordem, a cena inicial, as que ficam de fora, a chegada, o efeito,
+  a legenda e o tempo (Cenas 3D), o movimento de câmara (Efeitos), o sol (Ambiente), as etiquetas e o passeio, e os
+  panoramas 360° (Imagens).
+- **Render ▸ Cenas da apresentação** passa a abrir também a interface do Presentation.
+- Na coluna da direita, os campos de cada separador ficam juntos no topo (antes espalhavam-se pela altura).
+
 ## 0.479.0 — 2026-11-08
 
 **Aba «ArqSynth Presentation»** (o dono: «crie uma aba de ArqSynth Presentation e use as 2 colunas para replicar a

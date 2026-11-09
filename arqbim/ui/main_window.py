@@ -52,7 +52,6 @@ from ..tools.base import Option
 from . import (context_bar, graphic_rules, icons, ids_panel, menus, notes_panel, notice, pdf, picture, project_tree,
                properties, quick_edit, ribbon, schedules, selection_dialogs, sheet_view, storeys, theme,
                title_block_dialog, view_tabs, view_templates)
-from . import presentation_panel
 from . import room_program as room_program_panel
 from . import verify_bar                                    # (0.417) the Verifier
 from . import verify_panel                                  # (0.418) its panel
@@ -1820,7 +1819,8 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------ the compact bar and its modules (0.184)
 
     # (0.468, the owner: «A aba materiais eu quero que fique antes da aba biblioteca»)
-    MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules", "settings")
+    MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules",
+               "presentation", "settings")         # (0.480, the owner's mark: the ArqSynth Presentation after the rules)
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
                     "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel",   # (0.468)
                     "rooms": "program_panel",                   # (0.475: the programme's manager, no longer a table)
@@ -1872,19 +1872,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tp.on_insert = lambda kind, key: self.schedules_panel.insert(kind, key) if self.table_shown() else None
         tp.on_make_own = lambda: self.schedules_panel.make_own() if self.table_shown() else None      # (0.478)
         tp.visibilityChanged.connect(lambda shown: self._refresh_tables_panel() if shown else None)
-        self.presentation_panel = presentation_panel.dock(self, self.program_panel)    # (0.363, hidden until asked)
-        pp = self.presentation_panel
-        pp.on_change, pp.on_order, pp.on_initial = self._scene_change, self._scene_order, self._scene_initial
-        pp.on_open, pp.on_thumbnails, pp.on_export = self.open_scene, self.scene_thumbnails, self.export_presentation
-        pp.on_play, pp.rooms = self.play_scene_move, self._room_names                  # (0.364)
-        pp.on_sun = self.play_scene_sun                                                # (0.365)
-        pp.has_site = lambda: self._site_place() is not None
-        pp.on_options = self._presentation_options                                    # (0.366)
-        pp.on_panorama_new = lambda: self.render_panorama()                           # (0.368)
-        pp.on_panorama_remove = self.remove_panorama
-        pp.visibilityChanged.connect(lambda shown: self._refresh_presentation() if shown else None)
         # (0.479) the ArqSynth Presentation tab: its two columns and its commands over the 3D view, hidden until the
-        # tab is chosen (ui/presentation_mode.py)
+        # tab is chosen (ui/presentation_mode.py). (0.480, the owner: «não quero essa divisão na coluna») it took the
+        # place of the 0.363 Presentation panel, which split the left column under the navigator
         from . import presentation_mode
         self.presentation_mode = presentation_mode.PresentationMode(self)
         self.viewport.selection_listeners.append(lambda ids: self.presentation_mode.selection_changed(ids))
@@ -1906,7 +1896,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for name in self.MODULES:
             act = QtGui.QAction(icons.module_icon(name), t("mod." + name), self)
             act.setToolTip("{}\n{}".format(t("mod." + name), t("tip.mod." + name)))
-            if name in self.LEFT_MODULES:
+            if name in self.LEFT_MODULES or name == "presentation":
                 act.setCheckable(True)
                 group.addAction(act)
             act.triggered.connect(lambda _=False, n=name: self.set_module(n))
@@ -1962,6 +1952,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self.module = name
             self.module_actions[name].setChecked(True)
 
+    def _presentation_module(self, on):
+        """(0.480) The left bar's ArqSynth Presentation icon lit while its interface is in front; after it, the module
+        that was lit before."""
+        acts = getattr(self, "module_actions", None)
+        if not acts or "presentation" not in acts:
+            return
+        if on:
+            if self.module != "presentation":
+                self._module_before = self.module
+            self.module = "presentation"
+            acts["presentation"].setChecked(True)
+        elif self.module == "presentation":
+            before = getattr(self, "_module_before", None)
+            self.module = before
+            if before in acts and acts[before].isCheckable():
+                acts[before].setChecked(True)
+            else:
+                acts["presentation"].setChecked(False)
+
     def set_module(self, name):
         """(0.184) A module of the compact bar: its panel up in panel 5 — or, the module in view clicked again,
         the left panels folded away."""
@@ -1984,6 +1993,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tree_panel.focus(("views", "sheets"))
             self.module = name
             self.module_actions[name].setChecked(True)
+        elif name == "presentation":                        # (0.480) the ArqSynth Presentation's interface — again:
+            if self.presentation_shown():                   # the BIM's (the 3D view's tab)
+                self.views.open(self._live_3d())
+            else:
+                self.show_presentation_tab()
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])
@@ -3420,8 +3434,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dock_titles()                                 # (0.374: before the panels are made again in the theme)
         self.props.restyle()
         self.quick.restyle()                               # (0.354)
-        for panel in (getattr(self, "program_panel", None), getattr(self, "presentation_panel", None),
-                      getattr(self, "materials_panel", None), getattr(self, "presentation_mode", None)):   # (0.479)
+        for panel in (getattr(self, "program_panel", None), getattr(self, "materials_panel", None),
+                      getattr(self, "presentation_mode", None)):                                         # (0.479)
             if panel is not None:                          # (0.357; 0.363: their notes, the thumbnails' cards; 0.474:
                 panel.restyle()                            # the Materials panel's notes)
         if getattr(self, "_help", None) is not None:       # (the Help panel, once F1 made it)
@@ -7574,14 +7588,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if hasattr(self, "notes_panel") and (changed is None or NOTES_CHANGED in changed):
             self.notes_panel.show_notes(self.doc.notes)
         drawn_only = {GUIDES_CHANGED, DIMS_CHANGED, IMAGES_CHANGED, CAD_CHANGED, CLOUD_CHANGED}
-        if getattr(self, "presentation_panel", None) is not None and self.presentation_panel.isVisible() and (
-                changed is None or removed or not changed or not set(changed) <= drawn_only):
-            # (0.363: out of the document's notification; 0.365: also a change of no element — the site's place)
-            QtCore.QTimer.singleShot(0, self._refresh_presentation)
         mode = getattr(self, "presentation_mode", None)
         if mode is not None and (changed is None or removed or not changed or not set(changed) <= drawn_only):
-            # (0.479) the Presentation tab's columns again (out of the document's notification); its layers only when
-            # elements changed — while it is not in front, they are made again when it is
+            # (0.479) the Presentation tab's columns again (out of the document's notification; also a change of no
+            # element — the site's place); its layers only when elements changed — while it is not in front, they are
+            # made again when it is
             QtCore.QTimer.singleShot(0, lambda c=changed, r=removed: mode.refresh(changed=c, removed=r))
         if hasattr(self, "views") and not self.doc.loading:
             # tabs of views that are gone closed, names again (out of the document's notification)
@@ -7968,47 +7979,12 @@ class MainWindow(QtWidgets.QMainWindow):
                        else t("present.panoramas_n", n=len(entries))))
         return path
 
-    # ------------------------------------------------------------ the Presentation panel (0.363)
+    # ------------------------------------------------------------ the scenes of the presentation (0.363)
 
     def show_presentation_panel(self):
-        """Render ▸ Scenes of the presentation: the panel of the scenes prepared for the ArqSynth Presentation
-        (ui/presentation_panel.py), beside the Project panel. (0.479) From the ArqSynth Presentation tab: the 3D view's
-        tab first (the BIM's columns back)."""
-        if self.presentation_shown():
-            self.views.open(self._live_3d())
-        self.presentation_panel.show()
-        self.presentation_panel.raise_()
-        self._refresh_presentation()
-
-    def _refresh_presentation(self):
-        panel = getattr(self, "presentation_panel", None)
-        if panel is None or not panel.isVisible() or self.doc.loading:
-            return
-        from ..model import presentation as presentation_model
-        found = presentation_model.scenes(self.doc)
-        try:
-            rooms = self.doc.ifc.count("IfcSpace")
-        except AttributeError:
-            rooms = 0
-        panel.show_scenes(found, presentation_model.initial(self.doc, found), self._scene_thumbs,
-                          self.doc.presentation, rooms, getattr(self.doc, "panoramas", ()))
-
-    def _presentation_options(self, **options):
-        """(0.366) The panel's rooms: as labels, as the Virtual Walk — one undo step."""
-        from ..model import presentation as presentation_model
-        self.doc.set_presentation(presentation_model.with_options(self.doc.presentation, **options))
-
-    def _scene_change(self, key, **fields):
-        from ..model import presentation as presentation_model
-        self.doc.set_presentation(presentation_model.changed(self.doc.presentation, key, **fields))
-
-    def _scene_order(self, keys):
-        from ..model import presentation as presentation_model
-        self.doc.set_presentation(presentation_model.ordered(self.doc.presentation, keys))
-
-    def _scene_initial(self, key):
-        from ..model import presentation as presentation_model
-        self.doc.set_presentation(presentation_model.with_initial(self.doc.presentation, key))
+        """Render ▸ Scenes of the presentation — (0.480) the ArqSynth Presentation's interface (the tab; the 0.363 panel
+        that split the left column is gone): its scenes, their settings, the export."""
+        return self.show_presentation_tab()
 
     def open_scene(self, key):
         """A scene's view shown (the panel's double-click): a named 3D view, a plan, a section in its tab; the general
@@ -8103,7 +8079,6 @@ class MainWindow(QtWidgets.QMainWindow):
                            "started": time.monotonic(), "view": self.views.current()}
         vp.look_at(*frames[0])
         timer.start()
-        self.presentation_panel.set_playing("move")
         self.presentation_mode.set_playing("move")
         self.message(t("info.move_playing", name=t("move." + scene.move),
                        s="{:.0f}".format(presentation_model.move_seconds(scene))))
@@ -8141,7 +8116,6 @@ class MainWindow(QtWidgets.QMainWindow):
             play["timer"].stop()
         if play["kind"] == "sun":                           # (0.365: the view style's sun and shadows again)
             self.viewport.preview_sun(None)
-            self.presentation_panel.set_playing(None)
             self.presentation_mode.set_playing(None)
             return
         fov, snapshot = play["kept"]
@@ -8151,7 +8125,6 @@ class MainWindow(QtWidgets.QMainWindow):
         elif play["view"] is not None:                      # (left meanwhile: kept as it was before the move)
             self.views.cameras[play["view"]] = snapshot
             self._left_view(play["view"], snapshot)         # (a named 3D view's camera as it was, not mid-move)
-        self.presentation_panel.set_playing(None)
         self.presentation_mode.set_playing(None)
 
     SUN_SECONDS = 8.0       # (0.365) a sun animation previewed: the day, or the year, in this long
@@ -8203,7 +8176,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.sun_shown", date=date, time=hour, az=round(azimuth), alt=round(altitude)))
         self._move_play = {"kind": "sun", "frames": frames, "timer": timer, "started": time.monotonic(),
                            "view": self.views.current()}
-        self.presentation_panel.set_playing("sun")
         self.presentation_mode.set_playing("sun")
         return True
 
@@ -8252,7 +8224,6 @@ class MainWindow(QtWidgets.QMainWindow):
             if back is not None:
                 self.views.open(back)
         self._scene_thumbs = dict(thumbs)
-        self._refresh_presentation()
         self.presentation_mode.refresh(layers=False)        # (0.479: the Presentation tab's cards)
         if not quiet:
             self.message(t("info.present_thumbs", n=len(thumbs)))

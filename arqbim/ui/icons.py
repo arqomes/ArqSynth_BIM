@@ -1597,6 +1597,15 @@ def module_icon(name):
         p.setPen(_pen(BLUE, 1.6))
         p.drawLine(QtCore.QPointF(22, 8), QtCore.QPointF(28, 8))
         p.drawLine(QtCore.QPointF(22, 14), QtCore.QPointF(28, 14))
+    elif name == "presentation":                         # (0.480) the ArqSynth Presentation: a screen on its stand
+        p.setBrush(QtGui.QColor("#ffffff"))
+        p.drawRoundedRect(QtCore.QRectF(4, 5, 24, 16), 2, 2)
+        p.drawLine(QtCore.QPointF(16, 21), QtCore.QPointF(16, 25))
+        p.drawLine(QtCore.QPointF(10, 27), QtCore.QPointF(16, 25))
+        p.drawLine(QtCore.QPointF(22, 27), QtCore.QPointF(16, 25))
+        p.setPen(QtCore.Qt.PenStyle.NoPen)
+        p.setBrush(QtGui.QColor(BLUE))
+        p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(13, 9), QtCore.QPointF(21, 13), QtCore.QPointF(13, 17)]))
     p.end()
     return theme.icon(pm)
 
