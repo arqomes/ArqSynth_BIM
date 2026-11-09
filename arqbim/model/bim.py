@@ -2861,6 +2861,84 @@ def add_purlin_cleats(doc, purlins=None, params=None):
     return doc.execute(IfcCommand(t("cmd.purlin_cleat"), action)).result
 
 
+def _node_key(doc, kind, members, end=None):
+    """(0.505) What makes two nodes alike for a connection of `kind`: its pieces' sections — and for a beam's end on a
+    column, whether it meets the column's flange or its web."""
+    key = (kind,) + tuple(doc.ifc.steel_section(m) or "" for m in members)
+    if kind in ("end_plate", "fin_plate") and end is not None:
+        try:
+            frame = doc.ifc._beam_end_frame(members[0], int(end))
+            key += (doc.ifc._onto_flange(members[1], frame[1]),)
+        except Exception:
+            pass
+    return key
+
+
+def equal_nodes(doc, guid):
+    """(0.505, DetailCraft's «copy to equal nodes») For a connection (or a part of it): (the other connections of its
+    kind on alike nodes — their assemblies —, the alike nodes without one — [(members, end)]). Alike: the same
+    sections (and, at a beam's end, the same face of the column)."""
+    found = doc.ifc.connection_params(guid)
+    if found is None:
+        return [], []
+    kind, members, params = found
+    own = doc.ifc.connection_of(guid).GlobalId
+    key = _node_key(doc, kind, members, params.get("end"))
+    others = []
+    for a in doc.ifc.file.by_type("IfcElementAssembly"):
+        if a.GlobalId == own or doc.ifc.kind_of(a.GlobalId) != "steel_connection":
+            continue
+        k, m, p = doc.ifc.connection_params(a.GlobalId)
+        if k == kind and _node_key(doc, k, m, p.get("end")) == key:
+            others.append(a)
+    free = []
+    if kind == "base_plate":
+        for c in steel_columns(doc):
+            if (kind, doc.ifc.steel_section(c) or "") == key and not any(
+                    doc.ifc.connection_params(a.GlobalId)[0] == "base_plate" for a in doc.ifc.connections_on([c])):
+                free.append(([c], None))
+    elif kind in ("end_plate", "fin_plate"):
+        beams = [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcBeam"
+                 and doc.ifc.steel_section(o.id) == doc.ifc.steel_section(members[0])]
+        for beam in beams:
+            taken = {int(doc.ifc.connection_params(a.GlobalId)[2].get("end", -1)) for a in doc.ifc.connections_on([beam])
+                     if doc.ifc.connection_params(a.GlobalId)[0] in ("end_plate", "fin_plate")}
+            for end in (0, 1):
+                column = doc.ifc.beam_end_column(beam, end)
+                if column is not None and end not in taken and _node_key(doc, kind, [beam, column], end) == key:
+                    free.append(([beam, column], end))
+    elif kind == "gusset":
+        free = [([b, c], end) for b, c, end in gusset_ends(doc) if _node_key(doc, kind, [b, c]) == key]
+    elif kind == "purlin_cleat":
+        free = [([p, b], None) for p, b in purlin_seats(doc) if _node_key(doc, kind, [p, b]) == key]
+    return others, free
+
+
+def apply_to_equal(doc, guid):
+    """(0.505) A connection's values (all but which end it is at) given to every connection of its kind on alike nodes,
+    and the same connection put on the alike nodes without one. One undo step. (how many changed, how many made)."""
+    found = doc.ifc.connection_params(guid)
+    if found is None:
+        return 0, 0
+    kind, _members, params = found
+    others, free = equal_nodes(doc, guid)
+    if not others and not free:
+        return 0, 0
+    language = lang()
+    values = {k: v for k, v in params.items() if k != "end"}
+    touched = [m for a in others for m in doc.ifc.connection_params(a.GlobalId)[1]]
+
+    def action(ifc):
+        for a in others:
+            ifc.set_connection(a.GlobalId, language, **values)
+        for members, end in free:
+            ifc.add_connection(kind, members, dict(values, **({"end": end} if end is not None else {})), language)
+
+    doc.execute(IfcCommand(t("cmd.apply_equal"), action,
+                           changed=touched + [p.GlobalId for a in others for p in doc.ifc.connection_parts(a)]))
+    return len(others), len(free)
+
+
 def set_connection(doc, guid, **values):
     """(0.497) A connection's parameters changed (mm), from it or any of its parts: made again. One undo step."""
     language = lang()

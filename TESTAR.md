@@ -644,6 +644,21 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.505 — Aplicar aos nós iguais (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.505.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (separador **Estrutura**): dois cliques, por exemplo 6 m.
+2. Clique na chapa de base de um pilar. Nas Propriedades, em **Espessura da chapa (mm)**, escreva **30** e carregue
+   Enter: só essa chapa fica com 30 mm (no navegador do projeto, em Chapas, só uma diz «400×400×30»).
+3. Ainda com a chapa escolhida, desça nas Propriedades até **Nós iguais** e clique em **Aplicar aos nós iguais**: a
+   mensagem diz «3 ligação(ões) com as medidas desta» e as 4 chapas ficam com 30 mm.
+4. Ctrl+Z: as outras 3 voltam aos 20 mm.
+5. Faça o mesmo com um gousset (mude a **Folga** para 40 e aplique): os 8 gousset ficam com a mesma folga.
+6. Faça Ctrl+N e uma nave com **Chapas de base** desligado. Escolha um pilar e, na barra da seleção, **Chapa de base**;
+   clique na chapa, depois em **Aplicar aos nós iguais**: a mensagem diz «3 posta(s) de novo» e todos os pilares
+   ficam com chapa.
+
 ## 0.504 — Apoio das madres (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.504.0**.

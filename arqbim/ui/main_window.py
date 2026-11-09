@@ -7196,6 +7196,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_loose(doc, guid, **{action[6:]: value})
             elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes
                 bim.set_gutter(doc, guid, **{action[7:]: value})
+            elif action == "connection_equal":            # (0.505) its values to the alike nodes
+                changed, made = bim.apply_to_equal(doc, guid)
+                self.message(t("info.apply_equal", changed=changed, made=made) if changed or made
+                             else t("info.apply_equal_none"), warning=not (changed or made))
             elif action.startswith("connection."):        # (0.497) a steel connection's value: made again
                 bim.set_connection(doc, guid, **{action[len("connection."):]: value})
             elif action in ("wall_framing", "wall_framing_spacing", "wall_framing_blocking"):   # (0.437)

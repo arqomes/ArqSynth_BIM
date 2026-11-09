@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.505.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: aplicar aos nós iguais.**
+
+- Nas Propriedades de qualquer ligação de aço (chapa de base, chapa de topo, cutelo, gousset, apoio de madre), botão
+  **Aplicar aos nós iguais**: as medidas desta ligação passam para todas as ligações do mesmo tipo nos **nós iguais**
+  (os mesmos perfis e, numa ponta de viga, a mesma face do pilar — banzo ou alma), e a ligação é **posta** nos nós
+  iguais que ainda não a têm (por exemplo: uma chapa de base com 25 mm debaixo de um pilar HEB 200, aplicada, põe a
+  mesma debaixo de todos os HEB 200 sem chapa). Um só Ctrl+Z desfaz tudo.
+
 ## 0.504.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: o apoio das madres.**

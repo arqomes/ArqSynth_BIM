@@ -3408,6 +3408,19 @@ _STRINGS = {
     "connection.field.gusset.p": ("Passo entre parafusos (mm)", "Pitch (mm)"),
     "connection.warn.root": ("⚠ O furo fica na raiz da cantoneira: os parafusos a pelo menos {v} mm do canto.",
                              "⚠ The hole falls in the angle's root: the bolts at least {v} mm from its heel."),
+    "cmd.apply_equal": ("Aplicar aos nós iguais", "Apply to equal nodes"),                           # (0.505)
+    "props.connection_equal": ("Nós iguais", "Equal nodes"),
+    "props.connection_equal_button": ("Aplicar aos nós iguais", "Apply to equal nodes"),
+    "props.connection_equal_tip": ("Estas medidas passam para todas as ligações deste tipo nos nós iguais (os mesmos "
+                                   "perfis e, numa ponta de viga, a mesma face do pilar), e esta ligação é posta nos "
+                                   "nós iguais que ainda não a têm.",
+                                   "These values go to every connection of this kind on equal nodes (the same "
+                                   "sections and, at a beam's end, the same face of the column), and this connection is "
+                                   "put on the equal nodes without one."),
+    "info.apply_equal": ("Nós iguais: {changed} ligação(ões) com as medidas desta, {made} posta(s) de novo.",
+                         "Equal nodes: {changed} connection(s) given these values, {made} new one(s)."),
+    "info.apply_equal_none": ("Não há outros nós iguais a este (os mesmos perfis).",
+                              "There are no other nodes equal to this one (the same sections)."),
     "connection.purlin_cleat": ("Apoio de madre", "Purlin cleat"),                                  # (0.504)
     "cmd.purlin_cleat": ("Apoio de madre", "Purlin cleat"),
     "act.purlin_cleat": ("Apoio de madre", "Purlin cleat"),

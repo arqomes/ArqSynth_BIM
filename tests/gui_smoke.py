@@ -660,6 +660,7 @@ def bim_flow():
     steel_sheet_flow()
     steel_gusset_flow()
     purlin_cleat_flow()
+    equal_nodes_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20342,6 +20343,52 @@ def purlin_cleat_flow():
           and win.ribbon_item("purlin_cleat") is not None,
           "oferecido={} feitos={} ({} parafusos) propriedades={} 90mm={} todos={}".format(
               offered, made, bolts, shown, lower, total))
+
+
+def equal_nodes_flow():
+    """0.505 — «Aplicar aos nós iguais»: a shed; a base plate chosen, its thickness typed 30 in the Properties; the
+    button «Aplicar aos nós iguais» clicked: the other 3 base plates 30 mm too, said in the message; one undo takes it
+    back. Captured: 505_nos_iguais.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+    pump(300)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+
+    def plates():
+        return [a for a in doc.ifc.file.by_type("IfcElementAssembly") if doc.ifc.kind_of(a.GlobalId) ==
+                "steel_connection" and doc.ifc.connection_params(a.GlobalId)[0] == "base_plate"]
+    first = plates()[0]
+    plate = next(p.GlobalId for p in doc.ifc.connection_parts(first) if p.is_a("IfcPlate"))
+    vp.set_selection({plate})
+    pump(300)
+    edit = win.props.editors.get("connection.tp")
+    if edit is not None:
+        edit.setText("30")
+        edit.editingFinished.emit()
+        pump(400)
+    plate = next(p.GlobalId for p in doc.ifc.connection_parts(first) if p.is_a("IfcPlate"))
+    vp.set_selection({plate})
+    pump(300)
+    button = win.props.editors.get("connection_equal")
+    shown = button is not None and button.isVisible()
+    if button is not None:
+        button.click()
+        pump(500)
+    thick = [doc.ifc.connection_params(a.GlobalId)[2]["tp"] for a in plates()]
+    applied = thick == [30.0] * 4
+    shot("505_nos_iguais.png")
+    doc.undo()
+    pump(300)
+    back = sorted(doc.ifc.connection_params(a.GlobalId)[2]["tp"] for a in plates()) == [20.0, 20.0, 20.0, 30.0]
+    doc.modified = False
+    check("nos_iguais", shown and applied and back,
+          "botao={} aplicado={} ({}) desfeito={}".format(shown, applied, thick, back))
 
 
 def steel_sheet_flow():

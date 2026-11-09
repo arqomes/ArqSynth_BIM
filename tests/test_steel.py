@@ -789,6 +789,77 @@ class PurlinCleats(unittest.TestCase):
         self.assertEqual(len(self._cleats(doc)), 20)
 
 
+class EqualNodes(unittest.TestCase):
+    """(0.505) «Aplicar aos nós iguais» — DetailCraft's «copy to equal nodes»."""
+
+    def _shed(self, **options):
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                       **options)
+        return doc
+
+    def _of(self, doc, kind):
+        return [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                if doc.ifc.kind_of(a.GlobalId) == "steel_connection" and doc.ifc.connection_params(a.GlobalId)[0] == kind]
+
+    def test_values_to_the_others(self):
+        """A shed: one base plate made 30 mm thick, applied: the other 3 too (none made); one gusset's gap 40, applied:
+        the other 7 too, each brace held back as the first; one undo takes it back."""
+        from arqbim.model import bim
+        doc = self._shed()
+        plates = self._of(doc, "base_plate")
+        bim.set_connection(doc, plates[0].GlobalId, tp=30.0)
+        self.assertEqual(bim.apply_to_equal(doc, plates[0].GlobalId), (3, 0))
+        self.assertTrue(all(doc.ifc.connection_params(a.GlobalId)[2]["tp"] == 30.0 for a in self._of(doc, "base_plate")))
+        gussets = self._of(doc, "gusset")
+        bim.set_connection(doc, gussets[0].GlobalId, gap=40.0)
+        self.assertEqual(bim.apply_to_equal(doc, gussets[0].GlobalId), (7, 0))
+        holds = set()
+        for a in self._of(doc, "gusset"):
+            _k, (brace, _c), params = doc.ifc.connection_params(a.GlobalId)
+            self.assertEqual(params["gap"], 40.0)
+            holds.add(round(doc.ifc.steel_cuts(doc.ifc.by_guid(brace))[2][params["end"]], 6))
+        self.assertEqual(len(holds), 1)
+        doc.undo()
+        self.assertEqual(sum(1 for a in self._of(doc, "gusset") if doc.ifc.connection_params(a.GlobalId)[2]["gap"] ==
+                             40.0), 1)
+
+    def test_put_on_free_nodes(self):
+        """A shed without its plates: a base plate under one column, applied: under the other 3 (its values); one
+        purlin's 2 cleats, one applied: the other its values, every other purlin's made (18); end plates on one IPE
+        300 between two HEB 200 (their flanges to it), applied: on the other IPE 300 alike, not on an IPE 200."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        doc = self._shed(plates=False)
+        columns = bim.steel_columns(doc)
+        made = bim.add_base_plates(doc, [columns[0]], {"tp": 25.0})
+        self.assertEqual(bim.apply_to_equal(doc, made[0]), (0, 3))
+        self.assertEqual(sorted(doc.ifc.connection_params(a.GlobalId)[2]["tp"] for a in self._of(doc, "base_plate")),
+                         [25.0] * 4)
+        purlin = bim.purlin_seats(doc)[0][0]
+        cleats = bim.add_purlin_cleats(doc, [purlin])
+        self.assertEqual(len(cleats), 2)
+        self.assertEqual(bim.apply_to_equal(doc, cleats[0]), (1, 18))
+        self.assertEqual(len(self._of(doc, "purlin_cleat")), 20)
+        from arqbim.model.document import Document
+        doc = Document()
+        for x in (0.0, 6.0, 12.0):
+            bim.add_column(doc, np.array((x, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.5, x_dir=(0.0, 1.0, 0.0))
+        b1 = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe300"], 3.0)
+        b2 = bim.add_beam(doc, np.array((6.0, 0.0, 3.0)), np.array((12.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe300"], 3.0)
+        b3 = bim.add_beam(doc, np.array((6.0, 0.0, 2.0)), np.array((12.0, 0.0, 2.0)), catalog.BY_KEY["viga_ipe200"], 2.0)
+        ends = bim.add_beam_connections(doc, "end_plate", [b1])
+        self.assertEqual(len(ends), 2)
+        self.assertEqual(bim.apply_to_equal(doc, ends[0]), (1, 2))
+        self.assertEqual(len(doc.ifc.connections_on([b2])), 2)
+        self.assertEqual(doc.ifc.connections_on([b3]), [])
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

@@ -1986,6 +1986,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                 value = float(p.get(k) or 0.0)
                 self._text_editor(label, "{:g}".format(value).replace(".", sep), "connection." + k,
                                   guid, parse=number(k), least=0.0)
+        item = self._row(t("props.connection_equal"), "")             # (0.505) DetailCraft's «copy to equal nodes»
+        button = QtWidgets.QPushButton(t("props.connection_equal_button"))
+        button.setToolTip(t("props.connection_equal_tip"))
+        button.clicked.connect(lambda _c=False: self._emit("connection_equal", guid, True))
+        self.tree.setItemWidget(item, 1, button)
+        self.editors["connection_equal"] = button
         for code, value in p.get("warnings") or ():
             warn = self._row(t("connection.warn." + code, v="{:g}".format(value).replace(".", sep)))
             warn.setFirstColumnSpanned(True)
