@@ -241,6 +241,22 @@ def steel_member_icon():
     return theme.icon(pm)
 
 
+def steel_mitre_icon():
+    """(0.496) Meia-esquadria: a post and a rafter meeting in a mitre, its line dashed."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((4, 30), (4, 7), (11, 3), (11, 30))]))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((4, 7), (11, 3), (29, 10), (29, 16), (11, 10))]))
+    dashed = _pen(INK, 1.0)
+    dashed.setStyle(QtCore.Qt.PenStyle.DashLine)
+    p.setPen(dashed)
+    p.drawLine(QtCore.QPointF(2, 9), QtCore.QPointF(14, 1))
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()

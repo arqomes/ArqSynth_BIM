@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.496.0 — 2026-11-09
+
+**Estrutura metálica, passo 2b: as pontas das peças cortadas.**
+
+- **Meia-esquadria**: escolhidas duas peças metálicas cujas linhas se encontram (o pilar e a asna de um pórtico), a
+  barra da seleção (e o separador **Estrutura**, por baixo do Sistema de vigas) oferece **Meia-esquadria**: as duas
+  linhas acabam no ponto onde se encontram, cada peça prolonga-se para lá dele e é cortada pelo plano que divide o
+  ângulo ao meio — o joelho fica fechado, sem buracos nem sobreposições. Um passo de Ctrl+Z. Se as linhas não se
+  encontram (paralelas ou a mais de 50 cm), diz-o e não muda nada.
+- **Recorte automático**: uma viga de aço desenhada com a ferramenta Viga até outra viga de aço (uma secundária numa
+  principal) pára na alma da principal, a 10 mm, e o banzo de cima que bateria no banzo da principal é recortado (até
+  por baixo do banzo e do raio de concordância, mais 5 mm); o de baixo também, quando for preciso.
+- Os cortes e os recortes ficam guardados na peça, presos à ponta a que pertencem: mudar o perfil, o comprimento ou a
+  altura da peça mantém-nos. No IFC, os cortes por planos são `IfcBooleanClippingResult` (corpo «Clipping») e os
+  recortes `IfcBooleanResult` (corpo «CSG»), como o Revit e o Tekla os leem.
+
 ## 0.495.0 — 2026-11-09
 
 **Estrutura metálica, passo 2: peças metálicas** (o PLANO, «Estrutura metálica e pormenores de fabrico»).

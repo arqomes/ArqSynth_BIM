@@ -1567,8 +1567,10 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    grossa em 1:100+). Os dados são das normas (medidas não têm autor); não se copia a tabela do DetailCraft.
 2. **Peças metálicas.** (0.495.0, a primeira parte: a ferramenta Peça metálica entre dois pontos — viga, pilar,
    contraventamento, madre, elemento; inserção, rotação, cotas ou pontos 3D —, contraventamento em X ou diagonal entre
-   dois pilares, as vigas de aço à face dos pilares a 10 mm. Falta: os cortes nas pontas — recorte, meia-esquadria,
-   corte por um plano —, as peças a seguirem os pilares quando estes se mexem, e as Tabelas «Estrutura metálica».)
+   dois pilares, as vigas de aço à face dos pilares a 10 mm. 0.496.0: meia-esquadria entre duas peças, recorte
+   automático de uma viga de aço sobre outra, cortes e recortes guardados por ponta. Falta: o corte por um plano à
+   escolha, as peças a seguirem os pilares quando estes se mexem — vai com as ligações, passo 3 —, e as Tabelas
+   «Estrutura metálica» — vai com as marcas, passo 5.)
    Pilar e viga com perfil (as ferramentas que já existem, com o catálogo), viga inclinada (dois
    pontos com cotas, ou pela inclinação), contraventamento (diagonal, em X, em K, entre pilares ou na cobertura), o ponto
    de inserção (os 9 e o eixo) e a rotação do perfil. As pontas como no Tekla: a viga pára na face do pilar (banzo ou

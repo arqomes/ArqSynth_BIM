@@ -223,6 +223,67 @@ class SteelMembers(unittest.TestCase):
         np.testing.assert_allclose((v[:, 0].min(), v[:, 0].max()), (0.0, 6.0), atol=1e-6)
 
 
+class SteelCuts(unittest.TestCase):
+    """(0.496) Ends cut: a portal's knee in a mitre; a secondary beam coped onto a girder."""
+
+    def test_a_knee_in_a_mitre(self):
+        """A column IPE 300 (a steel piece, upright, 0 → 4 m) and a rafter IPE 300 from its top out 5 m, rising
+        0,5 m: mitred, both lines end at the knee, each piece drawn out and cut by the plane that halves their angle —
+        nothing of either beyond it (the column's material all on its side of the plane, the rafter's on its own); the
+        lines read back as they are; one undo step; refused for two pieces that do not meet; the file valid."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        post = bim.add_steel_member(doc, (0.0, 0.0, 0.0), (0.0, 0.0, 4.0), catalog.BY_KEY["viga_ipe300"],
+                                    function="column", cardinal=5, rotation=90.0)
+        rafter = bim.add_steel_member(doc, (0.0, 0.0, 4.0), (5.0, 0.0, 4.5), catalog.BY_KEY["viga_ipe300"], cardinal=5)
+        self.assertTrue(bim.mitre(doc, post, rafter))
+        p, r = doc.ifc.steel_member_params(post), doc.ifc.steel_member_params(rafter)
+        np.testing.assert_allclose((p["start"], p["end"], r["start"], r["end"]),
+                                   ((0, 0, 0), (0, 0, 4), (0, 0, 4), (5, 0, 4.5)), atol=1e-6)
+        up = np.array((0.0, 0.0, 1.0))
+        out = np.array((5.0, 0.0, 0.5)) / np.linalg.norm((5.0, 0.0, 0.5))
+        n = (up - (-out)) / np.linalg.norm(up + out)            # (the post's: away from it, past the knee)
+        knee = np.array((0.0, 0.0, 4.0))
+        pv, rv = doc.get(post).mesh.verts, doc.get(rafter).mesh.verts
+        self.assertLess(float(((pv - knee) @ n).max()), 1e-4)            # (the post: none past the plane)
+        self.assertGreater(float(((rv - knee) @ n).min()), -1e-4)        # (the rafter: none behind it)
+        self.assertGreater(float(pv[:, 2].max()), 4.05)                   # (drawn out past the knee's line: its
+        self.assertGreater(float(pv[:, 0].min()), -0.16)                  # outer corner filled)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        doc.undo()
+        self.assertEqual(doc.ifc.steel_cuts(doc.ifc.by_guid(post))[0], [])
+        far = bim.add_steel_member(doc, (10.0, 0.0, 0.0), (10.0, 0.0, 4.0), catalog.BY_KEY["viga_ipe300"],
+                                   function="column")
+        self.assertFalse(bim.mitre(doc, far, rafter))
+
+    def test_a_beam_coped_onto_a_girder(self):
+        """An IPE 200 drawn onto an IPE 400 girder, their tops level: it stops at the girder's web (+ 10 mm) and its
+        top flange is coped back past the girder's flange (its top cut down by the girder's tf + r + 5 mm); its
+        bottom, higher than the girder's bottom flange, is not; the girder is not touched."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        ipe400 = catalog.steel_spec(catalog.BY_KEY["viga_ipe300"], "IPE400", "S275")
+        girder = bim.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((6.0, 0.0, 3.0)), ipe400, 3.0)
+        beam = bim.add_beam(doc, np.array((3.0, 5.0, 3.0)), np.array((3.0, 0.0, 3.0)), catalog.BY_KEY["viga_ipe200"],
+                            3.0)
+        v = doc.get(beam).mesh.verts
+        self.assertAlmostEqual(float(v[:, 1].min()), 0.0043 + 0.010, places=6)        # (tw 8,6 / 2 + 10 mm)
+        cuts, copes, _ext = doc.ifc.steel_cuts(doc.ifc.by_guid(beam))
+        self.assertEqual(len(copes), 1)
+        zone = (13.5 + 21.0) / 1000.0 + 0.005
+        near = v[v[:, 1] < 0.0143 + (180 - 8.6) / 2000.0 - 0.010 + 0.005]        # (where the girder's flange is)
+        self.assertLess(float(near[:, 2].max()), 3.0 - zone + 1e-6)                     # (coped)
+        self.assertAlmostEqual(float(v[:, 2].max()), 3.0, places=6)                     # (its top further on)
+        self.assertAlmostEqual(float(doc.get(girder).mesh.verts[:, 1].max()), 0.09, places=6)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

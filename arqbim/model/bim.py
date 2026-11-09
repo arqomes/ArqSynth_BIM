@@ -2637,9 +2637,15 @@ def add_beam(doc, start, end, spec, top, storey=None):
 
     def action(ifc):
         name = "{} {}".format(prefix, ifc.count("IfcBeam") + 1)
-        a, b = (ifc.beam_to_faces(start, end, top, spec) if getattr(spec, "section", None)    # (0.495: a steel beam
-                else (start, end))                                                           # stops at the columns)
-        return ifc.add_beam(spec, a, b, top, name, language, storey=storey).GlobalId
+        a, b, copes = start, end, []
+        if getattr(spec, "section", None):         # (0.495: a steel beam stops at the columns; 0.496: on a girder,
+            a, b = ifc.beam_to_faces(start, end, top, spec)                          # at its web, coped)
+            a, b, copes = ifc.beam_onto_beams(a, b, top, spec)
+        e = ifc.add_beam(spec, a, b, top, name, language, storey=storey)
+        if copes:
+            ifc.set_steel_cuts(e, copes=copes)
+            ifc.rebuild_beam(e.GlobalId)
+        return e.GlobalId
 
     return doc.execute(IfcCommand(t("cmd.beam"), action)).result
 
@@ -2658,6 +2664,17 @@ def add_steel_member(doc, start, end, spec, function="beam", cardinal=None, rota
                                     storey=storey, function=function, cardinal=cardinal, rotation=rotation).GlobalId
 
     return doc.execute(IfcCommand(t("cmd.steel_member"), action)).result
+
+
+def mitre(doc, a, b):
+    """(0.496) Two steel pieces cut to a mitre where their lines meet (a portal's knee). One undo step. False when
+    their lines do not meet."""
+    language = lang()
+    kinds = {doc.ifc.kind_of(g) for g in (a, b)}
+    if kinds != {"steel_member"} or not doc.ifc.mitre(a, b, language, dry=True):
+        return False
+    doc.execute(IfcCommand(t("cmd.steel_mitre"), lambda ifc: ifc.mitre(a, b, language), changed=[a, b]))
+    return True
 
 
 def x_brace(doc, a, b, spec, shape="x"):

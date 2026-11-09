@@ -75,7 +75,8 @@ PANELS = {
     # structure proposed at once —, Datum, Work Plane (its analysis went to Analyze, as Revit's)
     "structure": (("select", ("select",)),
                   # (0.495) the steel pieces after the floor, as Revit's Truss and Brace in its Structure panel
-                  ("structure", ("beam", "wall", "column", "slab", "steel_member", ("beam_system", "param_surface"))),
+                  ("structure", ("beam", "wall", "column", "slab", "steel_member", ("beam_system", "param_surface",
+                                                                                     "steel_mitre"))),
                   ("foundation", ("footing", ("combined_footing", "footings_under"))),
                   ("automatic", ("propose_structure", ("beams_between", "walls_under_beams", "slabs_in_bays"),
                                  ("columns_on_grid", "remove_proposal"))),

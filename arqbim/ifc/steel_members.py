@@ -11,6 +11,7 @@ moving or turning the piece moves its line.
 
 ArqSynth_Parametros: Elemento "steel_member", Funcao (FUNCTIONS' key), Insercao (1–9), Rotacao (degrees)."""
 
+import json
 import math
 
 import numpy as np
@@ -55,6 +56,18 @@ def function_spec(spec, function):
                    name_en=catalog.steel_name(function, spec.section, grade, "en"))
 
 
+def _closest(p, d, q, e):
+    """The nearest points of two lines (p + s d, q + t e; d, e unit), or None when they are parallel."""
+    w = p - q
+    b = float(d @ e)
+    denom = 1.0 - b * b
+    if denom < 1e-9:
+        return None
+    s = (b * float(e @ w) - float(d @ w)) / denom
+    t = (float(e @ w) - b * float(d @ w)) / denom
+    return p + d * s, q + e * t
+
+
 def frame(start, end, rotation=0.0):
     """(placement 4×4, length) of a piece from start to end, its section turned `rotation` degrees about its line."""
     m, length = classify.segment_placement(np.asarray(start, dtype=float), np.asarray(end, dtype=float))
@@ -86,7 +99,72 @@ def _reach(column_section, half, x_dir, u, beam_width):
     return min(a / ux if ux > 1e-9 else np.inf, b / uy if uy > 1e-9 else np.inf) + gap
 
 
+COPE_CLEAR = 0.005                 # m: a cope this much past the girder's flange (its root radius) and its edge (×2)
+
+
 class SteelMemberMixin:
+    def beam_onto_beams(self, start, end, top, spec, skip=()):
+        """(0.496) A steel beam's ends that lie on a steel girder (seen from above, at heights that overlap): brought
+        back to its web (+ the gap) and coped where its flanges would go through the girder's — its top (and its
+        bottom) cut away as far as the girder's flange and root radius, as long as the flange reaches. Returns (start,
+        end, copes — as set_steel_cuts keeps them, in the beam's own frame)."""
+        from ..core import steel
+        start, end = np.array(start, dtype=float), np.array(end, dtype=float)
+        d = (end - start)[:2]
+        n = float(np.linalg.norm(d))
+        sec = steel.get(spec.section) if spec.section else None
+        if n < 1e-9 or sec is None:
+            return start, end, []
+        u = d / n
+        width, depth = spec.profile
+        bottom = top - depth
+        out, copes = [start, end], []
+        for k, p in enumerate((start, end)):
+            for g in self.file.by_type("IfcBeam"):
+                if g.GlobalId in skip or self.kind_of(g.GlobalId) != "beam":
+                    continue
+                gsec = steel.get(self.steel_section(g.GlobalId) or "")
+                if gsec is None or gsec.family not in steel.I_FAMILIES + steel.U_FAMILIES:
+                    continue
+                try:
+                    a, b, g_top, _gw, g_depth = self.beam_params(g.GlobalId)
+                except Exception:
+                    continue
+                a, b = np.asarray(a, dtype=float)[:2], np.asarray(b, dtype=float)[:2]
+                axis = b - a
+                span = float(np.linalg.norm(axis))
+                if span < 1e-9:
+                    continue
+                axis /= span
+                normal = np.array((-axis[1], axis[0]))
+                rel = np.asarray(p[:2], dtype=float) - a
+                along, across = float(rel @ axis), float(rel @ normal)
+                if not -1e-6 <= along <= span + 1e-6 or abs(across) > gsec.b / 2000.0 + 1e-6:
+                    continue
+                if top <= g_top - g_depth + 1e-6 or bottom >= g_top - 1e-6:
+                    continue
+                inward = u if k == 0 else -u               # (from this end into the beam)
+                c = float(inward @ normal)
+                if abs(c) < 0.2:                           # (along the girder, not onto it)
+                    continue
+                side = 1.0 if c > 0 else -1.0               # (the girder's side the beam is on)
+                face = side * (gsec.tw / 2000.0 + GAP)
+                moved = np.array(p, dtype=float)
+                moved[:2] = p[:2] + inward * ((face - across) / c)
+                out[k] = moved
+                flange = (gsec.b - gsec.tw) / 2000.0 - GAP + 2 * COPE_CLEAR          # (how far back to cope)
+                reach = flange / abs(c)
+                zone = gsec.tf / 1000.0 + gsec.r / 1000.0 + COPE_CLEAR
+                half_w = width / 2.0 + 0.001
+                for low, high in ((g_top - zone, top + 0.001), (bottom - 0.001, g_top - g_depth + zone)):
+                    if high - low < 1e-6 or low > top or high < bottom:
+                        continue
+                    y0, y1 = max(low, bottom - 0.001) - (top - depth / 2.0), min(high, top + 0.001) - (top - depth / 2.0)
+                    z0, z1 = (-0.001, reach) if k == 0 else (-reach, 0.001)
+                    copes.append({"end": k, "lo": [-half_w, y0, z0], "hi": [half_w, y1, z1]})
+                break
+        return out[0], out[1], copes
+
     def beam_to_faces(self, start, end, top, spec):
         """(0.495) A steel beam's ends brought back to the faces of the columns they are in (seen from above, at the
         beam's height): (start, end)."""
@@ -167,15 +245,149 @@ class SteelMemberMixin:
                 "section": self.steel_section(guid)}
 
     def steel_length(self, e):
-        """A piece's length (m): its extrusion's depth."""
+        """A piece's length (m): its extrusion's depth, less what it is drawn out past its ends to be cut (0.496)."""
+        e0, e1 = self.steel_cuts(e)[2]
         for rep in e.Representation.Representations if e.Representation else ():
             for item in rep.Items:
                 solid = item
                 while solid.is_a("IfcBooleanResult"):
                     solid = solid.FirstOperand
                 if solid.is_a("IfcExtrudedAreaSolid"):
-                    return float(solid.Depth) * self.unit_scale
+                    return float(solid.Depth) * self.unit_scale - e0 - e1
         return 0.0
+
+    # ------------------------------------------------------------ (0.496) its ends cut
+
+    def steel_cuts(self, e):
+        """(cuts, copes, (drawn out at the start, at the end)) of a profiled element — cuts [{"end": 0 | 1, "p": point,
+        "n": normal}] (the side the normal points to taken away), copes [{"end", "lo", "hi"}] (boxes taken away) —,
+        in its own frame, metres, each from its end: the start's from the start, the end's from the end (z − its
+        length), so that they stay with their end when the piece gets longer."""
+        p = self._params(e) if e is not None else {}
+        try:
+            cuts = json.loads(p.get("Cortes") or "[]")
+            copes = json.loads(p.get("Recortes") or "[]")
+            ext = json.loads(p.get("Prolongar") or "[0, 0]")
+        except ValueError:
+            return [], [], (0.0, 0.0)
+        return cuts, copes, (float(ext[0]), float(ext[1]))
+
+    def set_steel_cuts(self, e, cuts=None, copes=None, ext=None):
+        """Its cuts, copes and drawing out kept (None: as they are); its body is made again by whoever calls."""
+        values = {}
+        if cuts is not None:
+            values["Cortes"] = json.dumps(cuts)
+        if copes is not None:
+            values["Recortes"] = json.dumps(copes)
+        if ext is not None:
+            values["Prolongar"] = json.dumps([float(ext[0]), float(ext[1])])
+        self._set_params(e, values)
+
+    def _apply_cuts(self, element, body, length):
+        """A profiled body (its extrusion `length` m long) drawn out past its ends, cut by its planes, its copes taken
+        away — as its parameters say (nothing: as it is)."""
+        cuts, copes, (e0, e1) = self.steel_cuts(element)
+        if not cuts and not copes and not e0 and not e1:
+            return
+        from ifcopenshell.util.data import Clipping
+        f, s = self.file, self.unit_scale
+        u = 1.0 / s
+        item = body.Items[0]
+        if e0 or e1:
+            x, y, z = (float(c) for c in item.Position.Location.Coordinates)
+            item.Position.Location = f.createIfcCartesianPoint((x, y, z - e0 * u))
+            item.Depth = float(item.Depth) + (e0 + e1) * u
+        solid = item
+        for c in cuts:
+            at = np.array(c["p"], dtype=float) + (np.array((0.0, 0.0, length)) if c.get("end") else 0.0)
+            solid = Clipping(location=tuple(float(v) for v in at), normal=tuple(float(v) for v in c["n"])) \
+                .apply(f, solid, s)
+        for box in copes:
+            shift = np.array((0.0, 0.0, length)) if box.get("end") else np.zeros(3)
+            lo, hi = np.array(box["lo"], dtype=float) + shift, np.array(box["hi"], dtype=float) + shift
+            profile = f.createIfcRectangleProfileDef(
+                "AREA", None, f.createIfcAxis2Placement2D(f.createIfcCartesianPoint(
+                    (float((lo[0] + hi[0]) / 2 * u), float((lo[1] + hi[1]) / 2 * u)))),
+                float((hi[0] - lo[0]) * u), float((hi[1] - lo[1]) * u))
+            cutter = f.createIfcExtrudedAreaSolid(
+                profile, f.createIfcAxis2Placement3D(f.createIfcCartesianPoint((0.0, 0.0, float(lo[2] * u)))),
+                f.createIfcDirection((0.0, 0.0, 1.0)), float((hi[2] - lo[2]) * u))
+            solid = f.createIfcBooleanResult("DIFFERENCE", solid, cutter)
+        body.Items = (solid,)
+        if copes:                                          # (IFC's: a body with boxes taken away is a CSG one…)
+            body.RepresentationType = "CSG"
+        elif cuts:                                         # (…one only cut by planes, a Clipping one)
+            body.RepresentationType = "Clipping"
+
+    def section_middle(self, e):
+        """Where the middle of its section is in its own frame (x, y, m) — its cardinal point's offset."""
+        for rep in e.Representation.Representations if e.Representation else ():
+            for item in rep.Items:
+                solid = item
+                while solid.is_a("IfcBooleanResult"):
+                    solid = solid.FirstOperand
+                if solid.is_a("IfcExtrudedAreaSolid"):
+                    c = solid.Position.Location.Coordinates
+                    return float(c[0]) * self.unit_scale, float(c[1]) * self.unit_scale
+        return 0.0, 0.0
+
+    def mitre(self, a, b, lang="pt", dry=False):
+        """Two steel pieces cut to a mitre where their lines meet (a portal's knee): each line's nearer end brought
+        to the meeting point, each piece drawn out past it by twice its section and cut by the plane that halves the
+        angle between them. Returns False (and changes nothing) when their lines do not meet (parallel, or more than
+        half a metre apart)."""
+        pa, pb = self.steel_member_params(a), self.steel_member_params(b)
+        ends_a, ends_b = (pa["start"], pa["end"]), (pb["start"], pb["end"])
+        ka, kb = min(((i, j) for i in (0, 1) for j in (0, 1)),
+                     key=lambda ij: float(np.linalg.norm(ends_a[ij[0]] - ends_b[ij[1]])))
+        da = ends_a[ka] - ends_a[1 - ka]
+        db = ends_b[kb] - ends_b[1 - kb]
+        da, db = da / np.linalg.norm(da), db / np.linalg.norm(db)
+        meet = _closest(ends_a[ka], da, ends_b[kb], db)
+        if meet is None:
+            return False
+        ja, jb = meet
+        if float(np.linalg.norm(ja - jb)) > 0.5 or float(np.linalg.norm(ja - ends_a[ka])) > 1.0 \
+                or float(np.linalg.norm(jb - ends_b[kb])) > 1.0:
+            return False
+        joint = (ja + jb) / 2.0
+        normal = da - db
+        if float(np.linalg.norm(normal)) < 1e-9:
+            return False
+        if dry:                                            # (only whether it can be done)
+            return True
+        normal /= np.linalg.norm(normal)
+        for guid, k, ends, p, n in ((a, ka, ends_a, pa, normal), (b, kb, ends_b, pb, -normal)):
+            start, end = (joint, ends[1]) if k == 0 else (ends[0], joint)
+            e = self.by_guid(guid)
+            w, h = self.steel_box(guid)
+            out = 2.0 * max(w, h)
+            cuts, copes, ext = self.steel_cuts(e)
+            ext = list(ext)
+            ext[k] = out
+            m, length = frame(start, end, p["rotation"])
+            inv = np.linalg.inv(m)
+            local = (inv @ np.append(joint, 1.0))[:3]
+            local_n = inv[:3, :3] @ n
+            if k == 1:
+                local = local - np.array((0.0, 0.0, length))
+            cuts = [c for c in cuts if c.get("end") != k] + [{"end": k, "p": [float(v) for v in local],
+                                                               "n": [float(v) for v in local_n]}]
+            self.set_steel_cuts(e, cuts=cuts, ext=ext)
+            self.set_steel_member(guid, start=start, end=end, lang=lang)
+        return True
+
+    def rebuild_beam(self, guid):
+        """A beam's body made again as it is (its copes, after they are set)."""
+        self.resize_beam(guid)
+
+    def steel_box(self, guid):
+        """(width, depth) of a profiled element's section, m."""
+        from .edit import profile_size
+        e = self.by_guid(guid)
+        profile = ifcopenshell.util.element.get_material(e, should_skip_usage=True).MaterialProfiles[0].Profile
+        w, d, _a, _p = profile_size(profile)
+        return w * self.unit_scale, d * self.unit_scale
 
     def set_steel_member(self, guid, spec=None, start=None, end=None, cardinal=None, rotation=None, lang="pt"):
         """A steel piece changed: another section (spec), other ends, cardinal point or rotation — made again."""

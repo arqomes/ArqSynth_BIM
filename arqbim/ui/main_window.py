@@ -809,6 +809,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_beams_between = self._action(t("act.beams_between"), lambda: self.beams_between(),
                                               icon=icons.beams_between_icon())                         # (0.94)
         self.act_beams_between.setToolTip(t("tip.beams_between"))
+        self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
+                                            icon=icons.steel_mitre_icon())                              # (0.496)
+        self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
         self.act_walls_under_beams = self._action(t("act.walls_under_beams"), lambda: self.walls_under_beams(),
                                                   icon=icons.walls_under_beams_icon())                 # (0.95)
         self.act_walls_under_beams.setToolTip(t("tip.walls_under_beams"))
@@ -2078,6 +2081,8 @@ class MainWindow(QtWidgets.QMainWindow):
             acts.append(self.act_walls_under_beams)
         if counts.get("IfcBeam", 0) >= 3:                   # (0.96) 3+ beams: slabs in their bays
             acts += [self.act_slabs_in_bays, self.act_beam_system]
+        if sum(counts.values()) == 2 and len(self._steel_pieces()) == 2:      # (0.496) two steel pieces: a mitre
+            acts.append(self.act_steel_mitre)
         if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
                 counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
                     isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
@@ -5049,6 +5054,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewport.set_selection({made})
         self.message(t("info.combined_footing"))
         return made
+
+    def _steel_pieces(self):
+        """(0.496) The steel pieces selected (their GlobalIds)."""
+        return [g for g in self.viewport.selection if isinstance(g, str) and self.doc.ifc.kind_of(g) == "steel_member"]
+
+    def steel_mitre(self):
+        """(0.496) Estrutura ▸ Meia-esquadria: the two steel pieces selected cut to a mitre where their lines meet."""
+        pieces = self._steel_pieces()
+        if len(pieces) != 2:
+            self.message(t("info.steel_mitre_pick"), warning=True)
+            return False
+        if not bim.mitre(self.doc, pieces[0], pieces[1]):
+            self.message(t("info.steel_mitre_no"), warning=True)
+            return False
+        self.message(t("info.steel_mitre", a=self.doc.get(pieces[0]).name, b=self.doc.get(pieces[1]).name))
+        return True
 
     def beams_between(self):
         """Beams between columns (0.94): between the columns selected (none: all those of the active storey)

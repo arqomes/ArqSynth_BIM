@@ -521,6 +521,7 @@ class EditMixin:
         self._clear_representations(element)
         body = api.geometry.add_profile_representation(self.file, context=self.body, profile=profile, depth=length,
                                                         cardinal_point=int(cardinal))
+        self._apply_cuts(element, body, length)            # (0.496) its ends cut, its copes, as it keeps them
         api.geometry.assign_representation(self.file, product=element, representation=body)
         _w, _d, area, perimeter = profile_size(profile)
         area, perimeter = area * s * s, perimeter * s

@@ -3289,6 +3289,16 @@ _STRINGS = {
     "cmd.grid_remove": ("Apagar eixo", "Delete grid axis"),
     "cmd.beam": ("Viga", "Beam"),
     "cmd.steel_member": ("Peça metálica", "Steel member"),          # (0.495)
+    "cmd.steel_mitre": ("Meia-esquadria", "Mitre"),                 # (0.496)
+    "act.steel_mitre": ("Meia-esquadria", "Mitre"),
+    "tip.steel_mitre": ("Corta duas peças metálicas escolhidas em meia-esquadria onde as linhas se encontram (o "
+                        "joelho de um pórtico).",
+                        "Cuts the two steel pieces selected to a mitre where their lines meet (a portal's knee)."),
+    "info.steel_mitre_pick": ("Escolha duas peças metálicas (Selecionar, Shift + clique) e depois Meia-esquadria.",
+                              "Select two steel pieces (Select, Shift + click), then Mitre."),
+    "info.steel_mitre_no": ("As linhas das duas peças não se encontram (paralelas, ou a mais de 50 cm).",
+                            "The two pieces' lines do not meet (parallel, or more than 50 cm apart)."),
+    "info.steel_mitre": ("{a} e {b} em meia-esquadria.", "{a} and {b} mitred."),
     "cmd.x_brace": ("Contraventamento entre pilares", "Bracing between columns"),
     "tool.wall": ("Parede", "Wall"),
     "tool.slab": ("Laje", "Slab"),

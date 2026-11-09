@@ -652,6 +652,7 @@ def bim_flow():
     diagram_boolean_flow()
     steel_types_flow()
     steel_member_flow()
+    steel_cuts_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20013,6 +20014,43 @@ def steel_member_flow():
     check("peca_metalica_e_contraventamento", in_ribbon and sloped and braces and faces and listed and retyped,
           "fita={} asna={} ({}) contraventamentos={} ({}) faces={} tipos={} mudou={}".format(
               in_ribbon, sloped, rp and (rp["start"], rp["end"]), braces, len(made), faces, listed, retyped))
+
+
+def steel_cuts_flow():
+    """0.496 — Ends cut: a post and a rafter (steel pieces) meeting at the knee; both selected, the selection bar
+    offers «Meia-esquadria»: clicked, both cut in a mitre; an IPE 200 drawn with the Beam tool onto an IPE 400
+    girder: stopped at its web, coped. Captured: 496_meia_esquadria.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    post = bim_actions.add_steel_member(doc, (0.0, 0.0, 0.0), (0.0, 0.0, 4.0), catalog.BY_KEY["viga_ipe300"],
+                                        function="column", cardinal=5, rotation=90.0)
+    rafter = bim_actions.add_steel_member(doc, (0.0, 0.0, 4.0), (5.0, 0.0, 4.5), catalog.BY_KEY["viga_ipe300"],
+                                          cardinal=5)
+    ipe400 = catalog.steel_spec(catalog.BY_KEY["viga_ipe300"], "IPE400", "S275")
+    bim_actions.add_beam(doc, np.array((0.0, 4.0, 3.0)), np.array((6.0, 4.0, 3.0)), ipe400, 3.0)
+    beam = bim_actions.add_beam(doc, np.array((3.0, 8.0, 3.0)), np.array((3.0, 4.0, 3.0)),
+                                catalog.BY_KEY["viga_ipe200"], 3.0)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    vp.set_selection({post, rafter})
+    pump(300)
+    offered = win.act_steel_mitre in win._selection_actions({"IfcColumn": 1, "IfcBeam": 1})
+    win.act_steel_mitre.trigger()
+    pump(300)
+    cut = bool(doc.ifc.steel_cuts(doc.ifc.by_guid(post))[0]) and bool(doc.ifc.steel_cuts(doc.ifc.by_guid(rafter))[0])
+    vp.set_selection(set())
+    vp.zoom_box((np.array((-0.6, -0.6, 3.4)), np.array((0.8, 0.6, 4.7))))
+    pump(400)
+    shot("496_meia_esquadria.png")
+    coped = len(doc.ifc.steel_cuts(doc.ifc.by_guid(beam))[1]) == 1
+    doc.modified = False
+    check("cortes_nas_pontas", offered and cut and coped and win.ribbon_item("steel_mitre") is not None,
+          "oferecido={} cortado={} recorte={}".format(offered, cut, coped))
 
 
 def camera_move_flow():

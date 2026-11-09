@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.496 — Meia-esquadria e recortes (estrutura metálica, passo 2b)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.496.0**.
+
+1. Faça Ctrl+N; fique na **planta** (vista de cima). No separador **Estrutura**, clique em **Peça metálica**. Na barra:
+   Tipo **Viga IPE 300 — S275**, Função **Pilar**, Inserção **Ao centro**, Rotação **90°**, Alturas **Pelas cotas**,
+   Cota no início `0`, Cota no fim `4`.
+2. Na planta, clique num ponto e depois **outra vez no mesmo ponto**: aparece um pilar de pé com 4 m (o início à cota
+   0, o fim à cota 4). Carregue em Esc.
+3. Mude a Função para **Viga**, Rotação **0°**, Cota no início `4`, Cota no fim `4,5`. Clique no pilar e depois 5 m
+   para a direita: aparece a asna, a subir 0,5 m. Esc. Abra o 3D (F8) para ver os dois.
+4. Com **Selecionar**, clique no pilar e, com Shift, na asna. Na barra da seleção aparece **Meia-esquadria**: clique.
+   O joelho fica cortado a meio do ângulo, sem buraco nem sobreposição. Ctrl+Z volta atrás; Ctrl+Y volta a cortar.
+5. Escolha só a asna e uma viga qualquer longe dela e clique em Meia-esquadria (no separador Estrutura, por baixo de
+   Sistema de vigas): aparece o aviso de que as linhas não se encontram.
+6. Com a ferramenta **Viga**, tipo **Viga IPE 300 — S275**, Cota do topo `3`, desenhe uma viga de 6 m (a principal).
+   Mude o tipo para **Viga IPE 200 — S275** e desenhe outra que chegue à primeira de lado, a meio: a secundária para
+   na alma da principal e o banzo de cima tem um recorte onde passaria o banzo da principal (veja de perto no 3D).
+
 ## 0.495 — Peças metálicas e contraventamentos (estrutura metálica, passo 2)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.495.0**.
