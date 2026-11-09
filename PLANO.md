@@ -1023,6 +1023,19 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       caminhos no 3D; «Percorrer a visita guiada» e «Ir até ao escolhido» à altura dos olhos; o importador lê tudo e a
       visita deixa de ser recusada quando um ambiente não tem porta). Fica por fazer: mudar à mão a ordem da visita,
       os apartamentos do Presentation e os movimentos de câmara dos fluxos (suave, humano, técnico, cinemático).
+10. **Pedidos do dono ao testar a 0.488** (2026-11-09: «podemos inserir as primitivas para fazer o diagrama, mas elas
+    podem ser editáveis usando as ferramentas de Modelagem, e podemos incluir ferramentas de adição, subtração,
+    interseção etc. nativo mesmo para este caso, quando exportamos para o ArqSynth, já vai pronto. Também seria bom
+    termos o preenchimento das paredes nos cortes aqui no BIM»):
+    1. **Corte preenchido**: nos cortes da interface do Presentation (e na caixa de corte do 3D), o que é cortado
+       preenchido como no papel — cada parede com a trama dos seus materiais (alvenaria, betão, isolamento, reboco),
+       como nas plantas e cortes do BIM — em vez do escuro liso de hoje; e o aspeto do corte do Presentation (Sólido /
+       Poché / Categoria, a cor), que vai na cena.
+    2. **Volumes de diagrama editáveis com a Modelagem**: escolher um volume no 3D com o rato e mexer-lhe com Mover,
+       Rodar, Escala (e as pegas das faces, como no Presentation), sem passar pelos campos.
+    3. **Combinar volumes, nativo**: União, Subtrair, Interseção e Diferença de dois volumes, calculados no BIM com o
+       mesmo motor do Presentation (manifold), as origens guardadas; vão já prontos como o «volume resultante» do
+       Presentation (`source: "boolean"` com a malha). Precisa da biblioteca `manifold3d` no Python do programa.
 
 ### Alvenaria por tipo de parede (decidido pelo dono do projeto, 2026-11-02)
 «Alvenaria por tipo.» Até aqui a alvenaria do cálculo (os blocos, o seu grupo, a sua resistência fb, a argamassa)
