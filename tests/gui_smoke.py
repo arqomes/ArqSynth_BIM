@@ -663,6 +663,7 @@ def bim_flow():
     equal_nodes_flow()
     beam_on_girder_flow()
     steel_truss_flow()
+    steel_floor_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20463,6 +20464,50 @@ def steel_truss_flow():
     check("trelica", in_ribbon and built and undone,
           "fita={} pecas={} ({} banzos, {} montantes, {} diagonais) desfeito={}".format(
               in_ribbon, len(made), names.count("Banzo"), names.count("Montante"), names.count("Diagonal"), undone))
+
+
+def steel_floor_flow():
+    """0.508 — A steel floor: a 6 × 5 m bay of IPE 300 between HEB 200 columns (axes, columns, beams between); the
+    four beams selected, «Sistema de vigas…» with 3 IPE 200 along Y: each one at the girders' webs, coped, with a fin
+    plate at each end. Captured: 508_piso_metalico.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.generate_grid(doc, [0.0, 6.0], [0.0, 5.0])
+    bim_actions.columns_on_grid(doc, None, catalog.BY_KEY["pilar_heb200"], 3.0, doc.active_storey)
+    girders = bim_actions.beams_between(doc, None, catalog.BY_KEY["viga_ipe300"])
+    pump(300)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection(set(girders))
+    pump(200)
+
+    def fill():
+        d = getattr(win, "_beam_system_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, fill)
+            return
+        d.way.setCurrentIndex(d.way.findData("y"))
+        d.value.setText("3")
+        d.kind.setCurrentIndex(max(0, d.kind.findData("viga_ipe200")))
+        d.accept()
+
+    win._beam_system_dialog = None
+    QtCore.QTimer.singleShot(100, fill)
+    system = win.beam_system()
+    pump(400)
+    fins = [a for g in system for a in doc.ifc.connections_on([g])
+            if doc.ifc.connection_params(a.GlobalId)[0] == "fin_plate"]
+    at_webs = all(abs(float(doc.ifc.beam_params(g)[0][1]) - 0.01355) < 1e-4 for g in system)
+    vp.set_selection(set())
+    vp.zoom_box((np.array((1.0, -0.6, 2.4)), np.array((3.4, 0.8, 3.2))))
+    pump(400)
+    shot("508_piso_metalico.png")
+    doc.modified = False
+    check("piso_metalico", len(system) == 3 and len(fins) == 6 and at_webs,
+          "vigas={} cutelos={} nas_almas={}".format(len(system), len(fins), at_webs))
 
 
 def steel_sheet_flow():

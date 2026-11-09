@@ -644,6 +644,23 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.508 — Piso metálico (estrutura metálica, passo 4)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.508.0**.
+
+1. Faça Ctrl+N. Separador **Estrutura** ▸ **Eixos** ▸ **Gerar eixos**: dois eixos em X a 0 e 6 m, dois em Y a 0 e
+   5 m.
+2. Escolha o tipo **Pilar HEB 200** na ferramenta **Pilar** e use **Pilares nos eixos** (painel Automático): 4
+   pilares de aço.
+3. Escolha o tipo **Viga IPE 300** na ferramenta **Viga** e use **Vigas entre pilares**: 4 vigas principais.
+4. Escolha as 4 vigas e clique em **Sistema de vigas**: Direção **Y**, **Número** 3, tipo **Viga IPE 200**, OK.
+5. Aproxime-se de uma ponta de uma IPE 200: pára junto à alma da IPE 300, com os banzos recortados, e tem um cutelo
+   soldado à alma da principal com 2 parafusos. O mesmo na outra ponta.
+6. Clique no eixo **2** e mova-o 1 m para a direita (ferramenta **Mover**, ou arraste-o): os pilares e as vigas
+   principais vão com ele, o vão cresce, as IPE 200 voltam a assentar repartidas no vão novo e os cutelos vão com
+   elas. Ctrl+Z.
+7. Volte a fazer o Sistema de vigas com **Número** 2: ficam 2 vigas e 4 cutelos (os das 3 antigas saem).
+
 ## 0.507 — Treliça (estrutura metálica, passo 4)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.507.0**.

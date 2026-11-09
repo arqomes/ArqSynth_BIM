@@ -127,6 +127,14 @@ def end_plate_layout(params, beam, column, onto_flange):
     return W, H, middle, spots, thickness, warnings
 
 
+def fin_rows(beam, params=None):
+    """(0.508) How many rows of bolts a fin plate takes on this beam: as many as fit between its flanges (its root
+    radii), the edges and pitch as given — 1 to 4."""
+    params = params or DEFAULTS["fin_plate"]
+    clear = beam.h - 2.0 * beam.tf - 2.0 * beam.r
+    return max(1, min(4, int((clear - 2.0 * params["e"]) // params["p"]) + 1))
+
+
 def fin_plate_layout(params, beam):
     """A fin plate on a beam's web (sections, mm): (its height, bolt spots [(along the beam from the column, up)],
     warnings)."""

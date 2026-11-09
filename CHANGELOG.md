@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.508.0 — 2026-11-09
+
+**Estrutura metálica, passo 4: o piso metálico.**
+
+- O **Sistema de vigas** (separador **Estrutura**, painel **Estrutura**) com um tipo de viga de aço faz agora um
+  **piso metálico**: as vigas secundárias param a 1 cm da **alma** das vigas principais (não nas pontas dos banzos),
+  ficam com os banzos **recortados** e levam um **cutelo** em cada ponta, soldado à alma da principal, com as fiadas
+  de parafusos que cabem na viga (2 numa IPE 200, 3 numa IPE 300).
+- Quando o vão muda (um eixo ou um pilar movido), o sistema volta a assentar como antes e as secundárias e os cutelos
+  vão atrás; quando se volta a pôr o sistema, os cutelos das vigas antigas saem com elas.
+- O **Cutelo** posto à mão também escolhe sozinho as fiadas que cabem na viga.
+
 ## 0.507.0 — 2026-11-09
 
 **Estrutura metálica, passo 4: a treliça.**

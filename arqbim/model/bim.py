@@ -2806,9 +2806,17 @@ def add_beam_connections(doc, kind, beams, params=None):
     if not todo:
         return []
 
+    from ..core import steel as core_steel
+    from ..ifc.steel_connections import fin_rows
+
+    def values(beam, end):                                   # (0.508: a fin plate's rows — what fits on the beam)
+        out = dict(params or {}, end=end)
+        if kind == "fin_plate" and "rows" not in out:
+            out["rows"] = fin_rows(core_steel.get(doc.ifc.steel_section(beam)))
+        return out
+
     def action(ifc):
-        return [ifc.add_connection(kind, [b, c], dict(params or {}, end=end), language).GlobalId
-                for b, c, end in todo]
+        return [ifc.add_connection(kind, [b, c], values(b, end), language).GlobalId for b, c, end in todo]
 
     return doc.execute(IfcCommand(t("cmd." + kind), action, changed=list({b for b, _c, _e in todo}))).result
 
@@ -3471,9 +3479,12 @@ def beam_system(doc, beams, way, mode, value, spec):
     if not rects:
         return [], skipped
     language, prefix = lang(), t("elem.beam")
+    steel_floor = bool(getattr(spec, "section", None))
 
     def action(ifc):
         if old:
+            for a in ifc.connections_on(old):                  # (0.508: their fin plates go with them)
+                ifc.remove_connection(a.GlobalId)
             ifc.remove(old)
         made = []
         for ring, rect in rects:
@@ -3484,6 +3495,16 @@ def beam_system(doc, beams, way, mode, value, spec):
                                      language, storey=ifc.storey_of(ring[0]))
                     ifc._set_params(e, {"Vigas": ";".join(ring), "Sistema": "{}|{}|{}|{}".format(w, mode, value, k)})
                     made.append(e.GlobalId)
+        if steel_floor:                                        # (0.508) a steel floor: each beam to the girders'
+            from ..core import steel as core_steel             # webs, coped, a fin plate at each end on a girder
+            from ..ifc.steel_connections import fin_rows
+            rows = fin_rows(core_steel.get(spec.section))
+            for g in made:
+                ifc.steel_system_fit(g)
+                for end in (0, 1):
+                    girder = ifc.beam_end_girder(g, end)
+                    if girder is not None:
+                        ifc.add_connection("fin_plate", [g, girder], {"end": end, "rows": rows}, language)
         return made
 
     return doc.execute(IfcCommand(t("cmd.beam_system"), action, changed=[])).result, skipped

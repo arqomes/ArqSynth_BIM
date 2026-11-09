@@ -451,6 +451,25 @@ class SteelMemberMixin:
                 changed.append(g)
         return changed
 
+    def steel_system_fit(self, guid):
+        """(0.508) A steel beam of a beam system (laid face to face in its bay) brought to the webs of the steel girders
+        its ends are on — cut back to them (the gap) and coped (beam_onto_beams) —, its connections made again."""
+        from types import SimpleNamespace
+        name = self.steel_section(guid)
+        if name is None or self.kind_of(guid) != "beam":
+            return
+        start, end, top, width, depth = self.beam_params(guid)
+        spec = SimpleNamespace(section=name, profile=(width, depth))
+        a, b, copes = self.beam_onto_beams(start, end, top, spec, skip=(guid,))
+        e = self.by_guid(guid)
+        self.set_steel_cuts(e, copes=copes)
+        if float(np.linalg.norm((a - start)[:2])) > 1e-9 or float(np.linalg.norm((b - end)[:2])) > 1e-9:
+            self.set_beam_ends(guid, a, b)
+        else:
+            self.rebuild_beam(guid)
+        for c in self.connections_on([guid]):
+            self._build_connection(c)
+
     def rebuild_beam(self, guid):
         """A beam's body made again as it is (its copes, after they are set)."""
         self.resize_beam(guid)

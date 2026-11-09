@@ -1595,6 +1595,8 @@ class EditMixin:
             if int(k) < len(lines):
                 (sx, sy), (ex, ey) = lines[int(k)]
                 self.set_beam_ends(beam, np.array((sx, sy, rect[4])), np.array((ex, ey, rect[4])))
+                if self.steel_section(beam) is not None:      # (0.508: a steel floor's — to the girders' webs)
+                    self.steel_system_fit(beam)
 
     def set_slab_rect(self, guid, x0, y0, x1, y1, top):
         """A slab made the rectangle x0..x1 × y0..y1 (plan, along X / Y), its top at `top`; its thickness the

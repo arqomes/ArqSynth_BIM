@@ -958,6 +958,55 @@ class Truss(unittest.TestCase):
         self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
 
 
+class SteelFloor(unittest.TestCase):
+    """(0.508) A steel floor: the beam system of steel beams."""
+
+    def test_floor(self):
+        """A 6 × 5 m bay of IPE 300 between HEB 200 columns; a beam system of 3 IPE 200 along Y: each stopped 10 mm
+        from the girders' webs (13,55 mm from their axes) and coped, a fin plate of 2 rows (what fits an IPE 200) at
+        each end, no warnings; laid again as 2: the old ones' plates gone with them (4 left); axis 2 moved 1 m out:
+        the system laid again in the wider bay, its beams still at the webs, their plates on them."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.generate_grid(doc, [0.0, 6.0], [0.0, 5.0])
+        bim.columns_on_grid(doc, None, catalog.BY_KEY["pilar_heb200"], 3.0, doc.active_storey)
+        bim.beams_between(doc, None, catalog.BY_KEY["viga_ipe300"])
+        made, skipped = bim.beam_system(doc, None, "y", "count", 3, catalog.BY_KEY["viga_ipe200"])
+        self.assertEqual((len(made), skipped), (3, 0))
+
+        def connections():
+            return [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                    if doc.ifc.kind_of(a.GlobalId) == "steel_connection"]
+        for g in made:
+            start, end, _top, _w, _h = doc.ifc.beam_params(g)
+            self.assertAlmostEqual(float(start[1]), 0.00355 + 0.010, places=5)
+            self.assertAlmostEqual(float(end[1]), 5.0 - 0.00355 - 0.010, places=5)
+            self.assertTrue(doc.ifc.steel_cuts(doc.ifc.by_guid(g))[1])                   # (coped)
+            fins = doc.ifc.connections_on([g])
+            self.assertEqual(sorted(doc.ifc.connection_params(a.GlobalId)[2]["end"] for a in fins), [0, 1])
+            self.assertTrue(all(doc.ifc.connection_params(a.GlobalId)[2]["rows"] == 2 for a in fins))
+            self.assertTrue(all(doc.ifc.connection_warnings(a.GlobalId) == [] for a in fins))
+        made, _ = bim.beam_system(doc, None, "y", "count", 2, catalog.BY_KEY["viga_ipe200"])
+        self.assertEqual(len(connections()), 4)
+        idx = {a.tag: k for k, a in enumerate(doc.grids)}
+        k = idx["2"]
+        axis = doc.grids[k]
+        bim.move_grid_axes(doc, {k: ((axis.start[0] + 1.0, axis.start[1]), (axis.end[0] + 1.0, axis.end[1]))})
+        xs = sorted(round(float(doc.ifc.beam_params(g)[0][0]), 4) for g in made)
+        self.assertGreater(xs[-1], 4.2)                                                 # (the wider bay's)
+        for g in made:
+            start = doc.ifc.beam_params(g)[0]
+            self.assertAlmostEqual(float(start[1]), 0.01355, places=5)
+            for a in doc.ifc.connections_on([g]):
+                plate = next(p for p in doc.ifc.connection_parts(a) if p.is_a("IfcPlate"))
+                v = doc.get(plate.GlobalId).mesh.verts
+                self.assertLess(abs(float(v[:, 0].max()) - float(start[0])), 0.02)      # (beside the beam, moved)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)
