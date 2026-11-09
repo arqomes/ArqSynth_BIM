@@ -647,6 +647,7 @@ def bim_flow():
     panorama_flow()
     presentation_tab_flow()
     scene_effects_flow()
+    scene_diagrams_flow()
     line_loops_flow()
     free_drawing_flow()
     work_plane_rotate_flow()
@@ -19524,6 +19525,100 @@ def scene_effects_flow():
           "escolhido={} ({}) comecou={} acabou={} exportado={} ({} / {})".format(
               set_up, cena, started, ended, exported, sent.get("bim_scene_geral", {}).get("effect"),
               sent.get("bim_scene_" + key_new, {}).get("effect")))
+
+
+def scene_diagrams_flow():
+    """0.487 — The Presentation's volumes for diagrams in the BIM's interface (Diagramas): a room of four walls; the
+    general view: «Caixa» — «Caixa 1» beside the model, chosen, drawn; its width 3 m, its elevation 1 m, turned 45°, half
+    see-through, pink; «Cilindro» — «Cilindro 1», the next colour; the box's eye off (one drawn); the cylinder locked (its
+    fields off, a change refused); a new scene shows none, the general view its own again; «Duplicar cena com estes
+    volumes»: the copy has both; exported: the general view's two volumes as the Presentation's; the interface put away:
+    none drawn. Captured: 487_diagramas.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_export
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (6.0, 0.0, 0.0), (6.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    bim_actions.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.show_presentation_tab()
+    pump(600)
+    mode = win.presentation_mode
+    mode.activate("geral")
+    pump(200)
+    QtTest.QTest.mouseClick(mode.side.buttons["diagrams"], Qt.MouseButton.LeftButton)
+    pump(200)
+    page = mode.side.pages["diagrams"]
+    empty = page.empty.isVisible() and not page.editor.isVisible() and mode.side.windowTitle() == "DIAGRAMAS"
+    QtTest.QTest.mouseClick(page.create["box"], Qt.MouseButton.LeftButton)
+    pump(300)
+
+    def geral():
+        return next(s for s in pm.scenes(doc) if s.key == "geral")
+
+    made = geral().diagrams
+    caixa = made[0] if made else {}
+    created = len(made) == 1 and caixa["name"] == "Caixa 1" and caixa["position"][0] > 6.0 \
+        and mode.diagram_key == caixa["id"] and vp.diagrams_shown() == 1 and page.editor.isVisible()
+    page.measures[0].setValue(3.0)
+    page.place[2].setValue(1.0)
+    page.turn[1].setValue(45.0)
+    page.opacity.setValue(50)
+    QtTest.QTest.mouseClick(page.swatches["#fb7185"], Qt.MouseButton.LeftButton)
+    pump(300)
+    caixa = geral().diagrams[0]
+    edited = caixa["dimensions"][0] == 3.0 and caixa["position"][2] == 1.0 and caixa["rotation"][1] == 45.0 \
+        and caixa["opacity"] == 0.5 and caixa["color"] == "#fb7185" and "m³" in page.info.text()
+    shot("487_diagramas.png")
+    QtTest.QTest.mouseClick(page.create["cylinder"], Qt.MouseButton.LeftButton)
+    pump(300)
+    cilindro = geral().diagrams[1] if len(geral().diagrams) > 1 else {}
+    second = cilindro.get("name") == "Cilindro 1" and cilindro.get("color") == "#f59e0b" and vp.diagrams_shown() == 2
+    rows = [page.rows.itemAt(k).widget() for k in range(page.rows.count())]
+    QtTest.QTest.mouseClick(rows[0].eye, Qt.MouseButton.LeftButton)
+    pump(300)
+    eye = geral().diagrams[0]["visible"] is False and vp.diagrams_shown() == 1
+    QtTest.QTest.mouseClick(page.lock, Qt.MouseButton.LeftButton)
+    pump(300)
+    locked = geral().diagrams[1]["locked"] and not page.measures[0].isEnabled() \
+        and not mode.update_diagram(cilindro["id"], dimensions=(9, 9, 9))
+    framed = mode.frame_diagrams()
+    other = mode.create_scene()
+    pump(400)
+    mode.activate(other)
+    pump(300)
+    apart = vp.diagrams_shown() == 0 and page.empty.isVisible()
+    mode.activate("geral")
+    pump(300)
+    back = vp.diagrams_shown() == 1
+    mode.choose_diagram(cilindro["id"])
+    pump(100)
+    QtTest.QTest.mouseClick(page.dup_scene, Qt.MouseButton.LeftButton)
+    pump(500)
+    copy_ = mode.scene()
+    duplicated = copy_ is not None and copy_.key != "geral" and len(copy_.diagrams) == 2
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_dia_"), "casa.glb"))
+    found = presentation_export.read(path) if path and os.path.exists(path) else None
+    sent = {s["id"]: s for s in (found or {}).get("presentation", {}).get("model3d", {}).get("scenes", [])}
+    shapes = [(d["type"], d["name"], d["visible"], d["locked"]) for d in sent.get("bim_scene_geral", {}).get(
+        "diagrams", [])]
+    exported = shapes == [("box", "Caixa 1", False, False), ("cylinder", "Cilindro 1", True, True)]
+    doc.modified = False
+    win.close_presentation()
+    pump(300)
+    gone = vp.diagrams_shown() == 0
+    check("diagramas_da_cena", empty and created and edited and second and eye and locked and framed and apart
+          and back and duplicated and exported and gone,
+          "vazio={} criada={} editada={} ({}) segundo={} olho={} bloqueado={} enquadrou={} outra_cena={} voltou={} "
+          "duplicada={} exportado={} ({}) saiu={}".format(empty, created, edited, caixa, second, eye, locked, framed,
+                                                        apart, back, duplicated, exported, shapes, gone))
 
 
 def camera_move_flow():

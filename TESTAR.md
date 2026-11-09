@@ -644,6 +644,33 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.487 — Diagramas na interface do Presentation
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.487.0**.
+
+1. Faça Ctrl+N e desenhe uma casa pequena (4 paredes e uma laje chegam).
+2. Clique no ícone **ArqSynth Presentation** da barra da esquerda e, na coluna da esquerda, no cartão **Vista geral**.
+3. Na barra de ícones da direita, clique no ícone com **um triângulo, um quadrado e um círculo** (o 5.º, por baixo do
+   sol): o título da coluna diz **DIAGRAMAS** e aparece «Ainda não há volumes nesta cena».
+4. Em **CRIAR VOLUME**, clique em **Caixa**: aparece uma caixa azul ao lado da casa, com o contorno destacado, e a
+   «Caixa 1» na lista com os campos por baixo.
+5. Em **Largura**, escreva `3` e carregue Enter; em **Elevação**, `1`; em **Rodar vertical**, `45`: a caixa muda no 3D.
+6. Em **APARÊNCIA**, clique na quinta cor (cor-de-rosa) e ponha a **Opacidade** em `50`: a caixa fica cor-de-rosa e
+   meio transparente.
+7. Clique em **Cilindro**: aparece o «Cilindro 1», cor de laranja. Experimente **Esfera**, **Cone** e **Plano**.
+8. Na lista, clique no **olho** da Caixa 1: desaparece do 3D. Clique outra vez: volta.
+9. Escolha o Cilindro 1 e clique em **Bloquear**: os campos ficam cinzentos e não se mudam. Clique outra vez para
+   desbloquear.
+10. Clique no botão do canto de cima (**Enquadrar volumes**): os volumes ficam à vista.
+11. Clique no cartão de outra cena (ou crie uma com **+ Criar cena**): não tem volumes. Volte à **Vista geral**: os
+    volumes estão lá.
+12. Clique em **Duplicar cena com estes volumes**: aparece uma cena nova com os mesmos volumes.
+13. Faça Ctrl+Z algumas vezes: cada mudança desfaz-se, uma a uma.
+14. Clique em **Exportar / atualizar**, grave o ZIP e importe-o no Presentation local (botão **ArqSynth BIM**): no
+    separador **Diagramas** do Presentation, a Vista geral tem os mesmos volumes, com as mesmas medidas e cores.
+15. Clique no ícone **ArqSynth Presentation** da barra da esquerda para voltar ao BIM: os volumes já não se veem (só
+    existem na interface do Presentation).
+
 ## 0.486 — Efeitos na interface do Presentation
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.486.0**.
@@ -651,7 +678,8 @@ Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.486.
 1. Faça Ctrl+N e desenhe uma casa pequena: uma laje de piso, 4 paredes, uma porta, uma janela e, se quiser, uma
    cobertura.
 2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
-3. Na barra de ícones da direita, clique no ícone da **câmara de filmar** (o 7.º): o título da coluna diz **EFEITOS**.
+3. Na barra de ícones da direita, clique no ícone da **câmara de filmar** (o 8.º desde a 0.487): o título da coluna
+   diz **EFEITOS**.
    No topo há dois botões, **MODELO** e **CÂMARA**; está em **MODELO**.
 4. Clique no cartão **Vista geral** (coluna da esquerda) e depois em **Construção**: aparece a explicação, a
    **Duração**, «Reproduzir ao entrar na cena» e, em baixo, a **Sequência de construção** com todas as peças numeradas
@@ -681,7 +709,7 @@ Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.485.
 
 1. Faça Ctrl+N e desenhe uma casa: 4 paredes, uma porta, uma janela e, de preferência, uma laje de piso.
 2. Clique no ícone **ArqSynth Presentation** da barra da esquerda.
-3. Na barra de ícones da direita, clique no ícone da **etiqueta** (o 5.º, por baixo do sol): o título da coluna diz
+3. Na barra de ícones da direita, clique no ícone da **etiqueta** (o 6.º desde a 0.487): o título da coluna diz
    **ETIQUETAS** e aparece «Sem etiquetas…».
 4. Em **ADICIONAR ETIQUETA**, clique em **Piso**: o botão fica aceso e aparece «Clique numa superfície do modelo…».
 5. Passe o rato pelo chão da casa, sem clicar: vê-se o contorno da etiqueta a acompanhar o rato.

@@ -33,6 +33,7 @@ from ..i18n import t
 from . import camera_moves
 from . import gltf_export
 from . import presentation as presentation_model
+from . import presentation_diagrams
 
 KEY = "arqsynth"                        # the GLB's asset.extras key
 FORMAT, FORMAT_VERSION = "arqsynth-ecosystem-handoff", "1.0"
@@ -580,6 +581,8 @@ def _scenes(doc, gltf, layers, storey_of, offset, chosen, thumbnails):
                             "style": _tuned_style(scene, style or {"mode": "material", "edges": True,
                                                                    "shadows": False})},
                            **({"hiddenLabels": labels} if labels else {}),
+                           **({"diagrams": [presentation_diagrams.to_presentation(d, lambda p: _gl(p, offset))
+                                            for d in scene.diagrams]} if scene.diagrams else {}),      # (0.487)
                            **_chosen(scene, thumbnails, known), **_move(doc, scene, building, rooms, offset)))
 
     for scene in chosen:

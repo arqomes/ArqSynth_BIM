@@ -43,7 +43,8 @@ DEFAULTS = {"hidden": False, "transition": "smooth", "transition_s": 1.2, "effec
             "hidden_tags": (),                            # (0.485) the labels it hides (their ids)
             # (0.486) its effect as the Presentation's: played when the scene is entered, how far an explosion starts
             # (× the model's radius), the elements left out of a construction (GlobalIds: they stay where they are)
-            "effect_auto": True, "effect_spread": 1.2, "effect_static": ()}
+            "effect_auto": True, "effect_spread": 1.2, "effect_static": (),
+            "diagrams": ()}                               # (0.487) its volumes (model/presentation_diagrams)
 LIMITS = {"transition_s": (0.0, 10.0), "effect_s": (1.0, 60.0), "seconds": (0.0, 600.0), "move_s": (0.0, 120.0),
           "sun_day": (1, 365), "sun_minutes": (0, 1439), "exposure": (0.3, 1.6), "fov": (0.0, FOV_MAX),
           "ao_intensity": (0.0, 2.0), "effect_spread": (0.3, 3.0)}
@@ -101,6 +102,7 @@ class Scene:
     effect_auto: bool = True    # (0.486) its effect played when the scene is entered (the Presentation's autoPlay)…
     effect_spread: float = 1.2  # …an explosion's distance (× the model's radius)…
     effect_static: tuple = ()   # …the elements left out of a construction (GlobalIds): seen still from the start
+    diagrams: tuple = ()        # (0.487) its volumes for diagrams (model/presentation_diagrams' dicts)
 
 
 def empty():
@@ -171,6 +173,9 @@ def _value(name, value):
                 return ()
             point = tuple(round(float(c), 4) for c in value)
             return point if len(point) == 3 and all(c == c and abs(c) < 1e7 for c in point) else None
+        if name == "diagrams":                         # (0.487) its volumes, each as model/presentation_diagrams keeps it
+            from . import presentation_diagrams
+            return presentation_diagrams.clean_all(value) if isinstance(value, (list, tuple)) else None
         if name == "cuts":                             # (0.484) the section planes, each (type, position, flipped)
             if isinstance(value, (str, bytes, dict)) or not hasattr(value, "__iter__"):
                 return None

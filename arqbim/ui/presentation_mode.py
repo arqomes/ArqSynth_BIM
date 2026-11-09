@@ -37,6 +37,8 @@ from ..model import camera_moves
 from ..model import presentation as pm
 from ..model import presentation_sun
 from ..model import presentation_tags
+from ..model import presentation_diagrams as diagrams_model
+from . import presentation_diagrams
 from . import presentation_glyphs as glyphs
 from . import presentation_labels
 from . import theme
@@ -46,7 +48,7 @@ THUMB = QtCore.QSize(84, 47)            # a scene card's picture (16:9)
 PAGE_THUMB = QtCore.QSize(150, 84)      # a page card's
 MIME = "application/x-arqsynth-scene"   # a scene card dragged to another place
 RAIL = (("layers", "layers"), None, ("scenes", "film"), ("cuts", "section"), ("environment", "sun"),
-        ("labels", "tag"), ("images", "pano"), ("effects", "camera"), None, ("walk", "walk"))
+        ("diagrams", "shapes"), ("labels", "tag"), ("images", "pano"), ("effects", "camera"), None, ("walk", "walk"))
 
 
 def vertical_fov(pygfx_fov, aspect):
@@ -1384,6 +1386,7 @@ class SidePanel(QtWidgets.QDockWidget):
         self.stack = QtWidgets.QStackedWidget()
         self.pages = {"layers": LayersPage(mode), "scenes": ScenesPage(mode), "cuts": CutsPage(mode),
                       "environment": EnvironmentPage(mode),
+                      "diagrams": presentation_diagrams.DiagramsPage(mode),           # (0.487; in the rail's order)
                       "labels": presentation_labels.LabelsPage(mode),                 # (0.485)
                       "images": ImagesPage(mode), "effects": EffectsPage(mode),
                       "walk": _OptionPage(mode, "walk", "present.walk", "pmode.walk_note")}
@@ -1418,6 +1421,7 @@ class SidePanel(QtWidgets.QDockWidget):
     def restyle(self):
         self.root.setStyleSheet(_css())
         self.pages["layers"].restyle()
+        self.pages["diagrams"].restyle()
         for button in self.buttons.values():
             button.update()
 
@@ -1736,6 +1740,8 @@ class PresentationMode(QtCore.QObject):
         self.tag_key = None                 # (0.485) the label chosen (its editor open in «Etiquetas»)
         self.label_placement = None         # (0.485) how the next one is put (Piso, Parede, Em pé, Chamada)
         self._tags_drawn = None             # (what the 3D view shows of them: drawn again only when it changed)
+        self.diagram_key = None             # (0.487) the volume chosen in «Diagramas» (its editor open)
+        self._diagrams_drawn = None
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
         self._layers_stale = True
         self._entered_once = False
@@ -1918,6 +1924,7 @@ class PresentationMode(QtCore.QObject):
         self.vp.set_hidden_elements(self.live["hidden"])
         self.apply_cuts()
         self.apply_tags()                                  # (0.485)
+        self.apply_diagrams()                              # (0.487)
         if self.scene_key is None or self.scene(self.scene_key) is None:
             self.scene_key = pm.initial(self.doc)
         for w in (self.look_button, self.sun_button, self.player):
@@ -1945,6 +1952,7 @@ class PresentationMode(QtCore.QObject):
         self.vp.set_hidden_elements(set())
         self.vp.set_cuts([])                              # (0.484: the BIM's 3D view whole)
         self.apply_tags()                                 # (0.485: none)
+        self.apply_diagrams()                             # (0.487: none)
         self.vp.camera_locked = False
         self.pages.hide()
         self.side.hide()
@@ -1962,6 +1970,8 @@ class PresentationMode(QtCore.QObject):
                          hidden_tags=set())
         self.tag_key = None
         self._tags_drawn = None
+        self.diagram_key = None
+        self._diagrams_drawn = None
         self._entered_once = False
         self.came_from = None
         self._layers_stale = True
@@ -1970,6 +1980,7 @@ class PresentationMode(QtCore.QObject):
             self.vp.set_cuts([])
             self.vp.camera_locked = False
             self.apply_tags()
+            self.apply_diagrams()
 
     def restyle(self):
         self.pages.restyle()
@@ -1998,6 +2009,9 @@ class PresentationMode(QtCore.QObject):
         if self.tag_key not in known:
             self.tag_key = None
         self.apply_tags()
+        if self.diagram(self.diagram_key) is None:        # (0.487: the scene's volumes, as they are now)
+            self.diagram_key = None
+        self.apply_diagrams()
         if layers is None:
             layers = changed is None or bool(removed) or any(isinstance(i, str) and self.doc.get(i) is not None
                                                              for i in changed)
@@ -2067,6 +2081,9 @@ class PresentationMode(QtCore.QObject):
         vp.camera_locked = False                          # (placed by the program, not the mouse)
         self.apply_cuts()
         self.apply_tags()
+        if self.diagram(self.diagram_key) is None:        # (0.487: its own volumes)
+            self.diagram_key = None
+        self.apply_diagrams()
 
         def place():
             if scene.kind == "view3d":
@@ -2485,6 +2502,108 @@ class PresentationMode(QtCore.QObject):
             del self.live["cuts"][k]
             self.apply_cuts()
             self.side.show_scene(self.scene())
+
+    # ------------------------------------------------------------ (0.487) the volumes for diagrams («Diagramas»)
+
+    def diagrams(self, scene=None):
+        """The scene's volumes (the one chosen's by default)."""
+        scene = scene if scene is not None else self.scene()
+        return list(scene.diagrams) if scene is not None else []
+
+    def diagram(self, d_id):
+        return next((d for d in self.diagrams() if d["id"] == d_id), None) if d_id else None
+
+    def _keep_diagrams(self, items, label):
+        """The scene chosen's volumes these: one undo step."""
+        if self.scene() is None:
+            return False
+        self.doc.set_presentation(pm.changed(self.doc.presentation, self.scene_key, diagrams=list(items)), t(label))
+        self.refresh(layers=False)
+        return True
+
+    def add_diagram(self, kind):
+        """«Criar volume»: a box, cylinder, sphere, cone or plane beside the model (the Presentation's createDiagram),
+        chosen. One undo step."""
+        items = self.diagrams()
+        if self.scene() is None:
+            return None
+        if len(items) >= diagrams_model.MAX:
+            self.win.message(t("pmode.dia_full", n=diagrams_model.MAX), warning=True)
+            return None
+        box = self.vp.bounds()
+        d = diagrams_model.new(kind, items, box[0] if box is not None else None, box[1] if box is not None else None,
+                               base=t("pmode.dia_shape." + kind))
+        self.diagram_key = d["id"]
+        if self.side.tab != "diagrams":
+            self.side.show_tab("diagrams")
+        self._keep_diagrams(items + [d], "pmode.cmd_dia_add")
+        self.win.message(t("pmode.dia_put", name=d["name"]))
+        return d["id"]
+
+    def update_diagram(self, d_id, **fields):
+        """A volume's fields changed (its editor, its eye, its lock) — a locked one only unlocked. One undo step."""
+        d = self.diagram(d_id)
+        if d is None or (d["locked"] and set(fields) - {"locked"}):
+            return False
+        changed = diagrams_model.clean(dict(d, **fields))
+        if changed is None or changed == d:
+            return False
+        return self._keep_diagrams(diagrams_model.with_one(self.diagrams(), changed), "pmode.cmd_dia")
+
+    def remove_diagram(self, d_id):
+        d = self.diagram(d_id)
+        if d is None or d["locked"]:
+            return False
+        if self.diagram_key == d_id:
+            self.diagram_key = None
+        self._keep_diagrams(diagrams_model.without(self.diagrams(), d_id), "pmode.cmd_dia_remove")
+        self.win.message(t("pmode.dia_removed", name=d["name"]))
+        return True
+
+    def duplicate_diagram(self, d_id):
+        d = self.diagram(d_id)
+        items = self.diagrams()
+        if d is None or len(items) >= diagrams_model.MAX:
+            return None
+        copy_ = diagrams_model.duplicate(d, items, t("pmode.copy_word"))
+        self.diagram_key = copy_["id"]
+        self._keep_diagrams(items + [copy_], "pmode.cmd_dia_dup")
+        return copy_["id"]
+
+    def choose_diagram(self, d_id):
+        """A volume chosen in the list (its editor, its outline in the 3D view), or none."""
+        self.diagram_key = d_id if self.diagram(d_id) is not None else None
+        self.apply_diagrams()
+        self.side.show_scene(self.scene())
+
+    def frame_diagrams(self, ids=None):
+        """«Enquadrar volumes» / «Focar volume»: those shown in view (the direction of view kept)."""
+        items = [d for d in self.diagrams() if ids is None or d["id"] in ids]
+        box = diagrams_model.bounds(items)
+        if box is not None:
+            self.vp.zoom_box(box)
+        return box is not None
+
+    def apply_diagrams(self):
+        """The scene chosen's volumes on the 3D view (those shown), the one chosen outlined; none when the tab is put
+        away. Drawn again only when they changed."""
+        if not self.active:
+            if self._diagrams_drawn is not None:
+                self._diagrams_drawn = None
+                self.vp.set_diagrams([])
+            return
+        items = [d for d in self.diagrams() if d["visible"]]
+        chosen = self.diagram(self.diagram_key)
+        key = repr((items, chosen if chosen is not None and chosen["visible"] else None))
+        if key == self._diagrams_drawn:
+            return
+        self._diagrams_drawn = key
+        draw = []
+        for d in items:
+            points, normals, triangles = diagrams_model.shape(d)
+            draw.append((points, normals, triangles, d["color"], d["opacity"], d["wireframe"]))
+        outline = diagrams_model.outline(chosen) if chosen is not None and chosen["visible"] else ()
+        self.vp.set_diagrams(draw, outline, theme.colour("accent").name())
 
     # ------------------------------------------------------------ (0.486) the effects (the right column's «Efeitos»)
 

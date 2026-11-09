@@ -1008,8 +1008,11 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       duração, reproduzir ao entrar, distância, sequência de construção com as peças tiradas —, «Pré-visualizar» no 3D
       com as contas do Presentation, o ▶ das cenas toca-os; no Presentation a fase de obra já não lê o pavimento
       «Piso 0» como estrutura). Fica por fazer arrastar a ordem de uma peça à mão (o Presentation também não o faz).
-   6. **Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D
-      (o importador do Presentation passa a lê-los).
+   6. ~~**Diagramas** (o separador «Diagramas»): volumes, setas e zonas coloridas sobre o modelo; vão para a página 3D
+      (o importador do Presentation passa a lê-los)~~ (0.487.0: os «Volumes para diagramas» do Presentation — caixa,
+      cilindro, esfera, cone, plano — por cena, com medidas, posição, rotação, escala, cor, opacidade, linhas, olho,
+      cadeado e descrição; o importador lê-os). Fica por fazer: mexer nos volumes com o rato no 3D (as pegas das faces
+      do Presentation), as animações dos volumes (crescer, explodir, organizar, repetir) e combinar e recortar volumes.
    7. **Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
       Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar).
 

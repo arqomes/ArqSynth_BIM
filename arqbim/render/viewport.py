@@ -405,6 +405,7 @@ class Viewport:
         self._tag_follow = None     # (the way to the viewer) -> [(corners, lines)]: those that face the camera
         self._tag_toward = None
         self._effect = None         # (0.486) the Presentation's effect being played (play_effect)
+        self._diagram_objects = []  # (0.487) the Presentation tab's scene's volumes on screen
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -2259,6 +2260,43 @@ class Viewport:
             if len(segments) == buf.nitems:
                 buf.data[:] = _f32(segments)
                 buf.update_range(0, len(segments))
+
+    # ------------------------------------------------------------ (0.487) the Presentation's volumes for diagrams
+
+    def set_diagrams(self, items, outline=(), outline_colour="#2f6fe4"):
+        """The volumes of the Presentation tab's scene drawn over the model: [(points (N, 3), normals (N, 3),
+        triangles (M, 3), colour "#rrggbb", opacity 0–1, wireframe)] — lit, see-through when their opacity is under 1,
+        only their triangles' lines when wireframe —; outline: [(a, b)] the edges of the one chosen, in
+        outline_colour. Not cut by the cuts, not picked. [] none."""
+        for wobj in self._diagram_objects:
+            self.scene.remove(wobj)
+        self._diagram_objects = []
+        for points, normals, triangles, colour, opacity, wireframe in items:
+            if not len(triangles):
+                continue
+            geometry = gfx.Geometry(positions=_f32(points), normals=_f32(normals),
+                                    indices=np.ascontiguousarray(np.asarray(triangles, dtype=np.uint32).reshape(-1, 3)))
+            clear = float(opacity) < 0.99
+            kw = {"alpha_mode": "blend", "depth_write": False} if clear else {}
+            if wireframe:
+                material = _mat(gfx.MeshBasicMaterial, color=colour, opacity=float(opacity), wireframe=True,
+                                wireframe_thickness=1.5, side="both", pick_write=False, **kw)
+            else:
+                material = _mat(gfx.MeshPhongMaterial, color=colour, opacity=float(opacity), specular="#000",
+                                side="both", pick_write=False, **kw)
+            self._diagram_objects.append(gfx.Mesh(geometry, material))
+        segments = [p for edge in outline for p in edge]
+        if segments:
+            self._diagram_objects.append(gfx.Line(gfx.Geometry(positions=_f32(segments)),
+                                                  _mat(gfx.LineSegmentMaterial, thickness=2.5, color=outline_colour,
+                                                       aa=True, depth_test=False)))
+        for wobj in self._diagram_objects:
+            self.scene.add(wobj)
+        self.redraw()
+
+    def diagrams_shown(self):
+        """(0.487) How many volumes are drawn."""
+        return sum(1 for w in self._diagram_objects if isinstance(w, gfx.Mesh))
 
     # ------------------------------------------------------------ (0.486) the Presentation's scene effects
 

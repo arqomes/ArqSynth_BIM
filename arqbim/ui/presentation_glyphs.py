@@ -168,6 +168,10 @@ def _draw(p, kind):
         pen.setStyle(QtCore.Qt.PenStyle.DashLine)
         p.setPen(pen)
         _line(p, (2, 14), (22, 14))
+    elif kind == "shapes":                                  # (0.487) Diagramas: a triangle, a box, a circle
+        p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(12, 2.5), QtCore.QPointF(17, 10.5), QtCore.QPointF(7, 10.5)]))
+        p.drawRoundedRect(QtCore.QRectF(3, 13.5, 8, 8), 1, 1)
+        p.drawEllipse(QtCore.QPointF(17, 17.5), 4, 4)
     elif kind == "pause":
         p.drawRoundedRect(QtCore.QRectF(6, 5, 4, 14), 1, 1)
         p.drawRoundedRect(QtCore.QRectF(14, 5, 4, 14), 1, 1)
@@ -208,4 +212,4 @@ def icon(kind, colour, size=18, on_colour=None):
 KINDS = ("layers", "scene", "camera", "sun", "tag", "pano", "upload", "plus", "eye", "eye_off", "star", "star_on",
          "refresh", "copy", "pencil", "trash", "cube", "cover", "text", "plan", "concept", "split", "tabs", "film",
          "expand", "focus", "lock", "unlock", "palette", "auto", "search", "down", "right", "play", "rotate_l",
-         "rotate_r", "walk", "pause", "section")
+         "rotate_r", "walk", "pause", "section", "shapes")

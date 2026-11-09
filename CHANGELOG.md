@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.487.0 — 2026-11-09
+
+**Diagramas na interface do Presentation** (o dono: «Sim, diagramas»; passo 6 da lista do PLANO).
+
+- Na barra de ícones da direita há um separador novo, **Diagramas** (o ícone com um triângulo, um quadrado e um
+  círculo), entre Ambiente e Etiquetas, no mesmo sítio do Presentation. É o seu «Volumes para diagramas».
+- **Criar volume**: **Caixa**, **Cilindro**, **Esfera**, **Cone** ou **Plano**. O volume aparece ao lado do modelo,
+  com o nome «Caixa 1», «Cilindro 1»…, uma das cinco cores do Presentation e um pouco transparente.
+- A **lista** dos volumes da cena, cada um com a sua cor, o **olho** (mostrar/ocultar) e o **cadeado** (bloquear).
+- O volume escolhido, com o contorno destacado no 3D, edita-se por baixo:
+  - o **nome**, o tipo e o volume em m³;
+  - **Duplicar**, **Focar**, **Bloquear**, **Remover**;
+  - **Mostrar volume nesta cena**;
+  - **Medidas** (largura, altura, profundidade);
+  - **Posição** do centro da base (X, Y e elevação);
+  - **Rotação** e **Escala**, com **Repor rotação e escala**;
+  - **Aparência**: as cinco cores do Presentation ou qualquer outra, a opacidade e «Mostrar estrutura de linhas»;
+  - a **Descrição**.
+  Um volume bloqueado não se muda até ser desbloqueado.
+- **Enquadrar volumes** (canto de cima) põe à vista os volumes da cena.
+- Os volumes são **de cada cena**, como no Presentation: ao escolher outra cena veem-se os dela.
+  **Duplicar cena com estes volumes** faz uma cena nova com os mesmos. Cada mudança é um passo de desfazer.
+- Vão para o Presentation como os volumes da cena, com todos os campos.
+- **No Presentation** (ramo `integracao-arqsynth-bim`): o importador lê os volumes de cada cena e verifica-os como os
+  do próprio editor.
+
 ## 0.486.0 — 2026-11-09
 
 **Efeitos na interface do Presentation** (o dono: «Sim, efeitos»; passo 5 da lista do PLANO).

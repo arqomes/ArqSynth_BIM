@@ -10158,6 +10158,34 @@ class GltfExport(unittest.TestCase):
                                                                "autoPlay": False, "excluded": ["bim_" + walls[1]]})
         self.assertEqual(scenes["bim_scene_" + plan]["effect"], {"type": "explode", "seconds": 6.0, "spread": 2.0})
 
+    def test_presentation_diagrams_export(self):
+        """0.487: a scene's volumes for diagrams — kept with the scene and the file; in the GLB as the Presentation's
+        DiagramObjects, the base's middle in the GLB's axes (the model's offset taken off), only in their scene."""
+        from arqbim.model import gltf_export, presentation as pm, presentation_export as pe
+        doc = Document()
+        corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (5.0, 0.0, 0.0), (5.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+        bim.add_wall_loop(doc, corners, catalog.BY_KEY["parede_alv_20"])
+        caixa = {"id": "c1", "type": "box", "name": "Ampliação", "dimensions": (3, 2.5, 4), "position": (8, 2, 0),
+                 "color": "#fb7185", "opacity": 0.5}
+        doc.set_presentation(pm.changed(doc.presentation, "geral", diagrams=[caixa, {"id": "x", "type": "?"}]))
+        self.assertEqual([d["name"] for d in pm.scenes(doc)[0].diagrams], ["Ampliação"])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "casa.ifc")
+            doc.save(path)
+            again = Document()
+            again.open(path)
+            self.assertEqual(pm.scenes(again)[0].diagrams, pm.scenes(doc)[0].diagrams)
+            glb = os.path.join(tmp, "casa.glb")
+            pe.export(again, glb, "Casa")
+            model = pe.read(glb)["presentation"]["model3d"]
+        offset = np.asarray(model["offset"])
+        sent = model["scenes"][0]["diagrams"]
+        self.assertEqual([(d["id"], d["type"], d["dimensions"], d["material"]["color"], d["material"]["opacity"])
+                          for d in sent], [("bim_dia_c1", "box", [3.0, 2.5, 4.0], "#fb7185", 0.5)])
+        np.testing.assert_allclose(sent[0]["transform"]["position"],
+                                   gltf_export._y_up(np.array((8.0, 2.0, 0.0)) - offset)[0], atol=1e-5)
+        self.assertNotIn("diagrams", model["scenes"][1])
+
     def test_presentation_tag_frames(self):
         """0.485: where a label is drawn, as the Presentation's — on a floor its top to the north, turned by its
         rotation; on a wall its top up; standing high on its posts (two, one for a circle), facing its normal or, when
