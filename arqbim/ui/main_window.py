@@ -829,6 +829,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_purlin_cleat = self._action(t("act.purlin_cleat"), lambda: self.purlin_cleats(),
                                              icon=icons.purlin_cleat_icon())                            # (0.504)
         self.act_purlin_cleat.setToolTip(t("tip.purlin_cleat"))
+        self.act_knee_plate = self._action(t("act.knee_plate"), lambda: self.knee_plate(),
+                                           icon=icons.knee_plate_icon())                                # (0.513)
+        self.act_knee_plate.setToolTip(t("tip.knee_plate"))
         self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
                                             icon=icons.steel_mitre_icon())                              # (0.496)
         self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
@@ -2105,7 +2108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if counts.get("IfcBeam", 0) >= 3:                   # (0.96) 3+ beams: slabs in their bays
             acts += [self.act_slabs_in_bays, self.act_beam_system]
         if sum(counts.values()) == 2 and len(self._steel_pieces()) == 2:      # (0.496) two steel pieces: a mitre
-            acts.append(self.act_steel_mitre)
+            acts += [self.act_steel_mitre, self.act_knee_plate]                # (0.513) …or bolted
         if "IfcColumn" in counts and any(isinstance(g, str) and self.doc.ifc.steel_section(g) is not None
                                          for g in list(self.viewport.selection)[:20]):     # (0.497) steel columns
             acts.append(self.act_base_plate)
@@ -5150,6 +5153,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.gussets", n=len(made)))
         else:
             self.message(t("info.gussets_none"), warning=True)
+        return made
+
+    def knee_plate(self):
+        """(0.513) Estrutura ▸ Ligação ▸ Joelho aparafusado: the two steel pieces selected mitred and bolted (an end
+        plate on each in the mitre's plane)."""
+        pieces = self._steel_pieces()
+        made = bim.knee_plates(self.doc, pieces[0], pieces[1]) if len(pieces) == 2 else None
+        if made is None:
+            self.message(t("info.knee_plate_no"), warning=True)
+            return None
+        self.message(t("info.knee_plate", a=self.doc.get(pieces[0]).name, b=self.doc.get(pieces[1]).name))
         return made
 
     def purlin_cleats(self):

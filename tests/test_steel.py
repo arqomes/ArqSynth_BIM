@@ -1138,6 +1138,62 @@ class MemberHoles(unittest.TestCase):
                          steel_marks.holes_signature(turned, 6300.0, 60.0))
 
 
+class KneePlate(unittest.TestCase):
+    """(0.513) A mitre bolted."""
+
+    def _shed(self, **options):
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        made = bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                              catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"],
+                              catalog.BY_KEY["contrav_l80"], **options)
+        return doc, made
+
+    def test_knee_and_ridge(self):
+        """A frame's knee (HEB 200 / IPE 300) and ridge bolted: each piece held back 20 mm from the mitre's plane, a
+        plate 20 mm on each side of it (at the knee as wide as the HEB — 200 — and as deep as both cut sections),
+        6 M20 through both, 2 welds; no warnings; the pieces get no holes from it (welded to the plates); the file
+        valid; undone: the plain mitre back."""
+        import numpy as np
+        from arqbim.model import bim
+        doc, made = self._shed(plates=False)
+        column, rafter, rafter2 = made[:3]
+        for a, b in ((column, rafter), (rafter, rafter2)):
+            g = bim.knee_plates(doc, a, b)
+            self.assertIsNotNone(g)
+            self.assertIsNone(bim.knee_plates(doc, a, b))                    # (one there already)
+            self.assertEqual(doc.ifc.connection_warnings(g), [])
+            parts = doc.ifc.connection_parts(doc.ifc.connection_of(g))
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcPlate")), 2)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcMechanicalFastener")), 6)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcFastener")), 2)
+            _ka, _kb, joint, normal = doc.ifc.mitre_plane(a, b)[:4]
+            for guid, sign in ((a, 1.0), (b, -1.0)):
+                v = doc.get(guid).mesh.verts
+                self.assertAlmostEqual(float(((v - joint) @ normal * sign).max()), -0.020, places=6)
+                self.assertEqual(doc.ifc.member_holes(guid), [])
+        knee = next(p for p in doc.ifc.connection_parts(doc.ifc.connections_on([column])[0]) if p.is_a("IfcPlate"))
+        self.assertTrue(knee.Name.startswith("Chapa de topo 200×"))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        doc.undo()
+        doc.undo()
+        _ka, _kb, joint, normal = doc.ifc.mitre_plane(column, rafter)[:4]
+        v = doc.get(column).mesh.verts
+        self.assertAlmostEqual(float(((v - joint) @ normal).max()), 0.0, places=6)
+
+    def test_shed_bolted(self):
+        """A shed with «Joelhos: aparafusados»: its 2 frames' 3 mitres each bolted (6), in one undo step."""
+        doc, made = self._shed(knees="bolted")
+        knees = [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                 if doc.ifc.kind_of(a.GlobalId) == "steel_connection"
+                 and doc.ifc.connection_params(a.GlobalId)[0] == "knee_plate"]
+        self.assertEqual(len(knees), 6)
+        doc.undo()
+        self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

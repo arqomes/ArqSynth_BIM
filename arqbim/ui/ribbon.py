@@ -79,8 +79,8 @@ PANELS = {
                                  ["steel_shed", "steel_truss", "steel_stair"],                   # (0.499–0.509)
                                  ("beam_system", "param_surface", "steel_mitre"))),
                   ("foundation", ("footing", ("combined_footing", "footings_under"))),
-                  ("connection", ("base_plate", ["end_plate", "fin_plate", "gusset", "purlin_cleat"],
-                                  ("number_steel", "steel_nc"))),                                # (0.497–0.504)
+                  ("connection", ("base_plate", ["end_plate", "fin_plate", "gusset", "purlin_cleat", "knee_plate"],
+                                  ("number_steel", "steel_nc"))),                                # (0.497–0.513)
                   ("automatic", ("propose_structure", ("beams_between", "walls_under_beams", "slabs_in_bays"),
                                  ("columns_on_grid", "remove_proposal"))),
                   ("datum", ("grid", ("grid_generate", "grid_settings", "storey_new"))),

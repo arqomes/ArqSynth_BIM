@@ -1946,7 +1946,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                          "end_plate": ("tp", "W", "top", "bottom", "rows", "p", "g", "d", "e", "a"),      # (0.498)
                          "fin_plate": ("tp", "w", "rows", "p", "e", "eh", "d", "a"),
                          "gusset": ("tp", "rows", "p", "e", "d", "gap", "g", "edge", "a"),                # (0.503)
-                         "purlin_cleat": ("tp", "w", "H", "rows", "p", "d", "a")}                          # (0.504)
+                         "purlin_cleat": ("tp", "w", "H", "rows", "p", "d", "a"),                          # (0.504)
+                         "knee_plate": ("tp", "rows", "p", "g", "d", "e", "a")}                             # (0.513)
 
     def _connection_rows(self, guid, p):
         """(0.497) A steel connection's values (mm; a plate's 0: from the column), each changed here — the whole

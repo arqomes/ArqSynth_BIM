@@ -2725,6 +2725,10 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
         for i, j in shed.mitres:
             ifc.mitre(made[i], made[j], language)
         extra = []
+        if options.get("knees") == "bolted":                   # (0.513) the knees and ridges bolted
+            for i, j in shed.mitres:
+                a = ifc.add_connection("knee_plate", [made[i], made[j]], None, language)
+                extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
         for k in shed.plates:
             a = ifc.add_connection("base_plate", [made[k]], None, language)
             extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
@@ -2998,6 +3002,24 @@ def set_connection(doc, guid, **values):
     members = doc.ifc.connection_params(assembly.GlobalId)[1]          # (0.498: an end plate's beam changes too)
     return doc.execute(IfcCommand(t("cmd.connection"), lambda ifc: ifc.set_connection(guid, language, **values),
                                   changed=parts + members)).result
+
+
+def knee_plates(doc, a, b, params=None):
+    """(0.513) Two steel pieces whose lines meet (a portal's knee, its ridge) mitred and bolted: an end plate on each
+    in the mitre's plane, bolted together, each piece held back by its plate. One undo step. The connection's
+    GlobalId, or None (their lines do not meet; they have one already)."""
+    language = lang()
+    if doc.ifc.mitre_plane(a, b) is None:
+        return None
+    if any(doc.ifc.connection_params(c.GlobalId)[0] == "knee_plate" and set(doc.ifc.connection_params(c.GlobalId)[1])
+           == {a, b} for c in doc.ifc.connections_on([a])):
+        return None
+
+    def action(ifc):
+        ifc.mitre(a, b, language)
+        return ifc.add_connection("knee_plate", [a, b], params, language).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.knee_plate"), action, changed=[a, b])).result
 
 
 def x_brace(doc, a, b, spec, shape="x"):

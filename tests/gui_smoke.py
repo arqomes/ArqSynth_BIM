@@ -666,6 +666,7 @@ def bim_flow():
     steel_floor_flow()
     steel_stair_flow()
     steel_erection_flow()
+    knee_plate_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20583,6 +20584,44 @@ def steel_erection_flow():
           and frame.scale == 100 and texts.count("P1") == 6 and bool(paths),
           "listado={} rotulo={!r} escala={} marcas={}".format(listed, label, frame.scale if frame else None,
                                                              sorted(set(texts))))
+
+
+def knee_plate_flow():
+    """0.513 — A bolted knee: a shed without its plates; a column and its rafter selected, the selection bar offers
+    «Joelho aparafusado»: clicked, an end plate on each at the mitre, bolted; a plate chosen: its fields in the
+    Properties. Captured: 513_joelho_aparafusado.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    made = bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                                  catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"],
+                                  catalog.BY_KEY["contrav_l80"], plates=False)
+    pump(300)
+    column, rafter = made[0], made[1]
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection({column, rafter})
+    pump(300)
+    offered = win.act_knee_plate in win._selection_actions({"IfcColumn": 1, "IfcBeam": 1})
+    win.act_knee_plate.trigger()
+    pump(400)
+    knees = [a for a in doc.ifc.connections_on([column]) if doc.ifc.connection_params(a.GlobalId)[0] == "knee_plate"]
+    bolts = sum(1 for a in knees for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    built = len(knees) == 1 and bolts == 6
+    plate = next((p.GlobalId for p in doc.ifc.connection_parts(knees[0]) if p.is_a("IfcPlate")), None) if knees else None
+    vp.set_selection({plate} if plate else set())
+    pump(300)
+    shown = "connection.rows" in win.props.editors and "connection.tp" in win.props.editors
+    vp.set_selection(set())
+    win.set_view("front")
+    vp.zoom_box((np.array((-0.6, -0.4, 5.4)), np.array((0.9, 0.4, 6.6))))
+    pump(400)
+    shot("513_joelho_aparafusado.png")
+    doc.modified = False
+    check("joelho_aparafusado", offered and built and shown and win.ribbon_item("knee_plate") is not None,
+          "oferecido={} feito={} ({} parafusos) propriedades={}".format(offered, built, bolts, shown))
 
 
 def steel_sheet_flow():

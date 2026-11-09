@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.513 — Joelho aparafusado (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.513.0**.
+
+1. Faça Ctrl+N. Clique em **Pórtico de nave** e, na barra de parâmetros, ponha **Joelhos** em **Aparafusados**; faça
+   a nave com dois cliques (por exemplo 6 m).
+2. Aproxime-se de um joelho (o topo de um pilar, onde começa a asna): duas chapas costas com costas no corte inclinado,
+   com 6 parafusos; o pilar e a asna acabam cada um na sua chapa. O mesmo na cumeeira (asna com asna).
+3. Clique numa dessas chapas: nas Propriedades aparece **Joelho aparafusado** com a espessura, as fiadas e os
+   parafusos. Ponha **Fiadas de parafusos** em 2: as chapas ficam com 4 parafusos.
+4. Faça outra nave com **Joelhos** em **Soldados**. Escolha um pilar e a sua asna (clique num, Ctrl+clique no outro)
+   e, na barra da seleção, clique em **Joelho aparafusado**: só esse joelho fica aparafusado.
+5. Ctrl+Z: volta a meia-esquadria soldada.
+
 ## 0.512 — Furos nas peças (estrutura metálica, passos 5 e 7)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.512.0**.

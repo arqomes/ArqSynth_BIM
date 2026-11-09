@@ -345,6 +345,22 @@ def purlin_cleat_icon():
     return theme.icon(pm)
 
 
+def knee_plate_icon():
+    """(0.513) Joelho aparafusado: a column and a rafter meeting at a mitre, two plates between them, bolts."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((3, 30), (3, 9), (10, 15), (10, 30))]))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((13, 4), (30, 4), (30, 11), (17, 13))]))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in ((4, 7), (13, 2), (17, 14), (9, 18))]))
+    p.setBrush(QtGui.QColor(INK))
+    for x, y in ((9.0, 6.5), (12.5, 13.5)):
+        p.drawEllipse(QtCore.QPointF(x, y), 1.3, 1.3)
+    p.end()
+    return theme.icon(pm)
+
+
 def steel_shed_icon():
     """(0.499) Pórtico de nave: two portal frames, one behind the other, with their ridges."""
     pm, p = _canvas()

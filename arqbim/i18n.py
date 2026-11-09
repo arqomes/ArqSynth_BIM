@@ -3427,6 +3427,17 @@ _STRINGS = {
                          "Equal nodes: {changed} connection(s) given these values, {made} new one(s)."),
     "info.apply_equal_none": ("Não há outros nós iguais a este (os mesmos perfis).",
                               "There are no other nodes equal to this one (the same sections)."),
+    "connection.knee_plate": ("Joelho aparafusado", "Bolted knee"),                                 # (0.513)
+    "cmd.knee_plate": ("Joelho aparafusado", "Bolted knee"),
+    "act.knee_plate": ("Joelho aparafusado", "Bolted knee"),
+    "tip.knee_plate": ("Nas duas peças de aço escolhidas, cujas linhas se encontram (o joelho de um pórtico, a "
+                       "cumeeira): a meia-esquadria com uma chapa de topo em cada peça, aparafusadas uma à outra.",
+                       "On the two steel pieces selected, whose lines meet (a portal's knee, its ridge): the mitre with "
+                       "an end plate on each piece, bolted to each other."),
+    "info.knee_plate": ("Joelho aparafusado entre {a} e {b}.", "Bolted knee between {a} and {b}."),
+    "info.knee_plate_no": ("Escolha duas peças de aço cujas linhas se encontrem (e ainda sem joelho aparafusado).",
+                           "Select two steel pieces whose lines meet (with no bolted knee yet)."),
+    "refuse.connection_knee_off": ("as linhas dessas peças não se encontram", "those pieces' lines do not meet"),
     "connection.purlin_cleat": ("Apoio de madre", "Purlin cleat"),                                  # (0.504)
     "cmd.purlin_cleat": ("Apoio de madre", "Purlin cleat"),
     "act.purlin_cleat": ("Apoio de madre", "Purlin cleat"),
@@ -3497,6 +3508,9 @@ _STRINGS = {
     "ctx.shed_purlins": ("Afastamento das madres", "Purlins' spacing"),
     "ctx.shed_bracing": ("Contraventar", "Bracing"),
     "ctx.shed_plates": ("Chapas de base", "Base plates"),
+    "ctx.shed_knees": ("Joelhos", "Knees"),                                                          # (0.513)
+    "shed.knees.welded": ("Soldados", "Welded"),
+    "shed.knees.bolted": ("Aparafusados", "Bolted"),
     "hint.shed_start": ("Pórtico de nave: clique no início da primeira fila de pilares (o vão fica para a esquerda; as "
                         "medidas e os perfis na barra).",
                         "Steel shed: click the start of the first line of columns (the span goes to its left; sizes "

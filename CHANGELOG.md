@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.513.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: o joelho aparafusado.**
+
+- Ligação nova **Joelho aparafusado** (na barra da seleção com duas peças de aço escolhidas, ao lado de
+  Meia-esquadria; ou Estrutura ▸ Ligação ▸ seta de Chapa de topo): o joelho de um pórtico (pilar–asna) ou a
+  cumeeira (asna–asna) em meia-esquadria com uma **chapa de topo em cada peça**, no plano da meia-esquadria, costas
+  com costas, **aparafusadas** uma à outra (3 fiadas de 2 M20); cada peça recua a espessura da sua chapa; as chapas
+  têm o tamanho exato do corte das duas secções (no joelho, a largura do HEB).
+- O **Pórtico de nave** tem a opção **Joelhos: Soldados / Aparafusados** na barra de parâmetros: aparafusados, todos
+  os joelhos e cumeeiras levam esta ligação.
+- Nas Propriedades: espessura, fiadas, passo, distância entre parafusos, diâmetro, bordo e soldadura, com os avisos
+  do EN 1993-1-8; apagar a ligação (ou Ctrl+Z) devolve a meia-esquadria soldada.
+
 ## 0.512.0 — 2026-11-09
 
 **Estrutura metálica, passos 5 e 7: os furos nas próprias peças.**

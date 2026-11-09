@@ -24,10 +24,10 @@ import ifcopenshell.util.element
 from .edit import EditRefused
 
 api = ifcopenshell.api
-KINDS = ("base_plate", "end_plate", "fin_plate", "gusset", "purlin_cleat")
+KINDS = ("base_plate", "end_plate", "fin_plate", "gusset", "purlin_cleat", "knee_plate")
 NAMES = {"base_plate": ("Chapa de base", "Base plate"), "end_plate": ("Chapa de topo", "End plate"),
          "fin_plate": ("Cutelo", "Fin plate"), "gusset": ("Gousset", "Gusset plate"),
-         "purlin_cleat": ("Apoio de madre", "Purlin cleat")}
+         "purlin_cleat": ("Apoio de madre", "Purlin cleat"), "knee_plate": ("Joelho aparafusado", "Bolted knee")}
 ANGLE_FAMILIES = ("L", "LU")
 CLEAT_FAMILIES = ("C", "Z", "UPN", "UPE")      # (0.504: a purlin bolted through its web to a cleat beside it)
 # (mm) A × B its plate (0: the column's size + 2 × MARGIN), tp its thickness, n its anchor bolts (2, 4, 6, 8), d their
@@ -51,7 +51,11 @@ DEFAULTS = {"base_plate": {"A": 0.0, "B": 0.0, "tp": 20.0, "n": 4, "d": 20.0, "e
             # (0.504) a purlin's cleat: a plate standing on the beam's top flange (welded), beside the purlin's web,
             # bolted through it — its width along the purlin, its height (0: about 0.7 of the purlin's), bolts one
             # over the other
-            "purlin_cleat": {"tp": 8.0, "w": 100.0, "H": 0.0, "rows": 2, "p": 60.0, "d": 12.0, "a": 4.0}}
+            "purlin_cleat": {"tp": 8.0, "w": 100.0, "H": 0.0, "rows": 2, "p": 60.0, "d": 12.0, "a": 4.0},
+            # (0.513) a mitre bolted: an end plate on each piece in the mitre's plane, as wide as the wider flange and as
+            # deep as the cut sections, bolted together — its thickness, rows of two bolts, their pitch and gauge (0:
+            # the plate's width − 2 e), the edges
+            "knee_plate": {"tp": 20.0, "rows": 3, "p": 90.0, "g": 0.0, "d": 20.0, "e": 40.0, "a": 6.0}}
 LIMITS = {"A": (100.0, 3000.0), "B": (100.0, 3000.0), "tp": (5.0, 100.0), "n": (2, 8), "d": (12.0, 48.0),
           "e": (20.0, 300.0), "proj": (20.0, 300.0), "embed": (100.0, 2000.0), "grout": (0.0, 100.0), "a": (3.0, 20.0),
           "end": (0, 1), "W": (0.0, 1000.0), "top": (0.0, 300.0), "bottom": (0.0, 300.0), "rows": (1, 12),
@@ -289,6 +293,8 @@ class SteelConnectionMixin:
                 raise EditRefused("connection_purlin")
             if self.purlin_crossing(members[0], members[1]) is None:
                 raise EditRefused("connection_purlin_off")
+        if kind == "knee_plate" and self.mitre_plane(members[0], members[1]) is None:      # (0.513)
+            raise EditRefused("connection_knee_off")
         f = self.file
         label = NAMES[kind][0 if lang == "pt" else 1]
         column = self.by_guid(members[0])
@@ -333,6 +339,12 @@ class SteelConnectionMixin:
         kind, members, params = self.connection_params(assembly.GlobalId)
         if kind in ("end_plate", "gusset") and self.by_guid(members[0]) is not None:     # (0.503: a brace too)
             self._beam_end_drawn(members[0], int(params["end"]), 0.0)
+        if kind == "knee_plate" and all(self.by_guid(m) is not None for m in members):  # (0.513: the pure mitre
+            found = self.mitre_plane(members[0], members[1])                            # back)
+            if found is not None:
+                ka, kb, joint, normal = found[:4]
+                self._mitre_cut(members[0], ka, joint, normal, 0.0)
+                self._mitre_cut(members[1], kb, joint, -normal, 0.0)
 
     def release_connections(self, guids):
         """The connections among elements about to be deleted released (an end plate's beam lengthened back)."""
@@ -475,6 +487,8 @@ class SteelConnectionMixin:
             out += [p.GlobalId for p in self.connection_parts(assembly)]
             if _kind in ("end_plate", "gusset"):         # (its beam / brace held back: drawn again too)
                 out.append(members[0])
+            if _kind == "knee_plate":                    # (0.513: both pieces held back from the mitre)
+                out += list(members)
         return out
 
     def connection_warnings(self, guid):
@@ -502,6 +516,9 @@ class SteelConnectionMixin:
             if fin_plate_layout(params, secs[0])[0] > clear:
                 found.append(("girder", round(clear, 1)))
             return found
+        if kind == "knee_plate":
+            found = self._knee_layout(members[0], members[1], params)
+            return found[-1] if found else [("off", 0.0)]
         if kind == "purlin_cleat":
             found = purlin_cleat_layout(params, secs[0])[2]
             if self.purlin_crossing(members[0], members[1]) is None:
@@ -540,6 +557,8 @@ class SteelConnectionMixin:
             parts = self._gusset_parts(members[0], members[1], params, lang)
         elif kind == "purlin_cleat":
             parts = self._purlin_cleat_parts(members[0], members[1], params, lang)
+        elif kind == "knee_plate":
+            parts = self._knee_parts(members[0], members[1], params, lang)
         else:
             parts = []
         if parts:
@@ -730,6 +749,134 @@ class SteelConnectionMixin:
         parts.append(self._weld(m, params["a"], 2.0 * H / 1000.0, lang))
         api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
         storey = self.storey_of(beam)
+        if storey:
+            api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
+        return parts
+
+    # ------------------------------------------------------------ (0.513) a mitre bolted
+
+    def mitre_plane(self, a, b):
+        """Where two steel pieces' lines meet, as `mitre` cuts them: (a's end there, b's, the joint (world, m), the
+        normal of the plane halving their angle — pointing out of a, into b —, a's way to the joint, b's), or None."""
+        from .steel_members import _closest
+        if self.kind_of(a) != "steel_member" or self.kind_of(b) != "steel_member":
+            return None
+        pa, pb = self.steel_member_params(a), self.steel_member_params(b)
+        ends_a, ends_b = (pa["start"], pa["end"]), (pb["start"], pb["end"])
+        ka, kb = min(((i, j) for i in (0, 1) for j in (0, 1)),
+                     key=lambda ij: float(np.linalg.norm(ends_a[ij[0]] - ends_b[ij[1]])))
+        da = ends_a[ka] - ends_a[1 - ka]
+        db = ends_b[kb] - ends_b[1 - kb]
+        da, db = da / np.linalg.norm(da), db / np.linalg.norm(db)
+        meet = _closest(ends_a[ka], da, ends_b[kb], db)
+        if meet is None or float(np.linalg.norm(meet[0] - meet[1])) > 0.5:
+            return None
+        normal = da - db
+        if float(np.linalg.norm(normal)) < 1e-9:
+            return None
+        return ka, kb, (meet[0] + meet[1]) / 2.0, normal / np.linalg.norm(normal), da, db
+
+    def _mitre_cut(self, guid, k, joint, normal, offset):
+        """A piece's cut at its end k: the plane through `joint` − normal × offset (m), square to `normal` (world; the
+        side it points to taken away) — the mitre itself (0), or held back by an end plate's thickness."""
+        e = self.by_guid(guid)
+        m = self.placement(guid)
+        rot = m[:3, :3] / np.linalg.norm(m[:3, :3], axis=0)
+        local = rot.T @ (np.asarray(joint, dtype=float) - normal * offset - m[:3, 3])
+        local_n = rot.T @ np.asarray(normal, dtype=float)
+        if k == 1:
+            local = local - np.array((0.0, 0.0, self.steel_length(e)))
+        cuts, _copes, _ext = self.steel_cuts(e)
+        new = {"end": k, "p": [float(v) for v in local], "n": [float(v) for v in local_n]}
+        old = [c for c in cuts if c.get("end") == k]
+        if old and np.allclose(old[0]["p"], new["p"], atol=1e-7) and np.allclose(old[0]["n"], new["n"], atol=1e-7):
+            return
+        self.set_steel_cuts(e, cuts=[c for c in cuts if c.get("end") != k] + [new])
+        self.set_steel_member(guid)
+
+    def _knee_layout(self, a, b, params):
+        """The bolted mitre's plates and bolts (mm, in the plane: across the frame, then up it): (a's end, b's, joint,
+        normal, across, up, (u0, u1, v0, v1) the plates' extent round the joint, bolt spots, warnings) — or None."""
+        from ..core import steel
+        found = self.mitre_plane(a, b)
+        if found is None:
+            return None
+        ka, kb, joint, normal, da, db = found
+        across = np.cross(da, db)
+        if float(np.linalg.norm(across)) < 1e-6:
+            return None
+        across /= np.linalg.norm(across)
+        up = np.cross(normal, across)
+        up /= np.linalg.norm(up)
+        us, vs = [], []
+        for guid, d in ((a, da), (b, db)):              # (each section's corners at the joint, along it onto the plane)
+            sec = steel.get(self.steel_section(guid) or "")
+            if sec is None:
+                return None
+            w, h = steel.size(sec)
+            m = self.placement(guid)
+            rot = m[:3, :3] / np.linalg.norm(m[:3, :3], axis=0)
+            cx, cy = (v * 1000.0 for v in self.section_middle(self.by_guid(guid)))
+            for x in (cx - w / 2.0, cx + w / 2.0):
+                for y in (cy - h / 2.0, cy + h / 2.0):
+                    q = joint + rot[:, 0] * x / 1000.0 + rot[:, 1] * y / 1000.0
+                    q = q + d * (float((joint - q) @ normal) / float(d @ normal))
+                    us.append(float((q - joint) @ across) * 1000.0)
+                    vs.append(float((q - joint) @ up) * 1000.0)
+        u0, u1, v0, v1 = min(us), max(us), min(vs), max(vs)
+        e, dd = params["e"], params["d"]
+        g = params["g"] or (u1 - u0) - 2.0 * e
+        rows, p = int(params["rows"]), params["p"]
+        um, vm = (u0 + u1) / 2.0, (v0 + v1) / 2.0
+        spots = [(um + s * g / 2.0, vm + (j - (rows - 1) / 2.0) * p) for j in range(rows) for s in (-1, 1)]
+        d0 = hole(dd)
+        warnings = []
+        if (v1 - v0 - (rows - 1) * p) / 2.0 < 1.2 * d0 or (u1 - u0 - g) / 2.0 < 1.2 * d0:
+            warnings.append(("edge", round(1.2 * d0, 1)))
+        if rows > 1 and p < 2.2 * d0:
+            warnings.append(("pitch", round(2.2 * d0, 1)))
+        if g < 2.4 * d0:
+            warnings.append(("gauge", round(2.4 * d0, 1)))
+        return ka, kb, joint, normal, across, up, (u0, u1, v0, v1), spots, warnings
+
+    def _knee_parts(self, a, b, params, lang):
+        """Each piece held back from the mitre by its end plate's thickness, a plate welded to each in the mitre's
+        plane (back to back), the bolts through both."""
+        from ..core import steel
+        f = self.file
+        lay = self._knee_layout(a, b, params)
+        if lay is None:
+            return []
+        ka, kb, joint, normal, across, up, (u0, u1, v0, v1), spots, _w = lay
+        tp = params["tp"]
+        self._mitre_cut(a, ka, joint, normal, tp / 1000.0)
+        self._mitre_cut(b, kb, joint, -normal, tp / 1000.0)
+        W, H = u1 - u0, v1 - v0
+        centre = ((u0 + u1) / 2.0, (v0 + v1) / 2.0)
+        d0 = hole(params["d"])
+        material = self._column_material(a, lang)
+        parts, frames = [], []
+        for guid, shift in ((a, -tp), (b, 0.0)):
+            m = self._frame(joint + normal * (shift / 1000.0), across, np.cross(normal, across), normal)
+            frames.append(m)
+            plate = api.root.create_entity(f, ifc_class="IfcPlate", name="{} {}×{}×{}".format(
+                "Chapa de topo" if lang == "pt" else "End plate", _mm(round(W)), _mm(round(H)), _mm(tp)),
+                predefined_type="USERDEFINED")
+            plate.ObjectType = "END_PLATE"
+            self._place(plate, m)
+            self._extrusion_body(plate, [self._plate_profile(W, H, spots, d0, centre=centre)], [(0.0, 0.0, 0.0)],
+                                 [tp / 1000.0])
+            net = (W * H - len(spots) * math.pi * d0 * d0 / 4.0) * tp * 1e-9
+            self._plate_record(plate, W, H, tp, [(x - centre[0], y - centre[1], d0) for x, y in spots], guid)
+            self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
+                                                             "NetWeight": net * steel.DENSITY,
+                                                             "GrossArea": W * H * 1e-6})
+            sec = steel.get(self.steel_section(guid))
+            parts += [plate, self._weld(m, params["a"], steel.properties(sec.name)["paint"], lang)]
+        for k, (x, y) in enumerate(spots, 1):
+            parts.append(self._bolt(frames[0], x, y, 0.0, 2.0 * tp, params["d"], k, lang))
+        api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
+        storey = self.storey_of(a)
         if storey:
             api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
         return parts

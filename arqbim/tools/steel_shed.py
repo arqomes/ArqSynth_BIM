@@ -33,6 +33,7 @@ class SteelShedTool(_PointTool):
                       "brace": "contrav_l80"}
         self.span, self.eave, self.slope, self.spacing, self.purlins = 12.0, 6.0, 10, 6.0, 1.5
         self.bracing = self.plates = True
+        self.knees = "welded"                  # (0.513) or "bolted": an end plate on each side of the mitre
         self._start = self._end = None
 
     def options(self):
@@ -49,7 +50,9 @@ class SteelShedTool(_PointTool):
                  Option("bracing", t("ctx.shed_bracing"), "choice", self.bracing,
                         ((True, t("rules.yes")), (False, t("rules.no")))),
                  Option("plates", t("ctx.shed_plates"), "choice", self.plates,
-                        ((True, t("rules.yes")), (False, t("rules.no"))))]
+                        ((True, t("rules.yes")), (False, t("rules.no")))),
+                 Option("knees", t("ctx.shed_knees"), "choice", self.knees,
+                        (("welded", t("shed.knees.welded")), ("bolted", t("shed.knees.bolted"))))]
         return opts
 
     def set_option(self, key, value):
@@ -61,6 +64,8 @@ class SteelShedTool(_PointTool):
             self.slope = int(value)
         elif key in ("bracing", "plates"):
             setattr(self, key, bool(value))
+        elif key == "knees" and value in ("welded", "bolted"):
+            self.knees = value
         self.host.set_hint(self.hint())
 
     def hint(self):
@@ -131,7 +136,7 @@ class SteelShedTool(_PointTool):
         made = bim.steel_shed(self.doc, self._start, d / length, length, specs["column"], specs["rafter"],
                               specs["purlin"], specs["brace"], storey=self.doc.active_storey, span=self.span,
                               eave=self.eave, slope=float(self.slope), spacing=self.spacing, purlins=self.purlins,
-                              bracing=self.bracing, plates=self.plates)
+                              bracing=self.bracing, plates=self.plates, knees=self.knees)
         frames = max(2, int(round(length / self.spacing)) + 1)
         self.host.message(t("info.shed", n=frames, l=_fmt(length), s=_fmt(self.span), pieces=len(made)))
         self.cancel()
