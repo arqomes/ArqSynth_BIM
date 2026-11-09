@@ -1013,8 +1013,12 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
       cilindro, esfera, cone, plano — por cena, com medidas, posição, rotação, escala, cor, opacidade, linhas, olho,
       cadeado e descrição; o importador lê-os). Fica por fazer: mexer nos volumes com o rato no 3D (as pegas das faces
       do Presentation), as animações dos volumes (crescer, explodir, organizar, repetir) e combinar e recortar volumes.
-   7. **Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
-      Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar).
+   7. ~~**Passeio virtual**: ver no BIM as zonas dos ambientes e os caminhos pelas portas e escadas que vão para o
+      Passeio do Presentation, e percorrê-lo no 3D (a ferramenta Caminhar)~~ (0.488.0: separador Passeio com as contas,
+      o início, o tempo em cada ambiente e a visita guiada pela ordem em que se percorre, ambientes de fora; zonas e
+      caminhos no 3D; «Percorrer a visita guiada» e «Ir até ao escolhido» à altura dos olhos; o importador lê tudo e a
+      visita deixa de ser recusada quando um ambiente não tem porta). Fica por fazer: mudar à mão a ordem da visita,
+      os apartamentos do Presentation e os movimentos de câmara dos fluxos (suave, humano, técnico, cinemático).
 
 ### Alvenaria por tipo de parede (decidido pelo dono do projeto, 2026-11-02)
 «Alvenaria por tipo.» Até aqui a alvenaria do cálculo (os blocos, o seu grupo, a sua resistência fb, a argamassa)

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.488.0 — 2026-11-09
+
+**Passeio virtual na interface do Presentation** (o dono: «Sim, passeio»; passo 7, o último da lista do PLANO).
+
+- O separador **Passeio** (o último ícone da direita) mostra agora o Passeio Virtual que vai para o Presentation:
+  - continua a opção **Passeio Virtual pelos ambientes**;
+  - quantos **ambientes**, **portas entre eles** e **escadas** o passeio tem;
+  - o **Início**: o ambiente onde o passeio começa (por omissão, o da porta de entrada no piso mais baixo) ou outro à
+    escolha;
+  - o **Tempo em cada ambiente** da visita guiada (por omissão 3 s, como no Presentation);
+  - a **Visita guiada**: os ambientes pela ordem em que se percorrem a partir do início, de porta em porta (e pelas
+    escadas); os que não têm ligação aparecem marcados «sem ligação». Desmarcar um ambiente deixa-o fora do passeio.
+- Com o separador aberto, veem-se no 3D as **zonas** dos ambientes (a verde o início, a cinzento as de fora) e os
+  **caminhos** pelas portas e escadas.
+- **Percorrer a visita guiada**: a câmara percorre o passeio à altura dos olhos (1,65 m), a 1,4 m/s, pelas portas e
+  escadas, parando o tempo escolhido em cada ambiente — como o Presentation o faz. **Ir até ao escolhido** (ou duplo
+  clique na lista) vai do início até esse ambiente. **Esc** ou **Parar** devolvem a câmara ao sítio.
+- Vai para o Presentation: o início, os ambientes de fora (não navegáveis), a visita guiada pela ordem certa — só com
+  os ambientes a que se chega, para o Presentation a aceitar — e o tempo em cada ambiente.
+- **No Presentation** (ramo `integracao-arqsynth-bim`): o importador lê estas escolhas. Antes, a visita guiada levava
+  todos os ambientes pela ordem do ficheiro e, se um não tivesse porta, o Presentation recusava a visita inteira.
+
 ## 0.487.0 — 2026-11-09
 
 **Diagramas na interface do Presentation** (o dono: «Sim, diagramas»; passo 6 da lista do PLANO).

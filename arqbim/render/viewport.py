@@ -406,6 +406,7 @@ class Viewport:
         self._tag_toward = None
         self._effect = None         # (0.486) the Presentation's effect being played (play_effect)
         self._diagram_objects = []  # (0.487) the Presentation tab's scene's volumes on screen
+        self._walk_objects = []     # (0.488) its Virtual Walk's zones and ways on screen
         self._split = set()         # IFC classes batched apart (see _split_classes)
         self._split_phases = False  # elements batched by phase too (some template hides phases)
         self.cut_height = CUT_HEIGHT    # m above the storey: where a plan cuts (the view template's)
@@ -2260,6 +2261,47 @@ class Viewport:
             if len(segments) == buf.nitems:
                 buf.data[:] = _f32(segments)
                 buf.update_range(0, len(segments))
+
+    # ------------------------------------------------------------ (0.488) the Presentation's Virtual Walk
+
+    def set_walk(self, zones=(), ways=()):
+        """The Virtual Walk shown over the model (the Passeio tab): zones [(outline [(x, y, z)], colour "#rrggbb",
+        opacity)] — flat, a hair over their floor, see-through —; ways [(points [(x, y, z)], colour, thickness px)] —
+        the ways through the doors and up the stairs. Seen through the model (on top), not cut, not picked. [] none."""
+        for wobj in self._walk_objects:
+            self.scene.remove(wobj)
+        self._walk_objects = []
+        for outline, colour, opacity in zones:
+            pts = _f32(outline) + np.float32((0.0, 0.0, 0.03))
+            if len(pts) < 3:
+                continue
+            tris = triangulate_polygon(pts) if len(pts) > 3 and not is_convex_polygon(pts) else \
+                [(0, k, k + 1) for k in range(1, len(pts) - 1)]
+            if not len(tris):
+                continue
+            geometry = gfx.Geometry(positions=pts, indices=np.asarray(tris, dtype=np.uint32).reshape(-1, 3))
+            self._walk_objects.append(gfx.Mesh(geometry, _mat(gfx.MeshBasicMaterial, color=colour,
+                                                              opacity=float(opacity), alpha_mode="blend",
+                                                              depth_write=False, side="both", pick_write=False)))
+            ring = [q for a, b in zip(pts, np.roll(pts, -1, axis=0)) for q in (a, b)]
+            self._walk_objects.append(gfx.Line(gfx.Geometry(positions=_f32(ring)),
+                                               _mat(gfx.LineSegmentMaterial, thickness=1.5, color=colour, aa=True,
+                                                    depth_test=False)))
+        for points, colour, thickness in ways:
+            pts = _f32(points)
+            if len(pts) < 2:
+                continue
+            segments = [q for a, b in zip(pts, pts[1:]) for q in (a, b)]
+            self._walk_objects.append(gfx.Line(gfx.Geometry(positions=_f32(segments)),
+                                               _mat(gfx.LineSegmentMaterial, thickness=float(thickness), color=colour,
+                                                    aa=True, depth_test=False)))
+        for wobj in self._walk_objects:
+            self.scene.add(wobj)
+        self.redraw()
+
+    def walk_shown(self):
+        """(0.488) How many zones of the Virtual Walk are drawn."""
+        return sum(1 for w in self._walk_objects if isinstance(w, gfx.Mesh))
 
     # ------------------------------------------------------------ (0.487) the Presentation's volumes for diagrams
 

@@ -1303,25 +1303,114 @@ class EffectsPage(_Form):
             self.showing = False
 
 
-class _OptionPage(_Form):
-    """PASSEIO: the rooms as the Virtual Walk's zones, linked by the doors (0.485: ETIQUETAS has a page of its own,
-    ui/presentation_labels.py)."""
+class WalkPage(_Form):
+    """PASSEIO (0.488): the rooms as the Virtual Walk's zones, linked by the doors and stairs — on or off; how many rooms,
+    doors and stairs; the room it starts in (the usual: behind the door from outside, on the lowest storey); the
+    seconds in each room of its guided tour; the guided tour in the order it is walked, each room ticked (in the walk)
+    or not (left out: not navigable there), those it cannot reach marked; «Percorrer a visita guiada» and «Ir até ao
+    escolhido» walk it in the 3D view at a person's eye. Its zones and ways are seen over the model while it is open."""
 
-    def __init__(self, mode, option, text, note):
+    def __init__(self, mode):
         super().__init__(mode)
-        self.option, self.text = option, text
-        self.box = QtWidgets.QCheckBox(t(text))
-        self.box.toggled.connect(lambda on: None if self.showing else self.mode.set_option(**{self.option: on}))
+        self.box = QtWidgets.QCheckBox(t("present.walk"))
+        self.box.toggled.connect(lambda on: None if self.showing else self.mode.set_option(walk=on))
         self.form.addRow(self.box)
-        self.note(note)
+        self.note("pmode.walk_note")
+        self.counts = _label("", "pm_note")
+        self.counts.setWordWrap(True)
+        self.form.addRow(self.counts)
+        self.start = _narrow(QtWidgets.QComboBox())
+        self.start.setToolTip(t("pmode.walk_start_tip"))
+        self.start.currentIndexChanged.connect(
+            lambda _i: None if self.showing else self.mode.set_option(walk_start=self.start.currentData() or ""))
+        self.form.addRow(t("pmode.walk_start"), self.start)
+        self.dwell = _seconds(0.5, 60.0, 0.5)
+        self.dwell.valueChanged.connect(lambda v: None if self.showing else self.mode.set_option(walk_dwell=v))
+        self.form.addRow(t("pmode.walk_dwell"), self.dwell)
+        self.form.addRow(_label(t("pmode.walk_tour").upper(), "pm_head"))
+        self.tour = QtWidgets.QListWidget()
+        self.tour.setMaximumHeight(220)
+        self.tour.setToolTip(t("pmode.walk_off_tip"))
+        self.tour.itemChanged.connect(self._ticked)
+        self.tour.itemDoubleClicked.connect(lambda item: self.mode.play_walk(item.data(KEY)))
+        self.form.addRow(self.tour)
+        self.play = QtWidgets.QPushButton(t("pmode.walk_play"))
+        self.play.setObjectName("pm_create")
+        self.play.setToolTip(t("pmode.walk_play_tip"))
+        self.play.clicked.connect(lambda: self.mode.play_walk())
+        self.form.addRow(self.play)
+        self.go = QtWidgets.QPushButton(t("pmode.walk_go"))
+        self.go.setToolTip(t("pmode.walk_go_tip"))
+        self.go.clicked.connect(self._go)
+        self.form.addRow(self.go)
+        self.empty = self.note("pmode.walk_no_rooms")
+        self.note("pmode.walk_shown_note")
+        self.fields = (self.start, self.dwell, self.tour, self.play, self.go)
+
+    def _go(self):
+        item = self.tour.currentItem()
+        if item is not None and item.data(KEY):
+            self.mode.play_walk(item.data(KEY))
+
+    def _ticked(self, item):
+        """A room ticked (in the walk) or not (left out)."""
+        if self.showing or not item.data(KEY):
+            return
+        _start, off, _dwell = pm.walk_options(self.mode.doc)
+        off = set(off)
+        if item.checkState() == QtCore.Qt.CheckState.Checked:
+            off.discard(item.data(KEY))
+        else:
+            off.add(item.data(KEY))
+        self.mode.set_option(walk_off=sorted(off))
 
     def show_scene(self, _scene):
         self.showing = True
         try:
-            options, rooms = self.mode.options(), self.mode.room_count()
-            self.box.setChecked(bool(options.get(self.option, True)))
-            self.box.setText(t(self.text) + (" ({})".format(rooms) if rooms else ""))
+            mode = self.mode
+            options, rooms = mode.options(), mode.room_count()
+            on = bool(options.get("walk", True))
+            self.box.setChecked(on)
+            self.box.setText(t("present.walk") + (" ({})".format(rooms) if rooms else ""))
             self.box.setEnabled(bool(rooms))
+            sp = mode.walk_data() if rooms else {"rooms": [], "tour": [], "start": None}
+            names = mode.walk_names() if rooms else {}
+            chosen, off, dwell = pm.walk_options(mode.doc)
+            from ..model import presentation_walk
+            n_rooms, n_doors, n_stairs = presentation_walk.counts(sp) if rooms else (0, 0, 0)
+            self.counts.setText(t("pmode.walk_counts", rooms=n_rooms, doors=n_doors, stairs=n_stairs))
+            self.start.clear()
+            usual = presentation_walk.start_of(sp, "", off)
+            self.start.addItem(t("pmode.walk_start_auto", name=names.get(usual, ("—", ""))[0]), "")
+            for r in sp["rooms"]:
+                if r["id"] not in off:
+                    self.start.addItem(names[r["id"]][0], r["id"])
+            self.start.setCurrentIndex(max(self.start.findData(chosen), 0))
+            self.dwell.setValue(dwell)
+            self.tour.clear()
+            tour, loose = presentation_walk.tour(sp, sp.get("start"), off) if sp["rooms"] else ([], [])
+            listed = [(k + 1, rid) for k, rid in enumerate(tour)] + [(None, rid) for rid in loose] \
+                + [(None, r["id"]) for r in sp["rooms"] if r["id"] in off]
+            for number, rid in listed:
+                name, storey = names.get(rid, (rid, ""))
+                marks = [storey] if storey else []
+                if rid == sp.get("start"):
+                    marks.append(t("pmode.walk_start_mark"))
+                elif rid in loose:
+                    marks.append(t("pmode.walk_loose"))
+                text = "{}{}{}".format("{}. ".format(number) if number else "", name,
+                                       "  —  " + " · ".join(marks) if marks else "")
+                item = QtWidgets.QListWidgetItem(text)
+                item.setData(KEY, rid)
+                item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(QtCore.Qt.CheckState.Unchecked if rid in off else QtCore.Qt.CheckState.Checked)
+                self.tour.addItem(item)
+            playing = mode.playing == "walk"
+            self.play.setText(t("present.stop" if playing else "pmode.walk_play"))
+            for w in self.fields:
+                w.setEnabled(on and bool(sp["rooms"]))
+            self.play.setEnabled((on and len(tour) > 1) or playing)
+            self.empty.setVisible(not rooms)
         finally:
             self.showing = False
 
@@ -1389,7 +1478,7 @@ class SidePanel(QtWidgets.QDockWidget):
                       "diagrams": presentation_diagrams.DiagramsPage(mode),           # (0.487; in the rail's order)
                       "labels": presentation_labels.LabelsPage(mode),                 # (0.485)
                       "images": ImagesPage(mode), "effects": EffectsPage(mode),
-                      "walk": _OptionPage(mode, "walk", "present.walk", "pmode.walk_note")}
+                      "walk": WalkPage(mode)}                                            # (0.488)
         self.buttons = {}
         group = QtWidgets.QButtonGroup(rail)
         for entry in RAIL:
@@ -1434,6 +1523,7 @@ class SidePanel(QtWidgets.QDockWidget):
         self.setWindowTitle(t("pmode.rail." + name).upper())
         if name != "layers":
             page.show_scene(self.mode.scene())
+        self.mode.apply_walk()                            # (0.488: its zones and ways seen only in its tab)
 
     def show_scene(self, scene):
         """The pages of the scene chosen (the one in view: the others when they are chosen)."""
@@ -1742,6 +1832,8 @@ class PresentationMode(QtCore.QObject):
         self._tags_drawn = None             # (what the 3D view shows of them: drawn again only when it changed)
         self.diagram_key = None             # (0.487) the volume chosen in «Diagramas» (its editor open)
         self._diagrams_drawn = None
+        self._walk_data = None              # (0.488) the walk as it goes (worked out again after each change)
+        self._walk_drawn = False
         self._put_aside = None              # the BIM's panels hidden while the tab is in front, and their widths
         self._layers_stale = True
         self._entered_once = False
@@ -1953,6 +2045,7 @@ class PresentationMode(QtCore.QObject):
         self.vp.set_cuts([])                              # (0.484: the BIM's 3D view whole)
         self.apply_tags()                                 # (0.485: none)
         self.apply_diagrams()                             # (0.487: none)
+        self.apply_walk()                                 # (0.488: none)
         self.vp.camera_locked = False
         self.pages.hide()
         self.side.hide()
@@ -1972,6 +2065,7 @@ class PresentationMode(QtCore.QObject):
         self._tags_drawn = None
         self.diagram_key = None
         self._diagrams_drawn = None
+        self._walk_data = None
         self._entered_once = False
         self.came_from = None
         self._layers_stale = True
@@ -1997,6 +2091,7 @@ class PresentationMode(QtCore.QObject):
 
     def refresh(self, layers=None, changed=None, removed=None):
         """The columns again (the project changed): the pages and the scenes; the layers when elements changed."""
+        self._walk_data = None                            # (0.488: worked out again when it is asked for)
         if not self.active or self.doc.loading:
             if layers or changed is None or removed or any(self.doc.get(i) is not None for i in (changed or ())
                                                            if isinstance(i, str)):
@@ -2012,6 +2107,7 @@ class PresentationMode(QtCore.QObject):
         if self.diagram(self.diagram_key) is None:        # (0.487: the scene's volumes, as they are now)
             self.diagram_key = None
         self.apply_diagrams()
+        self.apply_walk()                                 # (0.488)
         if layers is None:
             layers = changed is None or bool(removed) or any(isinstance(i, str) and self.doc.get(i) is not None
                                                              for i in changed)
@@ -2059,6 +2155,7 @@ class PresentationMode(QtCore.QObject):
         self.playing = kind or None
         if self.active:
             self.side.show_scene(self.scene())
+            self.apply_walk()                             # (0.488: not over the view while it is walked)
 
     # ------------------------------------------------------------ the scene chosen
 
@@ -2502,6 +2599,63 @@ class PresentationMode(QtCore.QObject):
             del self.live["cuts"][k]
             self.apply_cuts()
             self.side.show_scene(self.scene())
+
+    # ------------------------------------------------------------ (0.488) the Virtual Walk («Passeio»)
+
+    def walk_data(self):
+        """The rooms, doors and stairs as they go to the Presentation, with the walk's start, rooms left out and guided
+        tour (presentation_export.spaces, in the GLB's axes without offset) — worked out once a change."""
+        if self._walk_data is None:
+            from ..model import presentation_export
+            self._walk_data = presentation_export.spaces(self.doc, (0.0, 0.0, 0.0))
+        return self._walk_data
+
+    def walk_names(self):
+        storeys = {g: n for g, n, _z in self.doc.storeys()}
+        return {r["id"]: (r["name"] or r["number"] or t("pmode.walk_room"), storeys.get(r.get("storey"), ""))
+                for r in self.walk_data()["rooms"]}
+
+    def apply_walk(self):
+        """The walk's zones (the start in the «good» colour, those left out greyed) and its ways through the doors and
+        up the stairs, over the 3D view while the Passeio tab is open (not while it is walked)."""
+        from ..model import presentation_walk
+        shown = self.active and self.side.tab == "walk" and self.playing != "walk" \
+            and bool(self.options().get("walk", True))
+        if not shown:
+            if self._walk_drawn:
+                self._walk_drawn = False
+                self.vp.set_walk()
+            return
+        sp = self.walk_data()
+        _start, off, _dwell = pm.walk_options(self.doc)
+        zones = []
+        for r in sp["rooms"]:
+            outline = [(x, -z, r["level"]) for x, z in r["outline"]]
+            key = "good" if r["id"] == sp["start"] else "neutral" if r["id"] in off else "accent"
+            zones.append((outline, theme.colour(key).name(), 0.38 if key != "neutral" else 0.2))
+        ways, seen = [], set()
+        for a, legs in presentation_walk.links(sp, off).items():
+            for b, pts in legs:
+                if (b, a) in seen:
+                    continue
+                seen.add((a, b))
+                ways.append(([presentation_walk.to_model(p) for p in pts], theme.colour("accent").name(), 2.5))
+        self.vp.set_walk(zones, ways)
+        self._walk_drawn = True
+
+    def play_walk(self, room=None):
+        """«Percorrer a visita guiada» (room None) or «Ir até ao escolhido»: the camera walking the way at a person's
+        eye, as the Presentation will (again: stopped, the camera back)."""
+        from ..model import presentation_walk
+        sp = self.walk_data()
+        _start, off, dwell = pm.walk_options(self.doc)
+        rooms = sp["tour"] if room is None else [sp["start"], room]
+        frames = presentation_walk.frames(sp, [r for r in rooms if r], off, fps=self.win.MOVE_FPS, dwell=dwell)
+        frames = [(presentation_walk.to_model(e), presentation_walk.to_model(g)) for e, g in frames]
+        names = self.walk_names()
+        message = t("info.walk_playing", n=len(rooms), v="1,4") if room is None else \
+            t("info.walk_to", name=names.get(room, ("", ""))[0])
+        return self.win.play_walk(frames, message)
 
     # ------------------------------------------------------------ (0.487) the volumes for diagrams («Diagramas»)
 

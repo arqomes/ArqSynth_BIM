@@ -644,6 +644,31 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.488 — Passeio virtual na interface do Presentation
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.488.0**.
+
+1. Faça Ctrl+N e desenhe uma casa de 8 × 4 m com uma parede a meio (duas divisões), uma porta na parede de fora e uma
+   porta na parede do meio.
+2. Com **Ambiente e área**, ponha um ambiente em cada divisão: «Sala» e «Cozinha».
+3. Clique no ícone **ArqSynth Presentation** da barra da esquerda e, na barra de ícones da direita, no **último**
+   (as duas pegadas): o título da coluna diz **PASSEIO**.
+4. Veja no 3D: a sala a verde (é o início: tem a porta de fora), a cozinha a azul e uma linha azul que passa pela
+   porta do meio. Na coluna: «Ambientes: 2 · portas entre eles: 1 · escadas: 0» e, em **VISITA GUIADA**,
+   «1. Sala — … · início» e «2. Cozinha».
+5. Clique em **Percorrer a visita guiada**: a câmara fica na sala à altura dos olhos, as zonas desaparecem, e ao fim de
+   3 s anda até à porta, passa-a e entra na cozinha. O botão diz **Parar**. No fim (ou com **Esc**) a câmara volta
+   onde estava e as zonas reaparecem.
+6. Em **Início**, escolha **Cozinha**: a cozinha fica verde e a visita passa a começar por ela. Ponha **Tempo em cada
+   ambiente** em `1` s e percorra outra vez.
+7. Na lista, clique na Sala e em **Ir até ao escolhido** (ou faça duplo clique na Sala): a câmara vai da cozinha à
+   sala.
+8. Desmarque a **Sala** na lista: fica cinzenta no 3D e sai da visita (o botão de percorrer apaga-se: só há um
+   ambiente). Volte a marcá-la.
+9. Mude para outro separador (por exemplo **Camadas**): as zonas e as linhas desaparecem do 3D.
+10. Clique em **Exportar / atualizar**, grave o ZIP e importe-o no Presentation local (botão **ArqSynth BIM**): no
+    Passeio do Presentation o início é o escolhido e a **visita guiada** começa e corre pela mesma ordem.
+
 ## 0.487 — Diagramas na interface do Presentation
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.487.0**.

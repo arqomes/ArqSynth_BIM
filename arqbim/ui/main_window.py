@@ -8195,6 +8195,34 @@ class MainWindow(QtWidgets.QMainWindow):
                        s="{:.0f}".format(seconds)))
         return True
 
+    def play_walk(self, frames, message):
+        """(0.488) The Passeio tab's «Percorrer»: the camera along the Virtual Walk — frames [(eye, target)] in the
+        model's axes, at MOVE_FPS, with the Presentation's lens —; at its end, again or with Esc, the camera back where
+        it was. Returns whether it started."""
+        if self._move_play is not None:
+            kind = self._move_play["kind"]
+            self.stop_scene_move()
+            if kind == "walk":
+                return False
+        if not frames:
+            self.message(t("info.walk_none"), warning=True)
+            return False
+        if self.tool is not None and self.tool.name not in QUIET_TOOLS:
+            self.set_tool("select")
+        vp = self.viewport
+        kept = (vp.camera.fov, vp.camera_snapshot())
+        vp.camera.fov = self._presentation_fov()
+        timer = QtCore.QTimer(self)
+        timer.setInterval(int(1000 / self.MOVE_FPS))
+        timer.timeout.connect(self._move_step)
+        self._move_play = {"kind": "walk", "frames": frames, "kept": kept, "timer": timer,
+                           "started": time.monotonic(), "view": self.views.current()}
+        vp.look_at(*frames[0])
+        timer.start()
+        self.presentation_mode.set_playing("walk")
+        self.message(message)
+        return True
+
     def _effect_done(self):
         """(0.486) The effect played to its end (the model is whole again)."""
         if self._move_play is not None and self._move_play["kind"] == "effect":

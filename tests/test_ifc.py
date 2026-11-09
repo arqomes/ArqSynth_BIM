@@ -10365,6 +10365,22 @@ class GltfExport(unittest.TestCase):
         np.testing.assert_allclose(way, (to_kitchen, 0.0, 0.0), atol=1e-6)    # (+x in the GLB: towards the kitchen)
         self.assertLess(abs(between["point"][0] + offset[0] - 4.0), 0.05)       # (in the wall: its leaf, its handle)
         self.assertEqual(found["start"], living)
+        self.assertEqual((found["tour"], found["dwell"]), ([living, kitchen], 3.0))   # (0.488: the guided tour)
+        self.assertNotIn("walk", rooms[kitchen])
+        # (0.488) the Passeio tab's choices: the start in the kitchen, 5 s a room; the living room left out
+        doc.set_presentation(pm.with_options(doc.presentation, walk_start=kitchen, walk_dwell=5))
+        _gltf, _bin, chosen = pe.package(doc)
+        sp = chosen["presentation"]["model3d"]["spaces"]
+        self.assertEqual((sp["start"], sp["tour"], sp["dwell"]), (kitchen, [kitchen, living], 5.0))
+        doc.set_presentation(pm.with_options(doc.presentation, walk_off=[living]))
+        _gltf, _bin, chosen = pe.package(doc)
+        sp = chosen["presentation"]["model3d"]["spaces"]
+        self.assertEqual((sp["start"], sp["tour"]), (kitchen, [kitchen]))
+        self.assertIs({r["id"]: r for r in sp["rooms"]}[living]["walk"], False)
+        self.assertEqual(pm.walk_options(doc), (kitchen, (living,), 5.0))
+        doc.set_presentation(pm.with_options(doc.presentation, walk_start="", walk_off=[], walk_dwell=3))
+        self.assertEqual(pm.walk_options(doc), ("", (), 3.0))
+        self.assertNotIn("walk_dwell", doc.presentation)
         doc.set_presentation(pm.with_options(doc.presentation, labels=False, walk=False))
         _gltf, _bin, again = pe.package(doc)
         self.assertNotIn("spaces", again["presentation"]["model3d"])

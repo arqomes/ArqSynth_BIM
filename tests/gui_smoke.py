@@ -648,6 +648,7 @@ def bim_flow():
     presentation_tab_flow()
     scene_effects_flow()
     scene_diagrams_flow()
+    walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
     work_plane_rotate_flow()
@@ -19762,6 +19763,92 @@ def scene_sun_flow():
     check("sol_da_cena", off and refused and on and kept and shown and np_dir and back and ended,
           "sem_lugar={} recusou={} com_lugar={} guardado={} mostrado={} direcao={} voltou={} dia={} balao={!r}".format(
               off, refused, on, kept, shown, np_dir, back, ended, win.last_message))
+
+
+def walk_tour_flow():
+    """0.488 — The Virtual Walk in the BIM's interface (Passeio): a house of two rooms with a door between them and one
+    from outside; the tab: the two zones and the way through the inner door over the 3D view; 2 rooms and 1 door between
+    them; the guided tour «1. Sala» (the start: one comes in by it), «2. Cozinha»; the start set to the kitchen (the tour
+    turned round); 1 s a room; «Percorrer a visita guiada»: the camera at a person's eye in the kitchen, the zones put
+    away, then along the way (it moved); Esc: the camera back, the zones again; the living room unticked (left out: the
+    tour the kitchen alone); another tab: no zones; exported: the start, the tour, the living room not navigable.
+    Captured: 488_passeio.png."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import presentation as pm
+    from arqbim.model import presentation_export
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    spec = catalog.BY_KEY["parede_alv_20"]
+    corners = [np.array(p) for p in ((0.0, 0.0, 0.0), (8.0, 0.0, 0.0), (8.0, 4.0, 0.0), (0.0, 4.0, 0.0))]
+    walls = bim_actions.add_wall_loop(doc, corners, spec)
+    inner = bim_actions.add_wall(doc, np.array((4.0, 0.0, 0.0)), np.array((4.0, 4.0, 0.0)), spec)
+    door = catalog.OPENING_BY_KEY["porta_90"]
+    bim_actions.add_opening(doc, walls[0], door, bim_actions.wall_frame(doc, walls[0]), 2.0, -1)
+    bim_actions.add_opening(doc, inner, door, bim_actions.wall_frame(doc, inner), 2.0, -1)
+    living = bim_actions.add_room(doc, (2.0, 2.0), "Sala")
+    kitchen = bim_actions.add_room(doc, (6.0, 2.0), "Cozinha")
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(300)
+    win.show_presentation_tab()
+    pump(600)
+    mode = win.presentation_mode
+    QtTest.QTest.mouseClick(mode.side.buttons["walk"], Qt.MouseButton.LeftButton)
+    pump(300)
+    page = mode.side.pages["walk"]
+    rows = [page.tour.item(k).text() for k in range(page.tour.count())]
+    seen = vp.walk_shown() == 2 and mode.side.windowTitle() == "PASSEIO" and "Ambientes: 2" in page.counts.text() \
+        and "portas entre eles: 1" in page.counts.text() and rows[:1] and rows[0].startswith("1. Sala") \
+        and "início" in rows[0] \
+        and len(rows) == 2 and rows[1].startswith("2. Cozinha")
+    shot("488_passeio.png")
+    page.start.setCurrentIndex(page.start.findData(kitchen))
+    pump(300)
+    page.dwell.setValue(1.0)
+    pump(300)
+    rows = [page.tour.item(k).text() for k in range(page.tour.count())]
+    turned = pm.walk_options(doc) == (kitchen, (), 1.0) and rows[0].startswith("1. Cozinha")
+    before = vp.camera_snapshot()
+    QtTest.QTest.mouseClick(page.play, Qt.MouseButton.LeftButton)
+    pump(300)
+    eye = vp.camera_position()
+    walking = mode.playing == "walk" and win._move_play is not None and win._move_play["kind"] == "walk" \
+        and vp.walk_shown() == 0 and abs(eye[2] - 1.65) < 0.05 and 4.0 < eye[0] < 8.0 \
+        and page.play.text() == "Parar"
+    pump(1800)
+    moved = win._move_play is not None and vp.camera_position()[0] < eye[0] - 0.3
+    _active()
+    key(Qt.Key.Key_Escape)
+    pump(300)
+    stopped = win._move_play is None and mode.playing is None and vp.walk_shown() == 2 \
+        and np.allclose(vp.camera_snapshot()["position"], before["position"], atol=1e-6)
+    item = next(page.tour.item(k) for k in range(page.tour.count())
+                if page.tour.item(k).data(Qt.ItemDataRole.UserRole) == living)
+    item.setCheckState(Qt.CheckState.Unchecked)
+    pump(300)
+    left_out = pm.walk_options(doc)[1] == (living,) and page.tour.item(0).text().startswith("1. Cozinha") \
+        and not page.play.isEnabled()
+    QtTest.QTest.mouseClick(mode.side.buttons["layers"], Qt.MouseButton.LeftButton)
+    pump(300)
+    hidden = vp.walk_shown() == 0
+    path = win.export_presentation(os.path.join(tempfile.mkdtemp(prefix="arqsynth_walk_"), "casa.glb"))
+    found = (presentation_export.read(path) or {}).get("presentation", {}).get("model3d", {}).get("spaces", {}) \
+        if path else {}
+    rooms = {r["id"]: r for r in found.get("rooms", [])}
+    exported = found.get("start") == kitchen and found.get("tour") == [kitchen] and found.get("dwell") == 1.0 \
+        and rooms.get(living, {}).get("walk") is False
+    doc.modified = False
+    win.close_presentation()
+    pump(300)
+    check("passeio_visita_guiada", seen and turned and walking and moved and stopped and left_out and hidden
+          and exported,
+          "visto={} ({} / {}) inicio_cozinha={} a_andar={} (olho {}) mexeu={} parou={} de_fora={} escondido={} "
+          "exportado={} ({})".format(seen, page.counts.text(), rows, turned, walking, eye, moved, stopped, left_out,
+                                     hidden, exported, {k: found.get(k) for k in ("start", "tour", "dwell")}))
 
 
 def rooms_walk_flow():

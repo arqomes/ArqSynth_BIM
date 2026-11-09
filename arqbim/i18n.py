@@ -7377,6 +7377,42 @@ _STRINGS = {
                          "Add a plane and move it with the slider. The cut is non-destructive."),
     "pmode.cuts_saved": ("Os cortes guardam-se na cena ao Criar/Actualizar.",
                          "The cuts are kept in the scene on Create/Update."),
+    # (0.488) the Presentation's «Passeio» (its Virtual Walk)
+    "pmode.walk_room": ("Ambiente", "Room"),
+    "pmode.walk_counts": ("Ambientes: {rooms} · portas entre eles: {doors} · escadas: {stairs}",
+                          "Rooms: {rooms} · doors between them: {doors} · stairs: {stairs}"),
+    "pmode.walk_start": ("Início", "Start"),
+    "pmode.walk_start_auto": ("Automático ({name})", "Automatic ({name})"),
+    "pmode.walk_start_tip": ("O ambiente onde o passeio começa (por omissão, o da porta de entrada no piso mais baixo).",
+                             "The room the walk starts in (by default, the one behind the entrance door on the lowest "
+                             "storey)."),
+    "pmode.walk_dwell": ("Tempo em cada ambiente", "Time in each room"),
+    "pmode.walk_tour": ("Visita guiada", "Guided tour"),
+    "pmode.walk_off_tip": ("Desmarque um ambiente para o deixar fora do passeio (não navegável). Duplo clique: ir até "
+                           "ele.", "Untick a room to leave it out of the walk (not navigable). Double click: walk to "
+                           "it."),
+    "pmode.walk_loose": ("sem ligação", "not linked"),
+    "pmode.walk_start_mark": ("início", "start"),
+    "pmode.walk_play": ("Percorrer a visita guiada", "Walk the guided tour"),
+    "pmode.walk_play_tip": ("A câmara percorre a visita guiada à altura dos olhos, pelas portas e escadas, como no "
+                            "Presentation. Esc para.",
+                            "The camera walks the guided tour at eye height, through the doors and stairs, as in the "
+                            "Presentation. Esc stops it."),
+    "pmode.walk_go": ("Ir até ao escolhido", "Walk to the one chosen"),
+    "pmode.walk_go_tip": ("A câmara vai do início até ao ambiente escolhido na lista, pelas portas e escadas.",
+                          "The camera goes from the start to the room chosen in the list, through the doors and "
+                          "stairs."),
+    "pmode.walk_no_rooms": ("Sem ambientes: desenhe-os com «Ambiente e área» para haver passeio.",
+                            "No rooms: draw them with «Room and area» for a walk."),
+    "pmode.walk_shown_note": ("As zonas (a verde o início, a cinzento as de fora) e os caminhos pelas portas e escadas "
+                              "veem-se no 3D enquanto este separador está aberto.",
+                              "The zones (the start in green, those left out in grey) and the ways through the doors "
+                              "and stairs are seen in the 3D view while this tab is open."),
+    "info.walk_playing": ("A percorrer a visita guiada: {n} ambientes, a {v} m/s. Esc para parar.",
+                          "Walking the guided tour: {n} rooms, at {v} m/s. Esc stops it."),
+    "info.walk_to": ("A caminhar até «{name}». Esc para parar.", "Walking to «{name}». Esc stops it."),
+    "info.walk_none": ("Não há caminho: os ambientes precisam de portas (ou escadas) entre eles.",
+                       "There is no way: the rooms need doors (or stairs) between them."),
     # (0.487) the Presentation's «Diagramas» (its «Volumes para diagramas», its words)
     "pmode.rail.diagrams": ("Diagramas", "Diagrams"),
     "pmode.dia_scene": ("Cena: {name}", "Scene: {name}"),

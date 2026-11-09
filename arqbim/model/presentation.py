@@ -149,12 +149,51 @@ def room_kind(name, external=False):
 
 
 def with_options(data, **options):
-    """The presentation with its options changed: labels, walk (booleans)."""
+    """The presentation with its options changed: labels, walk (booleans); (0.488) the Virtual Walk's room it starts
+    in (walk_start: a GlobalId, "" the usual), the rooms left out of it (walk_off), the seconds in each room of its
+    guided tour (walk_dwell)."""
     out = clean(copy.deepcopy(data))
     for name in ("labels", "walk"):
         if name in options:
             out[name] = bool(options[name])
+    out.update(_walk_options({**{k: out[k] for k in WALK_OPTIONS if k in out}, **options}))
+    for name in WALK_OPTIONS:
+        if name in options and name not in _walk_options(options):
+            out.pop(name, None)
     return out
+
+
+WALK_OPTIONS = ("walk_start", "walk_off", "walk_dwell")
+
+
+def _walk_options(data):
+    """(0.488) The walk's options as they are kept — only those not the usual."""
+    from . import presentation_walk
+    out = {}
+    start = str(data.get("walk_start") or "").strip()
+    if start:
+        out["walk_start"] = start
+    off = data.get("walk_off")
+    if isinstance(off, (list, tuple, set)):
+        off = sorted({str(g) for g in off if str(g)})
+        if off:
+            out["walk_off"] = off
+    try:
+        dwell = round(min(max(float(data.get("walk_dwell")), presentation_walk.DWELL_MIN), presentation_walk.DWELL_MAX),
+                      1)
+        if abs(dwell - presentation_walk.DWELL) > 1e-9:
+            out["walk_dwell"] = dwell
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
+def walk_options(doc_or_data):
+    """(0.488) (start "" — the usual —, rooms left out, seconds in each room) of the Virtual Walk."""
+    from . import presentation_walk
+    data = getattr(doc_or_data, "presentation", doc_or_data) or empty()
+    kept = _walk_options(data)
+    return kept.get("walk_start", ""), tuple(kept.get("walk_off", ())), kept.get("walk_dwell", presentation_walk.DWELL)
 
 
 def _value(name, value):
@@ -233,6 +272,7 @@ def clean(data):
     for name in ("labels", "walk"):                    # (0.366)
         if isinstance(data.get(name), bool):
             out[name] = data[name]
+    out.update(_walk_options(data))                    # (0.488) the walk's start, rooms left out, time in each
     if data.get("tags"):                               # (0.485) the labels put on the model
         from . import presentation_tags
         out["tags"] = presentation_tags.clean_tags(data["tags"])

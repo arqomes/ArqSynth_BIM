@@ -441,8 +441,20 @@ def spaces(doc, offset, labels=True, walk=True):
     ground = [r for r in out_rooms if lowest is not None and abs(r["level"] - lowest) < 0.5]
     entries = [d["from"] for d in doors if d["to"] is None and d["from"] in {r["id"] for r in ground}]
     start = entries[0] if entries else (max(ground, key=lambda r: r["area"])["id"] if ground else None)
-    return {"labels": bool(labels), "walk": bool(walk), "floors": floors, "rooms": out_rooms, "doors": doors,
-            "stairs": stairs, "start": start}
+    out = {"labels": bool(labels), "walk": bool(walk), "floors": floors, "rooms": out_rooms, "doors": doors,
+           "stairs": stairs, "start": start}
+    # (0.488) the Passeio tab's choices: the room it starts in, those left out of it (not navigable there), its guided
+    # tour (the rooms one can reach, in the order a visitor walks them) and the time in each
+    from . import presentation_walk
+    chosen, off, dwell = presentation_model.walk_options(doc)
+    off = [r["id"] for r in out_rooms if r["id"] in set(off)]
+    for r in out_rooms:
+        if r["id"] in off:
+            r["walk"] = False
+    out["start"] = presentation_walk.start_of(out, chosen, off)
+    out["tour"] = presentation_walk.tour(out, out["start"], off)[0]
+    out["dwell"] = dwell
+    return out
 
 
 def _bounds(gltf):
