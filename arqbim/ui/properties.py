@@ -1945,7 +1945,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
     CONNECTION_FIELDS = {"base_plate": ("A", "B", "tp", "n", "d", "e", "proj", "embed", "grout", "a"),
                          "end_plate": ("tp", "W", "top", "bottom", "rows", "p", "g", "d", "e", "a"),      # (0.498)
                          "fin_plate": ("tp", "w", "rows", "p", "e", "eh", "d", "a"),
-                         "gusset": ("tp", "rows", "p", "e", "d", "gap", "g", "edge", "a")}                # (0.503)
+                         "gusset": ("tp", "rows", "p", "e", "d", "gap", "g", "edge", "a"),                # (0.503)
+                         "purlin_cleat": ("tp", "w", "H", "rows", "p", "d", "a")}                          # (0.504)
 
     def _connection_rows(self, guid, p):
         """(0.497) A steel connection's values (mm; a plate's 0: from the column), each changed here — the whole
@@ -1964,7 +1965,7 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                     v = float(text.replace(",", ".").replace("mm", "").strip())
                 except ValueError:
                     return None
-                if k in ("A", "B", "W", "g") and v == 0.0:
+                if k in ("A", "B", "W", "g", "H") and v == 0.0:
                     return 0.0
                 return v if lo <= v <= hi else None
             return parse

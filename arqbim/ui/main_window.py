@@ -826,6 +826,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_fin_plate.setToolTip(t("tip.fin_plate"))
         self.act_gusset = self._action(t("act.gusset"), lambda: self.gussets(), icon=icons.gusset_icon())  # (0.503)
         self.act_gusset.setToolTip(t("tip.gusset"))
+        self.act_purlin_cleat = self._action(t("act.purlin_cleat"), lambda: self.purlin_cleats(),
+                                             icon=icons.purlin_cleat_icon())                            # (0.504)
+        self.act_purlin_cleat.setToolTip(t("tip.purlin_cleat"))
         self.act_steel_mitre = self._action(t("act.steel_mitre"), lambda: self.steel_mitre(),
                                             icon=icons.steel_mitre_icon())                              # (0.496)
         self.act_steel_mitre.setToolTip(t("tip.steel_mitre"))
@@ -2111,6 +2114,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                          and (self.doc.ifc.steel_section(g) or "")[:1] == "L"
                                          for g in list(self.viewport.selection)[:20]):
             acts.append(self.act_gusset)                              # (0.503) braces of angles: their gussets
+        if "IfcMember" in counts and any(isinstance(g, str) and self.doc.ifc.kind_of(g) == "steel_member"
+                                         and self.doc.ifc.steel_member_params(g)["function"] == "purlin"
+                                         for g in list(self.viewport.selection)[:20]):
+            acts.append(self.act_purlin_cleat)                        # (0.504) purlins: their cleats
         if sum(counts.values()) == 1 and (counts.get("IfcSlab", 0) == 1 or (     # (0.100) one slab: its outline
                 counts.get("IfcCovering", 0) == 1 and any(          # (0.410) a floor finish's, a ceiling's
                     isinstance(i, str) and self.doc.ifc.kind_of(i) in ("flooring", "ceiling")
@@ -5141,6 +5148,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.gussets", n=len(made)))
         else:
             self.message(t("info.gussets_none"), warning=True)
+        return made
+
+    def purlin_cleats(self):
+        """(0.504) Estrutura ▸ Ligação ▸ Apoio de madre: where the purlins selected — none selected: every purlin — sit
+        on steel beams, a cleat welded to the beam, the purlin bolted to it."""
+        purlins = [g for g in self.viewport.selection if isinstance(g, str)
+                   and self.doc.ifc.kind_of(g) == "steel_member"]
+        made = bim.add_purlin_cleats(self.doc, purlins or None)
+        if made:
+            self.message(t("info.purlin_cleats", n=len(made)))
+        else:
+            self.message(t("info.purlin_cleats_none"), warning=True)
         return made
 
     def steel_mitre(self):

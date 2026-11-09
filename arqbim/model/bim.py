@@ -2736,6 +2736,14 @@ def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, st
                 for end, col in ifc.brace_end_columns(made[k]).items():
                     a = ifc.add_connection("gusset", [made[k], col], {"end": end}, language)
                     extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
+        if shed.plates and getattr(purlin, "section", None) and \
+                core_steel.get(purlin.section).family in ("C", "Z", "UPN", "UPE"):   # (0.504: the purlins' cleats)
+            for k, piece in enumerate(shed.pieces):
+                if piece.role != "purlin":
+                    continue
+                for beam in ifc.purlin_beams(made[k]):
+                    a = ifc.add_connection("purlin_cleat", [made[k], beam], None, language)
+                    extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
         return made + extra
 
     return doc.execute(IfcCommand(t("cmd.steel_shed"), action)).result
@@ -2816,6 +2824,41 @@ def add_gussets(doc, braces=None, params=None):
                 for b, c, end in todo]
 
     return doc.execute(IfcCommand(t("cmd.gusset"), action, changed=list({b for b, _c, _e in todo}))).result
+
+
+def purlin_seats(doc, purlins=None):
+    """(0.504) [(purlin, beam)] — where the steel purlins given (None: every one; C, Z, channels) sit on steel beams
+    without a cleat there yet."""
+    from ..core import steel
+    from ..ifc.steel_connections import CLEAT_FAMILIES
+    if purlins is None:
+        purlins = [o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcMember"]
+    out = []
+    for purlin in purlins:
+        if doc.ifc.kind_of(purlin) != "steel_member" or \
+                doc.ifc.steel_member_params(purlin)["function"] != "purlin":
+            continue
+        sec = steel.get(doc.ifc.steel_section(purlin) or "")
+        if sec is None or sec.family not in CLEAT_FAMILIES:
+            continue
+        taken = {doc.ifc.connection_params(a.GlobalId)[1][1] for a in doc.ifc.connections_on([purlin])
+                 if doc.ifc.connection_params(a.GlobalId)[0] == "purlin_cleat"}
+        out += [(purlin, beam) for beam in doc.ifc.purlin_beams(purlin) if beam not in taken]
+    return out
+
+
+def add_purlin_cleats(doc, purlins=None, params=None):
+    """(0.504) A cleat where each steel purlin given (None: every one) sits on a steel beam: a plate welded to the
+    beam's top beside the purlin's web, bolted through it. One undo step. The connections' GlobalIds."""
+    language = lang()
+    todo = purlin_seats(doc, purlins)
+    if not todo:
+        return []
+
+    def action(ifc):
+        return [ifc.add_connection("purlin_cleat", [p, b], params, language).GlobalId for p, b in todo]
+
+    return doc.execute(IfcCommand(t("cmd.purlin_cleat"), action)).result
 
 
 def set_connection(doc, guid, **values):

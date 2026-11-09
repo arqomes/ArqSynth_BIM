@@ -659,6 +659,7 @@ def bim_flow():
     steel_lists_flow()
     steel_sheet_flow()
     steel_gusset_flow()
+    purlin_cleat_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20171,8 +20172,8 @@ def steel_shed_flow():
     rafters = [g for g in made if doc.get(g).ifc_class == "IfcBeam"]
     members = [g for g in made if doc.get(g).ifc_class == "IfcMember"]
     plates = [g for g in made if doc.get(g).ifc_class == "IfcPlate"]
-    built = len(columns) == 6 and len(rafters) == 6 and len(plates) == 6 + 16 and len(members) > 10   # (0.503: the
-    # 8 wall braces' gussets, at both ends)
+    built = len(columns) == 6 and len(rafters) == 6 and len(plates) == 6 + 16 + 30 and len(members) > 10   # (0.503:
+    # the 8 wall braces' gussets, at both ends; 0.504: the purlins' cleats, 10 purlins on 3 frames)
     win.set_tool("select")
     win.set_view("iso")
     vp.zoom_extents()
@@ -20210,8 +20211,8 @@ def steel_lists_flow():
     shot("500_lista_de_material.png")
     win.open_table("bolts")
     pump(300)
-    bolts = panel.table.rowCount() == 2 and "M20 × 530" in panel.text() and "M16" in panel.text()   # (0.503: and
-    # the gussets')
+    bolts = panel.table.rowCount() == 3 and "M20 × 530" in panel.text() and "M16" in panel.text() \
+        and "M12" in panel.text()                       # (0.503: and the gussets'; 0.504: the purlins' cleats')
     win.open_table("cutting")                                            # (0.501) the bars to buy
     pump(300)
     cutting = panel.table.rowCount() >= 3 and "HEB 200" in panel.text()
@@ -20281,6 +20282,66 @@ def steel_gusset_flow():
     check("gousset", offered and made and shown and held and total == 8 and win.ribbon_item("gusset") is not None,
           "oferecido={} feitos={} ({} parafusos) propriedades={} folga40={} ({:.3f}→{:.3f}) todos={}".format(
               offered, made, bolts, shown, held, before, after, total))
+
+
+def purlin_cleat_flow():
+    """0.504 — Purlin cleats: a shed without its plates; a purlin selected: the selection bar offers «Apoio de madre»;
+    clicked: a cleat on each of the 2 rafters it sits on (2 bolts each); one chosen: its fields in the Properties —
+    its height typed 90: made 90 high —; nothing selected, «Apoio de madre» again: every purlin's (20 in all).
+    Captured: 504_apoio_de_madre.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                           plates=False)
+    pump(300)
+    purlins = [g for g in (o.id for o in doc.objects.values() if o.is_bim)
+               if doc.get(g).ifc_class == "IfcMember" and bim_actions.purlin_seats(doc, [g])]
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.set_selection({purlins[0]} if purlins else set())
+    pump(300)
+    offered = win.act_purlin_cleat in win._selection_actions({"IfcMember": 1})
+    win.act_purlin_cleat.trigger()
+    pump(400)
+
+    def cleats(on=None):
+        found = doc.ifc.connections_on(on) if on else [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                                                       if doc.ifc.kind_of(a.GlobalId) == "steel_connection"]
+        return [a for a in found if doc.ifc.connection_params(a.GlobalId)[0] == "purlin_cleat"]
+    mine = cleats([purlins[0]]) if purlins else []
+    bolts = sum(1 for a in mine for p in doc.ifc.connection_parts(a) if p.is_a("IfcMechanicalFastener"))
+    made = len(mine) == 2 and bolts == 4
+    plate = next((p.GlobalId for p in doc.ifc.connection_parts(mine[0]) if p.is_a("IfcPlate")), None) if mine else None
+    vp.set_selection({plate} if plate else set())
+    pump(300)
+    edit = win.props.editors.get("connection.H")
+    shown = edit is not None and "connection.w" in win.props.editors and "connection.rows" in win.props.editors
+    if edit is not None:
+        edit.setText("90")
+        edit.editingFinished.emit()
+        pump(400)
+    plate = next((p for p in doc.ifc.connection_parts(mine[0]) if p.is_a("IfcPlate")), None) if mine else None
+    lower = plate is not None and (plate.Name or "").endswith("×90×8")
+    vp.set_selection(set())
+    pump(200)
+    win.act_purlin_cleat.trigger()
+    pump(400)
+    total = len(cleats())
+    if plate is not None:
+        v = doc.get(plate.GlobalId).mesh.verts
+        middle = v.mean(axis=0)
+        vp.zoom_box((middle - 0.3, middle + 0.3))
+    pump(400)
+    shot("504_apoio_de_madre.png")
+    doc.modified = False
+    check("apoio_de_madre", offered and made and shown and lower and total == 20
+          and win.ribbon_item("purlin_cleat") is not None,
+          "oferecido={} feitos={} ({} parafusos) propriedades={} 90mm={} todos={}".format(
+              offered, made, bolts, shown, lower, total))
 
 
 def steel_sheet_flow():

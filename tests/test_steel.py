@@ -440,7 +440,8 @@ class Shed(unittest.TestCase):
         np.testing.assert_allclose(apex, (0.0, 6.0, 6.0 + 6.0 * math.tan(math.radians(10.0))), atol=1e-9)
         purlins = [p for p in shed.pieces if p.role == "purlin"]
         self.assertEqual(len(purlins) % 2, 0)
-        self.assertAlmostEqual(float(np.linalg.norm(purlins[0].end - purlins[0].start)), 24.0)
+        self.assertAlmostEqual(float(np.linalg.norm(purlins[0].end - purlins[0].start)), 24.0 + 2 * 0.15)  # (0.504:
+        # past the end frames)
         self.assertEqual(purlins[0].cardinal, 2)
         self.assertAlmostEqual(abs(purlins[0].rotation), 10.0, places=6)       # (leaning with the roof)
         self.assertAlmostEqual(abs(shed.pieces[0].rotation) % 180.0, 0.0, places=6)     # (span along Y: an upright
@@ -461,7 +462,8 @@ class Shed(unittest.TestCase):
         made = bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, hea, ipe, catalog.BY_KEY["madre_c160"],
                               catalog.BY_KEY["contrav_l80"])
         kinds = [doc.ifc.kind_of(g) for g in made]
-        self.assertEqual(kinds.count("steel_connection"), 4 + 8)            # (0.503: the wall braces' 8 gussets)
+        self.assertEqual(kinds.count("steel_connection"), 4 + 8 + 20)       # (0.503: the wall braces' 8 gussets;
+        # 0.504: the purlins' cleats — 5 a slope, on 2 frames)
         columns = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcColumn")]
         rafters = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcBeam")]
         self.assertEqual((len(columns), len(rafters)), (4, 4))
@@ -519,8 +521,9 @@ class Marks(unittest.TestCase):
         self.assertGreater(sum(r["weight"] for r in rows), 1000.0)
         self.assertEqual([r["mark"][0] for r in rows][:2], ["P", "V"])
         bolts = schedules.rows(doc, "bolts")
-        self.assertEqual([(b["bolt"], b["count"]) for b in bolts], [("M20 × 530", 16), ("M16 × 35", 16)])  # (0.503:
-        # the gussets' — 2 at each end of the 8 wall braces)
+        self.assertEqual(sorted((b["bolt"], b["count"]) for b in bolts),
+                         sorted([("M20 × 530", 16), ("M16 × 35", 16), ("M12 × 25", 40)]))   # (0.503: the gussets' —
+        # 2 at each end of the 8 wall braces; 0.504: the purlins' cleats — 2 each, 20)
         self.assertGreater(bim.number_steel(doc), 0)
         tags = {doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]}
         self.assertEqual(tags, set(by_mark))
@@ -529,7 +532,7 @@ class Marks(unittest.TestCase):
         doc.undo()
         self.assertTrue(all(not doc.ifc.by_guid(g).Tag for r in rows for g in r["guids"]))
         counts = schedules.counts(doc)
-        self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 2))
+        self.assertEqual((counts["steel"], counts["bolts"]), (len(rows), 3))
 
 
 class Fabrication(unittest.TestCase):
@@ -610,7 +613,8 @@ class ShopDrawing(unittest.TestCase):
             self.assertTrue(any(s.startswith(mark + " —") for s in texts), mark)
         self.assertTrue(any("4 furos Ø22" in s and s.endswith("(1:10)") for s in texts))
         self.assertGreater(len(drawing.dims), 8)
-        plate_dims = [d for d in drawing.dims if d[4] in ("0,05", "0,30", "0,40")]    # edge, holes, whole: real sizes
+        plate_dims = [d for d in drawing.dims if d[4] in ("50", "300", "400")]   # edge, holes, whole: real sizes (mm)
+        self.assertTrue(all(d[4].isdigit() for d in drawing.dims))          # (0.504: whole millimetres)
         self.assertGreaterEqual(len(plate_dims), 4)
         self.assertGreater(len(drawing.lines), 30)
         self.assertIn("steel_parts", sheets.KINDS)
@@ -701,6 +705,88 @@ class Gussets(unittest.TestCase):
         self.assertEqual(len(self._gussets(doc)), 6)
         doc.undo()
         self.assertEqual(len(self._gussets(doc)), 8)
+
+
+class PurlinCleats(unittest.TestCase):
+    """(0.504) The purlins' cleats."""
+
+    def _cleats(self, doc):
+        return [a for a in doc.ifc.file.by_type("IfcElementAssembly")
+                if doc.ifc.kind_of(a.GlobalId) == "steel_connection" and doc.ifc.connection_params(a.GlobalId)[0] ==
+                "purlin_cleat"]
+
+    def _shed(self, **options):
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                       **options)
+        return doc
+
+    def test_shed_cleats(self):
+        """A shed's C 160 purlins get a cleat on each rafter they sit on (5 a slope, 2 slopes, 2 frames: 20): seen in
+        the purlin's own frame, the plate 8 mm thick against the back of its web (x −38 to −30 mm), standing on the
+        rafter's top (from 0 to 110 mm: 0,7 × 160), 100 mm along the purlin and under it — the purlins go 15 cm past
+        the end frames —; two M12 through the plate and the web; a weld; no warnings; all one mark; its height typed
+        90: made 90 high."""
+        import numpy as np
+        from arqbim.model import bim
+        doc = self._shed()
+        cleats = self._cleats(doc)
+        self.assertEqual(len(cleats), 20)
+        for a in cleats:
+            _kind, (purlin, beam), _params = doc.ifc.connection_params(a.GlobalId)
+            start, end, along, xl, yl, _mid = doc.ifc.brace_frame(purlin)
+            parts = doc.ifc.connection_parts(a)
+            plate = next(p for p in parts if p.is_a("IfcPlate"))
+            r = (doc.get(plate.GlobalId).mesh.verts - start) * 1000.0
+            x, y, s = r @ xl, r @ yl, r @ along
+            np.testing.assert_allclose((x.min(), x.max(), y.min(), y.max()), (-38.0, -30.0, 0.0, 110.0), atol=0.05)
+            self.assertAlmostEqual(float(s.max() - s.min()), 100.0, places=3)
+            self.assertTrue(0.0 <= s.min() and s.max() <= float(np.linalg.norm(end - start)) * 1000.0)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcMechanicalFastener")), 2)
+            self.assertEqual(sum(1 for p in parts if p.is_a("IfcFastener")), 1)
+            self.assertEqual(doc.ifc.connection_warnings(a.GlobalId), [])
+        marks, _pieces = doc.ifc.steel_marks()
+        plates = [p.GlobalId for a in cleats for p in doc.ifc.connection_parts(a) if p.is_a("IfcPlate")]
+        self.assertEqual(len({marks[g] for g in plates}), 1)
+        bim.set_connection(doc, cleats[0].GlobalId, H=90.0)
+        plate = next(p for p in doc.ifc.connection_parts(cleats[0]) if p.is_a("IfcPlate"))
+        self.assertTrue(plate.Name.endswith("100×90×8"), plate.Name)
+
+    def test_add_cleats(self):
+        """A shed without its plates: no cleats; «Apoio de madre» on every purlin: the 20; again: none more; a tube
+        is refused (it has no web to bolt through), and a purlin off the beam too; a rafter deleted takes its cleats;
+        undone: back."""
+        from arqbim.ifc import catalog
+        from arqbim.ifc.edit import EditRefused
+        from arqbim.model import bim
+        doc = self._shed(plates=False)
+        self.assertEqual(self._cleats(doc), [])
+        made = bim.add_purlin_cleats(doc)
+        self.assertEqual(len(made), 20)
+        self.assertEqual(bim.add_purlin_cleats(doc), [])
+        _kind, (purlin, rafter), _p = doc.ifc.connection_params(made[0])
+        tube = bim.add_steel_member(doc, (0.0, 1.0, 7.0), (6.0, 1.0, 7.0), catalog.BY_KEY["contrav_chs76"],
+                                    function="purlin")
+        self.assertEqual(bim.purlin_seats(doc, [tube]), [])
+        with self.assertRaises(EditRefused):
+            doc.ifc.add_connection("purlin_cleat", [tube, rafter])
+        other = next(g for g in doc.ifc.purlin_beams(purlin) if g != rafter) if len(doc.ifc.purlin_beams(purlin)) > 1 \
+            else None
+        far = next(o.id for o in doc.objects.values() if o.is_bim and o.ifc_class == "IfcBeam"
+                   and o.id not in doc.ifc.purlin_beams(purlin))
+        with self.assertRaises(EditRefused):
+            doc.ifc.add_connection("purlin_cleat", [purlin, far])
+        self.assertIsNotNone(other)
+        on_rafter = [a for a in self._cleats(doc) if doc.ifc.connection_params(a.GlobalId)[1][1] == rafter]
+        self.assertEqual(len(on_rafter), 5)
+        bim.delete(doc, [rafter])
+        self.assertEqual(len(self._cleats(doc)), 15)
+        doc.undo()
+        self.assertEqual(len(self._cleats(doc)), 20)
 
 
 def dataclasses_replace(spec, **fields):

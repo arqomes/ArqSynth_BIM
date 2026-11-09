@@ -3408,6 +3408,30 @@ _STRINGS = {
     "connection.field.gusset.p": ("Passo entre parafusos (mm)", "Pitch (mm)"),
     "connection.warn.root": ("⚠ O furo fica na raiz da cantoneira: os parafusos a pelo menos {v} mm do canto.",
                              "⚠ The hole falls in the angle's root: the bolts at least {v} mm from its heel."),
+    "connection.purlin_cleat": ("Apoio de madre", "Purlin cleat"),                                  # (0.504)
+    "cmd.purlin_cleat": ("Apoio de madre", "Purlin cleat"),
+    "act.purlin_cleat": ("Apoio de madre", "Purlin cleat"),
+    "tip.purlin_cleat": ("Onde as madres escolhidas (nenhuma escolhida: todas) assentam em vigas de aço: uma orelha "
+                         "soldada ao banzo da viga, ao lado da alma da madre, e a madre aparafusada a ela.",
+                         "Where the purlins selected (none selected: all of them) sit on steel beams: a cleat welded to "
+                         "the beam's flange beside the purlin's web, the purlin bolted to it."),
+    "info.purlin_cleats": ("{n} apoio(s) de madre onde as madres assentam nas vigas de aço.",
+                           "{n} purlin cleat(s) where the purlins sit on steel beams."),
+    "info.purlin_cleats_none": ("Nenhuma madre (C, Z ou U) assenta numa viga de aço sem apoio.",
+                                "No purlin (C, Z or channel) sits on a steel beam without a cleat."),
+    "connection.field.H": ("Altura da orelha (mm; 0: automática)", "Cleat height (mm; 0: automatic)"),
+    "connection.field.purlin_cleat.w": ("Largura da orelha ao longo da madre (mm)", "Cleat width along the purlin (mm)"),
+    "connection.field.purlin_cleat.rows": ("Parafusos (um sobre o outro)", "Bolts (one over the other)"),
+    "connection.field.purlin_cleat.p": ("Passo entre parafusos (mm)", "Pitch (mm)"),
+    "connection.warn.flange": ("⚠ O parafuso de cima bate no banzo da madre: no máximo a {v} mm do fundo.",
+                               "⚠ The top bolt hits the purlin's flange: at most {v} mm from its bottom."),
+    "connection.warn.off": ("⚠ A madre já não assenta nesta viga: o apoio ficou sem peças (apague-o ou volte a pôr "
+                            "a madre na viga).",
+                            "⚠ The purlin no longer sits on this beam: the cleat has no parts (delete it or put the "
+                            "purlin back on the beam)."),
+    "refuse.connection_purlin": ("o apoio de madre liga madres em C, Z ou U (aparafusadas pela alma)",
+                                 "a purlin cleat joins C, Z or channel purlins (bolted through their web)"),
+    "refuse.connection_purlin_off": ("a madre não assenta nessa viga", "the purlin does not sit on that beam"),
     "refuse.connection_brace_angle": ("o gousset liga contraventamentos em cantoneira (um tubo precisa de outra ligação)",
                                       "a gusset plate joins angle braces (a tube needs another connection)"),
     "connection.field.A": ("Largura da chapa (mm; 0: automática)", "Plate width (mm; 0: automatic)"),

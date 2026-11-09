@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.504.0 — 2026-11-09
+
+**Estrutura metálica, passo 3: o apoio das madres.**
+
+- Ligação nova **Apoio de madre** (separador **Estrutura**, painel **Ligação**, na lista da seta ao lado de **Chapa de
+  topo**; também na barra da seleção quando se escolhe uma madre): onde cada madre assenta numa viga ou asna de aço,
+  uma **orelha** (chapa de 100 × 110 × 8 mm para uma madre C 160) de pé sobre o banzo da asna, **soldada** a ele dos
+  dois lados, encostada à alma da madre (às costas, numa C ou num U; do lado livre, numa Z), e **dois parafusos M12**
+  um sobre o outro pela orelha e pela alma. Sem nada escolhido, põe-se em todas as madres.
+- Nas Propriedades: espessura, largura ao longo da madre, **altura** (0: 0,7 da altura da madre), parafusos, passo,
+  diâmetro e soldadura; avisos do EN 1993-1-8 e do parafuso de cima contra o banzo da madre; aviso quando a madre já
+  não assenta na viga.
+- O **Pórtico de nave** já põe os apoios em todas as madres, e as madres passam **15 cm** além dos pórticos das
+  pontas (a orelha das empenas fica toda debaixo da madre, e o remate da empena tem onde apoiar).
+- O desenho **Peças de aço (fabrico)** passa a ter as chapas numa segunda coluna, à direita dos perfis (cabe a 1:50
+  numa folha mesmo com muitas marcas), e as cotas em **milímetros**, como se usam na serralharia.
+- Na fita, a Chapa de topo, o Cutelo, o Gousset e o Apoio de madre ficam num botão com seta (lista), como no Revit.
+
 ## 0.503.0 — 2026-11-09
 
 **Estrutura metálica, passo 3: o gousset dos contraventamentos.**

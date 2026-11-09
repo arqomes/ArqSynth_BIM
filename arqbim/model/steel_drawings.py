@@ -10,7 +10,7 @@ import numpy as np
 
 from ..core import steel, steel_marks
 from ..i18n import decimal_sep, t
-from .rebar_drawings import TEXT, _dim, _room_for_texts, _text
+from .rebar_drawings import TEXT, _room_for_texts, _text
 
 SCALE = 50
 ROW = 0.55                      # m (at 1:50: 11 mm) between one piece and the next, its text and dimension under it
@@ -20,6 +20,19 @@ PLATE_ZOOM = 5                  # plates drawn 5× (at 1:10): their holes and ed
 
 def _n(v, d=2):
     return "{:.{}f}".format(float(v), d).replace(".", decimal_sep())
+
+
+def _dim(drawing, p1, p2, offset, value=None):
+    """(0.504) A dimension as rebar_drawings' (its line `offset` to the left of p1 → p2), its text in whole
+    millimetres — the workshop's (a cleat's 25 mm, not «0,03»)."""
+    a, b = np.asarray(p1, dtype=float), np.asarray(p2, dtype=float)
+    d = b - a
+    length = float(np.linalg.norm(d))
+    if length < 1e-6:
+        return
+    n = np.array((-d[1], d[0])) / length
+    mm = (length if value is None else value) * 1000.0
+    drawing.dims.append((a, b, a + n * offset, b + n * offset, "{:.0f}".format(mm)))     # (whole mm, as cut)
 
 
 def _outline(doc, guid, axis, depth_dir):
@@ -62,14 +75,21 @@ def parts_drawing(doc, title):
         groups.setdefault(marks.get(p["guid"], ""), []).append(p)
     drawing = Drawing(title)
     lines, ann = [], []
+    order = sorted(groups, key=steel_marks.sort_key)
     y = 0.0
-    for mark in sorted(groups, key=steel_marks.sort_key):
-        members = groups[mark]
-        p = members[0]
-        if p["prefix"] == "Ch":
-            y = _plate(doc, drawing, lines, ann, mark, members, y)
-        else:
-            y = _profile(doc, drawing, lines, ann, mark, members, y)
+    for mark in order:                                  # (the sections' marks down a first column…)
+        if groups[mark][0]["prefix"] != "Ch":
+            y = _profile(doc, drawing, lines, ann, mark, groups[mark], y)
+    x0 = 0.0                                            # (…0.504: the plates' down a second, right of it — one
+    if lines:                                           # column grew past what a sheet holds at 1:50)
+        x0 = float(np.concatenate(lines)[..., 0].max())
+        for _kind, _shapes, _h, words, where, size, *_rest in ann:
+            x0 = max(x0, float(where[0]) + len(words) * 0.55 * size * SCALE / 1000.0)
+        x0 += 1.0
+    y = 0.0
+    for mark in order:
+        if groups[mark][0]["prefix"] == "Ch":
+            y = _plate(doc, drawing, lines, ann, mark, groups[mark], y, x0)
     if not lines:
         return None
     drawing.lines = np.concatenate(lines)
@@ -130,10 +150,27 @@ def _chain(drawing, stops, at, along, offset, zoom):
     return abs(offset)
 
 
-def _plate(doc, drawing, lines, ann, mark, members, y):
+def _plate(doc, drawing, lines, ann, mark, members, y, x0=0.0):
     """A plate's mark: seen flat and enlarged (PLATE_ZOOM: at 1:10 on the 1:50 sheet, its dimensions reading its
-    real sizes), its holes, chains of dimensions from its edges through its holes under it and on its right;
-    returns the next y."""
+    real sizes), its holes, chains of dimensions from its edges through its holes under it and on its right — its
+    left edge at x0; returns the next y."""
+    lines_before, dims_before, ann_before = len(lines), len(drawing.dims), len(ann)
+    y = _plate_at_zero(doc, drawing, lines, ann, mark, members, y)
+    if x0:                                              # (drawn from x = 0, then moved to its column)
+        shift = np.array((x0, 0.0))
+        for k in range(lines_before, len(lines)):
+            lines[k] = lines[k] + shift
+        for k in range(dims_before, len(drawing.dims)):
+            p1, p2, l1, l2, words, *own = drawing.dims[k]
+            drawing.dims[k] = (p1 + shift, p2 + shift, l1 + shift, l2 + shift, words, *own)
+        for k in range(ann_before, len(ann)):
+            item = list(ann[k])
+            item[4] = np.asarray(item[4], dtype=float) + shift
+            ann[k] = tuple(item)
+    return y
+
+
+def _plate_at_zero(doc, drawing, lines, ann, mark, members, y):
     e = doc.ifc.by_guid(members[0]["guid"])
     plate = json.loads(doc.ifc._params(e).get("Chapa") or "{}")
     if not plate:

@@ -24,10 +24,12 @@ import ifcopenshell.util.element
 from .edit import EditRefused
 
 api = ifcopenshell.api
-KINDS = ("base_plate", "end_plate", "fin_plate", "gusset")
+KINDS = ("base_plate", "end_plate", "fin_plate", "gusset", "purlin_cleat")
 NAMES = {"base_plate": ("Chapa de base", "Base plate"), "end_plate": ("Chapa de topo", "End plate"),
-         "fin_plate": ("Cutelo", "Fin plate"), "gusset": ("Gousset", "Gusset plate")}
+         "fin_plate": ("Cutelo", "Fin plate"), "gusset": ("Gousset", "Gusset plate"),
+         "purlin_cleat": ("Apoio de madre", "Purlin cleat")}
 ANGLE_FAMILIES = ("L", "LU")
+CLEAT_FAMILIES = ("C", "Z", "UPN", "UPE")      # (0.504: a purlin bolted through its web to a cleat beside it)
 # (mm) A × B its plate (0: the column's size + 2 × MARGIN), tp its thickness, n its anchor bolts (2, 4, 6, 8), d their
 # diameter, e their distance to the plate's edges, proj how far they stand over the plate, embed how deep in the
 # concrete, grout under the plate, a the weld's throat
@@ -45,12 +47,16 @@ DEFAULTS = {"base_plate": {"A": 0.0, "B": 0.0, "tp": 20.0, "n": 4, "d": 20.0, "e
             # the bolts along the brace (rows), their pitch, the end distance, the brace's end clear of the column
             # (gap), the bolts' gauge from the angle's heel (0: about half its leg), the plate past the leg (edge)
             "gusset": {"end": 1, "tp": 10.0, "rows": 2, "p": 60.0, "e": 35.0, "d": 16.0, "gap": 20.0, "g": 0.0,
-                       "edge": 25.0, "a": 5.0}}
+                       "edge": 25.0, "a": 5.0},
+            # (0.504) a purlin's cleat: a plate standing on the beam's top flange (welded), beside the purlin's web,
+            # bolted through it — its width along the purlin, its height (0: about 0.7 of the purlin's), bolts one
+            # over the other
+            "purlin_cleat": {"tp": 8.0, "w": 100.0, "H": 0.0, "rows": 2, "p": 60.0, "d": 12.0, "a": 4.0}}
 LIMITS = {"A": (100.0, 3000.0), "B": (100.0, 3000.0), "tp": (5.0, 100.0), "n": (2, 8), "d": (12.0, 48.0),
           "e": (20.0, 300.0), "proj": (20.0, 300.0), "embed": (100.0, 2000.0), "grout": (0.0, 100.0), "a": (3.0, 20.0),
           "end": (0, 1), "W": (0.0, 1000.0), "top": (0.0, 300.0), "bottom": (0.0, 300.0), "rows": (1, 12),
           "p": (40.0, 300.0), "g": (0.0, 600.0), "w": (60.0, 400.0), "eh": (30.0, 300.0), "gap": (0.0, 200.0),
-          "edge": (15.0, 150.0)}
+          "edge": (15.0, 150.0), "H": (0.0, 600.0)}
 MARGIN = 100.0                # mm round the column, its plate's default
 BOLT_SIZES = (12.0, 16.0, 20.0, 24.0, 27.0, 30.0, 36.0, 42.0, 48.0)
 
@@ -85,7 +91,7 @@ def clean(kind, params):
         except (TypeError, ValueError):
             continue
         lo, hi = LIMITS[k]
-        if k in ("A", "B", "W", "g") and v == 0.0:
+        if k in ("A", "B", "W", "g", "H") and v == 0.0:
             out[k] = 0.0
             continue
         v = min(max(v, lo), hi)
@@ -156,6 +162,38 @@ def gusset_layout(params, brace):
     if g - d0 / 2.0 < brace.tw + brace.r:
         warnings.append(("root", round(brace.tw + brace.r + d0 / 2.0, 1)))
     return g, along, warnings
+
+
+def web_face(sec):
+    """(0.504) Where a purlin's web has its free face (mm, its section's x from its bounding box's middle) and to which
+    side of it its cleat goes (−1, +1): a C's and a channel's web on the left, its back free; a Z's in the middle, the
+    side away from its lower flange."""
+    if sec.family == "Z":
+        return sec.tw / 2.0, 1.0
+    return -size_of(sec)[0] / 2.0, -1.0
+
+
+def size_of(sec):
+    from ..core import steel
+    return steel.size(sec)
+
+
+def purlin_cleat_layout(params, purlin):
+    """(0.504) A purlin's cleat (sections, mm): (its height, bolt spots [(along, up from the purlin's bottom)],
+    warnings) — EN 1993-1-8 Table 3.3, and the top bolt's nut clear of the purlin's upper flange."""
+    h = purlin.h
+    H = params["H"] or max(60.0, round(0.7 * h / 10.0) * 10.0)
+    rows, p, d = int(params["rows"]), params["p"], params["d"]
+    spots = [(0.0, H / 2.0 + (j - (rows - 1) / 2.0) * p) for j in range(rows)]
+    d0 = hole(d)
+    warnings = []
+    if (H - (rows - 1) * p) / 2.0 < 1.2 * d0 or params["w"] / 2.0 < 1.2 * d0:
+        warnings.append(("edge", round(1.2 * d0, 1)))
+    if rows > 1 and p < 2.2 * d0:
+        warnings.append(("pitch", round(2.2 * d0, 1)))
+    if max(y for _x, y in spots) + d > h - purlin.tw:
+        warnings.append(("flange", round(h - purlin.tw - d, 1)))
+    return H, spots, warnings
 
 
 def base_plate_layout(params, b, h):
@@ -237,6 +275,12 @@ class SteelConnectionMixin:
             from ..core import steel
             if steel.get(self.steel_section(members[0])).family not in ANGLE_FAMILIES:
                 raise EditRefused("connection_brace_angle")
+        if kind == "purlin_cleat":                       # (0.504: a C, a Z, a channel — bolted through its web)
+            from ..core import steel
+            if steel.get(self.steel_section(members[0])).family not in CLEAT_FAMILIES:
+                raise EditRefused("connection_purlin")
+            if self.purlin_crossing(members[0], members[1]) is None:
+                raise EditRefused("connection_purlin_off")
         f = self.file
         label = NAMES[kind][0 if lang == "pt" else 1]
         column = self.by_guid(members[0])
@@ -387,6 +431,11 @@ class SteelConnectionMixin:
             return end_plate_layout(params, secs[0], secs[1], self._onto_flange(members[1], frame[1]))[5]
         if kind == "gusset":
             return gusset_layout(params, secs[0])[2]
+        if kind == "purlin_cleat":
+            found = purlin_cleat_layout(params, secs[0])[2]
+            if self.purlin_crossing(members[0], members[1]) is None:
+                found = found + [("off", 0.0)]
+            return found
         return fin_plate_layout(params, secs[0])[2]
 
     # ------------------------------------------------------------ its parts
@@ -418,6 +467,8 @@ class SteelConnectionMixin:
             parts = self._fin_plate_parts(members[0], members[1], params, lang)
         elif kind == "gusset":
             parts = self._gusset_parts(members[0], members[1], params, lang)
+        elif kind == "purlin_cleat":
+            parts = self._purlin_cleat_parts(members[0], members[1], params, lang)
         else:
             parts = []
         if parts:
@@ -714,6 +765,106 @@ class SteelConnectionMixin:
         parts.append(self._weld(m, params["a"], 2.0 * weld_len / 1000.0, lang))
         api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
         storey = self.storey_of(column)
+        if storey:
+            api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
+        return parts
+
+    # ------------------------------------------------------------ (0.504) a purlin on a beam
+
+    def _bottom_line(self, guid):
+        """A steel piece's bottom middle line (its section's, along its own y): (start, end, along, x, y)."""
+        from ..core import steel
+        start, end, along, xl, yl, (cx, cy) = self.brace_frame(guid)
+        sec = steel.get(self.steel_section(guid) or "")
+        h = sec.h if sec is not None else self.steel_box(guid)[1] * 1000.0
+        shift = xl * cx / 1000.0 + yl * (cy - h / 2.0) / 1000.0
+        return start + shift, end + shift, along, xl, yl
+
+    def _top_line(self, guid):
+        """A beam's top middle line (start, end): its section's middle line up its own y by half its depth."""
+        a, b = self._beam_line(guid)
+        m = self.placement(guid)
+        y = m[:3, 1] / np.linalg.norm(m[:3, 1])
+        half = self.steel_box(guid)[1] / 2.0
+        return np.asarray(a, dtype=float) + y * half, np.asarray(b, dtype=float) + y * half
+
+    def purlin_crossing(self, purlin, beam, reach=0.03):
+        """Where a purlin sits on a beam: its distance along the purlin's bottom line from its start (m), or None (its
+        bottom line crosses the beam's top within `reach` and within both lengths)."""
+        p0, p1, u, _x, _y = self._bottom_line(purlin)
+        try:
+            q0, q1 = self._top_line(beam)
+        except Exception:
+            return None
+        v = q1 - q0
+        lq = float(np.linalg.norm(v))
+        lp = float(np.linalg.norm(p1 - p0))
+        if lq < 1e-6 or lp < 1e-6:
+            return None
+        v = v / lq
+        w = p0 - q0
+        b = float(u @ v)
+        den = 1.0 - b * b
+        if den < 1e-9:                                         # (parallel: it does not cross)
+            return None
+        s = (b * float(w @ v) - float(w @ u)) / den
+        t = (float(w @ v) - b * float(w @ u)) / den
+        if not (-1e-6 <= s <= lp + 1e-6 and -reach <= t <= lq + reach):
+            return None
+        if float(np.linalg.norm((p0 + u * s) - (q0 + v * t))) > reach:
+            return None
+        return s
+
+    def purlin_beams(self, purlin):
+        """(0.504) {beam GlobalId: distance along the purlin} — the steel beams it sits on."""
+        out = {}
+        for e in self.file.by_type("IfcBeam"):
+            g = e.GlobalId
+            if g == purlin or self.steel_section(g) is None:
+                continue
+            s = self.purlin_crossing(purlin, g)
+            if s is not None:
+                out[g] = s
+        return out
+
+    def _purlin_cleat_parts(self, purlin, beam, params, lang):
+        """The cleat beside the purlin's web where it sits on the beam: a plate standing on the beam's top (its foot
+        welded to it, both sides), bolted through the purlin's web."""
+        from ..core import steel
+        f = self.file
+        psec = steel.get(self.steel_section(purlin) or "")
+        s = self.purlin_crossing(purlin, beam)
+        if psec is None or s is None or psec.family not in CLEAT_FAMILIES:
+            return []
+        start, _end, along, xl, yl, (cx, cy) = self.brace_frame(purlin)
+        H, spots, _w = purlin_cleat_layout(params, psec)
+        tp, w = params["tp"], params["w"]
+        x_face, side = web_face(psec)
+        x_out = cx + x_face + side * tp                         # (the plate's outer face, from the purlin's line)
+        y_bottom = cy - psec.h / 2.0
+        z2 = -side * xl
+        x2 = side * along
+        y2 = np.cross(z2, x2)
+        origin = start + along * s + xl * (x_out / 1000.0) + yl * (y_bottom / 1000.0)
+        m = self._frame(origin, x2, y2, z2)
+        material = self._column_material(beam, lang)
+        plate = api.root.create_entity(f, ifc_class="IfcPlate", name="{} {}×{}×{}".format(
+            "Orelha" if lang == "pt" else "Cleat", _mm(w), _mm(H), _mm(tp)), predefined_type="USERDEFINED")
+        plate.ObjectType = "CLEAT"
+        self._place(plate, m)
+        d0 = hole(params["d"])
+        self._extrusion_body(plate, [self._plate_profile(w, H, spots, d0, centre=(0.0, H / 2.0))], [(0.0, 0.0, 0.0)],
+                             [tp / 1000.0])
+        net = (w * H - len(spots) * math.pi * d0 * d0 / 4) * tp * 1e-9
+        self._plate_record(plate, w, H, tp, [(x, y - H / 2.0, d0) for x, y in spots], beam)
+        self._set_qto(plate, "Qto_PlateBaseQuantities", {"Width": tp / 1000.0 / self.unit_scale, "NetVolume": net,
+                                                         "NetWeight": net * steel.DENSITY, "GrossArea": w * H * 1e-6})
+        parts = [plate]
+        for k, (x, y) in enumerate(spots, 1):
+            parts.append(self._bolt(m, x, y, 0.0, tp + psec.tw, params["d"], k, lang))
+        parts.append(self._weld(m, params["a"], 2.0 * w / 1000.0, lang))
+        api.material.assign_material(f, products=parts, type="IfcMaterial", material=material)
+        storey = self.storey_of(beam)
         if storey:
             api.spatial.assign_container(f, products=parts, relating_structure=self.storey(storey))
         return parts

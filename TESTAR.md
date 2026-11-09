@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.504 — Apoio das madres (estrutura metálica, passo 3)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.504.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (separador **Estrutura**): dois cliques, por exemplo 6 m.
+2. Aproxime-se (roda do rato) de uma asna, por cima: em cada madre que nela assenta há uma pequena chapa de pé (a
+   **orelha**) encostada à alma da madre, com 2 parafusos. Nas pontas da nave, as madres passam um pouco (15 cm)
+   além do último pórtico.
+3. Clique numa orelha: nas Propriedades aparece **Apoio de madre** com a espessura, a largura, a **Altura da orelha**
+   e os parafusos.
+4. Escreva **90** na Altura e carregue Enter: a orelha fica mais baixa (no navegador do projeto, em Chapas, passa a
+   «Orelha 100×90×8»). Ctrl+Z volta atrás.
+5. Faça Ctrl+N e outra nave com **Chapas de base** desligado na barra de parâmetros: não leva orelhas. Clique numa
+   madre e, na barra da seleção, em **Apoio de madre**: essa madre leva uma orelha em cada asna onde assenta (2).
+   Clique no vazio e use **Estrutura** ▸ painel **Ligação** ▸ seta ao lado de **Chapa de topo** ▸ **Apoio de madre**:
+   a mensagem diz quantas pôs nas outras.
+6. Abra a vista **Peças de aço (fabrico)** numa folha: à esquerda os perfis, à direita as chapas (Ch1 chapa de base,
+   Ch2 gousset, Ch3 orelha), todas as cotas em milímetros.
+
 ## 0.503 — Gousset dos contraventamentos (estrutura metálica, passo 3)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.503.0**.

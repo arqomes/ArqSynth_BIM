@@ -38,7 +38,7 @@ class Shed:
 
 
 DEFAULTS = {"span": 12.0, "eave": 6.0, "slope": 10.0, "spacing": 6.0, "purlins": 1.5, "bracing": True,
-            "plates": True}
+            "plates": True, "overhang": 0.15}
 
 
 def _turn_for(depth_dir, axis):
@@ -55,11 +55,12 @@ def _turn_for(depth_dir, axis):
 
 
 def layout(origin, direction, length, span=12.0, eave=6.0, slope=10.0, spacing=6.0, purlins=1.5, bracing=True,
-           plates=True, rafter_depth=0.36, purlin_lift=0.0):
+           plates=True, rafter_depth=0.36, purlin_lift=0.0, overhang=0.15):
     """The shed along `direction` (level) from `origin` (its first column line's foot), `length` m long, `span` m
     wide to the left of it, its eaves `eave` m high, its roof at `slope` degrees to a ridge in the middle, frames about
-    every `spacing` m (the same between all of them), purlins about every `purlins` m along each slope; bracing in the
-    end bays; base plates. rafter_depth: the rafters' depth (m) — the purlins sit on their tops."""
+    every `spacing` m (the same between all of them), purlins about every `purlins` m along each slope — (0.504) past
+    the end frames by `overhang` m (the gables' verge on them, the end cleats under them) —; bracing in the end bays;
+    base plates. rafter_depth: the rafters' depth (m) — the purlins sit on their tops."""
     origin = np.asarray(origin, dtype=float)
     a = np.asarray(direction, dtype=float).copy()
     a[2] = 0.0
@@ -97,7 +98,8 @@ def layout(origin, direction, length, span=12.0, eave=6.0, slope=10.0, spacing=6
         for j in range(count):
             t = 0.1 + (slope_len - 0.2) * j / (count - 1)
             point = apex + down / np.linalg.norm(down) * (slope_len - t) + lift
-            out.pieces.append(Piece("purlin", "purlin", point, point + a * length, 2, _turn_for(up_normal, a)))
+            out.pieces.append(Piece("purlin", "purlin", point - a * overhang, point + a * (length + overhang), 2,
+                                    _turn_for(up_normal, a)))
     if bracing and n >= 2:
         for bay in sorted({0, n - 2}):
             f0, f1 = frames[bay], frames[bay + 1]

@@ -325,6 +325,26 @@ def gusset_icon():
     return theme.icon(pm)
 
 
+def purlin_cleat_icon():
+    """(0.504) Apoio de madre: a rafter's top flange, a C purlin sitting on it, the cleat beside its web, two bolts."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor("#b8c4cc"))
+    p.drawRect(QtCore.QRectF(2, 24, 28, 5))                                       # (the rafter's top flange)
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    p.drawRect(QtCore.QRectF(8, 10, 4, 14))                                       # (the cleat)
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.setPen(_pen(INK, 2.0))
+    p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(x, y) for x, y in
+                                    ((24, 7), (24, 4), (13, 4), (13, 23), (24, 23), (24, 20))]))   # (the C purlin)
+    p.setPen(_pen(INK, 1.3))
+    p.setBrush(QtGui.QColor(INK))
+    for y in (12.5, 19.0):
+        p.drawEllipse(QtCore.QPointF(10.5, y), 1.3, 1.3)
+    p.end()
+    return theme.icon(pm)
+
+
 def steel_shed_icon():
     """(0.499) Pórtico de nave: two portal frames, one behind the other, with their ridges."""
     pm, p = _canvas()
