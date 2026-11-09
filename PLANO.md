@@ -946,8 +946,7 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
 3. ~~**O painel Apresentação (BIM):** as cenas por ordem, a de entrada, a transição, o efeito (sol, construção,
    explosão), a narração (texto), as ocultas; miniaturas pela Imagem da vista~~ (0.363.0: Render ▸ Cenas da
    apresentação; também o tempo na cena; no Presentation, o importador lê as escolhas e sobe as miniaturas, no mesmo
-   ramo `integracao-arqsynth-bim`. Num «Atualizar» as cenas que já lá estavam não mudam — trazer as mudanças do BIM
-   para cenas já revistas no Presentation fica por decidir com o dono).
+   ramo `integracao-arqsynth-bim`. Desde a 0.489.0 um «Atualizar» leva as mudanças do BIM às cenas que já lá estavam).
 4. ~~**Movimentos de câmara (BIM):** por cena, um dos movimentos do Presentation (órbita, aproximação, recuo, voo,
    subida de fachada, os de interior), com o centro e o tamanho do edifício ou do ambiente, vistos no BIM antes~~
    (0.364.0: os 21, o tempo, o ambiente dos de interior, «Ver movimento»; no Presentation o importador fá-los com a
@@ -962,8 +961,11 @@ corte, «uma órbita aérea»), e o importador faz os objetos dele com as suas p
    ZIP e o botão «ArqSynth BIM» no Presentation); ~~panoramas 360° do render realista~~ (0.368.0: seis faces do Mitsuba
    juntas numa imagem equirretangular, guardadas com o projeto e listadas no painel; no Presentation, pontos 360° na
    planta do seu pavimento, atualizados ao importar outra vez sem tirar os feitos à mão). **Integração completa.**
-   Fica por decidir pelo dono: se o «Atualizar» deve levar as mudanças do BIM também às cenas que já existem no
-   Presentation (hoje leva as camadas e junta as cenas novas, sem mexer nas que lá se afinaram).
+   ~~Fica por decidir pelo dono: se o «Atualizar» deve levar as mudanças do BIM também às cenas que já existem no
+   Presentation~~ (0.489.0, o dono: «O "Atualizar" primeiro» — o que se prepara no BIM manda, o que só se faz no
+   Presentation fica: as cenas do BIM recebem o que mudou lá, nos seus lugares e pela ordem do BIM; as feitas no
+   Presentation ficam; as apagadas no BIM saem). Fica por decidir: o mesmo para as etiquetas dos ambientes e o Passeio
+   de uma página que já existe (hoje ficam como se mudaram no Presentation; só entram os ambientes novos).
 8. ~~**A aba «ArqSynth Presentation»** (o dono, 2026-11-08: «use as 2 colunas para replicar a experiência que se tem no
    ArqSynth Presentation… ao clicar na aba a tela muda a interface para a interface do ArqSynth Presentation»)~~
    (0.479.0): a última aba das vistas; as colunas do Presentation (páginas e cartões das cenas com os seis botões,

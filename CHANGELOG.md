@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.489.0 — 2026-11-09
+
+**«Atualizar» no Presentation leva as mudanças do BIM às cenas que já lá estão** (o dono: «O "Atualizar" primeiro»).
+
+Até aqui, ao exportar outra vez do BIM e escolher **Atualizar** no Presentation, só entravam as camadas e as cenas
+novas; as cenas que já lá estavam ficavam como estavam, mesmo que tivessem mudado no BIM. Agora a regra é: **o que se
+prepara no BIM manda; o que só se faz no Presentation fica.**
+
+- **As cenas que vêm do BIM** recebem o que mudou lá: o nome, a câmara, o modo de visualização, o sol, a exposição e o
+  céu, as camadas e as etiquetas escondidas, os cortes, a chegada, o efeito, a legenda e o tempo, o movimento de
+  câmara, os volumes de diagrama feitos no BIM, se está dentro ou fora da apresentação e a miniatura nova.
+- **O que só se faz no Presentation fica** nessas cenas: o áudio da narração, o aspeto do corte, os volumes e as
+  etiquetas feitos lá, os comentários, as cotas, os materiais da cena.
+- **As cenas criadas no Presentation** ficam exatamente como estão, no mesmo lugar.
+- Uma cena **apagada no BIM** sai do Presentation; uma **nova** entra no fim. A **ordem** das cenas do BIM passa a ser a
+  do BIM, nos lugares que elas ocupavam.
+- A **cena de entrada** passa a ser a escolhida no BIM, a menos que no Presentation se tenha escolhido uma cena feita lá.
+- O mesmo vale para o pacote ZIP (botão **ArqSynth BIM**) e para o GLB sozinho.
+- Ficam como antes (o que se mudou no Presentation fica): as etiquetas dos ambientes e o Passeio Virtual de uma página
+  que já existe; as fichas, as cores e a visibilidade das camadas; os ajustes de material da página.
+- A mudança é só no Presentation (o importador, ramo `integracao-arqsynth-bim`); no BIM nada muda na exportação.
+
 ## 0.488.0 — 2026-11-09
 
 **Passeio virtual na interface do Presentation** (o dono: «Sim, passeio»; passo 7, o último da lista do PLANO).

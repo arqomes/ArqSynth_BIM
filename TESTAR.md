@@ -644,6 +644,28 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.489 — «Atualizar» no Presentation leva as mudanças do BIM às cenas
+
+Precisa do Presentation local a correr (`http://127.0.0.1:3002`) e do programa aberto por
+**`C:\BIM\ArqSynth BIM.bat`** (o título deve dizer **0.489.0**).
+
+1. No BIM, abra uma casa com pelo menos uma vista 3D com nome (ou crie uma cena com **+ Criar cena** na interface do
+   Presentation).
+2. Clique em **Exportar / atualizar** e grave o ZIP.
+3. No Presentation, importe o ZIP (botão **ArqSynth BIM**). Veja as cenas da página 3D.
+4. No Presentation, numa das cenas do BIM, escreva uma legenda qualquer; crie também uma cena sua, com **+ Criar
+   cena** do Presentation, e dê-lhe um nome («Minha cena»).
+5. Volte ao BIM e, na interface do Presentation, mude essa mesma cena: outro nome (clique no lápis do cartão), outra
+   câmara (rode a vista e clique em **Atualizar** no cartão), um efeito (separador **Efeitos** ▸ **Explosão**).
+   Apague outra cena do BIM (caixote do lixo do cartão).
+6. Clique em **Exportar / atualizar** e grave o ZIP outra vez.
+7. No Presentation, importe o ZIP outra vez e escolha **Atualizar**:
+   - a cena mudada tem o nome novo, a câmara nova, a Explosão e a miniatura nova;
+   - a legenda que escreveu no Presentation foi substituída pela do BIM (o BIM manda na legenda); o áudio, se pôs um,
+     ficou;
+   - a cena apagada no BIM desapareceu;
+   - a «Minha cena» continua lá, igual, no mesmo lugar.
+
 ## 0.488 — Passeio virtual na interface do Presentation
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.488.0**.
