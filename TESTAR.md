@@ -644,6 +644,24 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.499 — Pórtico de nave (estrutura metálica, passo 4)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.499.0**.
+
+1. Faça Ctrl+N e fique na planta. No separador **Estrutura**, clique em **Pórtico de nave**.
+2. Na barra de cima veja as escolhas: Pilares **Pilar HEB 200**, Asnas **Viga IPE 300**, Madres **Madre C 160…**,
+   Contraventamentos **L 80×8**, Vão `12`, Altura do beirado `6`, Inclinação `10°`, Afastamento dos pórticos `6`,
+   Afastamento das madres `1,5`, Contraventar **Sim**, Chapas de base **Sim**.
+3. Clique num ponto da planta, leve o rato para a direita, escreva `24` e carregue em Enter: aparece uma nave de 24 m ×
+   12 m.
+4. Abra o 3D (F8): 5 pórticos, cada um com dois pilares e duas asnas que se encontram na cumeeira; os joelhos cortados
+   em meia-esquadria; as madres por cima das asnas; contraventamentos em X nas pontas (paredes e telhado); chapas de base
+   com chumbadouros.
+5. Carregue em Ctrl+Z: sai tudo de uma vez. Ctrl+Y: volta.
+6. Mude a Inclinação para `15°` e o Vão para `16`, e faça outra nave: o telhado fica mais inclinado e mais largo.
+7. Clique numa asna e mude o tipo nas Propriedades (por exemplo **Viga HEB 240**): a asna muda de perfil e o joelho
+   fica cortado na mesma.
+
 ## 0.498 — Chapa de topo e cutelo (estrutura metálica, passo 3b)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.498.0**.

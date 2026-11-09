@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.499.0 — 2026-11-09
+
+**Estrutura metálica, passo 4: estruturas prontas — o pórtico de nave.**
+
+- Ferramenta nova **Pórtico de nave** (separador **Estrutura**, a seguir à Peça metálica): dois cliques marcam a primeira
+  fila de pilares (o comprimento da nave; o vão fica para a esquerda dela) e a nave faz-se inteira, num só passo de
+  Ctrl+Z:
+  - **pórticos** igualmente afastados (cerca de 6 m), cada um com dois **pilares** — a alma no plano do pórtico — e
+    duas **asnas** até à cumeeira, com os **joelhos e a cumeeira em meia-esquadria**;
+  - **madres** em todo o comprimento, assentes no topo das asnas e inclinadas com o telhado, a cerca de 1,5 m;
+  - **contraventamentos em X** nos vãos das pontas, nas duas paredes e nas duas águas do telhado;
+  - **chapas de base** com chumbadouros debaixo de todos os pilares.
+- Na barra: os perfis dos pilares, das asnas, das madres e dos contraventamentos (qualquer tipo de aço); o vão (12 m),
+  a altura do beirado (6 m), a inclinação (3° a 30°; 10°), o afastamento dos pórticos e das madres, e se leva
+  contraventamentos e chapas de base. O comprimento pode escrever-se depois do primeiro clique.
+- Cada peça fica uma peça metálica normal: muda-se de perfil, move-se, apaga-se, e as ligações seguem-na.
+
 ## 0.498.0 — 2026-11-09
 
 **Estrutura metálica, passo 3b: ligações viga–pilar — chapa de topo e cutelo.**

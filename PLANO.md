@@ -1591,7 +1591,10 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    `IfcMechanicalFastener` (BOLT, ANCHORBOLT), `IfcFastener` (WELD), os furos como `IfcOpeningElement` nas peças, tudo
    num `IfcElementAssembly` por conjunto. Uma ligação escolhida mostra os parâmetros nas Propriedades (com «Editar
    tipo» para os tipos de ligação, como no Revit).
-4. **Estruturas prontas** (o prático e rápido): pórtico de nave (pilares, vigas de cobertura inclinadas com joelho e
+4. **Estruturas prontas** (0.499.0: o **pórtico de nave** — ferramenta com dois cliques, pórticos com joelhos e
+   cumeeira em meia-esquadria, madres, contraventamentos em X nas pontas, chapas de base. Faltam: a treliça, a estrutura
+   de piso metálica, a escada metálica, e a nave como um conjunto editável pelos parâmetros depois de feita.)
+   (o prático e rápido): pórtico de nave (pilares, vigas de cobertura inclinadas com joelho e
    cumeeira, madres, contraventamentos de cobertura e de fachada, ligações postas), treliça (Pratt, Warren, Howe; banzos e
    diagonais em cantoneira ou tubo), madres em C ou Z pelo espaçamento (como a carpintaria do telhado), estrutura de piso
    metálica (principais e secundárias, como o sistema de vigas) e escada metálica (vigas de escada em UPN, degraus em

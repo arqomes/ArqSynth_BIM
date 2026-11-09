@@ -2702,6 +2702,37 @@ def add_base_plates(doc, columns=None, params=None):
     return doc.execute(IfcCommand(t("cmd.base_plate"), action)).result
 
 
+def steel_shed(doc, origin, direction, length, column, rafter, purlin, brace, storey=None, **options):
+    """(0.499) A steel shed (core/steel_shed): portal frames of `column` and `rafter` (steel types) along `length`,
+    purlins of `purlin`, X bracing of `brace` in its end bays; its knees and ridges mitred, base plates under its
+    columns. options: span, eave, slope (degrees), spacing, purlins (their spacing), bracing, plates. One undo step.
+    The GlobalIds of what it made."""
+    from ..core import steel_shed as core_shed
+    language = lang()
+    shed = core_shed.layout(origin, direction, length, rafter_depth=float(rafter.profile[1]),
+                            **{k: v for k, v in options.items() if k in core_shed.DEFAULTS})
+    specs = {"column": column, "rafter": rafter, "purlin": purlin, "brace": brace}
+    words = {"column": "elem.column", "beam": "elem.beam", "purlin": "elem.purlin", "brace": "elem.brace"}
+    classes = {"column": "IfcColumn", "beam": "IfcBeam", "purlin": "IfcMember", "brace": "IfcMember"}
+
+    def action(ifc):
+        made = []
+        for piece in shed.pieces:
+            name = "{} {}".format(t(words[piece.function]), ifc.count(classes[piece.function]) + 1)
+            e = ifc.add_steel_member(specs[piece.role], piece.start, piece.end, name, language, storey=storey,
+                                     function=piece.function, cardinal=piece.cardinal, rotation=piece.rotation)
+            made.append(e.GlobalId)
+        for i, j in shed.mitres:
+            ifc.mitre(made[i], made[j], language)
+        extra = []
+        for k in shed.plates:
+            a = ifc.add_connection("base_plate", [made[k]], None, language)
+            extra += [a.GlobalId] + [p.GlobalId for p in ifc.connection_parts(a)]
+        return made + extra
+
+    return doc.execute(IfcCommand(t("cmd.steel_shed"), action)).result
+
+
 def add_beam_connections(doc, kind, beams, params=None):
     """(0.498) An end plate or a fin plate at each end of the steel beams given that reaches a steel column (and has
     no connection there yet). One undo step. The connections' GlobalIds."""

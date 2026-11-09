@@ -421,6 +421,59 @@ class BeamConnections(unittest.TestCase):
         self.assertEqual(doc.ifc.validate(express_rules=True), [])
 
 
+class Shed(unittest.TestCase):
+    """(0.499) The steel shed: portal frames, purlins, bracing, knees and ridges mitred, base plates."""
+
+    def test_layout(self):
+        """24 m long, frames about every 6 m: 5 frames of two columns and two rafters, the ridge 1,06 m over the
+        eaves at 10° over 12 m; purlins on each slope the length of the shed, on the rafters' tops, leaning with the
+        roof; X bracing in the two end bays (walls and roof: 16 braces); the columns' depth in their frame's plane."""
+        import numpy as np
+        from arqbim.core import steel_shed
+        shed = steel_shed.layout((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 24.0, rafter_depth=0.36)
+        roles = [p.role for p in shed.pieces]
+        self.assertEqual((shed.frames, roles.count("column"), roles.count("rafter"), roles.count("brace")),
+                         (5, 10, 10, 16))
+        self.assertEqual(len(shed.mitres), 15)
+        self.assertEqual(len(shed.plates), 10)
+        apex = shed.pieces[1].end
+        np.testing.assert_allclose(apex, (0.0, 6.0, 6.0 + 6.0 * math.tan(math.radians(10.0))), atol=1e-9)
+        purlins = [p for p in shed.pieces if p.role == "purlin"]
+        self.assertEqual(len(purlins) % 2, 0)
+        self.assertAlmostEqual(float(np.linalg.norm(purlins[0].end - purlins[0].start)), 24.0)
+        self.assertEqual(purlins[0].cardinal, 2)
+        self.assertAlmostEqual(abs(purlins[0].rotation), 10.0, places=6)       # (leaning with the roof)
+        self.assertAlmostEqual(abs(shed.pieces[0].rotation) % 180.0, 0.0, places=6)     # (span along Y: an upright
+        turned = steel_shed.layout((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), 12.0)               # piece's depth is along Y
+        self.assertAlmostEqual(abs(turned.pieces[0].rotation) % 180.0, 90.0, places=6)   # already; along X: turned)
+
+    def test_made(self):
+        """Made in the model: HEA 300 columns, IPE 360 rafters, C purlins, L bracing — 2 frames 6 m apart over 12 m:
+        the knees and the ridges cut (each column and rafter has its cuts), a base plate under each column, the file
+        valid; one undo takes it all."""
+        import numpy as np
+        from arqbim.ifc import catalog
+        from arqbim.model import bim
+        from arqbim.model.document import Document
+        doc = Document()
+        hea = catalog.steel_spec(catalog.BY_KEY["pilar_heb200"], "HEA300", "S275")
+        ipe = catalog.steel_spec(catalog.BY_KEY["viga_ipe300"], "IPE360", "S275")
+        made = bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 6.0, hea, ipe, catalog.BY_KEY["madre_c160"],
+                              catalog.BY_KEY["contrav_l80"])
+        kinds = [doc.ifc.kind_of(g) for g in made]
+        self.assertEqual(kinds.count("steel_connection"), 4)
+        columns = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcColumn")]
+        rafters = [g for g in made if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcBeam")]
+        self.assertEqual((len(columns), len(rafters)), (4, 4))
+        for g in columns + rafters:
+            self.assertTrue(doc.ifc.steel_cuts(doc.ifc.by_guid(g))[0], g)
+        top = max(float(doc.get(g).mesh.verts[:, 2].max()) for g in rafters)
+        self.assertGreater(top, 6.0 + 6.0 * math.tan(math.radians(10.0)))
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        doc.undo()
+        self.assertTrue(all(doc.ifc.by_guid(g) is None for g in made))
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

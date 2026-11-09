@@ -306,6 +306,17 @@ def fin_plate_icon():
     return theme.icon(pm)
 
 
+def steel_shed_icon():
+    """(0.499) Pórtico de nave: two portal frames, one behind the other, with their ridges."""
+    pm, p = _canvas()
+    for (dx, dy), colour in (((5, -4), "#8f9ea9"), ((0, 0), INK)):
+        p.setPen(_pen(QtGui.QColor(colour), 1.8))
+        pts = [QtCore.QPointF(x + dx, y + dy) for x, y in ((4, 29), (4, 14), (15, 7), (26, 14), (26, 29))]
+        p.drawPolyline(QtGui.QPolygonF(pts))
+    p.end()
+    return theme.icon(pm)
+
+
 def footing_icon():
     """Footing (0.68): a post standing on a wide block below the ground line."""
     pm, p = _canvas()
@@ -2823,6 +2834,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "move": move_icon, "rotate": rotate_icon, "tape": tape_icon, "wall": wall_icon, "slab": slab_icon,
               "column": column_icon, "beam": beam_icon, "footing": footing_icon, "pipe": pipe_icon, "duct": duct_icon,
               "steel_member": steel_member_icon,                                              # (0.495)
+              "steel_shed": steel_shed_icon,                                                  # (0.499)
               "grid": grid_icon,
               "door": door_icon, "window": window_icon, "section": section_icon, "dimension": dimension_icon,
               "orbit": orbit_icon, "pan": pan_icon, "zoom": zoom_icon, "zoom_window": zoom_window_icon,

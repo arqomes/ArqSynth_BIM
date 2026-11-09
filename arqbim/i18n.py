@@ -3294,6 +3294,7 @@ _STRINGS = {
     "cmd.beam": ("Viga", "Beam"),
     "cmd.steel_member": ("Peça metálica", "Steel member"),          # (0.495)
     "cmd.steel_mitre": ("Meia-esquadria", "Mitre"),                 # (0.496)
+    "cmd.steel_shed": ("Pórtico de nave", "Steel shed"),             # (0.499)
     # (0.497) steel connections
     "cmd.base_plate": ("Chapa de base", "Base plate"),
     "cmd.connection": ("Ligação metálica", "Steel connection"),
@@ -3379,6 +3380,30 @@ _STRINGS = {
     "tool.column": ("Pilar", "Column"),
     "tool.beam": ("Viga", "Beam"),
     "tool.steel_member": ("Peça metálica", "Steel member"),          # (0.495)
+    "tool.steel_shed": ("Pórtico de nave", "Steel shed"),            # (0.499)
+    "ctx.shed_column": ("Pilares", "Columns"),
+    "ctx.shed_rafter": ("Asnas", "Rafters"),
+    "ctx.shed_purlin": ("Madres", "Purlins"),
+    "ctx.shed_brace": ("Contraventamentos", "Bracing"),
+    "ctx.shed_span": ("Vão", "Span"),
+    "ctx.shed_eave": ("Altura do beirado", "Eaves' height"),
+    "ctx.shed_slope": ("Inclinação", "Slope"),
+    "ctx.shed_spacing": ("Afastamento dos pórticos", "Frames' spacing"),
+    "ctx.shed_purlins": ("Afastamento das madres", "Purlins' spacing"),
+    "ctx.shed_bracing": ("Contraventar", "Bracing"),
+    "ctx.shed_plates": ("Chapas de base", "Base plates"),
+    "hint.shed_start": ("Pórtico de nave: clique no início da primeira fila de pilares (o vão fica para a esquerda; as "
+                        "medidas e os perfis na barra).",
+                        "Steel shed: click the start of the first line of columns (the span goes to its left; sizes "
+                        "and sections on the bar)."),
+    "hint.shed_end": ("Clique no fim da fila (ou escreva o comprimento e Enter): a nave faz-se com {span} de vão.",
+                      "Click the line's end (or type the length and Enter): the shed is made {span} wide."),
+    "info.shed": ("Nave de {l} × {s}: {n} pórticos, madres, contraventamentos e chapas de base ({pieces} peças). Ctrl+Z "
+                  "desfaz tudo.",
+                  "Shed {l} × {s}: {n} frames, purlins, bracing and base plates ({pieces} pieces). Ctrl+Z undoes it "
+                  "all."),
+    "info.shed_types": ("Escolha perfis de aço para os pilares, asnas, madres e contraventamentos.",
+                        "Choose steel sections for the columns, rafters, purlins and bracing."),
     "ctx.steel_mode": ("Desenhar", "Draw"),
     "steel_mode.line": ("Entre dois pontos", "Between two points"),
     "steel_mode.x": ("Contraventamento em X", "X bracing"),

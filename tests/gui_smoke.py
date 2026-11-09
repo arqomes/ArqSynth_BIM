@@ -655,6 +655,7 @@ def bim_flow():
     steel_cuts_flow()
     base_plate_flow()
     beam_connections_flow()
+    steel_shed_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20137,6 +20138,49 @@ def beam_connections_flow():
     doc.modified = False
     check("chapa_de_topo_e_cutelo", offered and made and shown and win.ribbon_item("fin_plate") is not None,
           "oferecidas={} feitas={} ({} parafusos) propriedades={}".format(offered, made, bolts, shown))
+
+
+def steel_shed_flow():
+    """0.499 — The «Pórtico de nave» tool (Estrutura): span 10 m, slope 12°; two clicks 12 m apart along X: 3 frames
+    (6 m spacing), their columns and rafters (mitred), purlins, bracing in the end bays and a base plate under each
+    column; one undo takes it all. Captured: 499_portico_de_nave.png."""
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("top")
+    vp.zoom_box((np.array((-2.0, -2.0, 0.0)), np.array((14.0, 12.0, 1.0))))
+    pump(300)
+    in_ribbon = win.ribbon_item("steel_shed") is not None
+    win.set_tool("steel_shed")
+    pump(100)
+    tool = win.tool
+    tool.set_option("span", 10.0)
+    tool.set_option("slope", 12)
+    before = {o.id for o in doc.objects.values() if o.is_bim}
+    for p in ((0.0, 0.0, 0.0), (12.0, 0.0, 0.0)):
+        move(vp.project(np.array(p)), 3)
+        click()
+        pump(200)
+    pump(400)
+    made = [g for g in (o.id for o in doc.objects.values() if o.is_bim) if g not in before]
+    columns = [g for g in made if doc.get(g).ifc_class == "IfcColumn"]
+    rafters = [g for g in made if doc.get(g).ifc_class == "IfcBeam"]
+    members = [g for g in made if doc.get(g).ifc_class == "IfcMember"]
+    plates = [g for g in made if doc.get(g).ifc_class == "IfcPlate"]
+    built = len(columns) == 6 and len(rafters) == 6 and len(plates) == 6 and len(members) > 10
+    win.set_tool("select")
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("499_portico_de_nave.png")
+    doc.undo()
+    pump(300)
+    undone = all(doc.get(g) is None for g in made)
+    doc.modified = False
+    check("portico_de_nave", in_ribbon and built and undone,
+          "fita={} pilares={} asnas={} madres_e_contraventamentos={} chapas={} desfeito={}".format(
+              in_ribbon, len(columns), len(rafters), len(members), len(plates), undone))
 
 
 def camera_move_flow():
