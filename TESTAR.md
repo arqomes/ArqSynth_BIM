@@ -644,6 +644,30 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.494 — Perfis de aço (estrutura metálica, passo 1)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.494.0**.
+
+1. Faça Ctrl+N. No separador **Arquitetura** da fita, escolha **Pilar** e, na lista de tipos da barra de cima, o tipo
+   **Pilar HEB 200 — S275**. Clique num ponto da planta: aparece o pilar.
+2. No separador **Estrutura**, escolha **Viga** e o tipo **Viga IPE 300 — S275**. Clique no pilar e depois 5 m ao
+   lado: aparece a viga.
+3. Carregue em F8 (ou abra o 3D): o pilar e a viga têm a secção em I verdadeira, com as concordâncias. (A viga ainda
+   entra pelo pilar adentro: os cortes nas pontas são o passo 2.)
+4. Com **Selecionar**, clique na viga: nas Propriedades, em Materiais, aparecem **Perfil de aço** «IPE 300 — Aço
+   estrutural S275» e **Peso** «42,2 kg/m · 211 kg» (para 5 m).
+5. Com a viga escolhida, clique em **Editar tipo** (ou **Gerenciar ▸ Tipos**, Vigas): a Forma é **Perfil de aço**,
+   a Família IPE, o Perfil IPE 300, a Classe S275, e por baixo as medidas, 42,2 kg/m e as inércias.
+6. Mude o Perfil para **IPE 400**: o nome passa a «Viga IPE 400 — S275». Clique em **Aplicar**: a viga fica mais
+   alta, com o topo no mesmo sítio. Ctrl+Z volta atrás.
+7. Escolha a **Viga de concreto 20×40**, mude a Forma para **Perfil de aço**: aparecem Família, Perfil e Classe; mude
+   a Família para **Tubo quadrado** e veja a lista de tubos (SHS 40×40×2 até 300×300×12).
+8. Experimente as outras famílias (UPN, cantoneiras, madres C e Z): a miniatura e as medidas mudam com a escolha.
+   Clique em **Cancelar** para não gravar.
+9. Abra a **planta de estrutura** (Navegador ▸ Plantas de estrutura ▸ Térreo): a etiqueta do pilar diz «P1 HEB 200»
+   e a da viga «V1 IPE 300».
+10. Exporte o IFC e abra-o no Revit (ou outro visualizador): os perfis vêm com o nome «HEB200», «IPE300».
+
 ## 0.493 — Combinar e recortar volumes de diagrama
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.493.0**.

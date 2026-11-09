@@ -1551,7 +1551,11 @@ muda); desenhos de conjunto com símbolos de soldadura (ISO 2553); verificação
 existe; tudo em português e pelas normas europeias.
 
 Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a recomendada é esta):
-1. **Catálogo de perfis e classes de aço.** Perfis pela EN 10365 (IPE, HEA, HEB, HEM, UPN, UPE), EN 10056-1
+1. ~~**Catálogo de perfis e classes de aço.**~~ (0.494.0: `core/steel.py` com 400+ perfis conferidos contra as massas
+   publicadas, propriedades pelo contorno, S235–S460; «Perfil de aço» no Editar tipo; IFC com o perfil verdadeiro e o
+   nome normalizado; peso nas quantidades e nas Propriedades; etiquetas das plantas de estrutura. Fica para depois: o
+   perfil cortado cheio a preto nas escalas 1:100+, o `Pset_ProfileMechanical` no IFC, os tubos laminados a quente EN
+   10210 e as madres de fabricantes.) Perfis pela EN 10365 (IPE, HEA, HEB, HEM, UPN, UPE), EN 10056-1
    (cantoneiras de abas iguais e desiguais) e EN 10210/10219 (tubos quadrados, retangulares e redondos), perfis
    enformados a frio C, Z e Ω
    (madres) e chapa. Cada um com h, b, tw, tf, r, área, kg/m, área de pintura, Iy, Iz, Wel, Wpl, It, Iw, raios de

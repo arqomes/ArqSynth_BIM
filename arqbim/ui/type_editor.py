@@ -141,10 +141,28 @@ class TypeEditor(QtWidgets.QDialog):
         sf = QtWidgets.QFormLayout(self.section_box)
         self.shape = QtWidgets.QComboBox()                  # (0.97: a column's / beam's section)
         for value, label in ((None, "types.shape.rect"), ("circle", "types.shape.circle"), ("L", "types.shape.L"),
-                             ("T", "types.shape.T")):
+                             ("T", "types.shape.T"), ("steel", "types.shape.steel")):     # (0.494: a steel section)
             self.shape.addItem(t(label), value)
         self.shape_label = QtWidgets.QLabel(t("types.shape"))
         sf.addRow(self.shape_label, self.shape)
+        # (0.494) a steel section of the catalogue (core/steel): its family, its size, its grade, what it is
+        from ..core import steel
+        self.steel_family, self.steel_size, self.steel_grade = (QtWidgets.QComboBox(), QtWidgets.QComboBox(),
+                                                                QtWidgets.QComboBox())
+        for key, _ifc, standard in steel.FAMILIES:
+            self.steel_family.addItem(t("steel.family." + key) + ("  ({})".format(standard) if standard else ""), key)
+        for grade in steel.GRADES:
+            self.steel_grade.addItem(grade, grade)
+        self.steel_size.setMaxVisibleItems(20)
+        self.steel_info = QtWidgets.QLabel()
+        self.steel_info.setStyleSheet("QLabel { color: %s; }" % theme.C["note"])
+        self.steel_info.setWordWrap(True)
+        self.steel_labels = [QtWidgets.QLabel(t(k)) for k in ("types.steel_family", "types.steel_size",
+                                                              "types.steel_grade")]
+        for label, widget in zip(self.steel_labels, (self.steel_family, self.steel_size, self.steel_grade)):
+            sf.addRow(label, widget)
+        sf.addRow(self.steel_info)
+        self._steel_auto = None                             # (the name the program gave: changed with the section)
         self.width = QtWidgets.QLineEdit()
         self.depth = QtWidgets.QLineEdit()
         self.web = QtWidgets.QLineEdit()
@@ -217,7 +235,10 @@ class TypeEditor(QtWidgets.QDialog):
         self.ok.clicked.connect(self.ok_clicked)
         self.where.clicked.connect(self.where_used)
         self.materials.clicked.connect(self._open_materials)
-        self.shape.currentIndexChanged.connect(lambda _i: self._show_shape())
+        self.shape.currentIndexChanged.connect(lambda _i: self._show_shape(chosen=True))
+        self.steel_family.currentIndexChanged.connect(lambda _i: self._fill_steel_sizes())
+        self.steel_size.currentIndexChanged.connect(lambda _i: self._steel_changed())
+        self.steel_grade.currentIndexChanged.connect(lambda _i: self._steel_changed())
         self.design_button.clicked.connect(self._open_generator)
         for edit in (self.width, self.depth, self.transom):
             edit.editingFinished.connect(self._show_design)
@@ -363,9 +384,10 @@ class TypeEditor(QtWidgets.QDialog):
             blocker = QtCore.QSignalBlocker(self.shape)
             self.shape.setCurrentIndex(max(0, self.shape.findData(spec.shape)))
             del blocker
+            self._show_steel(spec)
             self._show_shape()
-            self.material.setVisible(not footing)
-            self.material_label.setVisible(not footing)
+            self.material.setVisible(not footing and self._shape() != "steel")     # (0.494: steel: its grade)
+            self.material_label.setVisible(not footing and self._shape() != "steel")
             if not footing:
                 self._fill_materials(self.material, spec.material)
         self._show_use(spec)
@@ -407,18 +429,90 @@ class TypeEditor(QtWidgets.QDialog):
         spec = self.current
         return self.shape.currentData() if spec is not None and spec.kind in ("column", "beam") else None
 
-    def _show_shape(self):
-        """The section's fields for its shape: a circle its diameter only; an L or a T their legs' thickness."""
+    def _show_shape(self, chosen=False):
+        """The section's fields for its shape: a circle its diameter only; an L or a T their legs' thickness; (0.494)
+        a steel section its family, size and grade (its sizes and material from them). chosen: the shape just
+        picked in its list — steel: the name follows the section."""
         spec = self.current
         if spec is None or spec.kind in OPENING_KINDS:
             return
         shape = self._shape()
+        steel_ = shape == "steel"
         round_ = spec.kind in ("pipe", "pile") or shape == "circle"
         self.width_label.setText(t("types.diameter" if round_ else "types.width"))
-        self.depth.setVisible(not round_ and not spec.strip)
-        self.depth_label.setVisible(not round_ and not spec.strip)
+        self.width.setVisible(not steel_)
+        self.width_label.setVisible(not steel_)
+        self.depth.setVisible(not round_ and not spec.strip and not steel_)
+        self.depth_label.setVisible(not round_ and not spec.strip and not steel_)
         self.web.setVisible(shape in ("L", "T"))
         self.web_label.setVisible(shape in ("L", "T"))
+        for w in (self.steel_family, self.steel_size, self.steel_grade, self.steel_info, *self.steel_labels):
+            w.setVisible(steel_)
+        if spec.kind in ("column", "beam"):
+            self.material.setVisible(not steel_)
+            self.material_label.setVisible(not steel_)
+        if steel_ and chosen:
+            self._steel_changed(rename=True)
+
+    # ------------------------------------------------------------ (0.494) a steel section
+
+    def _show_steel(self, spec):
+        """The steel section of the type shown (its family, size, grade) — an IPE 200 in S275 for one that is not."""
+        from ..core import steel
+        sec = steel.get(spec.section) if spec.section else None
+        family = sec.family if sec is not None and sec.name in {s.name for s in steel.sections(sec.family)} else "IPE"
+        grade = steel.grade_of(spec.material) or "S275"
+        for combo, value in ((self.steel_family, family), (self.steel_grade, grade)):
+            blocker = QtCore.QSignalBlocker(combo)
+            combo.setCurrentIndex(max(0, combo.findData(value)))
+            del blocker
+        self._fill_steel_sizes(sec.name if sec is not None else "IPE200", rename=False)
+        self._steel_auto = _name(spec) if spec.section else None
+
+    def _fill_steel_sizes(self, select=None, rename=True):
+        """The family's sizes in the list (the one shown kept if the family has it, else its first)."""
+        from ..core import steel
+        family = self.steel_family.currentData()
+        blocker = QtCore.QSignalBlocker(self.steel_size)
+        keep = select or self.steel_size.currentData()
+        self.steel_size.clear()
+        for sec in steel.sections(family):
+            self.steel_size.addItem(steel.display(sec.name), sec.name)
+        index = self.steel_size.findData(keep)
+        self.steel_size.setCurrentIndex(index if index >= 0 else 0)
+        del blocker
+        self._steel_changed(rename=rename)
+
+    def _steel_changed(self, rename=True):
+        """The section chosen: what it is (its dimensions, its mass, its properties); the name follows it when it is
+        the program's («Viga IPE 300 — S275»)."""
+        from ..core import steel
+        name = self.steel_size.currentData()
+        sec = steel.get(name)
+        if sec is None or self.current is None:
+            self.steel_info.setText("")
+            return
+        p = steel.properties(sec.name)
+        grade = self.steel_grade.currentData()
+        fy, fu = steel.strength(grade, steel.thickest(sec))
+        w, h = steel.size(sec)
+        sep = decimal_sep()
+
+        def n(value, d=1):
+            return "{:.{}f}".format(value, d).replace(".", sep)
+
+        lines = [t("types.steel_dims", h=n(h, 1), b=n(w, 1), tw=n(sec.tw, 1), tf=n(sec.tf, 1)),
+                 t("types.steel_mass", m=n(p["mass"], 1), a=n(p["A"], 2), paint=n(p["paint"], 3)),
+                 t("types.steel_inertia", iy=n(p["Iy"], 0), iz=n(p["Iz"], 0), wy=n(p["Wpl_y"], 0), wz=n(p["Wpl_z"], 0)),
+                 t("types.steel_grade_info", grade=grade, fy=n(fy, 0), fu=n(fu, 0))]
+        if steel.STANDARD.get(sec.family):
+            lines.append(t("types.steel_standard", std=steel.STANDARD[sec.family]))
+        self.steel_info.setText("\n".join(lines))
+        auto = catalog.steel_name(self.current.kind, sec.name, grade, lang())
+        if rename and self._shape() == "steel" and (self.name.text().strip() in (self._steel_auto, _name(self.current))
+                                                    or not self.name.text().strip()):
+            self.name.setText(auto)
+        self._steel_auto = auto
 
     def _show_use(self, spec):
         n = len(project_types.instances(self.doc.ifc, spec))
@@ -432,8 +526,11 @@ class TypeEditor(QtWidgets.QDialog):
         self.layers_box.setVisible(False)
         self.section_box.setVisible(True)
         self.section_box.setTitle(t("types.size"))
-        for w in (self.shape, self.shape_label, self.web, self.web_label):
+        for w in (self.shape, self.shape_label, self.web, self.web_label, self.steel_family, self.steel_size,
+                  self.steel_grade, self.steel_info, *self.steel_labels):
             w.setVisible(False)
+        self.width.setVisible(True)
+        self.width_label.setVisible(True)
         self.width_label.setText(t("types.width"))
         self.depth_label.setText(t("types.height"))
         self.width.setText(_len(spec.width))
@@ -595,6 +692,11 @@ class TypeEditor(QtWidgets.QDialog):
             layers = tuple(layers)
             functions = self._layer_functions()                     # (0.334)
         shape, web = spec.shape, spec.web
+        if spec.kind in ("column", "beam") and self._shape() == "steel":       # (0.494) a steel section
+            section, grade = self.steel_size.currentData(), self.steel_grade.currentData()
+            if not section:
+                return t("types.err_size")
+            return dataclasses.replace(catalog.steel_spec(spec, section, grade, name=name), masonry=spec.masonry)
         if spec.kind not in catalog.LAYERED or spec.kind == "footing":
             shape = self._shape() if spec.kind in ("column", "beam") else spec.shape
             round_ = spec.kind in ("pipe", "pile") or shape == "circle"
@@ -613,7 +715,8 @@ class TypeEditor(QtWidgets.QDialog):
         # (what the form does not show — a pile cap's piles, an IFC PredefinedType — stays as it was)
         return dataclasses.replace(spec, name_pt=name, name_en=name, layers=layers, profile=profile,
                                    material=material, shape=shape, web=web, functions=functions,
-                                   masonry=self._masonry() if spec.kind == "wall" else spec.masonry)    # (0.346)
+                                   masonry=self._masonry() if spec.kind == "wall" else spec.masonry,   # (0.346)
+                                   section=None)                      # (0.494: no longer a steel section)
 
     # ------------------------------------------------------------ actions
 

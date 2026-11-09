@@ -254,14 +254,17 @@ def _tags(doc, drawing, members, slabs):
     """Each member's tag (its short name and size) beside it, each slab's in it: text annotations — (0.238) each
     one a hand may move, kept in drawing.movable by its member's GlobalId."""
     from shapely.geometry import Polygon
+    from ..core import steel
     ann = []
     for o in members:
         tag = short_tag(o.name)
+        section = doc.ifc.steel_section(o.id) if o.ifc_class in ("IfcColumn", "IfcBeam") else None
         try:
             if o.ifc_class == "IfcColumn":
                 centre, _x, (a, b), _base, _top = doc.ifc.column_box(o.id)
                 drawing.movable.append((len(ann), o.id))
                 ann.append(_text((centre[0] + max(a, b) + 0.05, centre[1] + max(a, b) + 0.05),
+                                 "{} {}".format(tag, steel.display(section)) if section else      # (0.494: «P1 HEB 200»)
                                  "{} {}×{}".format(tag, _cm(2 * a), _cm(2 * b))))
             elif o.ifc_class == "IfcBeam":
                 start, end, _t, width, height = doc.ifc.beam_params(o.id)
@@ -271,7 +274,8 @@ def _tags(doc, drawing, members, slabs):
                     n = -n                    # (over a beam along X, right of one along Y: the text runs off it)
                 mid = (np.asarray(start[:2], dtype=float) + np.asarray(end[:2], dtype=float)) / 2
                 drawing.movable.append((len(ann), o.id))
-                ann.append(_text(mid + n * (width / 2 + 0.08), "{} {}×{}".format(tag, _cm(width), _cm(height))))
+                ann.append(_text(mid + n * (width / 2 + 0.08), "{} {}".format(tag, steel.display(section)) if section
+                                 else "{} {}×{}".format(tag, _cm(width), _cm(height))))
             elif o.ifc_class == "IfcFooting":
                 centre, _x, length, width, _top = doc.ifc.footing_params(o.id)
                 drawing.movable.append((len(ann), o.id))

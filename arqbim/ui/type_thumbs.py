@@ -161,6 +161,17 @@ def _outline(spec):
     b = b or a
     path = QtGui.QPainterPath()
     web = spec.web or min(a, b) / 3
+    if getattr(spec, "section", None):                   # (0.494) a steel section: its real outline (and hole)
+        from ..core import steel
+        sec = steel.get(spec.section)
+        if sec is not None:
+            outer, holes = steel.outline(sec)
+            for ring in [outer] + holes:
+                path.addPolygon(QtGui.QPolygonF([QtCore.QPointF(x / 1000.0, y / 1000.0) for x, y in ring]))
+                path.closeSubpath()
+            path.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
+            w, h = steel.size(sec)
+            return path, w / 1000.0, h / 1000.0
     if spec.round:
         path.addEllipse(QtCore.QPointF(0.0, 0.0), a / 2, a / 2)
     elif spec.shape == "L":                              # (its two legs: up the left, along the bottom)

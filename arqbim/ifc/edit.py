@@ -64,6 +64,13 @@ def profile_size(profile):
     if profile.is_a("IfcCircleProfileDef"):
         r = float(profile.Radius)
         return 2 * r, 2 * r, math.pi * r * r, 2 * math.pi * r
+    from ..core import steel
+    if steel.is_steel_profile(profile):                 # (0.494) a steel section: by its real outline
+        found = steel.ifc_outline(profile)
+        if found is not None:
+            outer, holes, w, d = found
+            area, perimeter = steel.area_and_perimeter(outer, holes)
+            return w, d, area, perimeter
     if profile.is_a("IfcLShapeProfileDef"):
         w, d, t = float(profile.Width or profile.Depth), float(profile.Depth), float(profile.Thickness)
         return w, d, t * (w + d - t), 2 * (w + d)
@@ -521,6 +528,12 @@ class EditMixin:
             values = {"Length": length * u, "CrossSectionArea": area, "OuterSurfaceArea": perimeter * length}
         else:
             values = {"Length": length * u, "CrossSectionArea": area, "GrossVolume": area * length}
+            from ..core import steel
+            if steel.is_steel_profile(profile):         # (0.494) a steel piece: its weight and its painted surface
+                sec = steel.get(getattr(profile, "ProfileName", None))
+                mass = steel.properties(sec.name)["mass"] if sec is not None else area * steel.DENSITY
+                values.update({"NetWeight": mass * length, "GrossWeight": mass * length,
+                               "OuterSurfaceArea": perimeter * length})
         self._set_qto(element, qto, values)
 
     def _set_filling_body(self, filling, kind, width, height, thickness):
@@ -1336,6 +1349,18 @@ class EditMixin:
         if profile.is_a("IfcTShapeProfileDef"):
             return "T", float(profile.WebThickness) * self.unit_scale
         return "rect", 0.0
+
+    def steel_section(self, guid):
+        """(0.494) The steel section (core/steel's name: «HEB200») of a column / beam made of one, or None."""
+        from ..core import steel
+        material = ifcopenshell.util.element.get_material(self.by_guid(guid), should_skip_usage=True)
+        if material is None or not material.is_a("IfcMaterialProfileSet") or not material.MaterialProfiles:
+            return None
+        profile = material.MaterialProfiles[0].Profile
+        if not steel.is_steel_profile(profile):
+            return None
+        sec = steel.from_ifc(profile, self.unit_scale)
+        return sec.name if sec is not None else None
 
     def pile_diameter(self, guid):
         """(0.228) A pile's diameter (m), from its round profile (its larger side if not round)."""

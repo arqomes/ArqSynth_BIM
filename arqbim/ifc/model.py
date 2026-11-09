@@ -1058,7 +1058,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             api.material.assign_material(self.file, products=[type_], type="IfcMaterialLayerSet", material=layer_set)
         else:
             x, y = spec.profile
-            if spec.round:                       # a pipe, a pile, a round column: a circle of its diameter
+            if spec.section:                     # (0.494) a steel section of the catalogue, named as it is
+                profile = self._steel_profile(spec.section)
+            elif spec.round:                     # a pipe, a pile, a round column: a circle of its diameter
                 profile = api.profile.add_parameterized_profile(self.file, ifc_class="IfcCircleProfileDef")
                 profile.Radius = x / 2 * to_units
             elif spec.shape == "L":              # (0.97) an L: its outer sizes, its legs' thickness
@@ -1071,7 +1073,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             else:
                 profile = api.profile.add_parameterized_profile(self.file, ifc_class="IfcRectangleProfileDef")
                 profile.XDim, profile.YDim = x * to_units, y * to_units
-            profile.ProfileName = name
+            if not spec.section:                 # (a steel section keeps its own name: «IPE300»)
+                profile.ProfileName = name
             profile_set = api.material.add_material_set(self.file, name=name, set_type="IfcMaterialProfileSet")
             api.material.add_profile(self.file, profile_set=profile_set,
                                      material=self._material(spec.material, lang), profile=profile)
@@ -1086,6 +1089,27 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 pset = api.pset.add_pset(self.file, product=type_, name=common[0])
                 api.pset.edit_pset(self.file, pset=pset, properties=common[1])
         return type_
+
+    def _steel_profile(self, section):
+        """(0.494) A steel section of the catalogue (core/steel) as its IFC profile — IfcIShapeProfileDef,
+        IfcUShapeProfileDef (a UPN's flange slope in the file's angle unit), IfcLShapeProfileDef, the hollow ones,
+        IfcCShapeProfileDef; a Z and an omega by their outline —, named as the other programs name it («IPE300»)."""
+        import ifcopenshell.util.unit
+        from ..core import steel
+        sec = steel.get(section)
+        if sec is None:
+            raise ValueError("unknown steel section: {}".format(section))
+        angle = ifcopenshell.util.unit.calculate_unit_scale(self.file, "PLANEANGLEUNIT") or 1.0
+        ifc_class, values = steel.ifc_profile(sec, 0.001 / self.unit_scale, angle)
+        if ifc_class == "IfcArbitraryClosedProfileDef":       # (IfcOpenShell takes the outline in metres)
+            points = [(x * self.unit_scale, y * self.unit_scale) for x, y in values["points"]]
+            profile = api.profile.add_arbitrary_profile(self.file, profile=points + [points[0]], name=sec.name)
+        else:
+            profile = api.profile.add_parameterized_profile(self.file, ifc_class=ifc_class)
+            for attribute, value in values.items():
+                setattr(profile, attribute, value)
+        profile.ProfileName = sec.name
+        return profile
 
     # ------------------------------------------------------------ elements
 
@@ -2308,7 +2332,16 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
         elif material is not None and material.is_a("IfcMaterialProfileSet"):
             p = material.MaterialProfiles[0]
             prof = p.Profile
-            if prof.is_a("IfcCircleProfileDef"):                      # (a pipe, a round column: its diameter)
+            from ..core import steel
+            if steel.is_steel_profile(prof):                            # (0.494) a steel piece: its section, its weight
+                sec = steel.from_ifc(prof, scale)
+                weight = ifcopenshell.util.element.get_psets(e).get(
+                    {"IfcBeam": "Qto_BeamBaseQuantities", "IfcColumn": "Qto_ColumnBaseQuantities",
+                     "IfcMember": "Qto_MemberBaseQuantities"}.get(e.is_a(), ""), {}).get("NetWeight")
+                if sec is not None:
+                    info["steel"] = (steel.display(sec.name), p.Material.Name if p.Material else "?",
+                                     steel.properties(sec.name)["mass"], weight)
+            elif prof.is_a("IfcCircleProfileDef"):                      # (a pipe, a round column: its diameter)
                 info["profile"] = (p.Material.Name if p.Material else "?", 2 * prof.Radius * scale, None)
             elif prof.is_a() in ("IfcRectangleProfileDef", "IfcLShapeProfileDef", "IfcTShapeProfileDef"):
                 w, d, _area, _p = profile_size(prof)                    # (an L, a T: their outer sizes, 0.97)

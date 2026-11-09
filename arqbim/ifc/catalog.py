@@ -67,6 +67,9 @@ class TypeSpec:
     # (0.346) a wall type's own masonry for Eurocode 6 — (units, group, fb N/mm², mortar), core/ec6's — or None: the
     # project's (its structural settings)
     masonry: tuple = None
+    # (0.494) a steel column's / beam's section from the catalogue (core/steel: «IPE300», «HEB200»…; shape "steel",
+    # profile its box in metres, material its grade's — «aco_s275»), or None
+    section: str = None
 
     @property
     def thickness(self):
@@ -240,6 +243,13 @@ for _m in (
     # metals
     _library("aco_s275", "Aço estrutural S275", "Structural steel S275", "steel", (0.55, 0.57, 0.60), 7850.0, 50.0,
              ("steel", "#c9ccd0")),
+    # (0.494) the other grades of the steel sections (core/steel.GRADES)
+    _library("aco_s235", "Aço estrutural S235", "Structural steel S235", "steel", (0.55, 0.57, 0.60), 7850.0, 50.0,
+             ("steel", "#c9ccd0")),
+    _library("aco_s355", "Aço estrutural S355", "Structural steel S355", "steel", (0.55, 0.57, 0.60), 7850.0, 50.0,
+             ("steel", "#c9ccd0")),
+    _library("aco_s460", "Aço estrutural S460", "Structural steel S460", "steel", (0.55, 0.57, 0.60), 7850.0, 50.0,
+             ("steel", "#c9ccd0")),
     _library("zinco", "Zinco (junta agrafada)", "Zinc (standing seam)", "zinc", (0.70, 0.72, 0.74), 7140.0, 110.0,
              (None, "#5d6166"), ("boards_v", "#55595e")),
     _library("cobre_chapa", "Chapa de cobre", "Copper sheet", "copper", (0.72, 0.45, 0.20), 8900.0, 380.0,
@@ -367,6 +377,17 @@ TYPES = (
              profile=(0.20, 0.50), material="concreto"),
     TypeSpec("viga_T_60", "beam", "Viga em T 60×50 (12)", "T beam 60×50 (12)", profile=(0.60, 0.50),
              material="concreto", shape="T", web=0.12),
+    # (0.494) steel: sections of the catalogue (core/steel), in a grade
+    TypeSpec("pilar_heb200", "column", "Pilar HEB 200 — S275", "Column HEB 200 — S275", profile=(0.20, 0.20),
+             material="aco_s275", shape="steel", section="HEB200"),
+    TypeSpec("pilar_shs150", "column", "Pilar SHS 150×150×8 — S355", "Column SHS 150×150×8 — S355",
+             profile=(0.15, 0.15), material="aco_s355", shape="steel", section="SHS150x150x8"),
+    TypeSpec("viga_ipe200", "beam", "Viga IPE 200 — S275", "Beam IPE 200 — S275", profile=(0.10, 0.20),
+             material="aco_s275", shape="steel", section="IPE200"),
+    TypeSpec("viga_ipe300", "beam", "Viga IPE 300 — S275", "Beam IPE 300 — S275", profile=(0.15, 0.30),
+             material="aco_s275", shape="steel", section="IPE300"),
+    TypeSpec("viga_heb240", "beam", "Viga HEB 240 — S275", "Beam HEB 240 — S275", profile=(0.24, 0.24),
+             material="aco_s275", shape="steel", section="HEB240"),
     # footings (0.68): layers = their depth; profile = the plan size of a pad (x, y), of a strip (its width, 0)
     TypeSpec("sapata_80", "footing", "Sapata 80×80×40", "Pad footing 80×80×40",
              layers=(("concreto", 0.40),), profile=(0.80, 0.80)),
@@ -447,6 +468,28 @@ KINDS = ("wall", "slab", "roof", "column", "beam", "footing", "pile", "pipe", "d
 def types():
     """Every type to draw with: the catalogue's (as the project has them) and then the project's own."""
     return tuple(BY_KEY[t.key] for t in TYPES) + tuple(_PROJECT)
+
+
+STEEL_WORDS = {"column": ("Pilar", "Column"), "beam": ("Viga", "Beam"), "member": ("Elemento", "Member")}
+
+
+def steel_name(kind, section, grade, lang="pt"):
+    """(0.494) A steel type's name: «Viga IPE 300 — S275»."""
+    from ..core import steel
+    word = STEEL_WORDS.get(kind, STEEL_WORDS["member"])[0 if lang == "pt" else 1]
+    return "{} {} — {}".format(word, steel.display(section), grade)
+
+
+def steel_spec(spec, section, grade, name=None):
+    """(0.494) A column / beam type made of a steel section of the catalogue in a grade (from `spec`: its key and kind
+    kept): its box, its grade's material, its name (given, else «Viga IPE 300 — S275»)."""
+    from ..core import steel
+    sec = steel.get(section)
+    w, h = steel.size(sec)
+    pt, en = (name, name) if name else (steel_name(spec.kind, sec.name, grade), steel_name(spec.kind, sec.name, grade,
+                                                                                            "en"))
+    return replace(spec, name_pt=pt, name_en=en, layers=(), profile=(w / 1000.0, h / 1000.0),
+                   material=steel.GRADE_MATERIAL[grade], shape="steel", web=None, section=sec.name)
 
 
 def is_starter(key):

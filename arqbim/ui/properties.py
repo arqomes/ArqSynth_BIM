@@ -2484,8 +2484,15 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._row(t("props.size"), "{} × {}".format(_len(info["size"][0]), _len(info["size"][1])))
         if info.get("host"):
             self._row(t("props.host"), info["host"])
-        if info["layers"] or info["profile"]:
+        if info["layers"] or info["profile"] or info.get("steel"):
             self._begin(t("props.g.materials"))               # (the type's: "do tipo" — every one of it)
+        if info.get("steel"):                                # (0.494) a steel piece: its section, grade, weight
+            section, material, per_metre, weight = info["steel"]
+            self._row(t("props.steel_section"), "{} — {}".format(section, material))
+            mass = "{:.1f} kg/m".format(per_metre).replace(".", decimal_sep())
+            if weight:
+                mass += " · {:.1f} kg".format(weight).replace(".", decimal_sep())
+            self._row(t("props.steel_weight"), mass)
         if info["layers"]:
             layers = self._row(t("props.layers"), _cm(sum(th for _, th in info["layers"])), bold=True)
             for name, thickness in info["layers"]:

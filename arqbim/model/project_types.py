@@ -113,7 +113,7 @@ def _same(a, b):
                 spec.predefined, spec.piles, spec.pile, round(spec.pile_length, 6), spec.shape,
                 round(spec.web, 6) if spec.web else None,
                 tuple(catalog.layer_function(spec, k) for k in range(len(spec.layers))),   # (0.334)
-                spec.masonry)                                                              # (0.346)
+                spec.masonry, spec.section)                                                # (0.346, 0.494)
     return a.kind == b.kind and rounded(a) == rounded(b)
 
 
@@ -159,6 +159,16 @@ def read_type(ifc, type_, kind):
     entry = mat.MaterialProfiles[0]
     profile = entry.Profile
     shape, web = None, None
+    material = material_key(entry.Material.Name) if entry.Material else None
+    from ..core import steel
+    if kind in ("column", "beam") and steel.is_steel_profile(profile):      # (0.494) a steel section
+        from ifcopenshell.util import unit as ifc_unit
+        angle = ifc_unit.calculate_unit_scale(ifc.file, "PLANEANGLEUNIT") or 1.0
+        sec = steel.from_ifc(profile, ifc.unit_scale, angle)
+        if sec is not None:
+            w, h = steel.size(sec)
+            return catalog.TypeSpec(key, kind, name, name, profile=(w / 1000.0, h / 1000.0), material=material,
+                                    predefined=predefined, shape="steel", section=sec.name)
     if profile.is_a("IfcCircleProfileDef"):
         size = (2 * float(profile.Radius) * s,) * 2
         shape = None if kind in ("pipe", "pile") else "circle"

@@ -650,6 +650,7 @@ def bim_flow():
     scene_diagrams_flow()
     diagram_editing_flow()
     diagram_boolean_flow()
+    steel_types_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -19873,6 +19874,72 @@ def diagram_boolean_flow():
           "secao={} uniao={} ({}) preenchida={} atualizada={} seguiu={} recusou={} apagado={} voltou={} exportado={} "
           "({})".format(shown, united, r and round(dia.volume(r), 3), filled, updated, followed, refused, gone, back,
                         exported, {k: v for k, v in b_out.items() if k != "mesh"}))
+
+
+def steel_types_flow():
+    """0.494 — Steel sections in the type editor: a concrete beam of «Viga de concreto 20×40» and an HEB 200 column;
+    the type editor on the steel IPE 300: «Perfil de aço», IPE, IPE 300, S275 and what it is (42,2 kg/m); on the
+    concrete beam's type: «Perfil de aço» chosen, HEA, HEA 200, S355 — the name follows («Viga HEA 200 — S355»),
+    Apply: the beam is an HEA 200 (190 mm deep), of S355, 5 × 42,3 kg; in the 3D view the I sections; the structure
+    plan's tag «V1 HEA 200». Captured: 494_perfil_de_aco.png, 494_aco_3d.png."""
+    from arqbim.core import steel
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import rebar_drawings
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    beam = bim_actions.add_beam(doc, np.array((0.0, 0.0, 3.0)), np.array((5.0, 0.0, 3.0)),
+                                catalog.BY_KEY["viga_20x40"], 3.0)
+    column = bim_actions.add_column(doc, np.array((0.0, 0.0, 0.0)), catalog.BY_KEY["pilar_heb200"], 3.0)
+    pump(200)
+    seen = {}
+
+    def work():
+        d = getattr(win, "_type_dialog", None)
+        if d is None or not d.isVisible():
+            QtCore.QTimer.singleShot(100, work)
+            return
+        d.select("viga_ipe300")
+        QtWidgets.QApplication.processEvents()
+        seen["shown"] = (d.shape.currentData(), d.steel_family.currentData(), d.steel_size.currentData(),
+                         d.steel_grade.currentData(), d.steel_family.isVisible(), d.material.isVisible(),
+                         "42,2 kg/m" in d.steel_info.text())
+        d.select("viga_20x40")
+        QtWidgets.QApplication.processEvents()
+        d.shape.setCurrentIndex(d.shape.findData("steel"))
+        d.steel_family.setCurrentIndex(d.steel_family.findData("HEA"))
+        d.steel_size.setCurrentIndex(d.steel_size.findData("HEA200"))
+        d.steel_grade.setCurrentIndex(d.steel_grade.findData("S355"))
+        QtWidgets.QApplication.processEvents()
+        seen["name"] = d.name.text()
+        d.grab().save(os.path.join(OUT, "494_perfil_de_aco.png"))
+        seen["applied"] = d.apply_changes()
+        d.reject()
+
+    QtCore.QTimer.singleShot(100, work)
+    win.edit_types("beam", "viga_ipe300")
+    pump(400)
+    v = doc.get(beam).mesh.verts
+    deep = abs(float(v.max(axis=0)[2] - v.min(axis=0)[2]) - 0.19) < 1e-6 and abs(float(v.max(axis=0)[2]) - 3.0) < 1e-6
+    section = doc.ifc.steel_section(beam)
+    weight = _psets_of(beam).get("Qto_BeamBaseQuantities", {}).get("NetWeight")
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(400)
+    shot("494_aco_3d.png")
+    storey = doc.storeys()[0][0]
+    drawing = rebar_drawings.structure_plan(doc, storey, "Estrutura")
+    texts = [a[3] for a in (drawing.annotations if drawing is not None else []) if a[0] == "text"]
+    tagged = any(t.endswith("HEA 200") for t in texts) and any(t.endswith("HEB 200") for t in texts)
+    doc.modified = False
+    check("perfis_de_aco_no_tipo", seen.get("shown") == ("steel", "IPE", "IPE300", "S275", True, False, True)
+          and seen.get("name") == "Viga HEA 200 — S355" and seen.get("applied") and deep and section == "HEA200"
+          and weight is not None and abs(weight - 5 * steel.get("HEA200").mass) < 1e-6 and tagged
+          and doc.ifc.steel_section(column) == "HEB200",
+          "visto={} nome={!r} aplicado={} alto={} perfil={} peso={} etiquetas={}".format(
+              seen.get("shown"), seen.get("name"), seen.get("applied"), deep, section, weight, texts[:6]))
 
 
 def camera_move_flow():

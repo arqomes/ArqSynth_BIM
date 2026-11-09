@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.494.0 — 2026-11-09
+
+**Estrutura metálica, passo 1: catálogo de perfis e classes de aço** (o dono: «faça plano para inserir a parte metálica e
+detalhes estruturais… comece e não pare até eu mandar»; o plano está no PLANO, «Estrutura metálica e pormenores de
+fabrico»).
+
+- Catálogo de perfis europeus, com as medidas das normas: **IPE, HEA, HEB, HEM** (EN 10365), **UPN** (abas
+  inclinadas a 8 %) e **UPE**, **cantoneiras** de abas iguais e desiguais (EN 10056-1), **tubos quadrados,
+  retangulares e redondos** enformados a frio (EN 10219) e **madres C, Z e ómega** enformadas a frio — mais de 400
+  perfis.
+- Cada perfil desenhado como a norma o desenha (raios de concordância, a inclinação das abas da UPN, os cantos dos
+  tubos) e com as suas propriedades: área, kg/m, inércias, módulos elástico e plástico, raios de giração, constantes
+  de torção e de empenamento, área de pintura. Conferidas contra os catálogos (IPE 300, HEB 200, HEA 200, SHS, CHS,
+  cantoneira, UPN).
+- Classes de aço **S235, S275, S355 e S460**, com fy e fu pela espessura (EC3-1-1, Quadro 3.1); materiais novos
+  «Aço estrutural S235 / S355 / S460».
+- No **Editar tipo** de pilares e vigas, a forma **Perfil de aço**: escolhe-se a família, o perfil e a classe; mostra
+  as medidas, o peso por metro e as propriedades; o nome segue a escolha («Viga IPE 300 — S275»). Os tipos novos:
+  Pilar HEB 200, Pilar SHS 150×150×8, Viga IPE 200, IPE 300 e HEB 240.
+- No IFC, a secção verdadeira (`IfcIShapeProfileDef`, `IfcUShapeProfileDef`, `IfcLShapeProfileDef`, os tubos,
+  `IfcCShapeProfileDef`; Z e ómega pelo contorno) com o nome que o Revit e o Tekla usam («IPE300»); ao abrir um IFC de
+  outro programa, os perfis de aço reconhecem-se pelo nome ou pelas medidas.
+- Cada peça de aço com o **peso** (kg) e a área de pintura nas quantidades; nas plantas de estrutura a etiqueta diz o
+  perfil («V1 HEA 200», «P1 HEB 200»). As miniaturas dos tipos desenham o perfil.
+
 ## 0.493.0 — 2026-11-09
 
 **Combinar e recortar volumes de diagrama, nativo no BIM** (o dono: «ferramentas de adição, subtração, interseção
