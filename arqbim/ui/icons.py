@@ -3027,3 +3027,11 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
               "dim_exterior": dimension_facades_icon,                                   # (0.399)
               "dim_interior": dimension_rooms_icon,                                     # (0.400)
               "lot": lot_icon}                                                          # (0.423)
+
+# (0.535) the tools drawn as Revit's pictures (ui/art_icons) take them everywhere — the ribbon, the menus, the Help,
+# the Properties' header — the older drawings stay for the others
+from . import art_icons  # noqa: E402
+
+for _name in art_icons.NAMES:
+    if _name in TOOL_ICONS:
+        TOOL_ICONS[_name] = (lambda n=_name: art_icons.icon(n))

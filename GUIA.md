@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.482.0
+# Guia das ferramentas — ArqSynth BIM 0.535.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.482.0.
+ArqSynth BIM 0.535.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -105,11 +105,11 @@ Onde está cada coisa: separador «Procurar» deste painel (escreva o nome).
 1. [Início](#1-início) — 16 comandos
 2. [Modelagem](#2-modelagem) — 34 comandos
 3. [Arquitetura](#3-arquitetura) — 50 comandos
-4. [Estrutura](#4-estrutura) — 21 comandos
+4. [Estrutura](#4-estrutura) — 35 comandos
 5. [Instalações](#5-instalações) — 18 comandos
 6. [Inserir](#6-inserir) — 10 comandos
 7. [Anotar](#7-anotar) — 14 comandos
-8. [Analisar](#8-analisar) — 16 comandos
+8. [Analisar](#8-analisar) — 17 comandos
 9. [Massa e Estudos](#9-massa-e-estudos) — 26 comandos
 10. [Terreno](#10-terreno) — 11 comandos
 11. [Colaborar](#11-colaborar) — 7 comandos
@@ -289,7 +289,7 @@ Operações gerais de criação e edição geométrica.
 
 - **Como se usa:** Selecione primeiro o que quer espelhar (ferramenta Selecionar) e volte a Espelhar.
 - **Teclas:** Dois cliques: o eixo de simetria · Ctrl: copiar · X / Y: bloquear o eixo · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.322 «Os comandos pedem o que lhes falta»; 0.289 «Gerador de portas e janelas»
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.322 «Os comandos pedem o que lhes falta»; 0.289 «Gerador de portas e janelas»
 
 #### Alinhar
 
@@ -357,7 +357,7 @@ Operações gerais de criação e edição geométrica.
 #### Círculo
 
 - **Como se usa:** Círculo (24 lados): clique no centro (no chão ou numa face).
-- **Passos de teste (TESTAR.md):** 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.383 «As prévias das paredes em volume»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.485 «Etiquetas na interface do Presentation»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.383 «As prévias das paredes em volume»; 0.373 «Desenho livre como no SketchUp: uma linha sozinha, Offset, Arco, Linha livre, Bézier»
 
 #### Linha livre
 
@@ -404,13 +404,13 @@ Operações gerais de criação e edição geométrica.
 
 #### Classificar como
 
-- **Escolhas:** Parede alvenaria 15 cm · Parede alvenaria 20 cm · Parede drywall 10 cm · Parede de betão armado 15 cm · Parede de betão armado 20 cm · Parede de betão armado 25 cm · Laje de concreto 12 cm · Laje de concreto 15 cm · Radier 30 cm · Pilar de concreto 20×20 · Pilar de concreto 30×30 · Pilar de concreto 20×50 · Pilar circular Ø30 · Pilar em L 40×40 (15) · Pilar em T 50×40 (15) · Viga de concreto 15×30 · Viga de concreto 20×40 · Viga de concreto 20×50 · Viga em T 60×50 (12) · Sapata 80×80×40 · Sapata 120×120×50 · Sapata corrida 50×30 · Bloco de 1 estaca 60×60×50 · Bloco de 2 estacas 150×60×60 · Bloco de 4 estacas 150×150×70
+- **Escolhas:** Parede alvenaria 15 cm · Parede alvenaria 20 cm · Parede drywall 10 cm · Parede de betão armado 15 cm · Parede de betão armado 20 cm · Parede de betão armado 25 cm · Laje de concreto 12 cm · Laje de concreto 15 cm · Radier 30 cm · Pilar de concreto 20×20 · Pilar de concreto 30×30 · Pilar de concreto 20×50 · Pilar circular Ø30 · Pilar em L 40×40 (15) · Pilar em T 50×40 (15) · Pilar HEB 200 — S275 · Pilar SHS 150×150×8 — S355 · Viga de concreto 15×30 · Viga de concreto 20×40 · Viga de concreto 20×50 · Viga em T 60×50 (12) · Viga IPE 200 — S275 · Viga IPE 300 — S275 · Viga HEB 240 — S275 · Sapata 80×80×40 · Sapata 120×120×50 · Sapata corrida 50×30 · Bloco de 1 estaca 60×60×50 · Bloco de 2 estacas 150×60×60 · Bloco de 4 estacas 150×150×70
 - **Passos de teste (TESTAR.md):** 0.310 «Faces sozinhas e Push/Pull como no SketchUp»
 
 #### Materiais…
 
 - **O que faz:** A janela dos materiais: nome, cor, tramas da superfície e do corte, transparência, acabamento no render, densidade e condutibilidade térmica; novo, duplicar, apagar um sem uso.
-- **Passos de teste (TESTAR.md):** 0.422 «Materiais e boas práticas»; 0.397 «As duas listas de materiais iguais»; 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.314 «Os materiais com gráficos completos (superfície e corte)»; 0.164 «Ações e materiais»
+- **Passos de teste (TESTAR.md):** 0.526 «Cursor por ferramenta, dicas do rodapé e janelas ao centro»; 0.422 «Materiais e boas práticas»; 0.397 «As duas listas de materiais iguais»; 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.314 «Os materiais com gráficos completos (superfície e corte)»; 0.164 «Ações e materiais»
 
 ---
 
@@ -449,7 +449,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Janela 120×120 (peitoril 1,00): passe o cursor sobre uma parede e clique — prende ao meio do compartimento e com a ombreira a 0,10 ou 0,20 da gola —, ou digite a distância à extremidade mais próxima (ex.: 0,60) e Enter.
 - **Teclas:** F: para a outra face da parede · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.476 «A janela já não cresce sozinha»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»; 0.404 «Portas e janelas: o lado certo, a prévia e as cotas na planta»; 0.339 «As janelas por cima, no tema escuro»
+- **Passos de teste (TESTAR.md):** 0.526 «Cursor por ferramenta, dicas do rodapé e janelas ao centro»; 0.483 «Uma camada por janela e transições animadas»; 0.476 «A janela já não cresce sozinha»; 0.420 «Iluminação, ventilação e o que está em frente das janelas»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.407 «Ortogonalizar: a porta e a janela endireitam-se com a parede»
 
 #### Caixilho Studio
 
@@ -477,7 +477,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Perfil da cobertura
 
 - **O que faz:** Selecione uma cobertura sobre um retângulo e uma face plana desenhada (a secção, à medida real, de pé atravessada ou no chão): a cobertura passa a essa secção, ao meio do vão e com o ponto mais baixo à altura do beirado, corrida ao comprido.
-- **Passos de teste (TESTAR.md):** 0.251 «A cobertura com um perfil desenhado»
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.251 «A cobertura com um perfil desenhado»
 
 #### Calha
 
@@ -488,12 +488,13 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Clique numa cobertura onde fica o ralo. Esc: Selecionar.
 - **Teclas:** Clique: um ralo ali · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.482 «A fita organizada como a do Revit»
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.482 «A fita organizada como a do Revit»
 
 #### Teto
 
 - **Como se usa:** Teto contínuo (gesso cartonado) a 2,60 m: clique dentro das paredes de um ambiente. (Tab muda o contorno.)
 - **Teclas:** Tab: por ambiente → retângulo → polígono · X / Y: bloquear o eixo · Delete: apagar o último canto
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»
 
 #### Laje
 
@@ -505,7 +506,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Piso cerâmico: clique dentro das paredes de um ambiente. (Tab muda o contorno.)
 - **Teclas:** Tab: por ambiente → retângulo → polígono · X / Y: bloquear o eixo · Delete: apagar o último canto
-- **Passos de teste (TESTAR.md):** 0.433 «Pisos com declive por canto»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.231 «As armaduras nos pisos tipo»; 0.214 «Vários pisos de uma vez a partir da nuvem»
+- **Passos de teste (TESTAR.md):** 0.527 «Mudar de piso, trama nas categorias, aba ativa destacada»; 0.508 «Piso metálico (estrutura metálica, passo 4)»; 0.433 «Pisos com declive por canto»; 0.410 «Contorno do piso como o perfil da parede; furos desenhados»; 0.231 «As armaduras nos pisos tipo»; 0.214 «Vários pisos de uma vez a partir da nuvem»
 
 #### Editar contorno
 
@@ -547,7 +548,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Reta, 1,00 m de largura, a subir 2,80 m: clique no meio do primeiro degrau (no chão).
 - **Teclas:** Dois cliques: o pé e o sentido · Pronta: um clique, R: rodar, Espaço: o ponto · X / Y: bloquear o eixo · Esc: cancelar
-- **Passos de teste (TESTAR.md):** 0.435 «Escadas prontas a colocar»; 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
+- **Passos de teste (TESTAR.md):** 0.509 «Escada metálica (estrutura metálica, passo 4)»; 0.435 «Escadas prontas a colocar»; 0.419 «Escadas, rampas, guardas, forma dos compartimentos, casas de banho e arrumos»; 0.261 «Guardas de escada contínuos»; 0.257 «Escadas sem linhas a mais no patamar»; 0.256 «As escadas com laje por baixo dos degraus»
 
 #### Elevador
 
@@ -568,7 +569,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Ambiente: clique dentro das paredes para fazer o ambiente (o contorno aparece debaixo do rato). Ele acompanha as paredes. Esc: Selecionar.
 - **Teclas:** Clique dentro de paredes fechadas · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.475 «Ambientes: o programa de necessidades no painel lateral»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»; 0.357 «Ambientes e o programa de necessidades»
+- **Passos de teste (TESTAR.md):** 0.490 ««Atualizar» também para as etiquetas dos ambientes e o Passeio»; 0.475 «Ambientes: o programa de necessidades no painel lateral»; 0.416 «O Verificador: o uso dos ambientes, os fogos e a tipologia»; 0.366 «Os ambientes e o Passeio Virtual»; 0.365 «O ambiente e os efeitos: o sol, a exposição, o vidro, a água e as luzes»; 0.364 «Os movimentos de câmara»
 
 #### Separador
 
@@ -734,7 +735,7 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 
 - **Como se usa:** Viga de concreto 20×40, topo a 2,80 m: clique no início da viga (o eixo; snaps e alinhamentos: o topo de um pilar…). Digite a cota do topo (ex.: 2,80) e Enter para a mudar.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.336 «As cargas nas paredes resistentes»; 0.229 «A dispensa de varões nas vigas»; 0.226 «A segunda camada de varões nas vigas»
+- **Passos de teste (TESTAR.md):** 0.506 «Viga apoiada noutra viga (estrutura metálica, passo 3)»; 0.336 «As cargas nas paredes resistentes»; 0.229 «A dispensa de varões nas vigas»; 0.226 «A segunda camada de varões nas vigas»
 
 - **Parede** — o mesmo de Arquitetura ▸ Construir.
 
@@ -742,15 +743,45 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 
 - **Laje** — o mesmo de Arquitetura ▸ Construir.
 
+#### Peça metálica
+
+- **Como se usa:** Viga Viga IPE 300 — S275: clique no início da linha (as cotas na barra; em 3D, «pelos pontos» apanha o topo de um pilar).
+- **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.496 «Meia-esquadria e recortes (estrutura metálica, passo 2b)»; 0.495 «Peças metálicas e contraventamentos (estrutura metálica, passo 2)»
+
+#### Pórtico de nave
+
+- **Como se usa:** Pórtico de nave: clique no início da primeira fila de pilares (o vão fica para a esquerda; as medidas e os perfis na barra).
+- **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
+- **Passos de teste (TESTAR.md):** 0.499 «Pórtico de nave (estrutura metálica, passo 4)»
+
+#### Treliça
+
+- **Como se usa:** Treliça: clique no primeiro apoio (o tipo, a altura e os perfis na barra).
+- **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
+- **Passos de teste (TESTAR.md):** 0.507 «Treliça (estrutura metálica, passo 4)»
+
+#### Escada metálica
+
+- **Como se usa:** Escada metálica: clique no pé (o meio do primeiro degrau, no chão).
+- **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
+- **Passos de teste (TESTAR.md):** 0.509 «Escada metálica (estrutura metálica, passo 4)»
+
 #### Sistema de vigas…
 
 - **O que faz:** Vigas paralelas (ou em grelha) dentro de cada vão fechado pelas vigas selecionadas, por número ou espaçamento. Ficam presas ao vão: refazem-se quando ele muda.
+- **Passos de teste (TESTAR.md):** 0.508 «Piso metálico (estrutura metálica, passo 4)»
 
 #### Superfície paramétrica
 
 - **Como se usa:** Superfície paramétrica (automática): clique nas curvas de que é feita (0 escolhida(s)) — Enter cria. 1 curva fechada: tampa; 1 aberta: extrusão; 2 ou mais: loft; 4 que se tocam: 4 bordos.
 - **Teclas:** Clique: escolher curvas · Enter: criar · Backspace: tirar a última · Botão direito: recomeçar · Esc: Selecionar
 - **Passos de teste (TESTAR.md):** 0.395 «Superfície paramétrica (forma primeiro, construção depois)»
+
+#### Meia-esquadria
+
+- **O que faz:** Corta duas peças metálicas escolhidas em meia-esquadria onde as linhas se encontram (o joelho de um pórtico).
+- **Passos de teste (TESTAR.md):** 0.496 «Meia-esquadria e recortes (estrutura metálica, passo 2b)»
 
 ### Estrutura ▸ Fundação
 
@@ -770,6 +801,55 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 - **O que faz:** Uma sapata sob cada pilar selecionado (nenhum: todos os do pavimento), com o tipo de sapata isolada da ferramenta Sapata. Fica presa ao pilar: vai com ele.
 - **Passos de teste (TESTAR.md):** 0.228 «Os maciços de estacas e as sapatas corridas»
 
+### Estrutura ▸ Armadura
+
+#### Malha eletrossoldada
+
+- **O que faz:** Põe uma malha eletrossoldada nas lajes selecionadas (Ø e espaçamento, face inferior, superior ou as duas), cortada pelo contorno menos o recobrimento.
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.522 «Malhas eletrossoldadas (passo 9)»
+
+### Estrutura ▸ Ligação
+
+#### Chapa de base
+
+- **O que faz:** Põe uma chapa de base, com os chumbadouros e a soldadura, debaixo dos pilares de aço escolhidos — sem nenhum escolhido, debaixo de todos os que ainda não têm.
+- **Passos de teste (TESTAR.md):** 0.497 «Chapa de base (estrutura metálica, passo 3)»
+
+#### Chapa de topo
+
+- **O que faz:** Nas vigas de aço escolhidas, em cada ponta que chega a um pilar de aço: uma chapa de topo soldada à viga e aparafusada ao pilar (ligação rígida).
+- **Passos de teste (TESTAR.md):** 0.498 «Chapa de topo e cutelo (estrutura metálica, passo 3b)»
+
+#### Cutelo
+
+- **O que faz:** Nas vigas de aço escolhidas, em cada ponta que chega a um pilar de aço ou à alma de outra viga de aço: um cutelo soldado ao pilar (ou à alma da viga principal) e aparafusado à alma da viga (ligação articulada).
+- **Passos de teste (TESTAR.md):** 0.498 «Chapa de topo e cutelo (estrutura metálica, passo 3b)»
+
+#### Gousset
+
+- **O que faz:** Nos contraventamentos em cantoneira escolhidos (nenhum escolhido: em todos), em cada ponta que chega a um pilar de aço: um gousset soldado ao pilar, o contraventamento recuado e aparafusado a ele.
+- **Passos de teste (TESTAR.md):** 0.503 «Gousset dos contraventamentos (estrutura metálica, passo 3)»
+
+#### Apoio de madre
+
+- **O que faz:** Onde as madres escolhidas (nenhuma escolhida: todas) assentam em vigas de aço: uma orelha soldada ao banzo da viga, ao lado da alma da madre, e a madre aparafusada a ela.
+- **Passos de teste (TESTAR.md):** 0.504 «Apoio das madres (estrutura metálica, passo 3)»
+
+#### Joelho aparafusado
+
+- **O que faz:** Nas duas peças de aço escolhidas, cujas linhas se encontram (o joelho de um pórtico, a cumeeira): a meia-esquadria com uma chapa de topo em cada peça, aparafusadas uma à outra.
+- **Passos de teste (TESTAR.md):** 0.513 «Joelho aparafusado (estrutura metálica, passo 3)»
+
+#### Numerar peças
+
+- **O que faz:** Escreve as marcas nas peças de aço (P, V, CV, M, E, Ch): a mesma para as peças iguais; uma peça que não mudou guarda a sua.
+- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.510 «Planta de montagem (estrutura metálica, passo 6)»; 0.500 «Marcas e listas da estrutura metálica (passo 5)»
+
+#### Exportar para fabrico
+
+- **O que faz:** Grava numa pasta um ficheiro DSTV NC1 por marca (para as máquinas de corte e furação, com a marca a gravar na peça), o plano de corte das barras (CSV) e as chapas em DXF (laser ou plasma).
+- **Passos de teste (TESTAR.md):** 0.512 «Furos nas peças (estrutura metálica, passos 5 e 7)»; 0.511 «Marcação SI e DXF das chapas (estrutura metálica, passo 7)»; 0.501 «Fabrico: DSTV NC1 e corte das barras (estrutura metálica, passo 7)»
+
 ### Estrutura ▸ Automático
 
 #### Propor estrutura…
@@ -779,7 +859,7 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 #### Vigas entre pilares
 
 - **O que faz:** Vigas entre os pilares selecionados (nenhum: todos os do pavimento) alinhados em X ou Y, só entre vizinhos, de face a face, com o topo no topo dos pilares e o tipo da ferramenta Viga. Ficam presas aos pilares: acompanham-nos.
-- **Passos de teste (TESTAR.md):** 0.250 «A verificação da sapata combinada»; 0.231 «As armaduras nos pisos tipo»; 0.229 «A dispensa de varões nas vigas»; 0.228 «Os maciços de estacas e as sapatas corridas»; 0.227 «Os pilares circulares, em L e em T»; 0.226 «A segunda camada de varões nas vigas»
+- **Passos de teste (TESTAR.md):** 0.508 «Piso metálico (estrutura metálica, passo 4)»; 0.250 «A verificação da sapata combinada»; 0.231 «As armaduras nos pisos tipo»; 0.229 «A dispensa de varões nas vigas»; 0.228 «Os maciços de estacas e as sapatas corridas»; 0.227 «Os pilares circulares, em L e em T»
 
 #### Paredes
 
@@ -1101,7 +1181,7 @@ Cálculo da estrutura e os seus mapas; o Verificador (regulamentos), IFC e IDS.
 #### Lista de armaduras…
 
 - **O que faz:** A lista das armaduras do modelo por posição, com os totais; para Excel ou CSV.
-- **Passos de teste (TESTAR.md):** 0.230 «As emendas dos varões compridos»; 0.229 «A dispensa de varões nas vigas»; 0.224 «A armadura superior das lajes sobre os apoios»; 0.166 «Verificação EC2 e armaduras»
+- **Passos de teste (TESTAR.md):** 0.523 «Malhas no mapa de armaduras (passo 9)»; 0.230 «As emendas dos varões compridos»; 0.229 «A dispensa de varões nas vigas»; 0.224 «A armadura superior das lajes sobre os apoios»; 0.166 «Verificação EC2 e armaduras»
 
 #### Quantidades da estrutura…
 
@@ -1111,14 +1191,19 @@ Cálculo da estrutura e os seus mapas; o Verificador (regulamentos), IFC e IDS.
 #### Memória de cálculo…
 
 - **O que faz:** A memória de cálculo da estrutura (ações, modelo, análise, verificação, quantidades, armaduras) numa página HTML ou num PDF.
-- **Passos de teste (TESTAR.md):** 0.233 «A memória de cálculo com os desenhos»; 0.167 «Quantidades da estrutura e memória de cálculo»
+- **Passos de teste (TESTAR.md):** 0.521 «Memória de cálculo da estrutura metálica (passo 8)»; 0.233 «A memória de cálculo com os desenhos»; 0.167 «Quantidades da estrutura e memória de cálculo»
+
+#### Memória de cálculo (aço)…
+
+- **O que faz:** A memória de cálculo da estrutura metálica (ações, modelo, verificação EC3 das peças e das ligações, lista de material), em PDF ou HTML.
+- **Passos de teste (TESTAR.md):** 0.521 «Memória de cálculo da estrutura metálica (passo 8)»
 
 ### Analisar ▸ Verificar
 
 #### Verificação
 
 - **O que faz:** O painel da Verificação: tudo o que o Verificador encontrou, por fogo ou por regulamento — um clique leva ao sítio; «Porquê» diz a regra; «Exceção…» aceita uma falha com a razão escrita. E as outras verificações do programa num só lugar.
-- **Passos de teste (TESTAR.md):** 0.425 «A ficha de verificação»; 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»; 0.250 «A verificação da sapata combinada»; 0.166 «Verificação EC2 e armaduras»; 0.163 «Modelo analítico e verificação»
+- **Passos de teste (TESTAR.md):** 0.519 «Encurvadura lateral na verificação EC3 (estrutura metálica, passo 8)»; 0.518 «Vento na verificação EC3 (estrutura metálica, passo 8)»; 0.516 «Verificação pelo Eurocódigo 3 (estrutura metálica, passo 8)»; 0.425 «A ficha de verificação»; 0.418 «O painel Verificação e as exceções»; 0.337 «A verificação das paredes de alvenaria (Eurocódigo 6)»
 
 #### Regulamentos do projeto…
 
@@ -1380,7 +1465,7 @@ Estilos gráficos, tema, render e apresentação, vistas (plantas, cortes, 3D), 
 #### Estilos de vista…
 
 - **O que faz:** Criar e editar estilos de vista: faces sombreadas ou em cores consistentes, cores dos materiais, arestas, sombras, padrões de superfície, transparência e cortes
-- **Passos de teste (TESTAR.md):** 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.315 «Estilos de vista com tramas e sombreamentos»
+- **Passos de teste (TESTAR.md):** 0.526 «Cursor por ferramenta, dicas do rodapé e janelas ao centro»; 0.318 «Padrões do projeto, tramas por categoria e a biblioteca de materiais»; 0.315 «Estilos de vista com tramas e sombreamentos»
 
 #### Estilos gráficos…
 
@@ -1421,7 +1506,7 @@ Estilos gráficos, tema, render e apresentação, vistas (plantas, cortes, 3D), 
 #### Render realista…
 
 - **O que faz:** A vista como se vê, numa imagem fotográfica: a luz do céu e do sol a ressaltar nas superfícies, sombras suaves, vidro. Corre à parte — pode continuar a trabalhar — e a imagem vai afinando.
-- **Passos de teste (TESTAR.md):** 0.343 «O render realista»
+- **Passos de teste (TESTAR.md):** 0.524 «Navegador como o Outliner do Blender»; 0.343 «O render realista»
 
 #### Panorama 360°…
 
@@ -1465,7 +1550,7 @@ Estilos gráficos, tema, render e apresentação, vistas (plantas, cortes, 3D), 
 #### Corte
 
 - **Como se usa:** Corte: clique no início da linha de corte (ou numa extremidade, num eixo…).
-- **Passos de teste (TESTAR.md):** 0.429 «Editar tipo com o corte ao vivo»; 0.362 «Para o ArqSynth Presentation: o pacote»; 0.358 «A linha de corte editável»; 0.319 «Escolher a trama da superfície e do corte»; 0.317 «As tramas de corte e de superfície no ecrã»; 0.314 «Os materiais com gráficos completos (superfície e corte)»
+- **Passos de teste (TESTAR.md):** 0.501 «Fabrico: DSTV NC1 e corte das barras (estrutura metálica, passo 7)»; 0.496 «Meia-esquadria e recortes (estrutura metálica, passo 2b)»; 0.491 «Corte preenchido»; 0.484 «Cortes na interface do Presentation»; 0.429 «Editar tipo com o corte ao vivo»; 0.362 «Para o ArqSynth Presentation: o pacote»
 
 #### Pormenor
 
@@ -1818,4 +1903,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*244 comandos descritos, gerados do ArqSynth BIM 0.482.0.*
+*259 comandos descritos, gerados do ArqSynth BIM 0.535.0.*

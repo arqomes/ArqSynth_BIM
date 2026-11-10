@@ -15,6 +15,22 @@ from PySide6 import QtCore, QtGui, QtWidgets
 KEY = "aparencia/tema"
 NAMES = ("light", "dark")
 
+# (0.535, the owner: «organize também os ícones para serem como dos revit» — «Sim, redesenhar») the materials of the
+# ribbon's pictures (ui/art_icons), drawn for the light theme: each a top, a left and a right face's tone — the neutral
+# ones kept under 80 % light, so that icon() leaves them as they are in the dark theme (only the ink and white turn)
+ART = {
+    "ink": "#33373d", "detail": "#6b7079", "paper": "#ffffff",
+    "wall": ("#dccfb6", "#c2b190", "#a08e6c"),           # masonry
+    "concrete": ("#c4c8ce", "#a5aab2", "#868c96"),
+    "wood": ("#e0a868", "#c98a4b", "#a86b33"),
+    "roof": ("#e07a5f", "#c8553d", "#a5442f"),           # tiles
+    "glass": ("#a9d0f5", "#6fa8e0", "#4f8fd6"),
+    "steel": ("#a3bcd8", "#7f9cbf", "#5f7fa3"),
+    "room": ("#b9dcf7", "#8cc3ee", "#6aa9de"),
+    "new": ("#f6d77a", "#e8bb3a", "#c99a1e"),           # what a command makes by itself
+    "blue": "#2f6fe4", "yellow": "#f2c94c", "green": "#6aa84f", "red": "#d64545",
+}
+
 THEMES = {
     "light": dict(
         # (0.308: the Caixilho Studio's names) the ribbon's whites and greys, its dark blue header, its blue

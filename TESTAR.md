@@ -644,6 +644,33 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.535 — Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.535.0** (ou uma versão mais recente). Faça
+**Ctrl+N**.
+
+1. Clique no separador **Modelagem**. Os ícones são desenhos novos, a cores e em perspetiva, como os do Revit: **Mover**
+   (setas azuis sobre uma caixa), **Copiar** (duas caixas), **Rodar** (seta azul à volta), **Espelhar**; os pequenos
+   **Alinhar**, **Offset**, **Escala**, **Matriz** (três caixas em fila), **Apagar** (caixa com um × vermelho); **Linha**,
+   **Arco**, **Retângulo**, **Círculo**, **Push/Pull**.
+2. Clique em **Arquitetura**: **Parede** (tijolo), **Porta** (madeira, numa parede), **Janela** (vidro azul), **Pilar**,
+   **Cobertura** (telha vermelha), **Teto**, **Laje** (betão), **Parede cortina**, **Guarda**, **Rampa**, **Escada**.
+3. Clique na setinha **▾** em baixo à direita de **Cobertura**: **Perfil da cobertura**, **Calha** e **Ralo** também têm
+   desenho novo. Carregue em Esc. Faça o mesmo nos botões com ▾ do fim da fita (**Ambiente e área ▾**, **Aberturas ▾**,
+   **Acabamentos ▾**, **Mobiliário ▾**): todos os ícones dos menus são dos novos.
+4. Clique em **Estrutura**: **Viga** e **Peça metálica** (perfil I em aço azulado), **Pórtico de nave**, **Sapata** e
+   **Sapata combinada** (betão), **Malha eletrossoldada** (rede cor de ferrugem), **Chapa de base**, **Chapa de topo**,
+   **Numerar peças**; em **Automático ▾**, vigas, paredes e lajes propostas a **amarelo**.
+5. As cores dizem o material, como no Revit: bege = alvenaria, cinzento = betão, azul-acinzentado = aço, castanho =
+   madeira, vermelho = telha, azul claro = vidro ou ambiente; **amarelo** = o que o comando faz sozinho, e a
+   **estrelinha amarela** = criar.
+6. No cabeçalho, clique no botão da **paleta** (ao lado do **?**) e escolha **Tema escuro**: os desenhos continuam
+   legíveis — os contornos escuros passam a claros, as cores dos materiais ficam. Volte a **Tema claro** no mesmo botão.
+7. Na **Arquitetura**, escolha a ferramenta **Parede** e desenhe uma (clique, clique, Esc). Clique na parede com a seta:
+   o topo das **Propriedades** mostra o mesmo desenho da parede.
+8. Os outros separadores (Instalações, Inserir, Anotar, Analisar, Massa e Estudos, Terreno, Colaborar, Visualizar,
+   Gerenciar) ainda têm os ícones antigos: ficam para as próximas versões.
+
 ## 0.527 — Mudar de piso, trama nas categorias, aba ativa destacada
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.527.0**.

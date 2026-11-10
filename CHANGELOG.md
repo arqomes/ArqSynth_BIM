@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.535.0 — 2026-11-10
+
+**Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura e Estrutura).**
+
+- Os botões das três abas principais — grandes, pequenos e os dos menus das setas ▾ — têm desenhos novos, feitos para
+  o ArqSynth à maneira do Revit: em perspetiva isométrica, com a cor do material (bege a alvenaria, cinzento o betão,
+  azul-acinzentado o aço, castanho a madeira, vermelho a telha, azul claro o vidro e os ambientes), amarelo o que o
+  comando faz sozinho, a estrelinha amarela para criar, o × vermelho para tirar. São 107 desenhos.
+- O mesmo desenho aparece na fita, nos menus, na Ajuda e no topo das Propriedades; no tema escuro os contornos passam a
+  claros e as cores ficam.
+- Os ícones simplificados do estudo (0.374), que a Modelagem usava, saíram. As outras abas ficam com os ícones de
+  antes, por agora.
+
 ## 0.530.0 — 2026-11-10
 
 **Cursor das ferramentas maior.**

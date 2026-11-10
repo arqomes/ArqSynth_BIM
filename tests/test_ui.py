@@ -1706,7 +1706,7 @@ class DarkTheme(unittest.TestCase):
         theme.apply("light")
 
     def test_minimal_study_themes(self):
-        from arqbim.ui import theme, ribbon, minimal_icons
+        from arqbim.ui import theme, ribbon, art_icons
         from arqbim.i18n import has
         self.assertEqual(set(theme.STUDY), {"bege", "pedra", "escuro", "grafite", "revit"})
         self.assertNotIn("theme_areia", ribbon.items_of("view"))
@@ -1716,11 +1716,33 @@ class DarkTheme(unittest.TestCase):
             self.assertTrue(has("act.theme_" + name))
             self.assertEqual(APP.palette().highlight().color().name(), theme.STUDY[name]["accent"])
             self.assertIn("background: %s" % theme.C["bar"], ribbon.header_style())
-            for key in minimal_icons.SHAPES:
-                image = minimal_icons.icon(key).pixmap(32, 32).toImage()
+            for key in ("select", "wall", "door", "window", "slab", "roof", "stair", "room", "curtain_wall"):
+                image = art_icons.icon(key).pixmap(32, 32).toImage()
                 self.assertFalse(image.isNull())
                 self.assertTrue(any(image.pixelColor(x, y).alpha() for x in range(32) for y in range(32)))
-        self.assertIsNone(minimal_icons.icon("unknown"))
+        self.assertIsNone(art_icons.icon("unknown"))
+        theme.apply("light")
+
+    def test_art_icons(self):
+        """0.535 — the ribbon's pictures drawn as Revit's: every one drawn and seen whole in its square; the materials'
+        neutral tones under 80 % light (the dark theme keeps them, it turns only the ink and the white); the tools
+        drawn here have these pictures as their actions' icons too."""
+        from arqbim.ui import art_icons, icons, theme
+        self.assertGreaterEqual(len(art_icons.NAMES), 30)
+        for name in art_icons.NAMES:
+            image = art_icons.pixmap(name).toImage()
+            self.assertEqual((image.width(), image.height()), (64, 64))
+            seen = [(x, y) for x in range(0, 64, 2) for y in range(0, 64, 2) if image.pixelColor(x, y).alpha() > 40]
+            self.assertTrue(seen, name)
+            xs, ys = [x for x, _y in seen], [y for _x, y in seen]
+            self.assertTrue(min(xs) >= 0 and max(xs) <= 63 and max(max(xs) - min(xs), max(ys) - min(ys)) >= 40, name)
+        for key, value in theme.ART.items():
+            for tone in (value if isinstance(value, tuple) else (value,)):
+                c = QtGui.QColor(tone)
+                neutral = max(c.redF(), c.greenF(), c.blueF()) - min(c.redF(), c.greenF(), c.blueF()) < 0.18
+                if neutral and key not in ("paper",):
+                    self.assertLess(c.lightnessF(), 0.8, (key, tone))
+        self.assertEqual(icons.TOOL_ICONS["wall"]().cacheKey(), art_icons.icon("wall").cacheKey())
 
     def test_icons(self):
         from arqbim.ui import theme

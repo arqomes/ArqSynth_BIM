@@ -3633,11 +3633,10 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             short = "rib.short." + name                          # (a shorter name under the icon)
             button.setText(t(short) if i18n_has(short) else ribbon.short_label(text))
-        if not small:
-            from .minimal_icons import icon as minimal_icon
-            refined = minimal_icon(name)
-            if refined is not None:
-                button.setIcon(refined)
+        from .art_icons import icon as art_icon          # (0.535: the pictures as Revit's — large and small alike)
+        drawn = art_icon(name)
+        if drawn is not None:
+            button.setIcon(drawn)
         button.keep()
         return button
 
