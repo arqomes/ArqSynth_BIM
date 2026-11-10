@@ -21,7 +21,7 @@ from . import canvas
 
 MAX_TRIANGLES = 30000          # per batch (measured: fewer, bigger batches navigate faster; rebuilding one stays ~5 ms)
 FEW_BATCHES = 4                # (0.328) changed at once up to so many (an edit): all made again in one image
-EDGE_LIFT = 0.002              # m; keeps edge lines visible on top of their faces
+EDGE_LIFT = 0.0                # (0.532) no longer moved off the faces: the line shader draws them in front by depth
 POCHE_COLOR = "#3a3a3a"        # what a plan cuts through
 EARTH_POCHE = "#9a8866"        # …the terrain (0.156: its batches marked GROUND)
 GROUND = "ground"              # the mark of a terrain's batch (in its key)

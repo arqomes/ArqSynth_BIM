@@ -4435,7 +4435,8 @@ class Viewport:
                     lifts = [normalize(sum(ns))] if len(ns) > 1 else [ns[0], -ns[0]]
                     base = sum(ns) / len(ns) * sheet_lift
                 for lift in lifts:
-                    out += [verts[a] + base + lift * EDGE_LIFT, verts[b] + base + lift * EDGE_LIFT]
+                    off = base + (lift * EDGE_LIFT if not ns else 0.0)   # (0.532) faces' edges: by depth, in the shader
+                    out += [verts[a] + off, verts[b] + off]
             return out
 
         visible = mesh.visible_edges()

@@ -38,6 +38,24 @@ if not HARFBUZZ:
     _shaper.shape_text_hb = _shaper.shape_text_ft
     pygfx.Text._text_engine.shape_text = _shaper.shape_text_ft
 
+# (0.532) Lines drawn a hair in front of the faces they lie on by DEPTH, along the line of sight (z' = z - k(w - z):
+# a fixed fraction of the distance to the eye, so on screen the line stays exactly on the face's edge at any zoom).
+# Before, the edges were moved 2 mm out along the faces' normals: up close that was many pixels off the solid.
+LINE_DEPTH_BIAS = 0.005             # 0.5 % of the distance (0.002 still left half a thick line in a slanted face)
+from pygfx.renderers.wgpu.shaders import lineshader as _lineshader  # noqa: E402
+
+_line_code = _lineshader.LineShader.get_code
+
+
+def _line_code_in_front(self):
+    return _line_code(self).replace(
+        "varyings.position = vec4<f32>(the_pos_n);",
+        f"varyings.position = vec4<f32>(the_pos_n.xy, the_pos_n.z - {LINE_DEPTH_BIAS} * (the_pos_n.w - the_pos_n.z),"
+        " the_pos_n.w);", 1)
+
+
+_lineshader.LineShader.get_code = _line_code_in_front
+
 if os.environ.get("WGPU_BACKEND_TYPE", "").strip().lower() == "opengl":
     pygfx.renderers.wgpu.enable_wgpu_features("!float32-filterable")
 
