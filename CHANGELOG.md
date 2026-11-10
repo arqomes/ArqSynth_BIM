@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.530.0 — 2026-11-10
+
+**Cursor das ferramentas maior.**
+
+- A cruz e o ícone da ferramenta ao lado ficam uma vez e meia maiores (traço um pouco mais grosso); o centro da cruz
+  continua a ser o ponto exato do clique.
+
 ## 0.529.0 — 2026-11-10
 
 **O cursor em cruz volta a apontar onde se clica.**

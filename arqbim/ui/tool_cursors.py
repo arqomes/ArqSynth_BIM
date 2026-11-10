@@ -7,9 +7,9 @@ from PySide6 import QtCore, QtGui
 
 from . import theme
 
-SIZE = 32                 # the cursor's picture (px, logical)
-HOT = 10                  # where the click lands: the cross's centre
-BADGE = 14                # the tool's icon, below right of the cross
+SIZE = 48                 # the cursor's picture (px, logical) — (0.530, the owner: «pequeno demais»: 32 → 48)
+HOT = 15                  # where the click lands: the cross's centre
+BADGE = 21                # the tool's icon, below right of the cross
 
 # tools with a shape of Qt's own (the pointer itself says it)
 SHAPES = {"select": QtCore.Qt.CursorShape.ArrowCursor, "pan": QtCore.Qt.CursorShape.OpenHandCursor,
@@ -22,7 +22,7 @@ def _cross(p):
     """A fine cross with a gap at the centre (the point stays seen), outlined."""
     arms = ((HOT, 1, HOT, HOT - 3), (HOT, HOT + 3, HOT, 2 * HOT - 1),
             (1, HOT, HOT - 3, HOT), (HOT + 3, HOT, 2 * HOT - 1, HOT))
-    for colour, width in ((theme.colour("grip_outline"), 3.0), (theme.colour("select"), 1.2)):
+    for colour, width in ((theme.colour("grip_outline"), 3.5), (theme.colour("select"), 1.6)):
         pen = QtGui.QPen(colour, width)
         pen.setCapStyle(QtCore.Qt.PenCapStyle.FlatCap)
         p.setPen(pen)
