@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.525.0 — 2026-11-10
+
+**Atalhos de ocultar e isolar, como no Blender.**
+
+- **Shift+H** isola o que está selecionado (na vista ou no Navegador); **Alt+H** revela tudo; **Ctrl+H** oculta a
+  seleção (fecha o olho no Navegador, gravado no IFC). O H sozinho continua a ser a Mão.
+- O menu do botão direito do Navegador mostra os atalhos ao lado de «Isolar na vista» e «Revelar tudo».
+
 ## 0.524.0 — 2026-11-10
 
 **O Navegador do Projeto com controlos como o Outliner do Blender.**

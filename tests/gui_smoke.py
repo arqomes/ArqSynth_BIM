@@ -1790,6 +1790,22 @@ def tree_controls_flow():
     check("isolar_na_vista", others <= vp.hidden_ids and not (set(walls[1:]) & vp.hidden_ids), len(vp.hidden_ids))
     shot("controlos_navegador_isolar.png")
     win.tree_element_action("show_all", [])
+    # (0.525) the keys, as Blender's: Shift+H isolates, Alt+H reveals all, Ctrl+H hides
+    vp.set_selection({walls[1]})
+    key(Qt.Key.Key_H, Qt.KeyboardModifier.ShiftModifier)
+    pump(200)
+    isolated = walls[0] in vp.hidden_ids and walls[1] not in vp.hidden_ids
+    key(Qt.Key.Key_H, Qt.KeyboardModifier.AltModifier)
+    pump(200)
+    revealed = not (set(walls) & vp.hidden_ids)
+    vp.set_selection({walls[2]})
+    key(Qt.Key.Key_H, Qt.KeyboardModifier.ControlModifier)
+    pump(200)
+    hidden = controls.has(doc, walls[2], "hidden") and walls[2] in vp.hidden_ids
+    key(Qt.Key.Key_H, Qt.KeyboardModifier.AltModifier)
+    pump(200)
+    check("atalhos_ocultar_isolar_revelar", isolated and revealed and hidden and not (set(walls) & vp.hidden_ids),
+          (isolated, revealed, hidden))
     win.tree_element_action("delete", [walls[0]])               # locked: refused
     pump(200)
     check("bloqueado_nao_exclui", doc.get(walls[0]) is not None,

@@ -644,6 +644,18 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.525 — Atalhos de ocultar e isolar (como no Blender)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.525.0**.
+
+1. Desenhe três paredes soltas (separador **Modelagem ▸ Parede**; clique, clique, Esc em cada).
+2. Carregue em **Esc** para voltar à seta e clique na parede do meio (fica azul).
+3. Carregue em **Shift+H**: só essa parede fica à vista (as outras ficam ocultas por agora).
+4. Carregue em **Alt+H**: volta tudo.
+5. Clique noutra parede e carregue em **Ctrl+H**: ela desaparece e, no Navegador, o olho dela fica fechado.
+6. Carregue em **Alt+H**: reaparece e o olho volta a abrir.
+7. Também funciona escolhendo as linhas no **Navegador** (Shift ou Ctrl para várias) e carregando nas mesmas teclas.
+
 ## 0.524 — Navegador como o Outliner do Blender
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.524.0**.

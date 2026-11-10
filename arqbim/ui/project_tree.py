@@ -888,8 +888,8 @@ class ProjectTree(QtWidgets.QDockWidget):
         put.setEnabled(bool(self._storeys))
         act(t("tree.el.delete"), "delete")
         menu.addSeparator()
-        act(t("tree.el.isolate"), "isolate")
-        act(t("tree.el.show_all"), "show_all")
+        act(t("tree.el.isolate"), "isolate").setShortcut(QtGui.QKeySequence("Shift+H"))        # (0.525: shown)
+        act(t("tree.el.show_all"), "show_all").setShortcut(QtGui.QKeySequence("Alt+H"))
         state = (lambda flag: self.state_of(ids, flag)) if self.state_of is not None else (lambda flag: False)
         for flag, off, on in (("hidden", "tree.el.hide", "tree.el.reveal"), ("locked", "tree.el.lock", "tree.el.unlock"),
                               ("no_render", "tree.el.render_off", "tree.el.render_on"),

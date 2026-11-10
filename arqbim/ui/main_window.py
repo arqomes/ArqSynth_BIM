@@ -543,6 +543,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_copy_clip = self._action(t("act.copy_clip"), lambda: self.copy_to_clipboard(), ["Ctrl+C"],
                                           icon=icons.copy_clip_icon())
         self.act_paste = self._action(t("act.paste"), lambda: self.paste(), ["Ctrl+V"], icon=icons.paste_icon())
+        # (0.525, as Blender's: Alt+H reveal, Shift+H hide the others, and Ctrl+H hide — H alone is the Pan)
+        self.act_hide_sel = self._action(t("act.hide_sel"), lambda: self.hide_keys("hide"), ["Ctrl+H"])
+        self.act_isolate = self._action(t("act.isolate"), lambda: self.hide_keys("isolate"), ["Shift+H"])
+        self.act_reveal = self._action(t("act.reveal"), lambda: self.hide_keys("show_all"), ["Alt+H"])
         self.act_paste_storeys = self._action(t("act.paste_storeys"), lambda: self.paste_on_storeys(),
                                               ["Ctrl+Shift+V"], icon=icons.paste_storeys_icon())
         for act, key, tip in ((self.act_copy_clip, "Ctrl+C", "tip.copy_clip"), (self.act_paste, "Ctrl+V", "tip.paste"),
@@ -9440,6 +9444,22 @@ class MainWindow(QtWidgets.QMainWindow):
         if locked:
             self.message(t("info.locked_refused", n=len(locked)), warning=True)
         return [i for i in ids if i not in locked and self.doc.get(i) is not None]
+
+    def hide_keys(self, action):
+        """(0.525) Ctrl+H / Shift+H / Alt+H on what is selected (in the view or the navigator)."""
+        if action == "show_all":
+            self.tree_element_action("show_all", [])
+            return
+        ids = [i for i in self.viewport.selection if isinstance(i, str) and self.doc.get(i) is not None]
+        if not ids and hasattr(self, "tree_panel"):
+            ids = [i for i in self.tree_panel._selected_members() if isinstance(i, str)]
+        if not ids:
+            self.message(t("info.hide_nothing"), warning=True)
+            return
+        if action == "hide":
+            self.set_control(ids, "hidden", True)
+        else:
+            self.tree_element_action("isolate", ids)
 
     def tree_element_action(self, action, ids, arg=None):
         """(0.524) The navigator's right-click menu on elements, a group, a category: the program's own commands."""
