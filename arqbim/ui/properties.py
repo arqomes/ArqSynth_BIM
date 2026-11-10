@@ -2096,7 +2096,15 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._type_editor(info, guid)
         else:
             self._row(t("props.type"), info["type"])
-        self._row(t("props.storey"), info["storey"])
+        storeys = doc.storeys() if hasattr(doc, "storeys") else []
+        if obj is not None and obj.storey and len(storeys) > 1 and kind not in ("door", "window"):
+            # (0.527) its storey chosen here, as Revit's Level: it goes up / down by the levels' difference
+            self._choice_combo(t("props.storey"), "change_storey", guid,
+                               [(name, g) for g, name, _z in reversed(storeys)], obj.storey)
+            self.editors["change_storey"].setObjectName("props_storey")
+            self.editors["change_storey"].setToolTip(t("props.storey_tip"))
+        else:
+            self._row(t("props.storey"), info["storey"])
         self._row("GlobalId", info["guid"])
         painted = self._paint_text(doc, guid)               # (0.391) its faces painted: each paint, how much
         if painted:

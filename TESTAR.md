@@ -644,6 +644,25 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.527 — Mudar de piso, trama nas categorias, aba ativa destacada
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.527.0**.
+
+1. Precisa de dois pisos: no painel **Pavimentos** (barra da esquerda, segundo ícone) crie um piso a +3,00 m, se ainda
+   não tiver.
+2. No **Térreo**, desenhe uma parede (**Modelagem ▸ Parede**, clique, clique, Esc) e ponha-lhe uma porta.
+3. Clique na parede com a seta. Nas **Propriedades**, desça até **Identificação ▸ Pavimento** e escolha o outro piso:
+   a parede sobe 3,00 m, com a porta, e no Navegador passa para esse piso. A barra diz «1 elemento(s) passaram para…».
+4. Carregue em **Ctrl+Z**: volta ao Térreo.
+5. Outra forma: no **Navegador**, clique com o botão direito na parede ▸ **Mudar para o piso ▸** e escolha o piso.
+   Com várias linhas escolhidas (Shift/Ctrl), passam todas.
+6. Veja no Navegador: as linhas das categorias (**Paredes (n)**, **Lajes (n)**…) têm uma trama fina de fundo.
+7. Em baixo no Navegador, clique em **Vistas**, depois em **Tudo**: a aba escolhida fica a negrito, com uma linha
+   da cor de destaque por baixo, como o separador ativo da fita.
+8. Ao lado da caixa **Pesquisar** do Navegador há dois botões pequenos: o primeiro (**Expandir tudo**) abre todos os
+   grupos e categorias; o segundo (**Recolher tudo**) fecha-os, ficando só Vistas, Biblioteca e Projeto. Os mesmos
+   comandos estão no fim do menu do botão direito.
+
 ## 0.526 — Cursor por ferramenta, dicas do rodapé e janelas ao centro
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.526.0**.

@@ -3499,6 +3499,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.338) The window's own pieces in the theme in use: the header, the ribbon (its buttons made again), the
         contextual bar, the modules' bar, the properties, the balloon; every icon in the theme's ink."""
         self.header.restyle()
+        if hasattr(self, "tree_panel"):
+            self.tree_panel.restyle()                     # (0.527) its active tab lit, its categories' hatch
         self.header_bar.setStyleSheet(ribbon.header_bar_style())
         self.ribbon_bar.setStyleSheet(ribbon.ribbon_style())
         self.context_bar.setStyleSheet(context_bar.style())
@@ -7126,6 +7128,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 _c, a, b = core_curves.ellipse_axes(curve)
                 self.message(t("info.ellipse_changed", a=format_length(float(np.linalg.norm(a)) * scale, decimal_sep()),
                                b=format_length(float(np.linalg.norm(b)) * scale, decimal_sep())))
+            elif action == "change_storey":                # (0.527) as Revit's Level
+                self.change_storey([guid], value)
+                return
             elif action == "name":
                 bim.rename(doc, guid, value)
             elif action == "mark":                         # (0.110) a door's / window's mark
@@ -9459,6 +9464,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("info.locked_refused", n=len(locked)), warning=True)
         return [i for i in ids if i not in locked and self.doc.get(i) is not None]
 
+    def change_storey(self, ids, storey_guid):
+        """(0.527) Elements put on another storey (Properties ▸ Pavimento, the navigator's menu): up / down by the
+        difference of levels; the locked ones left out. Returns the GlobalIds moved."""
+        ids = self._unlocked([i for i in ids if isinstance(i, str)])
+        try:
+            moved = bim.change_storey(self.doc, ids, storey_guid)
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return []
+        if not moved:
+            self.message(t("info.storey_same"))
+            return []
+        name = next((n for g, n, _z in self.doc.storeys() if g == storey_guid), "")
+        self.message(t("info.storey_changed", n=len(moved), s=name))
+        return moved
+
     def hide_keys(self, action):
         """(0.525) Ctrl+H / Shift+H / Alt+H on what is selected (in the view or the navigator)."""
         if action == "show_all":
@@ -9486,6 +9507,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._isolated = None
             self.set_control(list(controls.ids_with(self.doc, "hidden")), "hidden", False)
             self._apply_controls()
+            return
+        if action == "change_storey":
+            self.change_storey(ids, arg)
             return
         ids = self._unlocked(ids) if action in ("delete", "duplicate", "edit_type") else \
             [i for i in ids if self.doc.get(i) is not None]

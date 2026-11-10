@@ -64,5 +64,31 @@ class TreeControls(unittest.TestCase):
         self.assertGreater(part, 0)
 
 
+class ChangeStorey(unittest.TestCase):
+    """(0.527) An element put on another storey: up by the difference of levels, its door with it, one undo step."""
+
+    def test_wall_with_its_door_to_the_storey_above(self):
+        doc = Document()
+        ground = doc.active_storey
+        upper = bim.add_storey(doc, "Piso 1", 3.0)
+        wall = bim.add_wall(doc, (0, 0, 0), (5, 0, 0), catalog.BY_KEY["parede_alv_20"])
+        door = bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], bim.wall_frame(doc, wall), 2.0, -1)
+        z0 = float(doc.get(wall).mesh.bounds()[0][2])
+        moved = bim.change_storey(doc, [wall], upper)
+        self.assertEqual(moved, [wall])
+        self.assertEqual(doc.get(wall).storey, upper)
+        self.assertAlmostEqual(float(doc.get(wall).mesh.bounds()[0][2]), z0 + 3.0, places=4)
+        if door is not None:
+            self.assertEqual(doc.get(door).storey, upper)
+        self.assertEqual(bim.change_storey(doc, [wall], upper), [])          # already there
+        doc.undo()
+        self.assertEqual(doc.get(wall).storey, ground)
+        self.assertAlmostEqual(float(doc.get(wall).mesh.bounds()[0][2]), z0, places=4)
+        bim.change_storey(doc, [wall], upper, keep_height=True)              # only the storey
+        self.assertEqual(doc.get(wall).storey, upper)
+        self.assertAlmostEqual(float(doc.get(wall).mesh.bounds()[0][2]), z0, places=4)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+
+
 if __name__ == "__main__":
     unittest.main()

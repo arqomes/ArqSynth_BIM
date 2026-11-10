@@ -6126,7 +6126,9 @@ class Disciplines(unittest.TestCase):
                      # (0.446: how drawing looks — in the header's theme menu)
                      "draw_revit", "draw_addon",
                      # (0.450: the wall's shapes — on the contextual bar, as Revit's «Draw» panel, and on W + letter)
-                     "wall_rect", "wall_circle", "wall_arc", "wall_face", "wall_wand"}
+                     "wall_rect", "wall_circle", "wall_arc", "wall_face", "wall_wand",
+                     # (0.525: as Blender's keys Ctrl/Shift/Alt+H — and the navigator's right-click menu)
+                     "hide_sel", "isolate", "reveal"}
         self.assertEqual(acts - placed - elsewhere, set())
         for d in ("modeling", "architecture", "structure", "services", "terrain", "annotate", "massing"):
             self.assertEqual(ribbon.items_of(d)[0], "select")

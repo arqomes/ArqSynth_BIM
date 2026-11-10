@@ -90,6 +90,40 @@ def control_icon(flag, state):
     return _ICONS[key]
 
 
+def scope_style():
+    """(0.527, the owner: «a aba ativa dentro do painel, também precisa ficar destacada assim como o ribon») The foot's
+    tabs as the ribbon's: the chosen one on the panel's ground, in bold, with the accent's line (at its foot: the tabs
+    hang from the panel's bottom edge)."""
+    c = theme.C
+    return ("QTabBar::tab { padding: 4px 1px; min-width: 0px; color: %s; background: transparent;"
+            " border: none; border-bottom: 2px solid transparent; }"
+            "QTabBar::tab:hover:!selected { background: %s; }"
+            "QTabBar::tab:selected { background: %s; color: %s; font-weight: 600; border-bottom: 2px solid %s; }"
+            % (c["muted"], c["panel_hover"], c["bar"], c["text"], c["accent"]))
+
+
+_HATCH = {}
+
+
+def category_brush():
+    """(0.527, the owner: «colocar a trama, também para destacar cada categoria») The categories' rows on a fine
+    hatch — thin diagonals in the theme's lines over the panel's ground — so each stands out from its elements."""
+    key = (theme.C.get("panel_hover"), theme.C.get("edge_2"))
+    if key not in _HATCH:
+        size = 6
+        pm = QtGui.QPixmap(size, size)
+        pm.fill(theme.colour("panel_hover"))
+        p = QtGui.QPainter(pm)
+        ink = theme.colour("edge_2")
+        ink.setAlpha(150)
+        p.setPen(QtGui.QPen(ink, 1.0))
+        p.drawLine(0, size, size, 0)
+        p.drawPoint(0, 0)
+        p.end()
+        _HATCH[key] = QtGui.QBrush(pm)
+    return _HATCH[key]
+
+
 def controlled(key):
     """Does an item of the tree carry the control icons? The IFC elements, their categories, storeys, buildings."""
     return key is not None and (key[0] == "obj" or (key[0] == "cat" and key[1] != "sketches") or key[0] == "spatial")
@@ -173,7 +207,24 @@ class ProjectTree(QtWidgets.QDockWidget):
         column = QtWidgets.QVBoxLayout(box)
         column.setContentsMargins(4, 4, 4, 0)
         column.setSpacing(4)
-        column.addWidget(self.search)
+        # (0.527, the owner: «colocar opções de expandir tudo, recolher tudo») two small buttons beside the search
+        row = QtWidgets.QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        row.addWidget(self.search, 1)
+        self.expand_button = QtWidgets.QToolButton()
+        self.collapse_button = QtWidgets.QToolButton()
+        for button, name, tip, fn in ((self.expand_button, "tree_expand_all", "tree.expand_all", self.expand_all),
+                                      (self.collapse_button, "tree_collapse_all", "tree.collapse_all",
+                                       self.collapse_all)):
+            button.setObjectName(name)
+            button.setToolTip(t(tip))
+            button.setAutoRaise(True)
+            button.setIconSize(QtCore.QSize(ICON_SIZE, ICON_SIZE))
+            button.clicked.connect(lambda _c=False, fn=fn: fn())
+            row.addWidget(button)
+        self._fold_icons()
+        column.addLayout(row)
         column.addWidget(self.tree, 1)
         # (0.461, the owner: «no rodapé, vamos colocar outras abas de filtro… Vistas… Biblioteca… Projeto») what the
         # tree shows: all of it, the views only, the library only, the model only
@@ -187,7 +238,7 @@ class ProjectTree(QtWidgets.QDockWidget):
         self.scope_bar.setUsesScrollButtons(False)        # (all four in view: a narrow panel shortens their words)
         self.scope_bar.setElideMode(QtCore.Qt.TextElideMode.ElideRight)
         # (0.470: five of them — narrow enough to be read whole in the panel's usual width)
-        self.scope_bar.setStyleSheet("QTabBar::tab { padding: 4px 1px; min-width: 0px; }")
+        self.scope_bar.setStyleSheet(scope_style())
         small = self.scope_bar.font()
         if small.pointSizeF() > 0:
             small.setPointSizeF(small.pointSizeF() - 0.5)
@@ -328,6 +379,8 @@ class ProjectTree(QtWidgets.QDockWidget):
             item.setData(0, KEY, key)
             if lazy:
                 item.setChildIndicatorPolicy(QtWidgets.QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+            if key[0] == "cat":                       # (0.527) each category on its hatch
+                self._hatch(item)
             (parent.addChild if parent is not None else self.tree.addTopLevelItem)(item)
             self._items[key] = item
             self._members[key] = members
@@ -466,6 +519,76 @@ class ProjectTree(QtWidgets.QDockWidget):
             item.addChild(child)
             self._items[("obj", obj_id)] = child
             self._paint_controls(child)
+
+    def _fold_icons(self):
+        """The two buttons' icons: chevrons opening out (expand) and closing in (collapse), thin, in the theme."""
+        for button, opening in ((self.expand_button, True), (self.collapse_button, False)):
+            ratio = 2
+            pm = QtGui.QPixmap(ICON_SIZE * ratio, ICON_SIZE * ratio)
+            pm.setDevicePixelRatio(ratio)
+            pm.fill(QtCore.Qt.GlobalColor.transparent)
+            p = QtGui.QPainter(pm)
+            p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+            pen = QtGui.QPen(theme.colour("muted"), 1.2)
+            pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            for y, up in ((5.5, not opening), (10.5, opening)):        # two chevrons, pointing apart or together
+                d = -2.5 if up else 2.5
+                p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(4, y - d / 2), QtCore.QPointF(8, y + d / 2),
+                                                QtCore.QPointF(12, y - d / 2)]))
+            p.end()
+            button.setIcon(QtGui.QIcon(pm))
+
+    def _all_items(self):
+        out = []
+
+        def walk(item):
+            out.append(item)
+            for k in range(item.childCount()):
+                walk(item.child(k))
+
+        for k in range(self.tree.topLevelItemCount()):
+            walk(self.tree.topLevelItem(k))
+        return out
+
+    def expand_all(self):
+        """(0.527) Every group open — the categories too (their elements listed then)."""
+        self.tree.setUpdatesEnabled(False)
+        try:
+            for item in self._all_items():             # (opening a category lists its elements: walked again)
+                if item.childCount() or item.childIndicatorPolicy() == \
+                        QtWidgets.QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator:
+                    item.setExpanded(True)
+            for item in self._all_items():
+                if item.childCount():
+                    item.setExpanded(True)
+        finally:
+            self.tree.setUpdatesEnabled(True)
+
+    def collapse_all(self):
+        """(0.527) Every group closed but the top ones (Vistas, Biblioteca, Projeto stay in view)."""
+        self.tree.setUpdatesEnabled(False)
+        try:
+            for item in self._all_items():
+                if item.parent() is not None:
+                    item.setExpanded(False)
+        finally:
+            self.tree.setUpdatesEnabled(True)
+
+    def _hatch(self, item):
+        brush = category_brush()
+        for c in range(self.tree.columnCount()):
+            item.setBackground(c, brush)
+
+    def restyle(self):
+        """(0.527) The theme changed: the foot's tabs and the categories' hatch in its colours, the icons again."""
+        self.scope_bar.setStyleSheet(scope_style())
+        self._fold_icons()
+        for key, item in self._items.items():
+            if key[0] == "cat":
+                self._hatch(item)
+        self.refresh_controls()
 
     # ------------------------------------------------------------ controls (0.524)
 
@@ -886,6 +1009,11 @@ class ProjectTree(QtWidgets.QDockWidget):
             put.addAction("{}   {}".format(name, level_text(level)),
                           lambda g=guid: self._later(self.on_element, "replicate", list(ids), g))
         put.setEnabled(bool(self._storeys))
+        move = menu.addMenu(t("tree.el.change_storey"))              # (0.527: up / down by the levels' difference)
+        for guid, name, level in reversed(self._storeys):
+            move.addAction("{}   {}".format(name, level_text(level)),
+                           lambda g=guid: self._later(self.on_element, "change_storey", list(ids), g))
+        move.setEnabled(len(self._storeys) > 1)
         act(t("tree.el.delete"), "delete")
         menu.addSeparator()
         act(t("tree.el.isolate"), "isolate").setShortcut(QtGui.QKeySequence("Shift+H"))        # (0.525: shown)
@@ -905,6 +1033,12 @@ class ProjectTree(QtWidgets.QDockWidget):
             item = self._items.get(SHEETS)
         key = item.data(0, KEY) if item is not None else None
         menu = self.menu_for(key, item) if key is not None else None
+        if menu is None:
+            menu = QtWidgets.QMenu(self)
+        else:
+            menu.addSeparator()
+        menu.addAction(self.expand_button.icon(), t("tree.expand_all"), self.expand_all)      # (0.527)
+        menu.addAction(self.collapse_button.icon(), t("tree.collapse_all"), self.collapse_all)
         if menu is not None:
             menu.exec(menus.menu_point(menu, self.tree.viewport().mapToGlobal(pos)))   # (0.377) up at the foot
 

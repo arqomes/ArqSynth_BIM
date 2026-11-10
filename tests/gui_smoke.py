@@ -1807,12 +1807,49 @@ def tree_controls_flow():
     pump(200)
     check("atalhos_ocultar_isolar_revelar", isolated and revealed and hidden and not (set(walls) & vp.hidden_ids),
           (isolated, revealed, hidden))
+    # (0.527) expand all / collapse all, by the buttons beside the search
+    panel.collapse_button.click()
+    pump(200)
+    closed = not category.isExpanded()
+    panel.expand_button.click()
+    pump(300)
+    opened = category.isExpanded() and all(it.isExpanded() for k, it in panel._items.items()
+                                           if k[0] == "cat" and it.childCount())
+    shot("navegador_expandir_tudo.png")
+    check("expandir_recolher_tudo", closed and opened, (closed, opened))
+    # (0.527) the categories on a hatch, the foot's chosen tab lit as the ribbon's
+    texture = category.background(0).texture()
+    check("trama_nas_categorias", not texture.isNull() and texture.width() > 0
+          and "tab:selected" in panel.scope_bar.styleSheet(), texture.width())
+    # (0.527) a wall put on another storey: by the navigator's menu, then by its Properties (as Revit's Level)
+    upper = bim_actions.add_storey(doc, "Piso teste", 3.0)
+    pump(300)
+    z0 = float(doc.get(walls[2]).mesh.bounds()[0][2])
+    win.tree_element_action("change_storey", [walls[2]], upper)
+    pump(300)
+    up = doc.get(walls[2]).storey == upper and abs(float(doc.get(walls[2]).mesh.bounds()[0][2]) - z0 - 3.0) < 1e-4
+    panel.raise_()
+    pump(200)
+    listed = panel.item_for(("cat", upper, "IfcWall")) is not None
+    vp.set_selection({walls[2]})
+    pump(300)
+    combo = win.props.findChild(QtWidgets.QComboBox, "props_storey")
+    back = False
+    if combo is not None:
+        k = combo.findData(storey)
+        combo.setCurrentIndex(k)
+        combo.activated.emit(k)
+        pump(300)
+        back = doc.get(walls[2]).storey == storey and abs(float(doc.get(walls[2]).mesh.bounds()[0][2]) - z0) < 1e-4
+    shot("mudar_de_piso.png")
+    check("mudar_de_piso", up and listed and back, (up, listed, combo is not None, back, win.last_message))
     win.tree_element_action("delete", [walls[0]])               # locked: refused
     pump(200)
     check("bloqueado_nao_exclui", doc.get(walls[0]) is not None,
           (win.last_message, controls.has(doc, walls[0], "locked"), doc.get(walls[0]) is not None))
     win.set_control([walls[0]], "locked", False)
     bim_actions.delete(doc, walls)
+    bim_actions.remove_storey(doc, upper)
     pump(300)
     win.storeys_panel.raise_()
     pump(100)

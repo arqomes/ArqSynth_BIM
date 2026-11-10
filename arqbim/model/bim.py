@@ -5229,6 +5229,36 @@ def transform_objects(doc, obj_ids, matrix, label):
     return [o.id for o in sketches] + guids
 
 
+def change_storey(doc, obj_ids, storey_guid, keep_height=False):
+    """(0.527, the owner: «selecionar uma parede… vinculada num piso e mudá-la para outro piso… sem ter que apagar e
+    criar de novo») IFC elements put in another storey, as Revit's «Level» changed in the properties: they go up or
+    down by the difference between the two levels, keeping their height over their level (keep_height: they stay where
+    they are, only their storey changes). Doors and windows go with their wall (alone: left out); the walls joined to
+    them stretch to stay joined. One undo step. Returns the GlobalIds moved."""
+    from ..core.transform import translation
+    levels = {g: z for g, _n, z in doc.storeys()}
+    if storey_guid not in levels:
+        return []
+    objs = [doc.get(i) for i in obj_ids if doc.get(i) is not None and doc.get(i).is_bim]
+    guids = [o.id for o in objs if o.storey != storey_guid and not is_filling(doc, o.id)]
+    if not guids:
+        return []
+    moves = [(g, None if keep_height or doc.get(g).storey not in levels else
+              translation((0.0, 0.0, levels[storey_guid] - levels[doc.get(g).storey]))) for g in guids]
+    neighbours = doc.ifc.joined_walls(guids)
+    changed = sorted(set(guids) | set(neighbours) | {f for g in guids for f in _fillings(doc, g)})
+
+    def action(ifc):
+        for g, m in moves:
+            if m is not None and abs(float(m[2, 3])) > 1e-9:
+                ifc.transform(g, m)
+            ifc.move_to_storey(g, storey_guid)
+        ifc.rejoin(guids)
+        return guids
+
+    return doc.execute(IfcCommand(t("cmd.change_storey"), action, changed=changed)).result
+
+
 def copy_objects(doc, obj_ids, matrices, label, storeys=None):
     """Copies of sketches and IFC elements, one set per matrix (several matrices
     = a series of copies), in one undo step. A wall's doors and windows are

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.527.0 — 2026-11-10
+
+**Mudar elementos de piso; trama nas categorias do Navegador; aba ativa destacada.**
+
+- **Mudar de piso sem apagar:** um elemento (parede, laje, pilar, mobiliário…) passa para outro piso pelas
+  **Propriedades ▸ Identificação ▸ Pavimento** (como o «Nível» do Revit) ou pelo botão direito no Navegador ▸ **Mudar
+  para o piso ▸**. Sobe ou desce pela diferença de cotas entre os pisos; as portas e janelas vão com a parede; as
+  paredes ligadas acompanham; um só Ctrl+Z. Os bloqueados ficam de fora.
+- No **Navegador**, cada categoria (Paredes, Lajes, Janelas…) tem uma **trama** fina de fundo, para se destacar dos
+  seus elementos.
+- A **aba ativa no rodapé do Navegador** (Tudo, Vistas, Biblioteca, Projeto, Folhas) fica destacada como a da fita:
+  a negrito, com o fundo do painel e a linha da cor de destaque.
+- **Expandir tudo / Recolher tudo** no Navegador: dois botões ao lado da pesquisa e no fim do menu do botão direito.
+
 ## 0.526.0 — 2026-11-10
 
 **Cursor por ferramenta, dicas do rodapé por cima e janelas ao centro.**
