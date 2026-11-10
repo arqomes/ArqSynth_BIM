@@ -60,7 +60,7 @@ class ViewStyle:
 
 # the program's: the 3D view's looks (0.63) as they were, and two more — keyed by their old names
 BUILTIN = {                       # (0.317: the materials' surface patterns seen in the usual looks too, as in Revit)
-    "shaded": ViewStyle("shaded", patterns=True, uid="shaded"),
+    "shaded": ViewStyle("shaded", patterns=True, transparency=True, uid="shaded"),   # (0.533: glass seen through)
     "hidden": ViewStyle("hidden", faces="white", patterns=True, uid="hidden"),
     "wire": ViewStyle("wire", faces="none", uid="wire"),
     "xray": ViewStyle("xray", faces="xray", uid="xray"),

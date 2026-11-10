@@ -461,7 +461,9 @@ class Viewport:
         # each category or each material), the surface patterns, the transparency; a plan's or section's own style
         self.vstyle = view_styles_model.BUILTIN["shaded"]
         self.cut_style = None
-        self._dressing = ("category", False, False)
+        # (0.533) from the style shown at the start — before, fixed here: «Sombreado» never got its glass nor patterns
+        # until another style had been picked
+        self._dressing = (self.vstyle.colours, self.vstyle.patterns, self.vstyle.transparency)
         self._overrides = ()              # (0.318) the view style's hatches by category the pieces were made with
         self.element_hatches = {}         # (0.331) the view's own by element (set_element_hatches)
         self._dressed = {}                # obj_id -> (its mesh, materials' generation, dressing, (colours, patterns, clear))
