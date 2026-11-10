@@ -9799,6 +9799,8 @@ _STRINGS = {
     "rsched.col.total": ("Comp. total (m)", "Total length (m)"),
     "rsched.col.weight": ("Peso (kg)", "Weight (kg)"),
     "rsched.role.bottom": ("inferior", "bottom"),
+    "rsched.role.mesh_bottom": ("malha eletrossoldada inferior (painéis)", "bottom welded mesh (sheets)"),   # (0.523)
+    "rsched.role.mesh_top": ("malha eletrossoldada superior (painéis)", "top welded mesh (sheets)"),
     "rsched.role.top": ("superior", "top"),
     "rsched.role.stirrups": ("estribos", "stirrups"),
     "rsched.role.main": ("longitudinal", "main"),

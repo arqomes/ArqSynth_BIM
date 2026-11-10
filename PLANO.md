@@ -1659,7 +1659,8 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    dos fios, a escolha do dono, as designações comerciais por confirmar —, na face inferior, superior ou nas duas,
    cortadas pelo contorno da laje menos o recobrimento, seguem a laje quando muda; painéis 6,00 × 2,40 m com 0,30 m de
    sobreposição, peso; verificação do recobrimento, do espaçamento (EC2 9.3.1.1) e do aço mínimo (9.2.1.1). Faltam: o
-   varão desenhado à mão, as malhas no mapa de armaduras e na memória de cálculo, o congestionamento.)
+   varão desenhado à mão, o congestionamento. 0.523.0: as malhas na **Lista de armaduras** (M1, M2…, painéis, peso),
+   nos totais, nas quantidades e na memória de cálculo do betão.)
 10. **Montagem e construtibilidade** (0.514.0: a tabela **Estrutura metálica: montagem** — cada conjunto, peça com
     as chapas soldadas, pela ordem de montagem por fases, com o peso a içar e o centro de gravidade. Faltam: as fases
     escolhidas à mão, a ordem pelos apoios, a construtibilidade.) Fases de montagem, peso e centro de gravidade de cada conjunto, ordem

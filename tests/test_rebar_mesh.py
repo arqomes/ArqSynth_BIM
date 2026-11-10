@@ -71,6 +71,11 @@ class MeshIfcTest(unittest.TestCase):
         self.assertEqual({(r["diameter"], round(r["spacing"], 2)) for r in rows}, {(8, 0.2)})
         self.assertGreater(rows[0]["sheets"], 0)
         self.assertEqual(doc.ifc.mesh_of(slab).diameter, 8)
+        rows, totals = bim.rebar_schedule(doc)                          # (0.523) in the bar schedule
+        self.assertEqual([(r["mark"], r["shape"]) for r in rows], [("M1", "Ø8//0,20")] * 2)
+        self.assertAlmostEqual(totals[8][1], sum(r["weight"] for r in rows))
+        q = next(r for r in bim.structure_quantities(doc) if r.guid == slab)
+        self.assertAlmostEqual(q.steel, sum(r["weight"] for r in rows))
         again = bim.put_mesh(doc, [slab], rm.Mesh(6, 0.15))             # (replaced, not added)
         self.assertEqual(len(again), 1)
         self.assertEqual(len(doc.ifc.file.by_type("IfcReinforcingMesh")), 1)

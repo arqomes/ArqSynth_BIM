@@ -2233,7 +2233,7 @@ def structure_quantities(doc):
     from . import structure_quantities as sq
     columns, beams, footings, panels, _levels = structural_elements(doc)
     steel, has = {}, set()
-    for r in doc.ifc.rebar_rows():
+    for r in doc.ifc.rebar_rows() + mesh_schedule_rows(doc):        # (0.523: the meshes' steel too)
         if r["host"]:
             steel[r["host"]] = steel.get(r["host"], 0.0) + r["weight"]
             has.add(r["host"])
@@ -2314,9 +2314,24 @@ def _report_drawings(doc, names):
     return out
 
 
+def mesh_schedule_rows(doc):
+    """(0.523) The welded meshes as rows of the bar schedule: marked M1, M2… (one per mesh of a diameter and spacing),
+    their sheets (6,00 m long each) as the count, «Ø8//0,15» as the shape, their weight."""
+    from ..core import rebar_mesh as rm
+    out, marks = [], {}
+    for r in doc.ifc.mesh_rows():
+        mark = marks.setdefault((r["diameter"], round(r["spacing"], 3)), "M{}".format(len(marks) + 1))
+        out.append({"mark": mark, "guid": r["guid"], "host": r["host"], "host_name": r["host_name"],
+                    "role": "mesh_" + r["face"], "diameter": r["diameter"], "count": r["sheets"],
+                    "length": rm.SHEET[0], "spacing": r["spacing"], "bends": "",
+                    "shape": rm.Mesh(r["diameter"], r["spacing"]).name(",").replace(" ", ""),
+                    "weight": r["weight"]})
+    return out
+
+
 def rebar_schedule(doc):
     """(0.166) The bar schedule: (rows by position — model.ifc rebar_rows —, {diameter mm: (m, kg)} totals)."""
-    rows = doc.ifc.rebar_rows()
+    rows = doc.ifc.rebar_rows() + mesh_schedule_rows(doc)        # (0.523: the welded meshes after the bars)
     totals = {}
     for r in rows:
         m, kg = totals.get(r["diameter"], (0.0, 0.0))

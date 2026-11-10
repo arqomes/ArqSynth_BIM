@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.523.0 — 2026-11-10
+
+**Passo 9: as malhas no mapa de armaduras.**
+
+- A **Lista de armaduras** (e o seu Excel, e a memória de cálculo do betão) mostra, depois dos varões, as malhas
+  eletrossoldadas: marca **M1, M2…** (uma por Ø e espaçamento), a laje, a face, o número de painéis de 6,00 m, a forma
+  «Ø8//0,15» e o peso; o peso entra nos totais por diâmetro.
+- As **Quantidades da estrutura** contam o aço das malhas na laje.
+
 ## 0.522.0 — 2026-11-10
 
 **Estrutura metálica e pormenores, passo 9: malhas eletrossoldadas.**

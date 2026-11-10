@@ -644,6 +644,16 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.523 — Malhas no mapa de armaduras (passo 9)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.523.0**.
+
+1. Faça os passos 1 a 4 da 0.522 (laje 6 × 4 m com malha **Ø8 // 0,15**, **As duas** faces).
+2. No separador **Analisar**, painel **Documentos**, abra **Lista de armaduras…**.
+3. Confira: duas linhas com a marca **M1**, «malha eletrossoldada inferior (painéis)» e «… superior», Ø 8, o número
+   de painéis, a forma **Ø8//0,15** e o peso; em baixo, o total do Ø8 inclui esse peso.
+4. Feche e abra **Quantidades da estrutura…**: a laje tem o aço da malha.
+
 ## 0.522 — Malhas eletrossoldadas (passo 9)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.522.0**.
