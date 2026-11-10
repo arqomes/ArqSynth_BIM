@@ -695,7 +695,8 @@ class EditMixin:
         """Smallest local box (lo, hi) that must stay inside the element because of
         its openings, or None. ((0.305) Its reveals left out: they are made again to fit.)"""
         e = self.by_guid(guid)
-        boxes = [b for b in self._openings_local(e, self.placement(guid)) if self.reveal_params(b[0]) is None]
+        boxes = [b for b in self._openings_local(e, self.placement(guid)) if self.reveal_params(b[0]) is None
+                 and not self.is_structure_cut(b[0])]       # (0.531) the structure's cuts: made again to fit
         if not boxes:
             return None
         return np.min([b[1] for b in boxes], axis=0), np.max([b[2] for b in boxes], axis=0)

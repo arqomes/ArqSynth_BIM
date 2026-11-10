@@ -81,6 +81,7 @@ from .ripado_screen import RipadoScreenMixin  # noqa: E402
 from .steel_members import SteelMemberMixin  # noqa: E402
 from .steel_connections import SteelConnectionMixin  # noqa: E402
 from .steel_stairs import SteelStairMixin  # noqa: E402
+from .structure_cuts import StructureCutMixin  # noqa: E402
 
 HISTORY_SIZE = 100000          # keep IFC undo history as long as the program's
 FEW_ELEMENTS = 12              # up to this many, triangulate one by one (no thread pool to start)
@@ -392,7 +393,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
                ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
-               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin, SteelConnectionMixin, SteelStairMixin):
+               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin, SteelConnectionMixin, SteelStairMixin, StructureCutMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -1619,6 +1620,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
     def affected_walls(self, guids):
         """Walls whose shape changes when these elements are removed (their doors/windows)."""
         walls = {self.host_wall(g) for g in guids} - {None}
+        for g in guids:                                     # (0.531) the walls a piece cuts get whole again
+            if self._is_structure(self.by_guid(g)):
+                walls |= set(self._walls_cut_by(g))
         return sorted(walls - set(guids))
 
     def remove(self, guids):
@@ -1627,6 +1631,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
         f = self.file
         if self.file.by_type("IfcReinforcingBar"):                         # (a member takes its bars, 0.166)
             self.remove_rebars(guids)
+        self.drop_structure_cuts(guids)                                     # (0.531) its cuts in the walls
         for guid in guids:
             element = self.by_guid(guid)
             if element is None:

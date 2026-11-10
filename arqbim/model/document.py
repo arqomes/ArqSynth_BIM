@@ -461,6 +461,9 @@ class IfcCommand(Command):
                 # the curtain walls it made or changed that embed themselves cut their walls again (0.188)
                 embedded = doc.ifc.follow_embedded(list(self.changed) + list(doc.ifc.made or ()))
                 self.changed += [g for g in embedded if g not in self.changed]
+                # (0.531) the masonry taken away where columns, beams and steel pieces pass through the walls
+                cut = doc.ifc.follow_structure_cuts(list(self.changed) + list(doc.ifc.made or ()))
+                self.changed += [g for g in cut if g not in self.changed]
                 # the finishes on the walls it changed made again on them (0.119)
                 self.changed += [g for g in doc.ifc.follow_claddings(self.changed) if g not in self.changed]
                 # …and their light frames (0.437; a wall copied: its own)

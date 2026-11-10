@@ -502,6 +502,29 @@ class Structure(unittest.TestCase):
         lo, hi = bounds(doc, beam)
         self.assertTrue(np.allclose(lo, (0, -0.1, 2.4)) and np.allclose(hi, (5, 0.1, 2.8)), (lo, hi))
 
+    def test_structure_cuts_the_masonry(self):
+        """(0.531) A column / beam where a wall is takes the wall away there — either drawn first —, and gives it
+        back when it is removed."""
+        doc = Document()
+        wall = bim.add_wall(doc, (0, 0, 0), (5, 0, 0), catalog.BY_KEY["parede_alv_20"], height=2.8)
+        full = doc.get(wall).mesh.volume()
+        self.assertAlmostEqual(full, 5 * 0.2 * 2.8, places=6)
+        col = bim.add_column(doc, np.array((2.5, 0.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+        self.assertAlmostEqual(doc.get(wall).mesh.volume(), full - 0.3 * 0.2 * 2.8, places=5)
+        beam = bim.add_beam(doc, np.array((0.0, 0.0, 2.8)), np.array((5.0, 0.0, 2.8)), catalog.BY_KEY["viga_20x40"],
+                            2.8)
+        self.assertAlmostEqual(doc.get(wall).mesh.volume(), full - 0.3 * 0.2 * 2.4 - 5 * 0.2 * 0.4, places=5)
+        self.assertEqual(doc.ifc.validate(express_rules=True), [])
+        bim.delete(doc, [beam, col])
+        self.assertAlmostEqual(doc.get(wall).mesh.volume(), full, places=6)
+        doc.undo()
+        self.assertLess(doc.get(wall).mesh.volume(), full - 0.1)
+        # a wall drawn where a column already is
+        doc2 = Document()
+        bim.add_column(doc2, np.array((0.0, 3.0, 0.0)), catalog.BY_KEY["pilar_30"], 2.8)
+        w2 = bim.add_wall(doc2, (-2, 3, 0), (2, 3, 0), catalog.BY_KEY["parede_alv_20"], height=2.8)
+        self.assertAlmostEqual(doc2.get(w2).mesh.volume(), (4 - 0.3) * 0.2 * 2.8, places=5)
+
     def test_a_long_sketch_box_classified_as_a_beam(self):
         doc = Document()
         obj = box_object(doc, (0, -0.1, 2.4), 4.0, 0.2, 0.4)
