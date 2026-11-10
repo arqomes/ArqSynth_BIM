@@ -1681,6 +1681,7 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
   gravados no IFC (pset «ArqSynth_Controlo»); clicar e arrastar pela coluna; Shift / Ctrl; menu do botão direito
   (Editar tipo, Copiar, Duplicar, Replicar no piso ▸, Excluir, Isolar na vista, Revelar tudo, Ocultar…).~~ (0.524.0)
 - ~~Atalhos como no Blender: Shift+H isolar, Alt+H revelar tudo, Ctrl+H ocultar (o H é a Mão).~~ (0.525.0)
+- ~~Cursor por ferramenta, dicas do rodapé por cima, janelas flutuantes ao centro.~~ (0.526.0)
 - Por fazer: os controlos nos esboços (não são IFC), o
   bloqueio também nas edições feitas por fórmulas/IA (hoje: não se escolhe na vista, nem se exclui ou duplica pelo
   Navegador), a impressora nas imagens 3D das folhas (hoje: plantas, cortes, alçados e PDF/DWG/SVG dessas vistas).

@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.526 — Cursor por ferramenta, dicas do rodapé e janelas ao centro
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.526.0**.
+
+1. Com a ferramenta **Selecionar** (Esc), passe o rato pela vista 3D: o cursor é a seta normal.
+2. No separador **Modelagem**, clique em **Parede** e volte à vista: o cursor passa a uma mira azul fina com o ícone
+   da parede pequeno, em baixo à direita. O ponto do clique é o centro da mira.
+3. Experimente **Laje**, **Linha**, **Mover**: a mira fica, o ícone pequeno muda para o da ferramenta.
+4. Carregue em **H** (Mão): o cursor é uma mão aberta. Carregue em **Esc**: volta a seta.
+5. No **rodapé** (a barra de baixo), pare o rato em cima de um botão de navegação (por exemplo a lupa) ou em
+   **Pavimento**: a descrição aparece **por cima** do botão e lê-se toda.
+6. Abra uma janela, por exemplo **Visualizar ▸ Estilos de vista** ou **Gerenciar ▸ Materiais**: abre ao centro do
+   programa. Arraste-a para um lado, feche e volte a abrir outra: cada uma nova abre ao centro.
+
 ## 0.525 — Atalhos de ocultar e isolar (como no Blender)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.525.0**.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.526.0 — 2026-11-10
+
+**Cursor por ferramenta, dicas do rodapé por cima e janelas ao centro.**
+
+- O **cursor muda com a ferramenta**: seta para Selecionar, mão para a Mão (deslocar), e nas ferramentas de desenho e
+  edição uma mira fina (o centro é o ponto exato do clique) com o ícone da ferramenta ao lado — como no SketchUp.
+- No **rodapé**, a descrição de cada botão (navegação, pavimento, escala…) aparece **por cima** do botão, e já não por
+  baixo, onde ficava escondida.
+- As **janelas flutuantes** (diálogos e painéis soltos) abrem **ao centro** da janela do programa e sempre dentro do
+  ecrã; se as mudar de sítio à mão, ficam onde as pôs.
+
 ## 0.525.0 — 2026-11-10
 
 **Atalhos de ocultar e isolar, como no Blender.**

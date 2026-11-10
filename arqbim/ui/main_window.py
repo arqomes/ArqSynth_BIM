@@ -54,6 +54,7 @@ from . import (context_bar, graphic_rules, icons, ids_panel, menus, notes_panel,
                properties, quick_edit, ribbon, schedules, selection_dialogs, sheet_view, storeys, theme,
                title_block_dialog, view_tabs, view_templates)
 from . import room_program as room_program_panel
+from . import tool_cursors                                  # (0.526) the cursor by tool
 from . import verify_bar                                    # (0.417) the Verifier
 from . import verify_panel                                  # (0.418) its panel
 
@@ -2616,6 +2617,17 @@ class MainWindow(QtWidgets.QMainWindow):
                                                                notice._step(t("tool." + name), self.hint_label.text())),
                              act.icon() if act is not None else None)
 
+    def _tool_cursor(self):
+        """(0.526) The 3D view's cursor: the tool's (ui/tool_cursors)."""
+        if getattr(self, "tool", None) is None:
+            return None
+        act = self.tool_actions.get(self.tool.name)
+        cursor = tool_cursors.cursor_for(self.tool.name, act.icon() if act is not None else None)
+        for w in (self.canvas, getattr(self.canvas, "_subwidget", None)):
+            if w is not None:
+                w.setCursor(cursor)
+        return cursor
+
     def _plan_for(self, name):
         """(0.323) Cota, Desenho 2D and Pormenor chosen in a 3D view: they are drawn in a plan, a section or an
         elevation — the active storey's plan is opened for them (until 0.322 their step said «open a plan first»
@@ -2651,6 +2663,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.notice.hint(t("tool." + name) if i18n_has("tool." + name) else "", self.hint_label.text(),
                              act.icon() if act is not None else None, self._as_button(self._missing_for(name)))
         self._refresh_context_bar()
+        self._tool_cursor()                               # (0.526) the cursor says which tool: cross + its icon
         self.canvas.setFocus()
         self.viewport.redraw()
         if self._help is not None and self._help.isVisible():
@@ -3295,6 +3308,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._restyle()
         self._check_theme()
         self._tint_views()
+        self._tool_cursor()                               # (0.526) the tool's cursor in the theme's colours
         self.message(t("info.theme_" + theme.NAME))
 
     def _tint_views(self):
@@ -9916,6 +9930,47 @@ class MainWindow(QtWidgets.QMainWindow):
         return not isinstance(obj, (QtWidgets.QLineEdit, QtWidgets.QTextEdit, QtWidgets.QPlainTextEdit,
                                     QtWidgets.QAbstractSpinBox, QtWidgets.QComboBox))
 
+    def centre_window(self, window):
+        """(0.526, the owner: «organize melhor as janelas flutuantes, para ficar mais centralizada») A dialog or a
+        floating panel, the first time it is shown, centred over the program's window (not left where the system put
+        it — under WSLg, often at the screen's corner), and kept inside the screen. Moved by hand later: left there."""
+        if window is self or window.property("arq_centred") or window.windowType() == QtCore.Qt.WindowType.Popup:
+            return False
+        window.setProperty("arq_centred", True)
+        if window.width() < 50:
+            window.adjustSize()
+        frame = window.frameGeometry()
+        centre = self.frameGeometry().center()
+        frame.moveCenter(centre)
+        screen = (self.screen() or QtGui.QGuiApplication.primaryScreen()).availableGeometry()
+        frame.moveLeft(max(screen.left(), min(frame.left(), screen.right() - frame.width())))
+        frame.moveTop(max(screen.top(), min(frame.top(), screen.bottom() - frame.height())))
+        window.move(frame.topLeft())
+        return True
+
+    def _footer_tip(self, widget):
+        """(0.526, the owner: «no rodapé… a descrição fique para cima… fica oculta e não se lê nada») A button of the
+        footer (the status bar: navigation, views, scale…): its tip shown above it, not under it — under it, it went
+        under the screen's foot (WSLg does not know the taskbar). True when shown so."""
+        bar = self.statusBar()
+        if not (widget is bar or bar.isAncestorOf(widget)):
+            return False
+        text = widget.toolTip()
+        if not text:
+            return False
+        top = widget.mapToGlobal(QtCore.QPoint(widget.width() // 2, 0))
+        QtWidgets.QToolTip.showText(top, text, widget)
+        tip = next((w for w in QtWidgets.QApplication.topLevelWidgets()
+                    if w.isVisible() and w.inherits("QTipLabel")), None)
+        if tip is None:
+            return True
+        tip.adjustSize()
+        screen = (widget.screen() or QtGui.QGuiApplication.primaryScreen()).availableGeometry()
+        x = min(max(screen.left() + 4, top.x() - tip.width() // 2), screen.right() - tip.width() - 4)
+        tip.move(x, top.y() - tip.height() - 6)
+        self.footer_tip_shown = tip.geometry()      # (for the tests)
+        return True
+
     def eventFilter(self, obj, event):
         try:
             return self._filter(obj, event)
@@ -9923,9 +9978,14 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
 
     def _filter(self, obj, event):
+        et = event.type()
+        if et == QtCore.QEvent.Type.ToolTip and isinstance(obj, QtWidgets.QWidget) and self._footer_tip(obj):
+            return True                             # (0.526) the footer's tips shown above it
+        if et == QtCore.QEvent.Type.Show and isinstance(obj, (QtWidgets.QDialog, QtWidgets.QDockWidget)) \
+                and obj.isWindow():
+            self.centre_window(obj)                 # (0.526) the floating windows over the middle of the program
         if self._loading:
             return False                            # no typed measurements while a file is being read
-        et = event.type()
         if et in (QtCore.QEvent.Type.DragEnter, QtCore.QEvent.Type.DragMove, QtCore.QEvent.Type.Drop) and \
                 obj in (self.canvas, getattr(self.canvas, "_subwidget", None)):
             return self._room_drop(event, et)       # (0.357) a name of the programme dragged onto the view

@@ -942,6 +942,7 @@ def bim_flow():
     view_tabs_flow()
     library_flow()
     tree_controls_flow()              # (0.524)
+    cursors_tips_windows_flow()       # (0.526)
     sheets_flow()
     dimensions_flow()
     rules_flow()
@@ -1814,6 +1815,52 @@ def tree_controls_flow():
     bim_actions.delete(doc, walls)
     pump(300)
     win.storeys_panel.raise_()
+    pump(100)
+
+
+def cursors_tips_windows_flow():
+    """(0.526) The cursor by tool (a cross with the tool's icon; the arrow to select, the hand to pan), the footer's tips
+    above its buttons, the floating windows centred over the program."""
+    from arqbim.ui import tool_cursors
+    win.set_tool("wall")
+    pump(200)
+    cur = canvas.cursor()
+    wall_ok = cur.shape() == Qt.CursorShape.BitmapCursor and (cur.hotSpot().x(), cur.hotSpot().y()) == \
+        (tool_cursors.HOT, tool_cursors.HOT)
+    win.set_tool("pan")
+    pump(100)
+    pan_ok = canvas.cursor().shape() == Qt.CursorShape.OpenHandCursor
+    win.set_tool("select")
+    pump(100)
+    check("cursor_por_ferramenta", wall_ok and pan_ok and canvas.cursor().shape() == Qt.CursorShape.ArrowCursor,
+          (wall_ok, pan_ok, canvas.cursor().shape()))
+    pic = tool_cursors.cursor_for("wall", win.tool_actions["wall"].icon()).pixmap()
+    pic.save(os.path.join(OUT, "cursor_parede.png"))
+    buttons = [b for b in win.statusBar().findChildren(QtWidgets.QToolButton) if b.isVisible() and b.toolTip()]
+    button = buttons[0] if buttons else None
+    above = False
+    if button is not None:
+        win.footer_tip_shown = None
+        centre = button.rect().center()
+        QtWidgets.QApplication.sendEvent(button, QtGui.QHelpEvent(QtCore.QEvent.Type.ToolTip, centre,
+                                                                   button.mapToGlobal(centre)))
+        pump(200)
+        tip = win.footer_tip_shown
+        above = tip is not None and tip.bottom() < button.mapToGlobal(QtCore.QPoint(0, 0)).y()
+        label = next((w for w in QtWidgets.QApplication.topLevelWidgets()
+                      if w.isVisible() and w.inherits("QTipLabel")), None)
+        if label is not None:
+            label.grab().save(os.path.join(OUT, "dica_rodape.png"))
+        QtWidgets.QToolTip.hideText()
+    check("dica_do_rodape_para_cima", above, (button.toolTip() if button else None, win.footer_tip_shown))
+    dialog = QtWidgets.QDialog(win)
+    dialog.resize(420, 300)
+    dialog.move(0, 0)
+    dialog.show()
+    pump(300)
+    d = dialog.frameGeometry().center() - win.frameGeometry().center()
+    check("janela_flutuante_ao_centro", abs(d.x()) <= 30 and abs(d.y()) <= 30, (d.x(), d.y()))
+    dialog.close()
     pump(100)
 
 
