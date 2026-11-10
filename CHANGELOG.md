@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.529.0 — 2026-11-10
+
+**O cursor em cruz volta a apontar onde se clica.**
+
+- A cruz das ferramentas (0.526) era desenhada ao dobro do tamanho no ecrã do programa, e o clique caía 10 px acima e
+  à esquerda do centro da cruz: as pegas pequenas (contorno do piso, perfil da parede) não se apanhavam. Agora o centro
+  da cruz é exatamente o ponto do clique.
+
 ## 0.528.0 — 2026-11-10
 
 **Pontas da parede como no Revit: bolinha para esticar, Ctrl para o «+».**

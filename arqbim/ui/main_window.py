@@ -2622,7 +2622,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if getattr(self, "tool", None) is None:
             return None
         act = self.tool_actions.get(self.tool.name)
-        cursor = tool_cursors.cursor_for(self.tool.name, act.icon() if act is not None else None)
+        # (0.529) drawn at the screen's own pixel ratio: at 2× on a 1× screen (the WSL's) the X server showed the
+        # picture twice as big, its cross's centre 10 px off the point clicked — the profile's grips were missed
+        try:
+            ratio = max(1.0, float(self.canvas.devicePixelRatioF()))
+        except (AttributeError, RuntimeError):
+            ratio = 1.0
+        cursor = tool_cursors.cursor_for(self.tool.name, act.icon() if act is not None else None, ratio=ratio)
         for w in (self.canvas, getattr(self.canvas, "_subwidget", None)):
             if w is not None:
                 w.setCursor(cursor)
