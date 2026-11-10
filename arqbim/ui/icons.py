@@ -1300,6 +1300,24 @@ def calc_report_icon():
     return theme.icon(pm)
 
 
+def steel_report_icon():
+    """(0.521) The steel's calculation report: a page with lines of text and an I section, the red stamp to sign."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.2))
+    p.setBrush(QtGui.QColor("#ffffff"))
+    p.drawRect(QtCore.QRectF(6, 3, 20, 26))
+    for y in (8, 11):
+        p.drawLine(QtCore.QPointF(9, y), QtCore.QPointF(23, y))
+    p.setBrush(QtGui.QColor("#8f9ea9"))
+    for x0, y0, x1, y1 in ((10, 14, 20, 16), (14, 16, 16, 22), (10, 22, 20, 24)):     # (an I)
+        p.drawRect(QtCore.QRectF(x0, y0, x1 - x0, y1 - y0))
+    p.setPen(_pen(QtGui.QColor("#b0302a"), 1.6))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QtCore.QPointF(23, 25), 4.5, 4.5)
+    p.end()
+    return theme.icon(pm)
+
+
 def actions_icon():
     """Actions (0.164): a slab with loads coming down on it, the wind from the side."""
     pm, p = _canvas()

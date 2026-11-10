@@ -9508,6 +9508,64 @@ _STRINGS = {
     "info.cut_exported": ("Lista de corte exportada para {f}.", "Cut list exported to {f}."),
     "act.structure_quantities": ("Quantidades da estrutura…", "Structure quantities…"),
     "act.calc_report": ("Memória de cálculo…", "Calculation report…"),
+    "act.steel_report": ("Memória de cálculo (aço)…", "Steel calculation report…"),                 # (0.521)
+    "tip.steel_report": ("A memória de cálculo da estrutura metálica (ações, modelo, verificação EC3 das peças e das "
+                         "ligações, lista de material), em PDF ou HTML.",
+                         "The steel structure's calculation report (actions, model, the EC3 check of the pieces and the "
+                         "connections, bill of materials), as PDF or HTML."),
+    "info.steel_report_none": ("Não há estrutura metálica para calcular.", "There is no steel structure to work out."),
+    "sreport.title": ("Memória de cálculo da estrutura metálica — pré-dimensionamento",
+                      "Steel structure calculation report — pre-design"),
+    "sreport.codes": ("NP EN 1990 (bases e combinações), NP EN 1991-1-1 (sobrecargas), NP EN 1991-1-3 (neve), "
+                      "NP EN 1991-1-4 (vento), NP EN 1993-1-1 (peças), NP EN 1993-1-8 (ligações), com os Anexos "
+                      "Nacionais: γM0 = γM1 = 1,00, γM2 = 1,25.",
+                      "NP EN 1990 (basis and combinations), NP EN 1991-1-1 (imposed loads), NP EN 1991-1-3 (snow), "
+                      "NP EN 1991-1-4 (wind), NP EN 1993-1-1 (members), NP EN 1993-1-8 (joints), with the National "
+                      "Annexes: γM0 = γM1 = 1.00, γM2 = 1.25."),
+    "sreport.grade": ("Aço {g} (EN 10025-2): fy = {fy} N/mm², fu = {fu} N/mm² (acima de 40 mm, fy = {fy40}); "
+                      "E = 210 000 N/mm², G = 81 000 N/mm².",
+                      "Steel {g} (EN 10025-2): fy = {fy} N/mm², fu = {fu} N/mm² (over 40 mm, fy = {fy40}); "
+                      "E = 210 000 N/mm², G = 81 000 N/mm²."),
+    "sreport.bolts": ("Parafusos e chumbadouros da classe 8.8: fub = {fub} N/mm², γM2 = {g2}.",
+                      "Bolts and anchors of class 8.8: fub = {fub} N/mm², γM2 = {g2}."),
+    "sreport.dead": ("Peso próprio das peças; revestimento da cobertura {g} kN/m², pelas madres.",
+                     "The pieces' own weight; the roof's cladding {g} kN/m², by the purlins."),
+    "sreport.imposed": ("Cobertura: uso {use}, carregada com {q} kN/m² (a maior entre a sobrecarga e a neve, {snow} "
+                        "kN/m² na cobertura), pelas madres, em planta.",
+                        "Roof: use {use}, loaded with {q} kN/m² (the greater of the imposed load and the snow, {snow} "
+                        "kN/m² on the roof), by the purlins, on plan."),
+    "sreport.wind": ("Vento: zona {zone}, rugosidade {terrain}, qp = {qp} kN/m² à altura da cumeeira; paredes +0,8 / "
+                     "−0,5 pelos pilares, cobertura −0,6 / −0,5 / −0,7 com cpi +0,2 pelas madres; quatro direções.",
+                     "Wind: zone {zone}, terrain {terrain}, qp = {qp} kN/m² at the ridge's height; walls +0.8 / −0.5 by "
+                     "the columns, roof −0.6 / −0.5 / −0.7 with cpi +0.2 by the purlins; four ways."),
+    "sreport.combos": ("Combinações (EN 1990 6.10): 1,35 G + 1,5 Q; 1,35 G; 1,0 G + 1,5 Q; com o vento: 1,35 G + 1,5 Q + "
+                       "0,9 W, 1,35 G + 1,5 W + 1,5 ψ0 Q, 1,0 G + 1,5 W; flechas com G + Q e G + W (L/200).",
+                       "Combinations (EN 1990 6.10): 1.35 G + 1.5 Q; 1.35 G; 1.0 G + 1.5 Q; with the wind: 1.35 G + "
+                       "1.5 Q + 0.9 W, 1.35 G + 1.5 W + 1.5 ψ0 Q, 1.0 G + 1.5 W; deflections with G + Q and G + W "
+                       "(L/200)."),
+    "sreport.model": ("Pórtico 3D: {pieces} peças em {bars} barras e {links} ligações rígidas (as excentricidades), "
+                      "{nodes} nós, {supports} apoios encastrados nos pés dos pilares.",
+                      "Space frame: {pieces} pieces in {bars} bars and {links} rigid links (the eccentricities), "
+                      "{nodes} nodes, {supports} fixed supports at the columns' feet."),
+    "sreport.model_note": ("Cada peça pela linha do meio da secção, cortada onde outra a encontra; os contraventamentos "
+                           "articulados (só à tração); análise elástica de primeira ordem.",
+                           "Each piece by its section's middle line, cut where another meets it; the bracing pinned "
+                           "(tension only); first-order elastic analysis."),
+    "sreport.s.members": ("Verificação das peças (NP EN 1993-1-1)", "The members' check (NP EN 1993-1-1)"),
+    "sreport.members_summary": ("{n} peças verificadas; {f} excedem.", "{n} pieces checked; {f} fail."),
+    "sreport.s.joints": ("Verificação das ligações (NP EN 1993-1-8)", "The connections' check (NP EN 1993-1-8)"),
+    "sreport.joints_summary": ("{n} ligações verificadas; {f} excedem.", "{n} connections checked; {f} fail."),
+    "sreport.s.bill": ("Lista de material", "Bill of materials"),
+    "sreport.notes": ("Pré-dimensionamento: o projeto de estruturas e as suas peças desenhadas e escritas são de um "
+                      "engenheiro, que as assina.|Sem sismo; sem cargas de pisos nas vigas de aço.|Encurvadura lateral "
+                      "dos perfis I e U entre os nós que os seguram, C1 = 1; não a das cantoneiras e dos enformados a "
+                      "frio (estes sem a EN 1993-1-3).|Ligações: a fiada de fora a levar o momento; sem a flexão das "
+                      "chapas (T-stub) nem o betão sob a chapa de base.",
+                      "Pre-design: the structural design and its drawings and specifications are an engineer's, who "
+                      "signs them.|No earthquake; no floor loads on steel beams.|Lateral-torsional buckling of the I "
+                      "and channel sections between the nodes that hold them, C1 = 1; not the angles' and cold-formed "
+                      "sections' (these without EN 1993-1-3).|Connections: the outer row taking the moment; not the "
+                      "plates in bending (T-stub) nor the concrete under the base plate."),
     "qty.title": ("Quantidades da estrutura", "Structure quantities"),
     "qty.col.element": ("Elemento", "Element"),
     "qty.col.storey": ("Pavimento", "Storey"),

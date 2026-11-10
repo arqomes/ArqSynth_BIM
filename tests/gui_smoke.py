@@ -669,6 +669,7 @@ def bim_flow():
     knee_plate_flow()
     steel_assemblies_flow()
     ec3_colours_flow()
+    steel_report_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20710,6 +20711,32 @@ def ec3_colours_flow():
     doc.modified = False
     check("cores_utilizacao_ec3", coloured and shown and back, "cores={} legenda={!r} voltou={}".format(
         coloured, text.replace("\n", " | "), back))
+
+
+def steel_report_flow():
+    """0.521 — The steel calculation report (Analisar ▸ Memória de cálculo (aço)…): a 12 m shed; written as PDF and as
+    HTML: the PDF a real one, the page with its 8 sections and who signs; in the ribbon. No steel: said, nothing
+    written."""
+    import tempfile
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    folder = tempfile.mkdtemp(prefix="arqsynth_steel_report_")
+    nothing = win.steel_report(os.path.join(folder, "vazio.html")) is None
+    bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                           catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+    pump(300)
+    pdf_path, html_path = os.path.join(folder, "aco.pdf"), os.path.join(folder, "aco.html")
+    win.steel_report(pdf_path)
+    win.steel_report(html_path)
+    pump(300)
+    pdf = os.path.exists(pdf_path) and open(pdf_path, "rb").read(5) == b"%PDF-" and os.path.getsize(pdf_path) > 5000
+    page = open(html_path, encoding="utf-8").read() if os.path.exists(html_path) else ""
+    html_ok = "<h2>8. " in page and "assina" in page and "Verificação das ligações" in page
+    doc.modified = False
+    check("memoria_aco", nothing and pdf and html_ok and win.ribbon_item("steel_report") is not None,
+          "sem_aco={} pdf={} html={} fita={}".format(nothing, pdf, html_ok, win.ribbon_item("steel_report") is not None))
 
 
 def steel_sheet_flow():

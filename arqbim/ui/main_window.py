@@ -744,6 +744,9 @@ class MainWindow(QtWidgets.QMainWindow):
                                                      icon=icons.structure_quantities_icon())            # (0.167)
         self.act_calc_report = self._action(t("act.calc_report"), lambda: self.calc_report(),
                                             icon=icons.calc_report_icon())
+        self.act_steel_report = self._action(t("act.steel_report"), lambda: self.steel_report(),
+                                             icon=icons.steel_report_icon())                            # (0.521)
+        self.act_steel_report.setToolTip(t("tip.steel_report"))
         self.act_cut_list = self._action(t("act.cut_list"), lambda: self.cut_list(), icon=icons.cut_list_icon())   # (0.169)
         self.act_profile_from_face = self._action(t("act.profile_from_face"), lambda: self.profile_from_face(),
                                                   icon=icons.profile_icon())                                # (0.245)
@@ -1037,6 +1040,7 @@ class MainWindow(QtWidgets.QMainWindow):
         m.addAction(self.act_rebar_schedule)
         m.addAction(self.act_structure_quantities)          # (0.167)
         m.addAction(self.act_calc_report)
+        m.addAction(self.act_steel_report)                  # (0.521)
         m.addAction(self.act_cut_list)                      # (0.169)
         m.addAction(self.act_worktop)                       # (0.170)
         m.addSeparator()
@@ -6427,6 +6431,36 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         try:
             page = structure_report.report_html(bim.report_data(self.doc))
+            if path.lower().endswith(".pdf"):
+                from .report_pdf import html_to_pdf
+                html_to_pdf(page, path)
+            else:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(page)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        self.message(t("info.calc_report_saved", f=os.path.basename(path)))
+        return path
+
+    def steel_report(self, path=None):
+        """(0.521) Analisar ▸ Memória de cálculo (aço)…: the steel structure worked out — project, codes, actions, model,
+        the EC3 verification of each piece and connection, the bill of materials — as an HTML page or a PDF (by the
+        file's extension). Returns its path, or None."""
+        from ..model import steel_report
+        self.tool.cancel()
+        if not any(True for o in self.doc.objects.values() if o.is_bim and self.doc.ifc.steel_section(o.id)):
+            self.message(t("info.steel_report_none"), warning=True)
+            return None
+        if path is None:
+            base = os.path.splitext(self.doc.path)[0] + " - " if self.doc.path else os.path.join(_documents_dir(), "")
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, t("report.save"), base + t("act.steel_report").rstrip("…") + ".pdf",
+                "PDF (*.pdf);;HTML (*.html)")
+            if not path:
+                return None
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
+        try:
+            page = steel_report.report_html(steel_report.report_data(self.doc))
             if path.lower().endswith(".pdf"):
                 from .report_pdf import html_to_pdf
                 html_to_pdf(page, path)

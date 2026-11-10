@@ -107,7 +107,7 @@ PANELS = {
                  ("symbols", ("symbol_styles",))),
     # (0.482) as Revit's Analyze: the structural analysis and its reports, the checks (regulations, IFC, IDS)
     "analyze": (("analysis", ("analyse", ("analytical", "actions", "show_analytical"), ("moments", "verify_ec2"))),
-                ("documents", (("rebar_schedule", "structure_quantities", "calc_report"),)),
+                ("documents", (("rebar_schedule", "structure_quantities", "calc_report"), "steel_report")),  # (0.521)
                 ("check", ("verify_panel", ("verify_settings", "verify_sheet", "rules_editor"),
                            ("check_ifc", "check_ids", "missing_data")))),               # (0.425, 0.426)
     "massing": (("select", ("select",)),

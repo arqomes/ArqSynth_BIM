@@ -1387,6 +1387,33 @@ class Ec3Joints(unittest.TestCase):
         self.assertIsNone(table[-1]["guid"])
 
 
+class SteelReport(unittest.TestCase):
+    """(0.521) The steel structure's calculation report."""
+
+    def test_page(self):
+        """A 12 m shed's report: one page, its 8 sections — the project, the codes and S275's strengths, the actions
+        (the wind's qp written), the model (its pieces, bars, links, supports), each piece's check, each connection's,
+        the bill of materials with its total —, who signs; the same numbers as the tables."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, steel_report
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        data = steel_report.report_data(doc)
+        page = steel_report.report_html(data)
+        self.assertTrue(page.startswith("<!doctype html>"))
+        for k in range(1, 9):
+            self.assertIn("<h2>{}. ".format(k), page)
+        self.assertIn("Aço S275", page)
+        self.assertIn("qp = {} kN/m²".format("{:.2f}".format(data["analysis"].loads["wind"]).replace(".", ",")), page)
+        self.assertIn("HEB 200", page)
+        self.assertIn("Chapa de base", page)
+        self.assertIn("assina", page)
+        statuses = page.count("<td class='ok'>") + page.count("<td class='falha'>")
+        self.assertEqual(statuses, len(data["analysis"].rows) + len(data["joints"]))      # (a piece, a connection)
+
+
 class Ec3Colours(unittest.TestCase):
     """(0.517) The Graphic rules' «Utilização EC3»."""
 

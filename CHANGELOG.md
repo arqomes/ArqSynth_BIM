@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.521.0 — 2026-11-10
+
+**Estrutura metálica, passo 8: a memória de cálculo.**
+
+- Comando novo **Memória de cálculo (aço)…** (separador **Analisar**, painel **Documentos**; também no menu
+  Estrutura): grava em **PDF** (ou HTML) a memória de cálculo da estrutura metálica, com o mesmo aspeto da do betão:
+  1. o projeto (do carimbo); 2. as normas e os materiais (as classes de aço com fy e fu, os parafusos 8.8); 3. as
+  ações (revestimento, sobrecarga ou neve da cobertura, vento com a sua pressão de pico, as combinações); 4. o modelo
+  (peças, barras, ligações rígidas, nós, apoios); 5. a verificação de cada peça (NP EN 1993-1-1); 6. a de cada
+  ligação (NP EN 1993-1-8); 7. a lista de material com o total; 8. os métodos, os limites e quem assina.
+- Num projeto sem aço, o comando diz que não há estrutura metálica e não grava nada.
+
 ## 0.520.0 — 2026-11-10
 
 **Estrutura metálica, passo 8: as ligações pela NP EN 1993-1-8.**

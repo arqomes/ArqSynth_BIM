@@ -1647,7 +1647,7 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    seguram, curvas dos laminados). 0.520.0: as **ligações** pela EN 1993-1-8 (parafusos ao corte, esmagamento,
    tração, chumbadouros, soldaduras) com as forças nas pontas das peças, numa tabela. Faltam: o banzo comprimido junto
    aos joelhos (momentos negativos, não travado pelas madres), as chapas à flexão (T-stub) e o betão sob a chapa de
-   base, as cargas dos pisos nas vigas de aço e a memória de cálculo.)
+   base, as cargas dos pisos nas vigas de aço. 0.521.0: a **memória de cálculo da estrutura metálica** em PDF/HTML.)
    (pré-dimensionamento, no modelo analítico que já existe): o aço com E = 210 GPa e as
    secções do catálogo no pórtico 3D; EN 1993-1-1 — classe da secção, resistência (N, V, M e interação), encurvadura
    por flexão (curvas a–d), encurvadura lateral, flechas; EN 1993-1-8 — parafusos ao corte e ao esmagamento, soldaduras

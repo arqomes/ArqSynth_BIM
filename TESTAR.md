@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.521 — Memória de cálculo da estrutura metálica (passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.521.0**.
+
+1. Faça Ctrl+N. No separador **Analisar**, painel **Documentos**, clique em **Memória de cálculo (aço)…**: aparece a
+   mensagem «Não há estrutura metálica para calcular».
+2. Faça uma nave com o **Pórtico de nave** (12 m, **Joelhos** aparafusados).
+3. Clique outra vez em **Memória de cálculo (aço)…** e grave como PDF no Ambiente de Trabalho.
+4. Abra o PDF: 8 secções — o projeto, as normas e o aço S275 (fy, fu), as ações (com o vento qp), o modelo, a tabela
+   das peças (as mesmas utilizações da tabela «verificação EC3»), a das ligações (as da tabela «ligações EC3»), a
+   lista de material com o total, e no fim as notas e o aviso de que o projeto é de um engenheiro que o assina.
+5. Grave de novo, desta vez escolhendo **HTML**: abre no navegador com o mesmo conteúdo.
+
 ## 0.520 — Ligações pela EN 1993-1-8 (estrutura metálica, passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.520.0**.
