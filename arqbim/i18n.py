@@ -325,12 +325,15 @@ _STRINGS = {
     "ec3.fails": ("Excede", "Fails"),
     "ec3.unstable": ("Estrutura instável", "Unstable structure"),
     "ec3.notes": ("Notas (pré-dimensionamento)", "Notes (pre-design)"),
-    "ec3.notes_text": ("Peso próprio + revestimento {g} kN/m² + sobrecarga/neve {q} kN/m² nas madres; pés dos pilares "
-                       "encastrados; contraventamentos só à tração. Sem vento nem sismo; encurvadura lateral não "
-                       "verificada (madres e contraventamentos como travamento); enformados a frio sem a EN 1993-1-3.",
-                       "Own weight + cladding {g} kN/m² + imposed/snow {q} kN/m² on the purlins; columns fixed at their "
-                       "feet; bracing in tension only. No wind nor earthquake; lateral-torsional buckling not checked "
-                       "(purlins and bracing as restraints); cold-formed sections without EN 1993-1-3."),
+    "ec3.notes_text": ("Peso próprio + revestimento {g} kN/m² + sobrecarga/neve {q} kN/m² nas madres; vento qp = {w} "
+                       "kN/m² nas quatro direções (paredes +0,8/−0,5 pelos pilares, cobertura −0,6/−0,5/−0,7 e cpi "
+                       "+0,2 pelas madres); pés dos pilares encastrados; contraventamentos só à tração. Sem sismo; "
+                       "encurvadura lateral não verificada (madres e contraventamentos como travamento); enformados a "
+                       "frio sem a EN 1993-1-3.",
+                       "Own weight + cladding {g} kN/m² + imposed/snow {q} kN/m² on the purlins; wind qp = {w} kN/m² "
+                       "four ways (walls +0.8/−0.5 by the columns, roof −0.6/−0.5/−0.7 and cpi +0.2 by the purlins); "
+                       "columns fixed at their feet; bracing in tension only. No earthquake; lateral-torsional buckling "
+                       "not checked (purlins and bracing as restraints); cold-formed sections without EN 1993-1-3."),
     "ec3.check.N": ("Esforço axial (6.2.3/6.2.4)", "Axial force (6.2.3/6.2.4)"),
     "ec3.check.M": ("Flexão (6.2.5)", "Bending (6.2.5)"),
     "ec3.check.NM": ("Axial e flexão (6.2.1)", "Axial and bending (6.2.1)"),

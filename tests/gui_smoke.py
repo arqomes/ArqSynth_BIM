@@ -20691,7 +20691,8 @@ def ec3_colours_flow():
     panel.rule.activated.emit(panel.rule.currentIndex())
     pump(1500)
     text = panel.text()
-    column = next(g for g in made if doc.ifc.by_guid(g).is_a("IfcColumn"))
+    column = made[4]                    # (the middle frame's column: green — 0.518: the gables' corners, in the wind,
+    #                                     yellow)
     plate = next((p.id for p in objects() if p.is_bim and p.ifc_class == "IfcPlate"), None)
     coloured = vp.colours.get(column) == "#59a14f" and plate is not None and vp.colours.get(plate) == "#d9d9d9"
     shown = text.startswith("até 50 %") and "Sem valor" in text or text.startswith("até 50 %")

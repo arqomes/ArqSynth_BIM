@@ -354,7 +354,8 @@ def steel_check_rows(doc):
         out.append({"guid": None, "kind": "steel_check", "mark": "", "piece": t("ec3.notes"), "name": "", "type": "",
                     "storey": "", "section": "", "grade": "", "n_ed": None, "m_ed": None, "v_ed": None,
                     "deflection": None, "utilisation": None,
-                    "governing": t("ec3.notes_text", g=_num(found.loads.get("dead")), q=_num(found.loads.get("imposed"))),
+                    "governing": t("ec3.notes_text", g=_num(found.loads.get("dead")), q=_num(found.loads.get("imposed")),
+                                   w=_num(found.loads.get("wind"))),
                     "status": ""})
     return out
 

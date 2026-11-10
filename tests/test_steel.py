@@ -1302,6 +1302,35 @@ class Eurocode3(unittest.TestCase):
         self.assertIsNone(rows[-1]["guid"])
 
 
+class SteelWind(unittest.TestCase):
+    """(0.518) The wind on the steel structure."""
+
+    def test_wind(self):
+        """A 12 m shed (ridge 7,06 m): the peak pressure at its height (zone A, terrain III — the project's actions),
+        4 wind cases and their combinations (each leading, with the other's ψ0, and lifting against 1,0 G); the walls'
+        columns of the faces across the wind loaded — the gables' corner columns bent about their weak axis, more
+        used than with the gravity alone —; the wall braces working (in tension); no «wind» note left."""
+        from arqbim.core import actions
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, steel_analysis
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        settings = doc.ifc.structural_settings()
+        found = steel_analysis.analyse(doc, settings)
+        ridge = 6.0 + 6.0 * __import__("math").tan(__import__("math").radians(10.0))
+        self.assertAlmostEqual(found.loads["wind"], actions.peak_pressure(ridge, settings.wind_zone,
+                                                                          settings.terrain), places=3)
+        uls, sls = steel_analysis.combinations(settings, ["W1", "W2", "W3", "W4"])
+        self.assertEqual((len(uls), len(sls)), (3 + 4 * 3, 1 + 4))
+        self.assertNotIn("wind", found.notes)
+        columns = [r for r in found.rows if r["mark"] == "P1"]
+        self.assertGreater(max(r["utilisation"] for r in columns), 0.4)              # (the wind on the gables)
+        braces = [r for r in found.rows if r["mark"] in ("CV1", "CV2")]
+        self.assertTrue(any(r["n_ed"] > 10.0 for r in braces))
+
+
 class Ec3Colours(unittest.TestCase):
     """(0.517) The Graphic rules' «Utilização EC3»."""
 
@@ -1321,7 +1350,8 @@ class Ec3Colours(unittest.TestCase):
         values = steel_analysis.bands(doc, ids)
         self.assertEqual(set(values), set(ids))
         columns = [g for g in ids if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcColumn")]
-        self.assertTrue(all(values[g] == "low" for g in columns))
+        self.assertTrue(all(values[g] in ("low", "mid") for g in columns))        # (0.518: the corners in the wind)
+        self.assertIn("low", [values[g] for g in columns])
         plates = [g for g in ids if doc.ifc.by_guid(g).is_a("IfcPlate")]
         self.assertTrue(all(values[g] is None for g in plates))
         lines = graphic_rules.legend(values, graphic_rules.EC3)

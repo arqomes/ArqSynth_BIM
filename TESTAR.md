@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.518 — Vento na verificação EC3 (estrutura metálica, passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.518.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave**: dois cliques **12 m** afastados.
+2. Abra as **Tabelas** ▸ **Estrutura metálica: verificação EC3**. Os pilares de canto aparecem por volta dos 50 % (antes
+   ~30 %) e os contraventamentos com esforços maiores do que na 0.516; as madres continuam por volta dos 94 %.
+3. Na última linha (**Notas**) aparece «vento qp = 0,71 kN/m²».
+4. Separador **Analisar** ▸ **Ações e materiais…**: mude a **zona do vento** para B (ou a rugosidade para I, à beira
+   mar) e OK. Volte à tabela: o vento sobe e os pilares e contraventamentos ficam mais carregados.
+5. No painel **Regras gráficas**, **Colorir por** ▸ **Utilização EC3 (aço)**: os pilares dos cantos ficam amarelos (50
+   a 80 %), os do meio verdes.
+
 ## 0.517 — Utilização do EC3 em cores (estrutura metálica, passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.517.0**.

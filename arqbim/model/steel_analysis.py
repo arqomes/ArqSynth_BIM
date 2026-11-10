@@ -27,6 +27,15 @@ END_SNAP = 0.30                 # m: a piece's end this near where another meets
 E_KPA, G_KPA = steel.E * 1000.0, steel.G * 1000.0
 COMBOS = (("1,35G + 1,5Q", {"G": 1.35, "Q": 1.5}), ("1,35G", {"G": 1.35}), ("1,0G + 1,5Q", {"G": 1.0, "Q": 1.5}))
 SLS = {"G": 1.0, "Q": 1.0}
+# (0.518) the wind — NP EN 1991-1-4, for pre-design: the peak pressure at the ridge's height; mean external
+# coefficients: the walls (Table 7.1, h/d ≤ 1) +0,8 windward and −0,5 leeward, both pushing the way the wind goes;
+# a duopitch roof's slopes (Tables 7.4a/b, about 10°) −0,6 the one facing the wind, −0,5 the other, −0,7 with the
+# wind along the ridge; the internal pressure +0,2 (7.2.9: the worst for the roof's uplift)
+WIND_WALL = (0.8, 0.5)
+WIND_ROOF = {"windward": -0.6, "leeward": -0.5, "along": -0.7}
+CPI = 0.2
+WIND_WAYS = ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0))
+FACE = 0.30                     # m: columns this near the building's edge across the wind stand on its wall
 
 
 @dataclass
@@ -198,6 +207,76 @@ def _widths(pieces):
     return out
 
 
+def _face_widths(positions):
+    """The wall's width each column of a face takes: half the way to its neighbours along the face (none past a
+    corner)."""
+    order = sorted(range(len(positions)), key=lambda k: positions[k])
+    out = [0.0] * len(positions)
+    for n, k in enumerate(order):
+        left = positions[k] - positions[order[n - 1]] if n > 0 else 0.0
+        right = positions[order[n + 1]] - positions[k] if n + 1 < len(order) else 0.0
+        out[k] = (left + right) / 2.0
+    return out
+
+
+def _wind(frame, pieces, by_piece, widths, settings):
+    """(0.518) The wind's cases W1–W4 (along +x, −x, +y, −y) on the frame: the walls' pressure carried by the columns
+    of the windward and leeward walls (each its width of wall, along all its height), the roof's suction by the
+    purlins (square to the roof, out). (the cases' names, the peak pressure kPa) — none without columns."""
+    from ..core.actions import peak_pressure
+    columns = [i for i, p in enumerate(pieces) if p.prefix == "P"]
+    if not columns:
+        return [], 0.0
+    zs = [float(v[2]) for p in pieces for v in (p.a, p.b)]
+    qp = peak_pressure(max(zs) - min(zs), settings.wind_zone, settings.terrain)
+    cases = []
+    for k, (dx, dy) in enumerate(WIND_WAYS, 1):
+        name = "W{}".format(k)
+        way = np.array((dx, dy, 0.0))
+        across = np.array((-dy, dx, 0.0))
+        middles = {i: (pieces[i].a + pieces[i].b) / 2.0 for i in columns}
+        along = {i: float(c @ way) for i, c in middles.items()}
+        lo, hi = min(along.values()), max(along.values())
+        if hi - lo < 0.5:
+            continue
+        for coef, near in ((WIND_WALL[0], lo), (WIND_WALL[1], hi)):
+            face = [i for i in columns if abs(along[i] - near) <= FACE]
+            for i, w in zip(face, _face_widths([float(middles[i] @ across) for i in face])):
+                q = coef * qp * w
+                for m in by_piece.get(i, ()):
+                    frame.add_member_load(name, m, qx=q * dx, qy=q * dy)
+        for i, w in widths.items():
+            p = pieces[i]
+            level = np.array((p.up[0], p.up[1], 0.0))
+            if float(np.linalg.norm(level)) < 0.05:
+                cpe = WIND_ROOF["windward"]
+            elif abs(float(level @ way)) < 0.5 * float(np.linalg.norm(level)):
+                cpe = WIND_ROOF["along"]
+            else:
+                cpe = WIND_ROOF["windward" if float(level @ way) < 0 else "leeward"]
+            push = p.up * (-(cpe - CPI) * qp * w)               # (suction: out of the roof, along its normal)
+            for m in by_piece.get(i, ()):
+                frame.add_member_load(name, m, qx=push[0], qy=push[1], qz=push[2])
+        cases.append(name)
+    return cases, qp
+
+
+def combinations(settings, wind_cases):
+    """(0.518) The ULS combinations (EN 1990 6.10): the roof's imposed load or snow leading, or the wind leading (ψ0 of
+    the other), or the wind lifting against the least weight — and the SLS ones for the deflections (characteristic)."""
+    psi_q = settings.psi(roof=True)[0]
+    from ..core.actions import WIND_PSI
+    psi_w = WIND_PSI[0]
+    uls = list(COMBOS)
+    sls = [("G + Q", dict(SLS))]
+    for w in wind_cases:
+        uls += [("1,35G + 1,5Q + {:g}{}".format(1.5 * psi_w, w), {"G": 1.35, "Q": 1.5, w: 1.5 * psi_w}),
+                ("1,35G + 1,5{} + {:g}Q".format(w, 1.5 * psi_q), {"G": 1.35, w: 1.5, "Q": 1.5 * psi_q}),
+                ("1,0G + 1,5{}".format(w), {"G": 1.0, w: 1.5})]
+        sls.append(("G + {}".format(w), {"G": 1.0, w: 1.0}))
+    return uls, sls
+
+
 def bands(doc, ids=()):
     """(0.517) {GlobalId: its band of use} of the steel pieces checked (graphic_rules.ec3_band) — the elements of `ids`
     that are not, None (grey): the rule «Utilização EC3» of the Graphic rules panel."""
@@ -230,7 +309,6 @@ def analyse(doc, settings=None):
         frame.set_support(k)
     imposed = settings.imposed(roof=True)
     widths = _widths(pieces)
-    out.loads = {"dead": ROOF_DEAD, "imposed": imposed, "snow": settings.snow()}
     for m in frame.members:
         if m.id not in owners:                          # (an eccentricity's link: no weight of its own)
             continue
@@ -241,16 +319,19 @@ def analyse(doc, settings=None):
             w = widths[owners[m.id]]
             frame.add_member_load("G", m, qz=-ROOF_DEAD * w)
             frame.add_member_load("Q", m, qz=-imposed * w * abs(float(p.up[2])))
-    try:
-        results = frame.solve(("G", "Q"))
-    except sf.SpaceFrameError as exc:
-        out.error = str(exc)
-        return out
-    env = frame.envelope(results, COMBOS)
     by_piece = {}
     for m in frame.members:
         if m.id in owners:
             by_piece.setdefault(owners[m.id], []).append(m)
+    wind_cases, qp = _wind(frame, pieces, by_piece, widths, settings)          # (0.518)
+    uls, sls = combinations(settings, wind_cases)
+    out.loads = {"dead": ROOF_DEAD, "imposed": imposed, "snow": settings.snow(), "wind": qp}
+    try:
+        results = frame.solve(("G", "Q") + tuple(wind_cases))
+    except sf.SpaceFrameError as exc:
+        out.error = str(exc)
+        return out
+    env = frame.envelope(results, uls)
     for i, p in enumerate(pieces):
         members = by_piece.get(i, [])
         if not members:
@@ -273,12 +354,14 @@ def analyse(doc, settings=None):
         deflection = 0.0
         if p.prefix != "CV" and abs(float((p.b - p.a)[2])) < 0.5 * length:    # (a beam, a rafter, a purlin)
             for m in members:
-                deflection = max(deflection, frame.deflection_mid(results, SLS, m) / (m.length / DEFLECTION))
+                for _name, factors in sls:              # (down under G + Q, up under the wind's suction)
+                    deflection = max(deflection,
+                                     abs(frame.deflection_mid(results, factors, m)) / (m.length / DEFLECTION))
         util = max(found["util"], deflection)
         check = found["check"] if found["util"] >= deflection else "delta"
         out.rows.append({"guid": p.guid, "mark": p.mark, "prefix": p.prefix, "section": steel.display(p.section),
                          "grade": p.grade, "n_ed": axial, "m_ed": max(my, mz), "v_ed": max(vz, vy),
                          "deflection": deflection, "utilisation": util, "governing": check, "ok": util <= 1.0,
                          "notes": found["notes"], "class": found["class"]})
-    out.notes = ["wind", "floors"]
+    out.notes = ["floors"] + ([] if wind_cases else ["wind"])
     return out

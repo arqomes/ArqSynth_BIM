@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.518.0 — 2026-11-10
+
+**Estrutura metálica, passo 8: o vento.**
+
+- A **verificação EC3** (tabela e cores) passa a contar com o **vento** (NP EN 1991-1-4): a pressão de pico à altura
+  da cumeeira, pela zona e pela rugosidade das **Ações e materiais** do projeto; em quatro direções; nas paredes
+  (+0,8 a barlavento, −0,5 a sotavento) levado pelos pilares de cada parede, cada um com a sua largura de parede; na
+  cobertura (sucção −0,6 / −0,5 / −0,7 conforme a água e a direção, com a pressão interior +0,2) levado pelas madres.
+- Combinações da EN 1990 com o vento: a sobrecarga ou a neve a comandar com 0,9 do vento, o vento a comandar com o ψ0
+  da outra, e o vento a levantar contra o peso só (1,0 G + 1,5 W); as flechas também com o vento.
+- Numa nave de 12 m: os pilares de canto passam de 30 % a cerca de 50 % (o vento na empena dobra-os pelo eixo fraco) e
+  os contraventamentos passam a trabalhar; as madres continuam comandadas pelo peso e pela sobrecarga.
+- A linha de Notas diz a pressão do vento tomada; fica de fora o sismo.
+
 ## 0.517.0 — 2026-11-10
 
 **Estrutura metálica, passo 8: a utilização do EC3 em cores no 3D.**
