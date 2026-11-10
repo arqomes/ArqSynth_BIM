@@ -644,6 +644,36 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.524 — Navegador como o Outliner do Blender
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.524.0**.
+
+1. No separador **Modelagem**, clique em **Parede** e desenhe três paredes soltas (clique, clique, Esc em cada).
+2. Na barra da esquerda, clique no primeiro ícone (**Navegador do Projeto**). Em **Projeto ▸ … ▸ Térreo**, clique no
+   triângulo de **Paredes (3)**: aparecem Parede 1, 2 e 3.
+3. À direita de cada nome há quatro ícones: **seta** (selecionável), **olho** (mostrar), **câmara** (renderizar) e
+   **impressora** (imprimir). A linha **Paredes (3)** e as do piso e do edifício também os têm.
+4. **Ocultar arrastando:** carregue no **olho** da Parede 1 e, sem largar o botão, desça pela coluna dos olhos até à
+   Parede 3; largue. Os três olhos ficam fechados e as três paredes desaparecem da vista 3D.
+5. Carregue em **Ctrl+Z**: as três voltam todas de uma vez (é um só passo).
+6. **Bloquear:** clique na **seta** da Parede 1: passa a um cadeado. Na vista 3D, clique na Parede 1: não fica
+   selecionada (não se pode mover nem editar). Clique outra vez no cadeado para desbloquear.
+7. **Ocultar uma categoria inteira:** clique no olho da linha **Paredes (3)**: todas as paredes do piso somem; clique
+   de novo para as mostrar. Se só algumas estiverem ocultas, o olho da categoria fica meio apagado.
+8. **Seleção em série:** clique em **Parede 1**, carregue em **Shift** e clique em **Parede 3**: ficam as três
+   selecionadas. Com **Ctrl** junta ou tira uma de cada vez.
+9. **Menu do botão direito:** com as três selecionadas, clique com o botão direito numa delas e veja: **Copiar**,
+   **Duplicar**, **Replicar no piso ▸** (a lista dos pisos), **Excluir**, **Isolar na vista**, **Revelar tudo**,
+   **Ocultar**, **Bloquear edição**, **Não renderizar**, **Não imprimir**. Com uma só parede aparece também
+   **Editar tipo…**, que abre o editor do tipo.
+10. Escolha **Isolar na vista**: só as paredes escolhidas ficam à vista. Botão direito ▸ **Revelar tudo**: volta tudo.
+11. **Não imprimir:** clique na **impressora** da Parede 2 (fica riscada a vermelho). Abra a planta (F4) e
+    carregue em **Ctrl+P** para gravar o PDF da vista (ou ponha a planta numa folha): a Parede 2 não aparece no papel, mas continua na vista.
+12. **Não renderizar:** clique na **câmara** da Parede 3 (fica riscada). Em **Visualizar ▸ Render realista** a parede
+    não entra na imagem; no estilo de vista **Realista** também some.
+13. Grave (**Ctrl+S**), feche e abra o ficheiro: os cadeados, olhos, câmaras e impressoras ficam como os deixou (vão
+    no IFC, no conjunto de propriedades «ArqSynth_Controlo»).
+
 ## 0.523 — Malhas no mapa de armaduras (passo 9)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.523.0**.

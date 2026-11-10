@@ -23,7 +23,7 @@ from ..i18n import has as i18n_has
 from ..ifc import catalog, certify
 from ..ifc import ids as ids_check
 from ..ifc.model import Cancelled, IfcModel
-from ..model import bim, curve_edit, line_edit, parts, project_types
+from ..model import bim, controls, curve_edit, line_edit, parts, project_types
 from ..model import drawings
 from ..model import schedules as schedules_model
 from ..model import dimensions as dims_model
@@ -354,6 +354,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tree_panel.on_rename_section = self._rename_section
         self.tree_panel.on_remove_section = self.doc.remove_section
         self.tree_panel.on_sheet = self.sheet_action
+        self.tree_panel.state_of = lambda ids, flag: controls.state_of(self.doc, ids, flag)      # (0.524)
+        self.tree_panel.on_control = self.set_control
+        self.tree_panel.on_element = self.tree_element_action
+        self._isolated = None            # (0.524) the elements isolated from the navigator (the others hidden for now)
         self.tree_panel.set_names_of = lambda: sheets_model.set_names(self.doc.sheets)      # (0.128)
         self.tree_panel.on_template = self.template_action
         self.rules_panel = graphic_rules.dock(self, beside=self.storeys_panel)
@@ -7860,6 +7864,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_title()
         self._refresh_properties()
         self._refresh_storeys()
+        if not self.doc.loading:
+            controls.refresh(self.doc, None if changed is None else list(changed) + list(removed or ()))
+            self._apply_controls()
         self._refresh_tree(changed, removed)
         if hasattr(self, "library_panel") and not self.doc.loading:
             self.library_panel.mark_stale()                 # (0.466: the project's components, again)
@@ -9405,6 +9412,75 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.tool.name != "select":
             self.set_tool("select")
         self.viewport.set_selection({o.id for o in objs if self.viewport.is_shown(o)})
+
+    # ------------------------------------------------------------ the navigator's controls (0.524)
+
+    def _apply_controls(self):
+        """The flags kept in the IFC (model/controls) on the views: hidden, out of the Realistic style, not picked —
+        and the elements isolated from the navigator."""
+        if not hasattr(self, "viewport"):
+            return
+        hidden = controls.ids_with(self.doc, "hidden")
+        if self._isolated is not None:
+            hidden |= {o.id for o in self.doc.objects.values() if o.is_bim and o.id not in self._isolated}
+        self.viewport.set_controls(hidden=hidden, no_render=controls.ids_with(self.doc, "no_render"),
+                                   locked=controls.ids_with(self.doc, "locked"))
+        if hasattr(self, "tree_panel"):
+            self.tree_panel.refresh_controls()
+
+    def set_control(self, ids, flag, on):
+        """A navigator's control switched on these elements (one undo step), kept in the IFC."""
+        n = controls.set_flag(self.doc, ids, flag, on)
+        self._apply_controls()
+        return n
+
+    def _unlocked(self, ids):
+        """The ids without the locked ones (told when some were left out)."""
+        locked = [i for i in ids if controls.has(self.doc, i, "locked")]
+        if locked:
+            self.message(t("info.locked_refused", n=len(locked)), warning=True)
+        return [i for i in ids if i not in locked and self.doc.get(i) is not None]
+
+    def tree_element_action(self, action, ids, arg=None):
+        """(0.524) The navigator's right-click menu on elements, a group, a category: the program's own commands."""
+        if action == "isolate":
+            self._isolated = set(ids)
+            self._apply_controls()
+            self.message(t("info.isolated", n=len(ids)))
+            return
+        if action == "show_all":
+            self._isolated = None
+            self.set_control(list(controls.ids_with(self.doc, "hidden")), "hidden", False)
+            self._apply_controls()
+            return
+        ids = self._unlocked(ids) if action in ("delete", "duplicate", "edit_type") else \
+            [i for i in ids if self.doc.get(i) is not None]
+        if not ids:
+            return
+        if self.tool.name != "select":
+            self.set_tool("select")
+        old = self.viewport.locked_ids
+        self.viewport.locked_ids = set()                 # (copied / replicated as they are, even locked)
+        try:
+            self.viewport.set_selection(set(ids))
+        finally:
+            self.viewport.locked_ids = old
+        if action == "delete":
+            self._delete()
+        elif action == "copy":
+            self.copy_to_clipboard()
+        elif action == "duplicate":                      # (as Blender's Shift+D: the copy on the cursor, a click puts it)
+            self.copy_to_clipboard()
+            self.paste()
+        elif action == "replicate":
+            self.repeat_on_storeys([arg])
+        elif action == "edit_type":
+            self._refresh_properties()
+            button = self.props.findChild(QtWidgets.QPushButton, "props_edit_type")
+            if button is None:
+                self.message(t("info.no_type"), warning=True)
+            else:
+                button.click()
 
     def _frame_from_tree(self, ids):
         shown = [i for i in ids if self.doc.get(i) is not None and self.viewport.is_shown(self.doc.get(i))]

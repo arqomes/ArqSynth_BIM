@@ -11,11 +11,88 @@ disappear or change name / storey, not when one changes shape.
 
 import re
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..i18n import t
-from . import menus
+from . import menus, theme
 from .storeys import level_text
+
+# (0.524, the owner: «controlos para bloquear edição ou não, ocultar, revelar, renderizar ou não, imprimir ou não… um
+# comportamento como no Blender») the columns of icons right of the names, as Blender's Outliner: each a flag of
+# model/controls (its icon lit = the flag off: selectable, shown, rendered, printed)
+CONTROL_COLUMNS = ("locked", "hidden", "no_render", "no_print")
+ICON_SIZE = 16
+COLUMN_WIDTH = 22
+
+
+def _control_pixmap(flag, state):
+    """The icon of a column: state False (lit: selectable / shown / rendered / printed), True (dim and crossed — the
+    flag on), None (some of a group's elements: half lit)."""
+    ratio = 2
+    pm = QtGui.QPixmap(ICON_SIZE * ratio, ICON_SIZE * ratio)
+    pm.setDevicePixelRatio(ratio)
+    pm.fill(QtCore.Qt.GlobalColor.transparent)
+    p = QtGui.QPainter(pm)
+    p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    # (the owner: «ícones minimalista e leve») thin lines, no fills, a soft grey; off: fainter still
+    ink = theme.colour("muted")
+    ink.setAlpha(220 if state is False else 140 if state is None else 90)
+    pen = QtGui.QPen(ink, 1.0)
+    pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    s = ICON_SIZE
+    if flag == "locked":
+        if state is True:                                   # a padlock, shut
+            p.drawRoundedRect(QtCore.QRectF(3.5, 7.5, 9, 6.5), 1.2, 1.2)
+            p.drawArc(QtCore.QRectF(5, 2.5, 6, 9), 0, 180 * 16)
+        else:                                               # Blender's arrow: it can be picked
+            arrow = QtGui.QPolygonF([QtCore.QPointF(*xy) for xy in
+                                     ((4, 2), (4, 13), (7, 10.5), (9.2, 14.5), (10.8, 13.7), (8.7, 9.8), (12.3, 9.8))])
+            p.drawPolygon(arrow)
+    elif flag == "hidden":                                  # an eye (shut: its lid and lashes)
+        if state is True:
+            path = QtGui.QPainterPath(QtCore.QPointF(2, 7))
+            path.quadTo(QtCore.QPointF(8, 12.5), QtCore.QPointF(14, 7))
+            p.drawPath(path)
+            for x0, x1 in ((4.5, 3.5), (8, 8), (11.5, 12.5)):
+                p.drawLine(QtCore.QPointF(x0, 9.6), QtCore.QPointF(x1, 12))
+        else:
+            path = QtGui.QPainterPath(QtCore.QPointF(1.5, 8))
+            path.quadTo(QtCore.QPointF(8, 1), QtCore.QPointF(14.5, 8))
+            path.quadTo(QtCore.QPointF(8, 15), QtCore.QPointF(1.5, 8))
+            p.drawPath(path)
+            p.drawEllipse(QtCore.QPointF(8, 8), 2.0, 2.0)
+    elif flag == "no_render":                               # a camera
+        p.drawRoundedRect(QtCore.QRectF(2, 5, 12, 8.5), 1.5, 1.5)
+        p.drawLine(QtCore.QPointF(5.5, 5), QtCore.QPointF(6.5, 3))
+        p.drawLine(QtCore.QPointF(6.5, 3), QtCore.QPointF(9.5, 3))
+        p.drawLine(QtCore.QPointF(9.5, 3), QtCore.QPointF(10.5, 5))
+        p.drawEllipse(QtCore.QPointF(8, 9.2), 2.4, 2.4)
+    else:                                                   # a printer
+        p.drawRect(QtCore.QRectF(4.5, 2, 7, 4))
+        p.drawRoundedRect(QtCore.QRectF(2, 6, 12, 6), 1.2, 1.2)
+        p.drawRect(QtCore.QRectF(4.5, 10, 7, 4.5))
+    if state is True and flag != "locked" and flag != "hidden":       # crossed out: not rendered / not printed
+        p.setPen(QtGui.QPen(theme.colour("fail"), 1.0))
+        p.drawLine(QtCore.QPointF(2, s - 2), QtCore.QPointF(s - 2, 2))
+    p.end()
+    return pm
+
+
+_ICONS = {}
+
+
+def control_icon(flag, state):
+    key = (flag, state, theme.C.get("muted"), theme.C.get("fail"))
+    if key not in _ICONS:
+        _ICONS[key] = QtGui.QIcon(_control_pixmap(flag, state))
+    return _ICONS[key]
+
+
+def controlled(key):
+    """Does an item of the tree carry the control icons? The IFC elements, their categories, storeys, buildings."""
+    return key is not None and (key[0] == "obj" or (key[0] == "cat" and key[1] != "sketches") or key[0] == "spatial")
 
 KEY = QtCore.Qt.ItemDataRole.UserRole          # what an item stands for (a tuple, see _key)
 PLACEABLE = QtCore.Qt.ItemDataRole.UserRole + 1     # a component one can place again (made by ArqBIM)
@@ -67,6 +144,22 @@ class ProjectTree(QtWidgets.QDockWidget):
         self.setObjectName("project_tree")
         self.tree = QtWidgets.QTreeWidget()
         self.tree.setHeaderHidden(True)
+        # (0.524) the name, then a column of icons per control (as Blender's Outliner)
+        self.tree.setColumnCount(1 + len(CONTROL_COLUMNS))
+        header = self.tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        for c in range(1, 1 + len(CONTROL_COLUMNS)):
+            header.setSectionResizeMode(c, QtWidgets.QHeaderView.ResizeMode.Fixed)
+            header.resizeSection(c, COLUMN_WIDTH)
+        self.tree.setIconSize(QtCore.QSize(ICON_SIZE, ICON_SIZE))
+        self.tree.setMouseTracking(True)
+        self.tree.viewport().installEventFilter(self)
+        self.state_of = None         # (ids, flag) -> True | False | None (some): set by the window (model/controls)
+        self.on_control = None       # (ids, flag, on): a control switched — on many rows at once when dragged
+        self.on_element = None       # (action, ids, arg): the elements' right-click menu
+        self._drag = None            # (column, flag, value, {item keys passed over}) while dragging down a column
+        self._storeys = []           # [(GlobalId, name, level)] for "Replicate on storey ▸"
         self.tree.setIndentation(14)                 # project / site / building / storey: keep the names in view
         self.tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setExpandsOnDoubleClick(False)
@@ -201,6 +294,7 @@ class ProjectTree(QtWidgets.QDockWidget):
             return
         self._signature = signature
         self._sheet_names = [name for name, _placed in views["sheets"]]
+        self._storeys = list(views["plans"])
         self._section_names = list(views["sections"])
         self._templates = list(views["templates"])                 # [(uid, name)]
         self._assigned = dict(views["assigned"])                    # view key -> template uid
@@ -357,6 +451,7 @@ class ProjectTree(QtWidgets.QDockWidget):
             if (key[0] in folds and key not in self._closed) or key in opened:
                 item.setExpanded(True)
         self.filter()                                  # (0.184: still searching — 0.461: the tab chosen — the new list too)
+        self.refresh_controls()
         self._building = False
 
     def _fill(self, item):
@@ -370,12 +465,121 @@ class ProjectTree(QtWidgets.QDockWidget):
             child.setData(0, KEY, ("obj", obj_id))
             item.addChild(child)
             self._items[("obj", obj_id)] = child
+            self._paint_controls(child)
+
+    # ------------------------------------------------------------ controls (0.524)
+
+    def _ifc_members(self, item):
+        return [i for i in self._members_of(item) if isinstance(i, str)]
+
+    def _paint_controls(self, item, preview=None):
+        """The icons of an item's columns from its elements' flags (preview: {flag: state} shown while dragging)."""
+        key = item.data(0, KEY)
+        if not controlled(key) or self.state_of is None:
+            return
+        ids = self._ifc_members(item)
+        if not ids:
+            return
+        for c, flag in enumerate(CONTROL_COLUMNS, start=1):
+            state = preview[flag] if preview and flag in preview else self.state_of(ids, flag)
+            item.setIcon(c, control_icon(flag, state))
+            item.setToolTip(c, t("tree.col." + flag))
+
+    def refresh_controls(self):
+        """Every item's icons again (a flag changed — an undo, a file opened)."""
+        building, self._building = self._building, True
+        try:
+            for key, item in self._items.items():
+                if controlled(key):
+                    self._paint_controls(item)
+        finally:
+            self._building = building
+
+    def _control_at(self, pos):
+        """(item, column, flag) under a point of the tree's viewport, if it is a control's icon."""
+        item = self.tree.itemAt(pos)
+        if item is None or not controlled(item.data(0, KEY)) or not self._ifc_members(item):
+            return None
+        column = self.tree.columnAt(pos.x())
+        if not 1 <= column <= len(CONTROL_COLUMNS):
+            return None
+        return item, column, CONTROL_COLUMNS[column - 1]
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        """(0.524) As Blender's Outliner: a click on an icon switches it; dragged down (or up) the column, the same
+        state on every row the mouse runs over — applied in one undo step when the button is let go."""
+        if getattr(self, "state_of", None) is None or obj is not self.tree.viewport():
+            return False
+        kind = event.type()
+        if kind == QtCore.QEvent.Type.MouseButtonPress and event.button() == QtCore.Qt.MouseButton.LeftButton:
+            found = self._control_at(event.position().toPoint())
+            if found is None:
+                return False
+            item, column, flag = found
+            value = self.state_of(self._ifc_members(item), flag) is not True       # off (or some) -> on, on -> off
+            self._drag = (column, flag, value, {})
+            self._drag_over(item)
+            return True
+        if kind == QtCore.QEvent.Type.MouseButtonDblClick and self._control_at(event.position().toPoint()):
+            return True                                # (a quick second click: not the row's double-click)
+        if kind == QtCore.QEvent.Type.MouseMove and self._drag is not None:
+            column = self._drag[0]
+            x = self.tree.header().sectionViewportPosition(column) + COLUMN_WIDTH // 2
+            item = self.tree.itemAt(QtCore.QPoint(x, int(event.position().y())))
+            if item is not None and controlled(item.data(0, KEY)) and self._ifc_members(item):
+                self._drag_over(item)
+            return True
+        if kind == QtCore.QEvent.Type.MouseButtonRelease and self._drag is not None:
+            self.finish_drag()
+            return True
+        return False
+
+    def _drag_over(self, item):
+        _column, flag, value, passed = self._drag
+        key = item.data(0, KEY)
+        if key in passed:
+            return
+        passed[key] = item
+        self._paint_controls(item, {flag: value})
+
+    def finish_drag(self):
+        """The drag's state put on every row passed over (one undo step)."""
+        if self._drag is None:
+            return []
+        _column, flag, value, passed = self._drag
+        self._drag = None
+        ids = []
+        for item in passed.values():
+            for i in self._ifc_members(item):
+                if i not in ids:
+                    ids.append(i)
+        if ids and self.on_control is not None:
+            self.on_control(ids, flag, value)
+        self.refresh_controls()
+        return ids
+
+    def press_control(self, key, flag):
+        """A click on an item's icon (used by tests): as the mouse would."""
+        item = self._items.get(key)
+        if item is None:
+            return
+        self._drag = (1 + CONTROL_COLUMNS.index(flag), flag, self.state_of(self._ifc_members(item), flag) is not True, {})
+        self._drag_over(item)
+
+    def drag_control_over(self, key):
+        item = self._items.get(key)
+        if item is not None and self._drag is not None:
+            self._drag_over(item)
 
     def show_selection(self, ids):
         """Mark what is selected in the 3D view (one element: open its category and show it)."""
         ids = set(ids)
-        if ids and ids == self._selected_members():
+        chosen = self._selected_members()
+        if ids and ids == chosen:
             return                                    # the items just clicked stand for this selection
+        if chosen and ids <= chosen and self.state_of is not None and \
+                self.state_of([i for i in chosen - ids if isinstance(i, str)], "locked") is True:
+            return                                    # (0.524) the rows clicked, but those locked not picked in the view
         self.tree.blockSignals(True)
         try:
             self.tree.clearSelection()
@@ -650,9 +854,50 @@ class ProjectTree(QtWidgets.QDockWidget):
             if key[4] is not None:
                 menu.addAction(t("tree.open_view"), lambda: self._later(self.on_view, key[3], key[4]))
             menu.addAction(t("tree.take_off"), lambda: self._later(self.on_sheet, "take_off", key[1], key[2]))
+        elif controlled(key) and item is not None and self._ifc_members(item):
+            self._element_menu(menu, item)
         else:
             return None
         return menu
+
+    def menu_ids(self, item):
+        """The elements a right-click works on: the selected rows' if the row is one of them (Shift / Ctrl), its own
+        otherwise."""
+        if item.isSelected():
+            ids = []
+            for it in self.tree.selectedItems():
+                ids += [i for i in self._ifc_members(it) if i not in ids]
+            return ids
+        return self._ifc_members(item)
+
+    def _element_menu(self, menu, item):
+        """(0.524) An element's / group's / category's menu: the program's own commands on them."""
+        ids = self.menu_ids(item)
+
+        def act(text, action, arg=None):
+            return menu.addAction(text, lambda: self._later(self.on_element, action, list(ids), arg))
+
+        if item.data(0, KEY)[0] == "obj" and len(ids) == 1:
+            act(t("tree.el.edit_type"), "edit_type")
+        act(t("tree.el.copy"), "copy")
+        act(t("tree.el.duplicate"), "duplicate")
+        put = menu.addMenu(t("tree.el.replicate"))
+        for guid, name, level in reversed(self._storeys):
+            put.addAction("{}   {}".format(name, level_text(level)),
+                          lambda g=guid: self._later(self.on_element, "replicate", list(ids), g))
+        put.setEnabled(bool(self._storeys))
+        act(t("tree.el.delete"), "delete")
+        menu.addSeparator()
+        act(t("tree.el.isolate"), "isolate")
+        act(t("tree.el.show_all"), "show_all")
+        state = (lambda flag: self.state_of(ids, flag)) if self.state_of is not None else (lambda flag: False)
+        for flag, off, on in (("hidden", "tree.el.hide", "tree.el.reveal"), ("locked", "tree.el.lock", "tree.el.unlock"),
+                              ("no_render", "tree.el.render_off", "tree.el.render_on"),
+                              ("no_print", "tree.el.print_off", "tree.el.print_on")):
+            switched = state(flag) is True
+            a = menu.addAction(control_icon(flag, not switched), t(on if switched else off),
+                               lambda f=flag, v=not switched: self._later(self.on_control, list(ids), f, v))
+            a.setObjectName("tree_control_" + flag)
 
     def _menu(self, pos):
         item = self.tree.itemAt(pos)

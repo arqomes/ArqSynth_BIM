@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.524.0 — 2026-11-10
+
+**O Navegador do Projeto com controlos como o Outliner do Blender.**
+
+- Em cada elemento, categoria (ex.: «Paredes», «Malhas eletrossoldadas»), piso e edifício: **seta / cadeado**
+  (selecionável ou bloqueado), **olho** (mostrar / ocultar), **câmara** (renderizar ou não), **impressora** (imprimir
+  ou não), em traço fino, minimalistas. Ficam gravados no IFC (pset «ArqSynth_Controlo»).
+- **Clicar e arrastar** pela coluna aplica o mesmo estado a todas as linhas por onde o rato passa — um só Ctrl+Z.
+- **Shift** seleciona em série, **Ctrl** junta.
+- **Botão direito**: Editar tipo…, Copiar, Duplicar, Replicar no piso ▸, Excluir, Isolar na vista, Revelar tudo,
+  Ocultar/Revelar, Bloquear/Desbloquear, Renderizar ou não, Imprimir ou não.
+- Bloqueado: não se escolhe na vista (logo não se move nem edita); Excluir e Duplicar recusam com aviso.
+- «Não renderizar» sai do render (Mitsuba) e do estilo Realista; «não imprimir» sai das plantas, cortes e alçados das
+  folhas, dos PDF e das vistas exportadas.
+
 ## 0.523.0 — 2026-11-10
 
 **Passo 9: as malhas no mapa de armaduras.**

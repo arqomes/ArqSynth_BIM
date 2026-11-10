@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import material_looks
+from . import controls, material_looks
 
 # each material category's finish (catalog.MaterialSpec.category)
 CATEGORY_FINISH = {"plaster": "matte", "gypsum": "matte", "insulation": "matte", "concrete": "matte",
@@ -159,8 +159,12 @@ def gather(doc, objects, lights=None):
     ifc = getattr(doc, "ifc", None)
     found = {}
     shining = {}
+    try:
+        left_out = controls.ids_with(doc, "no_render")       # (0.524: the navigator's camera off)
+    except AttributeError:
+        left_out = set()
     for obj in objects:
-        if obj is None or obj.mesh is None:
+        if obj is None or obj.mesh is None or obj.id in left_out:
             continue
         if getattr(obj, "is_bim", False):
             try:

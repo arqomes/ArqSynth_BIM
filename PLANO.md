@@ -1675,6 +1675,15 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
   uma verificação de pessoa. O dono pode trazer o documento.)
 - Desempenho medido a cada fase (as metas da secção 6 das instruções). (0.255.0: medido no fim dos restos — sem regressões do código; falta a meta de abrir 500 MB, ~29 s pela proporção do edifício grande, e a pausa de ~1,3 s ao reabrir um modelo grande.) (0.344.0: ~~reabrir~~ — 1,0 s até à 1.ª imagem no edifício grande, ~12 s estimados para 500 MB; ~~a pausa ao reabrir~~ — 0,3 s desde a 0.328; a navegação a 57 imagens/s, medida fora do ecrã com a leitura da imagem. Fica a 1.ª abertura de 500 MB, ~32 s: mais de metade é o IfcOpenShell a ler o ficheiro, ~17 s só isso.)
 
+### Navegador como o Outliner do Blender (pedido 2026-11-10)
+
+- ~~Controlos por elemento, categoria, piso e edifício: seta (selecionável / bloqueado), olho, câmara, impressora;
+  gravados no IFC (pset «ArqSynth_Controlo»); clicar e arrastar pela coluna; Shift / Ctrl; menu do botão direito
+  (Editar tipo, Copiar, Duplicar, Replicar no piso ▸, Excluir, Isolar na vista, Revelar tudo, Ocultar…).~~ (0.524.0)
+- Por fazer: os controlos nos esboços (não são IFC), um atalho de teclado para ocultar (H, como no Blender), o
+  bloqueio também nas edições feitas por fórmulas/IA (hoje: não se escolhe na vista, nem se exclui ou duplica pelo
+  Navegador), a impressora nas imagens 3D das folhas (hoje: plantas, cortes, alçados e PDF/DWG/SVG dessas vistas).
+
 ## 5. Como se trabalha cada passo
 
 1. Uma versão por passo, com testes automáticos (núcleo e janela real) e uma captura do que o dono do projeto deve

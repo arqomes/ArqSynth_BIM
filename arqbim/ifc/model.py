@@ -2127,6 +2127,63 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             done += 1
         return done
 
+    # (0.524) the Project navigator's controls (as Blender's Outliner): flags kept in the pset «ArqSynth_Controlo»,
+    # only those switched on (a pset with none is taken away)
+    CONTROL_PSET = "ArqSynth_Controlo"
+    CONTROL_PROPS = {"locked": "Bloqueado", "hidden": "Oculto", "no_render": "NaoRenderizar",
+                     "no_print": "NaoImprimir"}
+
+    def controls_of(self, guid):
+        """The flags switched on of one element (a set of CONTROL_PROPS' keys)."""
+        e = self.by_guid(guid)
+        if e is None:
+            return set()
+        found = ifcopenshell.util.element.get_psets(e, psets_only=True).get(self.CONTROL_PSET) or {}
+        return {k for k, prop in self.CONTROL_PROPS.items() if found.get(prop)}
+
+    def all_controls(self):
+        """{GlobalId: set of flags} of every element that has one (read from the psets themselves, not element by
+        element)."""
+        names = {v: k for k, v in self.CONTROL_PROPS.items()}
+        out = {}
+        for pset in self.file.by_type("IfcPropertySet"):
+            if pset.Name != self.CONTROL_PSET:
+                continue
+            flags = {names[p.Name] for p in pset.HasProperties or ()
+                     if p.Name in names and p.is_a("IfcPropertySingleValue") and p.NominalValue is not None
+                     and bool(p.NominalValue.wrappedValue)}
+            if not flags:
+                continue
+            for rel in getattr(pset, "DefinesOccurrence", None) or ():
+                for obj in rel.RelatedObjects or ():
+                    out.setdefault(obj.GlobalId, set()).update(flags)
+        return out
+
+    def set_control(self, guids, flag, on):
+        """A flag switched on / off on these elements; returns how many changed."""
+        prop = self.CONTROL_PROPS[flag]
+        done = 0
+        for guid in guids:
+            e = self.by_guid(guid)
+            if e is None or bool(on) == (flag in self.controls_of(guid)):
+                continue
+            existing = ifcopenshell.util.element.get_psets(e, psets_only=True).get(self.CONTROL_PSET)
+            if existing and existing.get("id"):
+                pset = self.file.by_id(existing["id"])
+            else:
+                pset = api.pset.add_pset(self.file, product=e, name=self.CONTROL_PSET)
+            api.pset.edit_pset(self.file, pset=pset, properties={prop: bool(on)})
+            rest = {k for k, v in self.CONTROL_PROPS.items() if v != prop} & self.controls_of(guid)
+            if not on and not rest:
+                api.pset.remove_pset(self.file, product=e, pset=pset)
+            elif not on:
+                old = next((p for p in pset.HasProperties or () if p.Name == prop), None)
+                if old is not None:
+                    pset.HasProperties = [p for p in pset.HasProperties if p != old]
+                    self.file.remove(old)
+            done += 1
+        return done
+
     def layers(self, guids, own=True, single=False):
         """{GlobalId: [(hatch, normal, d0, d1)]} of the elements made of 2+ material layers (a
         wall's plaster | block | plaster): each layer is the space d0 <= normal·p <= d1, in the

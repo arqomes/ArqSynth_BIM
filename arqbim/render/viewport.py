@@ -396,6 +396,7 @@ class Viewport:
         self.colours = {}           # GlobalId -> colour of the graphic rule shown (see set_colours)
         self.hidden_classes = set() # IFC classes the view shown hides (its view template)
         self.hidden_phases = set()  # phases it hides ("NEW"…; "" for the elements without one)
+        self._layers_hidden, self._flag_hidden, self._no_render, self.locked_ids = set(), set(), set(), set()  # 0.524
         self.hidden_ids = set()     # (0.479) elements hidden one by one (the Presentation tab's layers: their eyes)
         self.camera_locked = False  # (0.479) the mouse does not move the camera (the Presentation tab's lock)
         self.extra_cuts = []        # (0.484) [(normal, offset)]: the Presentation tab's section planes (3D only)
@@ -2691,6 +2692,7 @@ class Viewport:
             self._overrides = vs.categories                                   # (0.318: …its hatches by category)
             self._texturing = texturing
             self._redress()
+            self._apply_hidden()                                              # (0.524: «renderizar não» out of it)
         self._set_shadows(vs.shadows and not cutting and vs.faces in ("shaded", "consistent"))
         if not cutting:
             self._set_axonometric(axonometric)
@@ -3195,7 +3197,25 @@ class Viewport:
         """(0.479) These elements (GlobalIds) not drawn — the Presentation tab's layers turned off with their eyes —,
         the others drawn again. Only the elements whose state changed move (to a batch of their own, not drawn): the
         rest of the model is not built again. Returns how many changed."""
-        ids = {i for i in ids if isinstance(i, str)}
+        self._layers_hidden = {i for i in ids if isinstance(i, str)}
+        return self._apply_hidden()
+
+    def set_controls(self, hidden=(), no_render=(), locked=()):
+        """(0.524) The Project navigator's controls: these elements hidden (its eye), left out of the Realistic style
+        (its camera), not picked (its arrow / padlock)."""
+        self._flag_hidden = {i for i in hidden if isinstance(i, str)}
+        self._no_render = {i for i in no_render if isinstance(i, str)}
+        self.locked_ids = {i for i in locked if isinstance(i, str)}
+        if self.selection & self.locked_ids:
+            self.set_selection(self.selection - self.locked_ids)
+        return self._apply_hidden()
+
+    def _apply_hidden(self):
+        """What is hidden one by one: the Presentation's layers, the navigator's eyes (and its cameras in the Realistic
+        style) together."""
+        ids = set(getattr(self, "_layers_hidden", ())) | set(getattr(self, "_flag_hidden", ()))
+        if self._texturing:
+            ids |= set(getattr(self, "_no_render", ()))
         changed = ids ^ self.hidden_ids
         self.hidden_ids = ids
         for obj_id in changed:
@@ -4581,6 +4601,9 @@ class Viewport:
             self.select_faces({})
         if self.line_selection and not keep_faces:
             self.select_lines({})
+        locked = getattr(self, "locked_ids", None)
+        if locked:
+            ids = set(ids) - locked                  # (0.524: locked in the navigator — not picked, so not edited)
         old, self.selection = self.selection, set(ids)
         for obj_id in old ^ self.selection:
             self.refresh_object(obj_id)

@@ -941,6 +941,7 @@ def bim_flow():
     views_flow()
     view_tabs_flow()
     library_flow()
+    tree_controls_flow()              # (0.524)
     sheets_flow()
     dimensions_flow()
     rules_flow()
@@ -1725,6 +1726,81 @@ def library_flow():
     pump(100)
 
 
+def tree_controls_flow():
+    """(0.524) The navigator's controls as Blender's Outliner: a click on an eye and a drag down the column hides every
+    row passed over (one undo step); the arrow locks (not picked); Shift selects a run of rows; the right-click menu."""
+    from arqbim.ifc import catalog as cat
+    from arqbim.model import bim as bim_actions
+    from arqbim.model import controls
+    from arqbim.ui import project_tree
+    panel = win.tree_panel
+    panel.raise_()
+    tree_all()
+    walls = [bim_actions.add_wall(doc, (20, y, 0), (24, y, 0), cat.BY_KEY["parede_alv_20"]) for y in (0, 2, 4)]
+    pump(400)
+    storey = doc.get(walls[0]).storey
+    category = panel.item_for(("cat", storey, "IfcWall"))
+    category.setExpanded(True)
+    pump(200)
+    rows = [panel.item_for(("obj", g)) for g in walls]
+    check("controlos_tem_icones", all(r is not None and not r.icon(2).isNull() for r in rows)
+          and not category.icon(1).isNull(), [r is not None for r in rows])
+    tree = panel.tree
+    tree.scrollToItem(rows[0])
+    pump(100)
+    x = tree.header().sectionViewportPosition(2) + project_tree.COLUMN_WIDTH // 2
+    first, last = (QtCore.QPoint(x, tree.visualItemRect(r).center().y()) for r in (rows[0], rows[2]))
+    QtTest.QTest.mousePress(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, first)
+    for k in range(1, 7):                                       # down the eyes' column, as a person drags
+        y = first.y() + (last.y() - first.y()) * k // 6
+        ev = QtGui.QMouseEvent(QtCore.QEvent.Type.MouseMove, QtCore.QPointF(x, y), QtCore.QPointF(x, y),
+                               Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        QtWidgets.QApplication.sendEvent(tree.viewport(), ev)
+        pump(20)
+    QtTest.QTest.mouseRelease(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, last)
+    pump(300)
+    hidden = [controls.has(doc, g, "hidden") for g in walls]
+    check("arrastar_olho_oculta_todas", all(hidden) and set(walls) <= vp.hidden_ids
+          and all(doc.ifc.controls_of(g) == {"hidden"} for g in walls), hidden)
+    shot("controlos_navegador_olhos.png")
+    win.act_undo.trigger()                                      # one undo step for the whole drag
+    pump(300)
+    check("arrastar_olho_um_so_desfazer", not any(controls.has(doc, g, "hidden") for g in walls)
+          and not (set(walls) & vp.hidden_ids), [controls.has(doc, g, "hidden") for g in walls])
+    # the arrow: locked, not picked in the view
+    panel.press_control(("obj", walls[0]), "locked")
+    panel.finish_drag()
+    pump(200)
+    vp.set_selection({walls[0], walls[1]})
+    check("bloqueado_nao_seleciona", vp.selection == {walls[1]} and controls.has(doc, walls[0], "locked"),
+          vp.selection)
+    # Shift: a run of rows; the menu on them
+    tree_click(rows[0])
+    QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+                            tree.visualRect(tree.indexFromItem(rows[2], 0)).center())
+    pump(200)
+    check("shift_seleciona_em_serie", all(r.isSelected() for r in rows), [r.isSelected() for r in rows])
+    menu = panel.menu_for(("obj", walls[1]), rows[1])
+    texts = [a.text() for a in menu.actions()]
+    check("menu_do_elemento", all(w in texts for w in ("Excluir", "Duplicar", "Isolar na vista", "Ocultar"))
+          and set(panel.menu_ids(rows[1])) == set(walls), texts)
+    win.tree_element_action("isolate", walls[1:])
+    pump(300)
+    others = {o.id for o in doc.objects.values() if o.is_bim and o.id not in walls[1:]}
+    check("isolar_na_vista", others <= vp.hidden_ids and not (set(walls[1:]) & vp.hidden_ids), len(vp.hidden_ids))
+    shot("controlos_navegador_isolar.png")
+    win.tree_element_action("show_all", [])
+    win.tree_element_action("delete", [walls[0]])               # locked: refused
+    pump(200)
+    check("bloqueado_nao_exclui", doc.get(walls[0]) is not None,
+          (win.last_message, controls.has(doc, walls[0], "locked"), doc.get(walls[0]) is not None))
+    win.set_control([walls[0]], "locked", False)
+    bim_actions.delete(doc, walls)
+    pump(300)
+    win.storeys_panel.raise_()
+    pump(100)
+
+
 def views_flow():
     """Views in the Project panel: plans, named sections (the one drawn in plan_flow), elevations."""
     panel = win.tree_panel
@@ -2452,7 +2528,7 @@ def tree_click(item, double=False):
     tree = win.tree_panel.tree
     tree.scrollToItem(item)
     pump(50)
-    center = tree.visualItemRect(item).center()
+    center = tree.visualRect(tree.indexFromItem(item, 0)).center()    # (0.524: on the name, not the controls' icons)
     QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center)
     if double:                                   # a real double-click: a click, then the second one
         QtTest.QTest.mouseDClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, center)

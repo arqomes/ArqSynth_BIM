@@ -12,7 +12,7 @@ from ..core import drawing2d
 from ..core import terrain as terrain_geo
 from ..i18n import decimal_sep, t
 from . import annotations as notes2d
-from . import cut_joins
+from . import controls, cut_joins
 from . import dimensions as dims_model
 from . import graphic_rules as rules_model
 from . import graphic_styles as styles_model
@@ -211,6 +211,8 @@ def _shown(doc, obj, settings):
     """Is this element in a view with these settings (its template: classes and phases hidden)?"""
     if obj.ifc_class in settings.hidden:
         return False
+    if controls.has(doc, obj.id, "no_print"):
+        return False                                    # (0.524: the navigator's printer off)
     return not settings.hidden_phases or (doc.status_of(obj.id) or "") not in settings.hidden_phases
 
 
