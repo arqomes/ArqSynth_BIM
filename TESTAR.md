@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.516 — Verificação pelo Eurocódigo 3 (estrutura metálica, passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.516.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave**: dois cliques **12 m** afastados (vão 12 m, pórticos de 6 em 6 m).
+2. Abra as **Tabelas** e clique em **Estrutura metálica: verificação EC3**.
+3. Confira: as madres M1 (C 160 a vencer 6 m) em cima, perto dos 90–95 % de **Utilização**; os pilares P1 (HEB 200)
+   e as asnas V1 (IPE 300) por volta dos 30 %; os contraventamentos com poucos % (só à tração). Todos **OK**.
+4. A última linha (**Notas**) diz as cargas tomadas e o que fica de fora (vento, sismo, encurvadura lateral).
+5. Faça Ctrl+N e outra nave igual, mas na barra de parâmetros do Pórtico de nave escolha em **Madres** o tipo
+   «Contraventamento L 80×8» (um perfil fraco para madre): na tabela as madres passam a **Excede**.
+6. Separador **Analisar**, painel **Cálculo**, **Ações e materiais…**: ponha a altitude em 1000 m (mais neve) e OK;
+   volte à tabela: as madres ficam mais carregadas.
+
 ## 0.515 — Desenho de conjuntos com soldaduras (estrutura metálica, passo 6)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.515.0**.

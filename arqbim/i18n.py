@@ -313,6 +313,32 @@ _STRINGS = {
     "sched.cat.bolts": ("Estrutura metálica: parafusos", "Steel structure: bolts"),
     "sched.cat.cutting": ("Estrutura metálica: corte das barras", "Steel structure: bar cutting"),      # (0.501)
     "sched.col.bars": ("Barras de 12 m", "12 m bars"),
+    "sched.cat.steel_check": ("Estrutura metálica: verificação EC3", "Steel structure: EC3 check"),  # (0.516)
+    "sched.col.n_ed": ("N (− compressão)", "N (− compression)"),
+    "sched.col.m_ed": ("M", "M"),
+    "sched.col.v_ed": ("V", "V"),
+    "sched.col.deflection": ("Flecha / (L/200)", "Deflection / (L/200)"),
+    "sched.col.utilisation": ("Utilização", "Utilisation"),
+    "sched.col.governing": ("Verificação que manda", "Governing check"),
+    "sched.col.status": ("Estado", "Status"),
+    "ec3.ok": ("OK", "OK"),
+    "ec3.fails": ("Excede", "Fails"),
+    "ec3.unstable": ("Estrutura instável", "Unstable structure"),
+    "ec3.notes": ("Notas (pré-dimensionamento)", "Notes (pre-design)"),
+    "ec3.notes_text": ("Peso próprio + revestimento {g} kN/m² + sobrecarga/neve {q} kN/m² nas madres; pés dos pilares "
+                       "encastrados; contraventamentos só à tração. Sem vento nem sismo; encurvadura lateral não "
+                       "verificada (madres e contraventamentos como travamento); enformados a frio sem a EN 1993-1-3.",
+                       "Own weight + cladding {g} kN/m² + imposed/snow {q} kN/m² on the purlins; columns fixed at their "
+                       "feet; bracing in tension only. No wind nor earthquake; lateral-torsional buckling not checked "
+                       "(purlins and bracing as restraints); cold-formed sections without EN 1993-1-3."),
+    "ec3.check.N": ("Esforço axial (6.2.3/6.2.4)", "Axial force (6.2.3/6.2.4)"),
+    "ec3.check.M": ("Flexão (6.2.5)", "Bending (6.2.5)"),
+    "ec3.check.NM": ("Axial e flexão (6.2.1)", "Axial and bending (6.2.1)"),
+    "ec3.check.V": ("Esforço transverso (6.2.6)", "Shear (6.2.6)"),
+    "ec3.check.Nb": ("Encurvadura (6.3.1)", "Buckling (6.3.1)"),
+    "ec3.check.NMb_y": ("Encurvadura com flexão (6.3.3, 6.61)", "Buckling with bending (6.3.3, 6.61)"),
+    "ec3.check.NMb_z": ("Encurvadura com flexão (6.3.3, 6.62)", "Buckling with bending (6.3.3, 6.62)"),
+    "ec3.check.delta": ("Flecha (L/200)", "Deflection (L/200)"),
     "sched.cat.erection": ("Estrutura metálica: montagem", "Steel structure: erection"),          # (0.514)
     "sched.col.order": ("Ordem", "Order"),
     "sched.col.phase": ("Fase", "Phase"),

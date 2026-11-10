@@ -38,6 +38,10 @@ CATEGORIES = {
     # (0.514) the erection: a line an assembly (a piece and the plates welded to it), in the order it goes up — its
     # phase, its mark, what it is, its plates, its weight to lift, its centre of gravity
     "erection": ((), ("order", "phase", "mark", "piece", "parts", "weight", "cog")),
+    # (0.516) Eurocode 3: a line a piece — its design forces, its deflection, how much of its resistance it uses, the
+    # check that governs, OK or not
+    "steel_check": ((), ("mark", "piece", "section", "grade", "n_ed", "m_ed", "v_ed", "deflection", "utilisation",
+                         "governing", "status")),
     "doors": (("IfcDoor",), ("name", "type", "storey", "width", "height", "host")),
     "windows": (("IfcWindow",), ("name", "type", "storey", "width", "height", "host")),
     # (0.125) the rooms: their areas, their finishes (read from the IFC's spaces, not from the shapes on screen)
@@ -52,8 +56,8 @@ CATEGORIES = {
     "keynotes": ((), ("code", "keynote_text", "count")),
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
-ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "erection", "doors",
-         "windows",
+ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "erection",
+         "steel_check", "doors", "windows",
          "rooms", "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
@@ -64,7 +68,9 @@ UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "sec
          "conduit": "{:.2f} m", "metres": "{:.2f} m",                                        # (its conduits, 0.146)
          "weight": "{:.0f} kg",                                                              # (tiles, 0.279)
          "kg_m": "{:.1f} kg/m", "paint": "{:.2f} m²",                                       # (0.500: steel)
-         "bought": "{:.2f} m", "used": "{:.2f} m", "waste": "{:.1f} %"}                     # (0.501: the bars)
+         "bought": "{:.2f} m", "used": "{:.2f} m", "waste": "{:.1f} %",                     # (0.501: the bars)
+         "n_ed": "{:.1f} kN", "m_ed": "{:.1f} kN·m", "v_ed": "{:.1f} kN",                   # (0.516: EC3)
+         "deflection": "{:.0f} %", "utilisation": "{:.0f} %"}
 COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps")
 # column -> (Properties panel action, element kinds it applies to) for the cells one can edit
 EDITABLE = {"name": ("name", None), "length": ("length", ("wall",)), "height": ("height", ("wall",))}
@@ -109,6 +115,7 @@ def counts(doc):
     out["bolts"] = len(bolt_rows(doc))
     out["cutting"] = len(cutting_rows(doc))            # (0.501)
     out["erection"] = len(erection_rows(doc))          # (0.514)
+    out["steel_check"] = out["erection"]               # (0.516: a line a piece — not analysed just to count)
     out["electrical"] = len(electrical_rows(doc))
     out["keynotes"] = len(keynote_rows(doc))
     return out
@@ -319,6 +326,44 @@ def erection_rows(doc):
     return out
 
 
+def steel_check_rows(doc):
+    """(0.516) The steel pieces checked by Eurocode 3 (model/steel_analysis): dicts with "guid", "kind" "steel_check",
+    "mark", "piece", "section", "grade", "n_ed" (kN, compression −), "m_ed" (kN·m), "v_ed" (kN), "deflection" and
+    "utilisation" (% of L/200, of the resistance), "governing" (the check), "status" — the most used first."""
+    from ..i18n import t
+    from . import steel_analysis
+    try:
+        found = steel_analysis.analyse(doc)
+    except Exception:                                  # (the IFC still being read)
+        return []
+    if found.error:
+        return [{"guid": None, "kind": "steel_check", "mark": "", "piece": t("ec3.unstable"), "name": "", "type": "",
+                 "storey": "", "section": "", "grade": "", "n_ed": None, "m_ed": None, "v_ed": None,
+                 "deflection": None, "utilisation": None, "governing": found.error, "status": "—"}]
+    out = []
+    for r in found.rows:
+        obj = doc.get(r["guid"])
+        name = obj.name if obj is not None else ""
+        out.append({"guid": r["guid"], "kind": "steel_check", "mark": r["mark"], "piece": name, "name": name,
+                    "type": r["section"], "storey": "", "section": r["section"], "grade": r["grade"],
+                    "n_ed": r["n_ed"], "m_ed": r["m_ed"], "v_ed": r["v_ed"], "deflection": r["deflection"] * 100.0,
+                    "utilisation": r["utilisation"] * 100.0, "governing": t("ec3.check." + r["governing"]),
+                    "status": t("ec3.ok") if r["ok"] else t("ec3.fails")})
+    out.sort(key=lambda r: -r["utilisation"])
+    if out:                                            # (what this pre-design leaves out, said under it)
+        out.append({"guid": None, "kind": "steel_check", "mark": "", "piece": t("ec3.notes"), "name": "", "type": "",
+                    "storey": "", "section": "", "grade": "", "n_ed": None, "m_ed": None, "v_ed": None,
+                    "deflection": None, "utilisation": None,
+                    "governing": t("ec3.notes_text", g=_num(found.loads.get("dead")), q=_num(found.loads.get("imposed"))),
+                    "status": ""})
+    return out
+
+
+def _num(v):
+    from ..i18n import decimal_sep
+    return "{:.2f}".format(float(v or 0.0)).replace(".", decimal_sep())
+
+
 def tiles_rows(doc):
     """(0.279) The roofs' tiles: dicts with "guid" (the roof's), "kind" "tiles", "roof", "tile", "tiles", "cut",
     "caps", "weight" (kg), "area" (m², along the slope) — a roof each."""
@@ -399,6 +444,8 @@ def rows(doc, category):
         return cutting_rows(doc)
     if category == "erection":                         # (0.514)
         return erection_rows(doc)
+    if category == "steel_check":                      # (0.516)
+        return steel_check_rows(doc)
     objs =[o for o in doc.objects.values() if o.is_bim and category_of(o.ifc_class) == category]
     info = doc.ifc.schedule_info([o.id for o in objs])
     levels = {name: z for _g, name, z in doc.storeys()}

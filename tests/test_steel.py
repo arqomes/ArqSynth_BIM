@@ -1255,6 +1255,53 @@ class AssemblyDrawing(unittest.TestCase):
         self.assertEqual(sheets.USUAL_SCALES["steel_assemblies"], 50)
 
 
+class Eurocode3(unittest.TestCase):
+    """(0.516) The steel checked by Eurocode 3."""
+
+    def test_check(self):
+        """By hand: an IPE 300 S275 (class 1, Wpl 628 cm³: Mc,Rd 172,7 kN·m) bent by 86,35 kN·m uses 50 %; an HEB 200
+        S275 6 m tall (curve c about z, λ̄z 1,36, χ 0,363, Nb,Rd ≈ 780 kN) pressed by 390 kN about 50 % by
+        buckling; a class 1 HEB 200; tension only on an angle: its area."""
+        from arqbim.core import ec3
+        bent = ec3.check("IPE300", "S275", 0.0, 86.35, 0.0, 0.0, 0.0, 6.0, 6.0)
+        self.assertEqual(bent["check"], "M")
+        self.assertAlmostEqual(bent["util"], 0.5, delta=0.01)
+        column = ec3.check("HEB200", "S275", -390.0, 0.0, 0.0, 0.0, 0.0, 6.0, 6.0)
+        self.assertEqual(column["check"], "Nb")
+        self.assertAlmostEqual(column["util"], 0.5, delta=0.02)
+        self.assertEqual(column["class"], 1)
+        tie = ec3.check("L80x8", "S275", 100.0, 0.0, 0.0, 0.0, 0.0, 8.0, 8.0)
+        self.assertEqual(tie["check"], "N")
+        self.assertAlmostEqual(tie["util"], 100.0 / (12.3 * 100 * 275 / 1000.0), delta=0.01)
+
+    def test_shed(self):
+        """A 12 m × 12 m shed analysed: no mechanism; a row a piece (34); the frames' columns and rafters well within
+        (between 10 and 80 %), the purlins nearly full (C 160 over 6 m), the braces in tension only (a few %); its table
+        sorted by use, with its notes under."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, schedules, steel_analysis
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        found = steel_analysis.analyse(doc)
+        self.assertEqual(found.error, "")
+        by = {}
+        for r in found.rows:
+            by.setdefault(r["mark"], []).append(r)
+        for mark in ("P1", "V1"):
+            self.assertTrue(all(0.1 < r["utilisation"] < 0.8 for r in by[mark]), mark)
+        purlins = [r["utilisation"] for r in by["M1"]]
+        self.assertTrue(0.6 < max(purlins) < 1.2 and min(purlins) > 0.2, purlins)    # (the edge ones: half a strip)
+        for mark in ("CV1", "CV2"):
+            self.assertTrue(all(r["utilisation"] < 0.2 and "tension_only" in r["notes"] for r in by[mark]))
+        rows = schedules.rows(doc, "steel_check")
+        self.assertEqual(len(rows), len(found.rows) + 1)
+        values = [r["utilisation"] for r in rows if r["utilisation"] is not None]
+        self.assertEqual(values, sorted(values, reverse=True))
+        self.assertIsNone(rows[-1]["guid"])
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

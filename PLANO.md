@@ -1638,7 +1638,12 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
    aberturas interiores por IK), o DXF das chapas para laser ou
    plasma (o escritor do `model/fabrication.py`) e o corte das barras (primeiro o maior que cabe; barras de 6 e 12 m,
    serra 3 mm, sobras aproveitáveis) com a lista de barras a comprar e o desperdício.
-8. **Verificação pelo EC3** (pré-dimensionamento, no modelo analítico que já existe): o aço com E = 210 GPa e as
+8. **Verificação pelo EC3** (0.516.0: a tabela **Estrutura metálica: verificação EC3** — a estrutura metálica no
+   pórtico 3D que já existia (`core/space_frame`), com as ligações rígidas das excentricidades; peso próprio,
+   revestimento e sobrecarga/neve pelas madres; classe, resistência, encurvadura por flexão e com flexão, flechas
+   L/200; contraventamentos só à tração. Faltam: o vento, a encurvadura lateral, as ligações (EN 1993-1-8:
+   parafusos e soldaduras), as cargas dos pisos nas vigas de aço, a cor da utilização no 3D e a memória de cálculo.)
+   (pré-dimensionamento, no modelo analítico que já existe): o aço com E = 210 GPa e as
    secções do catálogo no pórtico 3D; EN 1993-1-1 — classe da secção, resistência (N, V, M e interação), encurvadura
    por flexão (curvas a–d), encurvadura lateral, flechas; EN 1993-1-8 — parafusos ao corte e ao esmagamento, soldaduras
    de ângulo; memória de cálculo como a do EC2. O aviso «fora do dimensionamento» passa a dizer o que falta.

@@ -20228,7 +20228,11 @@ def steel_lists_flow():
     pump(300)
     erection = panel.table.rowCount() >= 26 and "1 — Pilares" in panel.text() and "Ordem" in panel.text()
     shot("514_montagem.png")
-    cutting = cutting and erection
+    win.open_table("steel_check")                                        # (0.516) Eurocode 3
+    pump(400)
+    ec3 = panel.table.rowCount() >= 27 and "Utilização" in panel.text() and "OK" in panel.text()
+    shot("516_verificacao_ec3.png")
+    cutting = cutting and erection and ec3
     import tempfile
     folder = tempfile.mkdtemp(prefix="arqsynth_dstv_")
     paths = win.export_steel_nc(folder)                                  # (0.501) the NC1 files

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.516.0 — 2026-11-09
+
+**Estrutura metálica, passo 8 (primeira parte): a verificação pelo Eurocódigo 3.**
+
+- Tabela nova **Estrutura metálica: verificação EC3** (painel Tabelas): cada peça de aço com os esforços de cálculo
+  (N, com a compressão negativa; M; V), a **flecha** em relação a L/200, a **utilização** (quanto da resistência
+  gasta) e a verificação que manda, **OK** ou **Excede** — as mais carregadas primeiro.
+- Como se calcula (pré-dimensionamento, NP EN 1993-1-1): a estrutura metálica como um pórtico 3D — cada peça pela sua
+  linha, cortada onde outra a encontra (madre na asna, contraventamento no pilar, viga na principal), com uma ligação
+  rígida curta onde as linhas passam afastadas (a madre por cima da asna); os pés dos pilares encastrados; o peso
+  próprio, o revestimento da cobertura (0,20 kN/m²) e a sobrecarga ou a neve da cobertura (as ações do projeto)
+  levados pelas madres, cada uma com a faixa que lhe toca; 1,35 G + 1,5 Q; os contraventamentos em X só à tração.
+  Em cada peça: a classe da secção, a resistência (axial, flexão nos dois eixos, transverso e a interação), a
+  encurvadura por flexão (curvas a–d) e com flexão (Anexo B).
+- Uma linha de **Notas** no fim diz o que fica de fora: o vento e o sismo, a encurvadura lateral (as madres e os
+  contraventamentos tomados como travamento) e a EN 1993-1-3 dos enformados a frio.
+
 ## 0.515.0 — 2026-11-09
 
 **Estrutura metálica, passo 6: o desenho de conjuntos com as soldaduras.**
