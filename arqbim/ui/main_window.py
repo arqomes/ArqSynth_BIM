@@ -10032,7 +10032,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # (0.380) Shift / Alt pressed or let go with the mouse still: a tool that shows something by them (the
             # wall's profile: a side pulled as a corner, an arc, a curve) shows it now, not at the next move
             hook = getattr(self.tool, "modifiers_changed", None)
-            if hook is not None and event.key() in (Key.Key_Shift, Key.Key_Alt):
+            if hook is not None and event.key() == Key.Key_Control and not event.isAutoRepeat():
+                # (0.528) Ctrl: a wall's ends show their «+» while it is held (the select tool); not swallowed
+                held = {n for n, m in (("Shift", Mod.ShiftModifier), ("Alt", Mod.AltModifier)) if event.modifiers() & m}
+                if et == QtCore.QEvent.Type.KeyPress:
+                    held.add("Ctrl")
+                hook(tuple(sorted(held)))
+            elif hook is not None and event.key() in (Key.Key_Shift, Key.Key_Alt):
                 held = {n for n, m in (("Shift", Mod.ShiftModifier), ("Alt", Mod.AltModifier)) if event.modifiers() & m}
                 name = "Shift" if event.key() == Key.Key_Shift else "Alt"
                 if et == QtCore.QEvent.Type.KeyPress:

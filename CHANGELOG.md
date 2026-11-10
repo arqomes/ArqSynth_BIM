@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.528.0 — 2026-11-10
+
+**Pontas da parede como no Revit: bolinha para esticar, Ctrl para o «+».**
+
+- Uma parede selecionada sozinha mostra uma **bolinha** em cada ponta: arrastada, a parede **estica ou encurta pelo
+  seu próprio eixo** (uma parede inclinada continua na mesma direção), com a cota do comprimento ao vivo.
+- Com **Ctrl** carregado, as bolinhas passam a **«+»**: um clique continua a desenhar paredes a partir dessa ponta.
+
 ## 0.527.0 — 2026-11-10
 
 **Mudar elementos de piso; trama nas categorias do Navegador; aba ativa destacada.**

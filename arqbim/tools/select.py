@@ -198,6 +198,20 @@ class _SectionMove:
 
 
 @dataclass
+class _WallEndMove:
+    """(0.528) A wall's end dragged by its dot, as Revit's: along the wall's own axis (a sloped wall keeps its way);
+    Ctrl shows the «+» instead, to go on drawing from that end."""
+    guid: str
+    end: int                    # 0: its start, 1: its end
+    a: np.ndarray               # its axis's ends when taken (world, at its base)
+    b: np.ndarray
+    base: np.ndarray
+    press: tuple
+    target: np.ndarray = None
+    dragging: bool = True
+
+
+@dataclass
 class _LevelMove:
     """(0.464) A level's line's end (a section's, an elevation's) or its ring's corner (3D) dragged: all the view's
     levels follow (aligned, as Revit's)."""
@@ -536,6 +550,7 @@ class SelectTool(Tool):
         self._cab_grips = None       # (0.244) a cabinet selected alone: division_grips
         self._block_grips = None     # (0.264) a roof by blocks selected alone: block_grips
         self._wall_ends = None       # (0.353) a wall selected alone: wall_ends (its «+»)
+        self._ctrl_held = False      # (0.528) Ctrl held: the wall's ends show their «+», not their dots
         self._door_flips = None      # (0.359) a door / window selected alone: door_flips (its arrows)
         self._section = None         # (0.358) the name of the section chosen in the plan (its head clicked)
         self._section_grips = None   # …and its section_grips
@@ -708,12 +723,78 @@ class SelectTool(Tool):
                 self._door_flips = wall_flips(self.doc, self.viewport.selection)
             except (KeyError, ValueError, TypeError, AttributeError, RuntimeError):
                 self._door_flips = None
-            if self._door_flips is not None:
-                self.viewport.show_grips([], [p for _w, p, *_ends in self._door_flips[1]], self._wall_ends[1],
-                                         self._door_flips[2])
+            self._show_wall_grips()
+            return
+        self.viewport.show_grips(ends, [(a + b) / 2 for a, b in self._grip_segments], ())
+
+    def _show_wall_grips(self):
+        """(0.528) A wall alone: its ends as dots to stretch it along its axis (Revit's); with Ctrl held, as «+» to
+        go on drawing from there (0.353) — and its flip arrow."""
+        if self._wall_ends is None:
+            return
+        dots, adds = ([], self._wall_ends[1]) if self._ctrl_held else (list(self._wall_ends[1]), ())
+        if self._door_flips is not None:
+            self.viewport.show_grips(dots, [p for _w, p, *_ends in self._door_flips[1]], adds, self._door_flips[2])
+        else:
+            self.viewport.show_grips(dots, [], adds)
+
+    def modifiers_changed(self, modifiers):
+        """(0.528) Ctrl pressed or let go: a wall's ends turn into «+» (go on drawing) or back into dots (stretch)."""
+        held = any(m in ("Control", "Ctrl") for m in (modifiers or ()))
+        if held != self._ctrl_held:
+            self._ctrl_held = held
+            if self._move is None:
+                self._show_wall_grips()
+
+    def _start_wall_end_move(self, k, x, y):
+        guid, (a, b) = self._wall_ends
+        a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+        self._move = _WallEndMove(guid, k, a.copy(), b.copy(), (a, b)[k].copy(), (x, y))
+        self.viewport.clear_temp_dims()
+        self.host.set_hint(self.hint())
+
+    def _wall_end_to(self, x, y, modifiers=()):
+        """(0.528) The wall's end where the mouse is, kept on the wall's axis (snaps projected onto it)."""
+        move = self._move
+        line = (move.b - move.a) * (1.0, 1.0, 0.0)
+        length = float(np.linalg.norm(line))
+        if length < 1e-9:
+            return
+        d = line / length
+        found, _snap, _hit = infer_point(self.viewport, x, y, move.base, modifiers,
+                                         plane=(move.base, np.array(Z_UP, dtype=float)))
+        if found is not None:
+            p = found.point
+        else:
+            origin, direction = self.viewport.ray(x, y)
+            p = ray_plane(origin, direction, move.base, np.array(Z_UP, dtype=float))
+            if p is None:
                 return
-        self.viewport.show_grips(ends, [(a + b) / 2 for a, b in self._grip_segments],
-                                 self._wall_ends[1] if self._wall_ends is not None else ())
+        s = float((np.asarray(p, dtype=float) - move.a) @ d)
+        s = min(s, length - 0.1) if move.end == 0 else max(s, 0.1)
+        move.target = move.a + d * s
+        move.target[2] = move.base[2]
+        a, b = (move.target, move.b) if move.end == 0 else (move.a, move.target)
+        self.viewport.show_lines([a, b], [PREVIEW, PREVIEW])
+        self.viewport.show_marker(move.target, PREVIEW)
+        self.viewport.show_temp_dims([temp_dims.TempDim(a, b, Z_UP)])
+        self.host.set_vcb(format_length(float(np.linalg.norm((b - a)[:2])), decimal_sep()))
+
+    def _finish_wall_end_move(self):
+        move, self._move = self._move, None
+        self.viewport.clear_overlays()
+        self.host.set_hint(self.hint())
+        self.host.set_vcb("")
+        if move.target is not None and np.linalg.norm(move.target - move.base) > 1e-6:
+            old = float(np.linalg.norm((move.b - move.a)[:2]))
+            a, b = (move.target, move.b) if move.end == 0 else (move.a, move.target)
+            grow = float(np.linalg.norm((b - a)[:2])) - old
+            try:
+                bim.resize_wall(self.doc, move.guid, **({"at_start": grow} if move.end == 0 else {"at_end": grow}))
+                self.host.message(t("info.wall_end_moved", l=format_length(old + grow, decimal_sep())))
+            except ValueError as exc:
+                self.host.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+        self._refresh_dims(keep=False)
 
     def activate(self):
         super().activate()
@@ -1432,6 +1513,9 @@ class SelectTool(Tool):
         if isinstance(self._move, _SectionMove):
             self._section_to(x, y)
             return
+        if isinstance(self._move, _WallEndMove):          # (0.528)
+            self._wall_end_to(x, y, modifiers)
+            return
         if isinstance(self._move, _DivisionMove):
             self._division_to(x, y)
             return
@@ -1492,6 +1576,9 @@ class SelectTool(Tool):
             return
         if isinstance(self._move, _SectionMove):
             self._finish_section_move()
+            return
+        if isinstance(self._move, _WallEndMove):          # (0.528)
+            self._finish_wall_end_move()
             return
         if isinstance(self._move, _DivisionMove):
             self._finish_division_move()
@@ -1919,9 +2006,13 @@ class SelectTool(Tool):
         if grip is not None:
             if grip[0] == "add" and self._curve_grips is not None:     # (0.411) a Bézier span's «+»: a new point,
                 self._start_curve_move(grip, x, y)                     # dragged out — the curve bends
-            elif grip[0] == "add":                        # (0.353) a wall's «+»: go on drawing it from that end
+            elif grip[0] == "add" or (grip[0] == "end" and self._wall_ends is not None and
+                                      any(m in ("Control", "Ctrl") for m in (modifiers or ()))):
+                # (0.353) a wall's «+» (0.528: its dot with Ctrl): go on drawing it from that end
                 if self._wall_ends is not None and hasattr(self.host, "continue_wall"):
                     self.host.continue_wall(self._wall_ends[0], grip[1])
+            elif grip[0] == "end" and self._wall_ends is not None:    # (0.528) a wall's dot: stretched on its axis
+                self._start_wall_end_move(grip[1], x, y)
             elif self._door_flips is not None and grip[0] == "middle":   # (0.359) a door's flip arrow
                 guid, flips, _segs = self._door_flips
                 what = flips[grip[1]][0]

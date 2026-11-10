@@ -21491,10 +21491,24 @@ def wall_continue_flow():
     vp.set_selection({first})
     pump(200)
     a, b, _t = doc.ifc.wall_axis(first)
+    # (0.528) by default dots (Revit's): its end dragged stays on the axis — 4 m → 5 m, pulled a bit off it
+    dots = [np.asarray(p) for p in vp.grips[0]]
+    shown_dots = len(dots) == 2 and not vp.grips[2] and np.allclose(dots[1], b)
+    drag([at(b), at(np.array((5.0, 0.4, 0.0)))])
+    pump(200)
+    a2, b2, _t = doc.ifc.wall_axis(first)
+    stretched = abs(float(np.linalg.norm(np.asarray(b2) - np.asarray(a2))) - 5.0) < 0.02 and abs(b2[1]) < 1e-6
+    key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    pump(300)
+    vp.set_selection({first})
+    pump(200)
+    win.tool.modifiers_changed(("Ctrl",))         # Ctrl held: the «+»
+    pump(100)
     pluses = [np.asarray(p) for p in vp.grips[2]]
-    shown = len(pluses) == 2 and np.allclose(pluses[0], a) and np.allclose(pluses[1], b)
+    shown = shown_dots and stretched and len(pluses) == 2 and np.allclose(pluses[0], a) and np.allclose(pluses[1], b)
     move(at(b), 2)
     click()
+    win.tool.modifiers_changed(()) if hasattr(win.tool, "modifiers_changed") else None
     pump(200)
     tool = win.tool
     drawing = tool.name == "wall" and tool._start is not None and np.allclose(tool._start, b) and \
@@ -21511,8 +21525,8 @@ def wall_continue_flow():
     same = bool(made) and doc.ifc.by_guid(made[0]).IsTypedBy[0].RelatingType.Name == spec.name_pt
     win.set_plan(False)
     check("parede_continuar", none_for_two and shown and drawing and len(made) == 1 and joined and same,
-          "dois={} mais={} a_desenhar={} novas={} ligada={} mesmo_tipo={}".format(
-              none_for_two, shown, drawing, len(made), joined, same))
+          "dois={} pontos={} esticada={} mais={} a_desenhar={} novas={} ligada={} mesmo_tipo={}".format(
+              none_for_two, shown_dots, stretched, shown, drawing, len(made), joined, same))
 
 
 def quick_edit_flow():

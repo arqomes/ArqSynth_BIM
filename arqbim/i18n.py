@@ -6974,6 +6974,8 @@ _STRINGS = {
     "info.wall_joined": ("Canto unido à parede existente.", "Corner joined to the existing wall."),
     "info.wall_continue": ("A continuar «{name}»: clique onde acaba a parede nova (Esc para).",
                            "Going on from «{name}»: click where the new wall ends (Esc stops)."),     # (0.353)
+    "info.wall_end_moved": ("Parede esticada pelo eixo: {l} (Ctrl na ponta: continuar a desenhar daí).",
+                            "Wall stretched along its axis: {l} (Ctrl on the end: go on drawing from there)."),  # (0.528)
     # Groups (Revit model groups) and typical floors
     "act.group_make": ("Criar grupo…", "Make group…"),
     "act.group_ungroup": ("Desagrupar", "Ungroup"),
