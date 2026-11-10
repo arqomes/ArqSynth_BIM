@@ -20233,7 +20233,11 @@ def steel_lists_flow():
     pump(400)
     ec3 = panel.table.rowCount() >= 27 and "Utilização" in panel.text() and "OK" in panel.text()
     shot("516_verificacao_ec3.png")
-    cutting = cutting and erection and ec3
+    win.open_table("steel_joints")                                       # (0.520) EN 1993-1-8
+    pump(400)
+    joints = panel.table.rowCount() >= 10 and "Parafusos" in panel.text() and "M20" in panel.text()
+    shot("520_ligacoes_ec3.png")
+    cutting = cutting and erection and ec3 and joints
     import tempfile
     folder = tempfile.mkdtemp(prefix="arqsynth_dstv_")
     paths = win.export_steel_nc(folder)                                  # (0.501) the NC1 files

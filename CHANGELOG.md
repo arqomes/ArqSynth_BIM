@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.520.0 — 2026-11-10
+
+**Estrutura metálica, passo 8: as ligações pela NP EN 1993-1-8.**
+
+- Tabela nova **Estrutura metálica: ligações EC3** (painel Tabelas): cada ligação com os seus parafusos, a força de
+  **corte** e de **tração** por parafuso, o uso das **soldaduras**, a **utilização** e a verificação que manda — OK ou
+  Excede —, as mais carregadas primeiro, e as notas por baixo.
+- As forças vêm do cálculo da 0.516–0.519 (com o vento), nas pontas das peças: o cutelo com o transverso da viga e o
+  momento da excentricidade dos parafusos; o gousset com a tração do contraventamento; a orelha com a reação da madre
+  na asna; a chapa de topo e o joelho aparafusado com o transverso em todos os parafusos e a tração do momento na
+  fiada de fora; a chapa de base com o levantamento e os momentos do pé do pilar nos chumbadouros.
+- Verificações: parafusos ao corte, esmagamento na peça mais fina (a alma de 2,5 mm de uma madre C manda nas
+  orelhas), tração, corte com tração; soldaduras de ângulo pelo método simplificado (parafusos e chumbadouros classe
+  8.8).
+- Numa nave de 12 m com joelhos aparafusados: os joelhos a ~95 % (a fiada de fora à tração), os chumbadouros a ~70 %,
+  as orelhas a ~33 %, os gousset a ~11 %.
+
 ## 0.519.0 — 2026-11-10
 
 **Estrutura metálica, passo 8: a encurvadura lateral.**

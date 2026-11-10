@@ -42,6 +42,9 @@ CATEGORIES = {
     # check that governs, OK or not
     "steel_check": ((), ("mark", "piece", "section", "grade", "n_ed", "m_ed", "v_ed", "deflection", "utilisation",
                          "governing", "status")),
+    # (0.520) EN 1993-1-8: a line a connection — its bolts, a bolt's shear and tension, its welds' use, its use
+    "steel_joints": ((), ("connection", "connection_kind", "bolts", "bolt_shear", "bolt_tension", "weld_use",
+                          "utilisation", "governing", "status")),
     "doors": (("IfcDoor",), ("name", "type", "storey", "width", "height", "host")),
     "windows": (("IfcWindow",), ("name", "type", "storey", "width", "height", "host")),
     # (0.125) the rooms: their areas, their finishes (read from the IFC's spaces, not from the shapes on screen)
@@ -57,7 +60,7 @@ CATEGORIES = {
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
 ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "erection",
-         "steel_check", "doors", "windows",
+         "steel_check", "steel_joints", "doors", "windows",
          "rooms", "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
@@ -70,7 +73,8 @@ UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "sec
          "kg_m": "{:.1f} kg/m", "paint": "{:.2f} m²",                                       # (0.500: steel)
          "bought": "{:.2f} m", "used": "{:.2f} m", "waste": "{:.1f} %",                     # (0.501: the bars)
          "n_ed": "{:.1f} kN", "m_ed": "{:.1f} kN·m", "v_ed": "{:.1f} kN",                   # (0.516: EC3)
-         "deflection": "{:.0f} %", "utilisation": "{:.0f} %"}
+         "deflection": "{:.0f} %", "utilisation": "{:.0f} %",
+         "bolt_shear": "{:.1f} kN", "bolt_tension": "{:.1f} kN", "weld_use": "{:.0f} %"}       # (0.520)
 COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps")
 # column -> (Properties panel action, element kinds it applies to) for the cells one can edit
 EDITABLE = {"name": ("name", None), "length": ("length", ("wall",)), "height": ("height", ("wall",))}
@@ -116,6 +120,7 @@ def counts(doc):
     out["cutting"] = len(cutting_rows(doc))            # (0.501)
     out["erection"] = len(erection_rows(doc))          # (0.514)
     out["steel_check"] = out["erection"]               # (0.516: a line a piece — not analysed just to count)
+    out["steel_joints"] = _connections_count(doc)      # (0.520)
     out["electrical"] = len(electrical_rows(doc))
     out["keynotes"] = len(keynote_rows(doc))
     return out
@@ -360,6 +365,40 @@ def steel_check_rows(doc):
     return out
 
 
+def _connections_count(doc):
+    try:
+        return sum(1 for a in doc.ifc.file.by_type("IfcElementAssembly")
+                   if doc.ifc.kind_of(a.GlobalId) == "steel_connection")
+    except Exception:                                  # (the IFC still being read)
+        return 0
+
+
+def steel_joint_rows(doc):
+    """(0.520) The steel connections checked by EN 1993-1-8 (model/steel_connection_check): dicts with "guid" (the
+    connection's), "kind" "steel_joint", "connection", "connection_kind", "bolts", "bolt_shear" and "bolt_tension" (kN a
+    bolt), "weld_use" and "utilisation" (%), "governing", "status" — the most used first, a line of notes under."""
+    from ..i18n import t
+    from . import steel_analysis, steel_connection_check
+    try:
+        found = steel_analysis.analyse(doc)
+        checked = steel_connection_check.check(doc, found) if not found.error else []
+    except Exception:                                  # (the IFC still being read)
+        return []
+    out = []
+    for r in checked:
+        out.append({"guid": r["guid"], "kind": "steel_joint", "connection": r["name"], "name": r["name"],
+                    "type": t("connection." + r["kind"]), "storey": "", "connection_kind": t("connection." + r["kind"]),
+                    "bolts": r["bolts"], "bolt_shear": r["shear"], "bolt_tension": r["tension"] or None,
+                    "weld_use": r["weld"] * 100.0, "utilisation": r["utilisation"] * 100.0,
+                    "governing": t("ec3j.check." + r["governing"]),
+                    "status": t("ec3.ok") if r["ok"] else t("ec3.fails")})
+    if out:
+        out.append({"guid": None, "kind": "steel_joint", "connection": t("ec3.notes"), "name": "", "type": "",
+                    "storey": "", "connection_kind": "", "bolts": "", "bolt_shear": None, "bolt_tension": None,
+                    "weld_use": None, "utilisation": None, "governing": t("ec3j.notes_text"), "status": ""})
+    return out
+
+
 def _num(v):
     from ..i18n import decimal_sep
     return "{:.2f}".format(float(v or 0.0)).replace(".", decimal_sep())
@@ -447,6 +486,8 @@ def rows(doc, category):
         return erection_rows(doc)
     if category == "steel_check":                      # (0.516)
         return steel_check_rows(doc)
+    if category == "steel_joints":                     # (0.520)
+        return steel_joint_rows(doc)
     objs =[o for o in doc.objects.values() if o.is_bim and category_of(o.ifc_class) == category]
     info = doc.ifc.schedule_info([o.id for o in objs])
     levels = {name: z for _g, name, z in doc.storeys()}

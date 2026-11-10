@@ -1347,6 +1347,46 @@ class SteelWind(unittest.TestCase):
         self.assertTrue(any(r["n_ed"] > 10.0 for r in braces))
 
 
+class Ec3Joints(unittest.TestCase):
+    """(0.520) The connections checked by EN 1993-1-8."""
+
+    def test_resistances(self):
+        """By hand (class 8.8, γM2 1,25): an M20 (As 245 mm²) in shear 94,1 kN, in tension 141,1 kN; bearing on 10 mm of
+        S275 with e1 = 40, d0 = 22 (αb 0,606): 52,1 kN; a fillet weld a = 5 in S275: 1,168 kN/mm; shear with tension:
+        Fv/Fv,Rd + Ft/1,4 Ft,Rd."""
+        from arqbim.core import ec3_joints as j
+        self.assertAlmostEqual(j.shear_rd(20), 94.08, places=1)
+        self.assertAlmostEqual(j.tension_rd(20), 141.12, places=1)
+        self.assertAlmostEqual(j.bearing_rd(20, 22, 10, "S275", 40), 2.5 * (40 / 66) * 430 * 20 * 10 / 1.25 / 1000,
+                               places=2)
+        self.assertAlmostEqual(j.weld_rd(5, "S275"), 430 / (3 ** 0.5 * 0.85 * 1.25) * 5 / 1000, places=4)
+        both = j.check_bolts(20, 22, 20, "S275", 50, 40.0, 70.0)
+        self.assertAlmostEqual(both["ratios"]["FvFt"], 40 / 94.08 + 70 / (1.4 * 141.12), places=3)
+
+    def test_shed(self):
+        """A 12 m shed with bolted knees: every connection checked (base plates, gussets, cleats, knees); the knees'
+        outer bolts in tension the most used, the cleats by bearing on the purlins' thin web, the gussets lightly; all
+        within; its table with its notes under."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, schedules, steel_analysis, steel_connection_check
+        from arqbim.model.document import Document
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"],
+                       knees="bolted")
+        rows = steel_connection_check.check(doc, steel_analysis.analyse(doc))
+        kinds = {r["kind"] for r in rows}
+        self.assertEqual(kinds, {"base_plate", "gusset", "purlin_cleat", "knee_plate"})
+        self.assertEqual(len(rows), schedules.counts(doc)["steel_joints"])
+        worst = {k: max(r["utilisation"] for r in rows if r["kind"] == k) for k in kinds}
+        self.assertTrue(all(0.0 < u <= 1.0 for u in worst.values()), worst)
+        self.assertEqual(max(worst, key=worst.get), "knee_plate")
+        self.assertTrue(all(r["governing"] == "Fb" for r in rows if r["kind"] == "purlin_cleat"))
+        table = schedules.rows(doc, "steel_joints")
+        self.assertEqual(len(table), len(rows) + 1)
+        self.assertIsNone(table[-1]["guid"])
+
+
 class Ec3Colours(unittest.TestCase):
     """(0.517) The Graphic rules' «Utilização EC3»."""
 

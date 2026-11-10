@@ -314,6 +314,26 @@ _STRINGS = {
     "sched.cat.cutting": ("Estrutura metálica: corte das barras", "Steel structure: bar cutting"),      # (0.501)
     "sched.col.bars": ("Barras de 12 m", "12 m bars"),
     "sched.cat.steel_check": ("Estrutura metálica: verificação EC3", "Steel structure: EC3 check"),  # (0.516)
+    "sched.cat.steel_joints": ("Estrutura metálica: ligações EC3", "Steel structure: EC3 connections"),  # (0.520)
+    "sched.col.connection": ("Ligação", "Connection"),
+    "sched.col.connection_kind": ("Tipo", "Kind"),
+    "sched.col.bolts": ("Parafusos", "Bolts"),
+    "sched.col.bolt_shear": ("Corte (por parafuso)", "Shear (a bolt)"),
+    "sched.col.bolt_tension": ("Tração (por parafuso)", "Tension (a bolt)"),
+    "sched.col.weld_use": ("Soldaduras", "Welds"),
+    "ec3j.check.Fv": ("Parafusos ao corte (3.6.1)", "Bolts in shear (3.6.1)"),
+    "ec3j.check.Fb": ("Esmagamento (3.6.1)", "Bearing (3.6.1)"),
+    "ec3j.check.Ft": ("Parafusos à tração (3.6.1)", "Bolts in tension (3.6.1)"),
+    "ec3j.check.FvFt": ("Corte com tração (3.6.1)", "Shear with tension (3.6.1)"),
+    "ec3j.check.Fw": ("Soldaduras (4.5.3.3)", "Welds (4.5.3.3)"),
+    "ec3j.notes_text": ("NP EN 1993-1-8: parafusos e chumbadouros da classe 8.8; o pior das combinações de cada ligação "
+                        "tomado de uma vez; a tração do momento na fiada de fora (o momento sobre o braço, repartido "
+                        "pelos seus dois parafusos); o esmagamento na peça mais fina; soldaduras pelo método "
+                        "simplificado. Sem as chapas à flexão (T-stub) nem o betão sob a chapa de base.",
+                        "NP EN 1993-1-8: bolts and anchors of class 8.8; each connection's worst combination taken at "
+                        "once; the moment's tension on the outer row (the moment over its lever arm, shared by its two "
+                        "bolts); bearing on the thinner part; welds by the simplified method. Not the plates in "
+                        "bending (T-stub) nor the concrete under the base plate."),
     "sched.col.n_ed": ("N (− compressão)", "N (− compression)"),
     "sched.col.m_ed": ("M", "M"),
     "sched.col.v_ed": ("V", "V"),

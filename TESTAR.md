@@ -644,6 +644,20 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.520 — Ligações pela EN 1993-1-8 (estrutura metálica, passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.520.0**.
+
+1. Faça Ctrl+N. Clique em **Pórtico de nave**, ponha **Joelhos** em **Aparafusados** e faça a nave com dois cliques
+   **12 m** afastados.
+2. Abra as **Tabelas** ▸ **Estrutura metálica: ligações EC3**.
+3. Confira: em cima os **joelhos aparafusados** (perto dos 95 %, «Parafusos à tração»), depois as **chapas de base**
+   (os chumbadouros, ~70 %), as **orelhas** das madres («Esmagamento», ~33 %) e os **gousset** (~11 %). Todos **OK**.
+4. Clique numa chapa de um joelho aparafusado na nave e, nas Propriedades, ponha o **Diâmetro** dos parafusos em
+   **M16**: volte à tabela — esse joelho passa a **Excede** (os M16 não chegam à tração da fiada de fora).
+5. A última linha (**Notas**) diz o que se tomou: parafusos 8.8, a fiada de fora a levar o momento, sem a flexão das
+   chapas nem o betão sob a chapa de base.
+
 ## 0.519 — Encurvadura lateral na verificação EC3 (estrutura metálica, passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.519.0**.

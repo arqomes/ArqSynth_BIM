@@ -58,6 +58,9 @@ class Result:
     error: str = ""
     notes: list = field(default_factory=list)
     loads: dict = field(default_factory=dict)
+    # (0.520) what the connections' checks read: the frame, its results, the ULS combinations, the pieces, each
+    # piece's bars in order along it — {"frame", "results", "uls", "pieces", "by_piece", "index" (GlobalId -> piece)}
+    context: dict = field(default_factory=dict)
 
 
 def pieces_of(doc):
@@ -148,17 +151,23 @@ def frame_of(pieces):
             s, t = min(max(s, 0.0), 1.0), min(max(t, 0.0), 1.0)
             kp, kq = meet(p, s, lp), meet(q, t, lq)
             if kp != kq:
-                links.append((kp, kq))
-    used = sorted({k for p in pieces for _t, k in p.stops} | {k for pair in links for k in pair})
+                links.append((kp, kq, i, j))
+    used = sorted({k for p in pieces for _t, k in p.stops} | {k for link in links for k in link[:2]})
     frame = sf.SpaceFrame(tolerance=1e-4)
     place = {k: frame.add_node(*nodes[k]) for k in used}
     nodes = [nodes[k] for k in used]
     for p in pieces:
         p.stops = [(t, place[k]) for t, k in p.stops]
-    for n, (k0, k1) in enumerate(sorted(set(links))):
+    frame.link_pieces = {}                              # (0.520) link id -> (piece, piece) it ties
+    seen_links = set()
+    for n, (k0, k1, i, j) in enumerate(sorted(set(links))):
+        if (k0, k1) in seen_links:
+            continue
+        seen_links.add((k0, k1))
         way = nodes[place[k1]] - nodes[place[k0]]
         up = (1.0, 0.0, 0.0) if abs(float(way[2])) > 0.9 * float(np.linalg.norm(way)) else (0.0, 0.0, 1.0)
-        frame.add_member("link/{}".format(n), place[k0], place[k1], E_KPA, G_KPA, *LINK, orientation=up)
+        m = frame.add_member("link/{}".format(n), place[k0], place[k1], E_KPA, G_KPA, *LINK, orientation=up)
+        frame.link_pieces[m.id] = (i, j)
     owners = {}
     for i, p in enumerate(pieces):
         props = steel.properties(p.section)
@@ -332,6 +341,8 @@ def analyse(doc, settings=None):
         out.error = str(exc)
         return out
     env = frame.envelope(results, uls)
+    out.context = {"frame": frame, "results": results, "uls": uls, "pieces": pieces, "by_piece": by_piece,
+                   "index": {p.guid: i for i, p in enumerate(pieces)}}
     for i, p in enumerate(pieces):
         members = by_piece.get(i, [])
         if not members:
