@@ -644,6 +644,17 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.519 — Encurvadura lateral na verificação EC3 (estrutura metálica, passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.519.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave** (dois cliques, 12 m), com as madres de 1,5 em 1,5 m (como vem).
+2. Abra as **Tabelas** ▸ **Estrutura metálica: verificação EC3** e anote a utilização das asnas V1 (por volta de 30 %).
+3. Faça Ctrl+N e outra nave igual, mas na barra de parâmetros ponha **Madres** a cada **3 m**: as asnas ficam travadas
+   só de 3 em 3 m e a sua utilização sobe um pouco (a encurvadura lateral entra nas contas). As madres C 160, agora
+   com o dobro da faixa de cobertura, passam a **Excede** — é o que se espera com madres tão afastadas.
+4. Na linha de **Notas**: «encurvadura lateral dos perfis I e U entre os nós onde outras peças os seguram (C1 = 1)».
+
 ## 0.518 — Vento na verificação EC3 (estrutura metálica, passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.518.0**.

@@ -328,12 +328,13 @@ _STRINGS = {
     "ec3.notes_text": ("Peso próprio + revestimento {g} kN/m² + sobrecarga/neve {q} kN/m² nas madres; vento qp = {w} "
                        "kN/m² nas quatro direções (paredes +0,8/−0,5 pelos pilares, cobertura −0,6/−0,5/−0,7 e cpi "
                        "+0,2 pelas madres); pés dos pilares encastrados; contraventamentos só à tração. Sem sismo; "
-                       "encurvadura lateral não verificada (madres e contraventamentos como travamento); enformados a "
-                       "frio sem a EN 1993-1-3.",
+                       "encurvadura lateral dos perfis I e U entre os nós onde outras peças os seguram (C1 = 1), não a "
+                       "das cantoneiras e dos enformados a frio (estes sem a EN 1993-1-3).",
                        "Own weight + cladding {g} kN/m² + imposed/snow {q} kN/m² on the purlins; wind qp = {w} kN/m² "
                        "four ways (walls +0.8/−0.5 by the columns, roof −0.6/−0.5/−0.7 and cpi +0.2 by the purlins); "
                        "columns fixed at their feet; bracing in tension only. No earthquake; lateral-torsional buckling "
-                       "not checked (purlins and bracing as restraints); cold-formed sections without EN 1993-1-3."),
+                       "of the I and channel sections between the nodes where other pieces hold them (C1 = 1), not the "
+                       "angles' and cold-formed sections' (these without EN 1993-1-3)."),
     "ec3.check.N": ("Esforço axial (6.2.3/6.2.4)", "Axial force (6.2.3/6.2.4)"),
     "ec3.check.M": ("Flexão (6.2.5)", "Bending (6.2.5)"),
     "ec3.check.NM": ("Axial e flexão (6.2.1)", "Axial and bending (6.2.1)"),
@@ -342,6 +343,7 @@ _STRINGS = {
     "ec3.check.NMb_y": ("Encurvadura com flexão (6.3.3, 6.61)", "Buckling with bending (6.3.3, 6.61)"),
     "ec3.check.NMb_z": ("Encurvadura com flexão (6.3.3, 6.62)", "Buckling with bending (6.3.3, 6.62)"),
     "ec3.check.delta": ("Flecha (L/200)", "Deflection (L/200)"),
+    "ec3.check.LT": ("Encurvadura lateral (6.3.2)", "Lateral-torsional buckling (6.3.2)"),         # (0.519)
     "sched.cat.erection": ("Estrutura metálica: montagem", "Steel structure: erection"),          # (0.514)
     "sched.col.order": ("Ordem", "Order"),
     "sched.col.phase": ("Fase", "Phase"),

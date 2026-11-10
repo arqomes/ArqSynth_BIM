@@ -2,9 +2,10 @@
 pre-design, the plan's step 8: a cross-section's class (Table 5.2), its resistances (6.2: tension or compression,
 bending about both axes, shear, and their interaction — the linear one of 6.2.1(7), on the safe side), a member's
 flexural buckling (6.3.1: the curves a0 to d of Table 6.1, chosen by Table 6.2) and a member in compression and
-bending (6.3.3, Annex B's interaction factors with Cm = 1). Lateral-torsional buckling is not checked here: the
-purlins and the bracing are taken to restrain the compression flange — said with the result. Cold-formed sections (C,
-Z, Ω) are checked with their elastic modulus as class 3: EN 1993-1-3 is not applied — said too.
+bending (6.3.3, Annex B's interaction factors with Cm = 1). (0.519) Lateral-torsional buckling of the I and channel
+sections (6.3.2.2–6.3.2.3: Mcr by the classic formula with C1 = 1, between the restraints the caller gives — the
+rolled sections' curves); an angle's or a cold-formed one's is not checked — said with the result. Cold-formed
+sections (C, Z, Ω) are checked with their elastic modulus as class 3: EN 1993-1-3 is not applied — said too.
 
 What it gives is a pre-design: a project's calculations are a structural engineer's, signed by them. Pure Python:
 N, mm (the results in kN, kN·m)."""
@@ -78,6 +79,38 @@ def chi(slenderness, curve):
     return min(1.0, 1.0 / (phi + math.sqrt(max(phi * phi - slenderness ** 2, 0.0))))
 
 
+LT_LAMBDA0, LT_BETA = 0.4, 0.75   # (6.3.2.3: rolled and welded I sections, the National Annex's)
+
+
+def m_cr(sec, length, c1=1.0):
+    """(0.519) The elastic critical moment for lateral-torsional buckling (N·mm) of an I or a channel over `length` m
+    between restraints, its ends free to warp and to turn on plan, the load at its shear centre — the classic formula
+    (SN003): C1 π² E Iz / L² √(Iw/Iz + L² G It / (π² E Iz)); C1 = 1 (a uniform moment: on the safe side)."""
+    props = steel.properties(sec.name)
+    if props.get("Iw") is None or length <= 0:
+        return None
+    iz, it, iw = props["Iz"] * 1e4, props["It"] * 1e4, props["Iw"] * 1e6          # mm⁴, mm⁴, mm⁶
+    l2 = (length * 1000.0) ** 2
+    return c1 * math.pi ** 2 * steel.E * iz / l2 * math.sqrt(iw / iz + l2 * steel.G * it / (math.pi ** 2 * steel.E * iz))
+
+
+def chi_lt(sec, w_y, fy, length):
+    """(0.519) (χLT, λ̄LT) of a rolled I or channel bent about y over `length` m between restraints — 6.3.2.3: the
+    curve b (h/b ≤ 2) or c, λ̄LT,0 0,4, β 0,75; 1 for the sections not prone to it (tubes)."""
+    if sec.family not in steel.I_FAMILIES + steel.U_FAMILIES:
+        return 1.0, 0.0
+    mcr = m_cr(sec, length)
+    if not mcr:
+        return 1.0, 0.0
+    lam = math.sqrt(w_y * fy / mcr)
+    if lam <= LT_LAMBDA0:
+        return 1.0, lam
+    alpha = ALPHA["b" if sec.h / sec.b <= 2.0 and sec.family in steel.I_FAMILIES else "c"]
+    phi = 0.5 * (1.0 + alpha * (lam - LT_LAMBDA0) + LT_BETA * lam * lam)
+    chi_ = 1.0 / (phi + math.sqrt(max(phi * phi - LT_BETA * lam * lam, 0.0)))
+    return min(chi_, 1.0, 1.0 / (lam * lam)), lam
+
+
 def shear_area(sec, area):
     """(Av for a shear along z — the depth —, along y) mm² — EN 1993-1-1 6.2.6(3), the rolled sections' cases."""
     f = sec.family
@@ -94,10 +127,11 @@ def shear_area(sec, area):
     return sec.h * sec.tw, sec.b * sec.tw
 
 
-def check(section, grade, n, my, mz, vz, vy, ly, lz):
+def check(section, grade, n, my, mz, vz, vy, ly, lz, llt=None):
     """A steel piece checked: its section (catalogue name), its grade; its design forces — n kN (tension +,
     compression −), my mz kN·m (about its strong and weak axes), vz vy kN —, its buckling lengths ly lz m (about y,
-    about z). {"util": the greatest ratio, "check": which, the ratios {name: ratio}, "class", "notes": [code]}."""
+    about z), (0.519) llt m its length between lateral restraints (None: lz) for lateral-torsional buckling.
+    {"util": the greatest ratio, "check": which, the ratios {name: ratio}, "class", "notes": [code]}."""
     sec = steel.get(section)
     props = steel.properties(sec.name)
     fy = steel.strength(grade, steel.thickest(sec))[0]
@@ -117,6 +151,11 @@ def check(section, grade, n, my, mz, vz, vy, ly, lz):
               "NM": abs(n) / n_rd + abs(my) / my_rd + abs(mz) / mz_rd,
               "V": max(abs(vz) / vz_rd, abs(vy) / vy_rd if vy_rd > 0 else 0.0)}
     notes = []
+    chi_l, lam_lt = (1.0, 0.0)                             # (0.519) lateral-torsional buckling, where bent about y
+    if abs(my) > 1e-6:
+        chi_l, lam_lt = chi_lt(sec, wy, fy, lz if llt is None else llt)
+        if chi_l < 1.0:
+            ratios["LT"] = abs(my) / (chi_l * my_rd * GAMMA_M0 / GAMMA_M1)
     if n < 0.0:                                            # (compression: flexural buckling, and with bending)
         cy, cz = curves(sec)
         lam_y = math.sqrt(area * fy / (math.pi ** 2 * steel.E * iy / (ly * 1000.0) ** 2)) if ly > 0 else 0.0
@@ -134,12 +173,12 @@ def check(section, grade, n, my, mz, vz, vy, ly, lz):
             kzz = min(1.0 + (2.0 * lam_z - 0.6) * nz, 1.0 + 1.4 * nz) if lam_z > 0.3 else 1.0
             kyz, kzy = 0.6 * kzz, 0.6 * kyy
         my_rk, mz_rk = my_rd * GAMMA_M0 / GAMMA_M1, mz_rd * GAMMA_M0 / GAMMA_M1
-        ratios["NMb_y"] = ny + kyy * abs(my) / my_rk + kyz * abs(mz) / mz_rk
-        ratios["NMb_z"] = nz + kzy * abs(my) / my_rk + kzz * abs(mz) / mz_rk
+        ratios["NMb_y"] = ny + kyy * abs(my) / (chi_l * my_rk) + kyz * abs(mz) / mz_rk     # (0.519: with χLT)
+        ratios["NMb_z"] = nz + kzy * abs(my) / (chi_l * my_rk) + kzz * abs(mz) / mz_rk
         if max(lam_y, lam_z) > 2.0:
             notes.append("slender")
-    if abs(my) > 1e-6:
-        notes.append("ltb")                                # (lateral-torsional buckling not checked)
+    if abs(my) > 1e-6 and sec.family not in steel.I_FAMILIES + steel.U_FAMILIES + HOLLOW + ("CHS",):
+        notes.append("ltb")                                # (an angle's, a cold-formed one's: not checked)
     if sec.family in COLD:
         notes.append("cold")
     if max(k_bend, k_comp) == 4:

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.519.0 — 2026-11-10
+
+**Estrutura metálica, passo 8: a encurvadura lateral.**
+
+- A **verificação EC3** passa a contar com a **encurvadura lateral** (bambeamento, NP EN 1993-1-1 6.3.2) das vigas,
+  asnas e pilares em perfis I e U: o momento crítico Mcr pela fórmula clássica (C1 = 1, do lado da segurança), o
+  comprimento entre os pontos onde outras peças os seguram (as madres nas asnas, os contraventamentos nos pilares) e
+  as curvas dos perfis laminados. Entra sozinha («Encurvadura lateral (6.3.2)» na coluna da verificação que manda) e
+  nas interações com a compressão.
+- Por exemplo, uma HEB 200 com 6 m sem travamentos: Mcr ≈ 258 kN·m, χLT ≈ 0,80 — gasta 25 % mais do que pela flexão
+  só; travada de 1,5 em 1,5 m, nada.
+- A linha de Notas diz o que fica de fora: a das cantoneiras e dos enformados a frio.
+
 ## 0.518.0 — 2026-11-10
 
 **Estrutura metálica, passo 8: o vento.**

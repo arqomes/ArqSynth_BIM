@@ -1263,7 +1263,7 @@ class Eurocode3(unittest.TestCase):
         S275 6 m tall (curve c about z, λ̄z 1,36, χ 0,363, Nb,Rd ≈ 780 kN) pressed by 390 kN about 50 % by
         buckling; a class 1 HEB 200; tension only on an angle: its area."""
         from arqbim.core import ec3
-        bent = ec3.check("IPE300", "S275", 0.0, 86.35, 0.0, 0.0, 0.0, 6.0, 6.0)
+        bent = ec3.check("IPE300", "S275", 0.0, 86.35, 0.0, 0.0, 0.0, 6.0, 6.0, llt=1.0)    # (held every 1 m)
         self.assertEqual(bent["check"], "M")
         self.assertAlmostEqual(bent["util"], 0.5, delta=0.01)
         column = ec3.check("HEB200", "S275", -390.0, 0.0, 0.0, 0.0, 0.0, 6.0, 6.0)
@@ -1273,6 +1273,22 @@ class Eurocode3(unittest.TestCase):
         tie = ec3.check("L80x8", "S275", 100.0, 0.0, 0.0, 0.0, 0.0, 8.0, 8.0)
         self.assertEqual(tie["check"], "N")
         self.assertAlmostEqual(tie["util"], 100.0 / (12.3 * 100 * 275 / 1000.0), delta=0.01)
+
+    def test_lateral_torsional(self):
+        """(0.519) By hand: an HEB 200 over 6 m between restraints — Mcr = π² E Iz / L² √(Iw/Iz + L² G It / π² E Iz) ≈
+        258 kN·m, λ̄LT ≈ 0,83 (Mpl 176,7 kN·m), curve b, χLT ≈ 0,80 —: bent by 100 kN·m it uses ≈ 70 % (LT governing,
+        not the 57 % of its section); restrained every 1,5 m, it is the section's; a tube is not prone to it."""
+        from arqbim.core import ec3, steel
+        self.assertAlmostEqual(ec3.m_cr(steel.get("HEB200"), 6.0) / 1e6, 258.0, delta=258.0 * 0.03)
+        chi, lam = ec3.chi_lt(steel.get("HEB200"), 642.5e3, 275.0, 6.0)
+        self.assertAlmostEqual(lam, 0.83, delta=0.02)
+        self.assertAlmostEqual(chi, 0.80, delta=0.02)
+        long = ec3.check("HEB200", "S275", 0.0, 100.0, 0.0, 0.0, 0.0, 6.0, 6.0)
+        self.assertEqual(long["check"], "LT")
+        self.assertAlmostEqual(long["util"], 100.0 / (chi * 176.7), delta=0.02)
+        short = ec3.check("HEB200", "S275", 0.0, 100.0, 0.0, 0.0, 0.0, 6.0, 6.0, llt=1.5)
+        self.assertEqual(short["check"], "M")
+        self.assertEqual(ec3.chi_lt(steel.get("SHS150x150x8"), 1e5, 355.0, 6.0), (1.0, 0.0))
 
     def test_shed(self):
         """A 12 m × 12 m shed analysed: no mechanism; a row a piece (34); the frames' columns and rafters well within
