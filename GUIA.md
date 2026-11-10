@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.535.0
+# Guia das ferramentas — ArqSynth BIM 0.536.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.535.0.
+ArqSynth BIM 0.536.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -574,7 +574,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 #### Separador
 
 - **Como se usa:** Separador: clique onde começa a linha que divide dois ambientes sem parede.
-- **Passos de teste (TESTAR.md):** 0.298 «A fita por disciplinas e o separador «Modificar | Paredes»»
+- **Passos de teste (TESTAR.md):** 0.536 «Ícones como os do Revit em todos os separadores»; 0.298 «A fita por disciplinas e o separador «Modificar | Paredes»»
 
 #### Identificar
 
@@ -1788,7 +1788,7 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 #### Editar perfil
 
 - **O que faz:** Desenhar o alçado da parede: empena, topo em degraus, recortes, arcos e curvas (também com duplo clique na parede)
-- **Passos de teste (TESTAR.md):** 0.298 «A fita por disciplinas e o separador «Modificar | Paredes»»
+- **Passos de teste (TESTAR.md):** 0.536 «Ícones como os do Revit em todos os separadores»; 0.298 «A fita por disciplinas e o separador «Modificar | Paredes»»
 
 #### Repor perfil
 
@@ -1820,7 +1820,7 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 #### Eixo a eixo
 
 - **O que faz:** As cotas da parede escolhida até às paredes à volta medem de eixo a eixo
-- **Passos de teste (TESTAR.md):** 0.361 «A cota temporária: a relação com as outras paredes»
+- **Passos de teste (TESTAR.md):** 0.536 «Ícones como os do Revit em todos os separadores»; 0.361 «A cota temporária: a relação com as outras paredes»
 
 #### Face a face
 
@@ -1903,4 +1903,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*259 comandos descritos, gerados do ArqSynth BIM 0.535.0.*
+*259 comandos descritos, gerados do ArqSynth BIM 0.536.0.*

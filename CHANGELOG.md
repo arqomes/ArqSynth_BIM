@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.536.0 — 2026-11-10
+
+**Ícones como os do Revit em todos os separadores.**
+
+- Os desenhos novos da 0.535 chegam aos outros separadores: **Instalações** (conduta, difusor, equipamento AVAC,
+  tubo, louça sanitária, ponto elétrico, luminária, circuitos…), **Inserir** (ligar DXF e nuvens de pontos, imagem de
+  fundo, modelo 3D, componentes), **Anotar** (cotas exteriores, interiores, de paredes, de fachadas, de ambientes,
+  desenho 2D, numerar, notas-chave, símbolos), **Analisar** (cálculo, modelo analítico, ações, momentos, EC2,
+  listas e memórias, Verificador, IFC, IDS, dados em falta), **Massa e Estudos**, **Terreno** (localização, terreno,
+  lote, plataformas, rampa, aterro e escavação, inclinações), **Colaborar** (nota BCF, partilhar, sincronizar,
+  reservas, conflitos), **Visualizar** (estilos, render, panorama, vistas, corte, caixa de corte, câmara, janelas,
+  temas, rato), **Gerenciar** (tipos, padrões, fases, pavimentos, componentes, grupos, IA), **Início** (novo, abrir,
+  guardar, PDF, DXF, folhas, ajuda, sair) e a aba **Modificar | Paredes** (virar a parede, perfil, ligar o topo e a
+  base, cotas eixo a eixo ou pelas faces, juntar, ortogonalizar). São 254 desenhos ao todo.
+- Cores novas para a água (tubos), a relva e a terra (terreno). As cinco paletas do estudo continuam a mostrar as suas
+  próprias cores.
+
 ## 0.535.0 — 2026-11-10
 
 **Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura e Estrutura).**

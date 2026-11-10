@@ -1743,6 +1743,13 @@ class DarkTheme(unittest.TestCase):
                 if neutral and key not in ("paper",):
                     self.assertLess(c.lightnessF(), 0.8, (key, tone))
         self.assertEqual(icons.TOOL_ICONS["wall"]().cacheKey(), art_icons.icon("wall").cacheKey())
+        # (0.536) every button of every tab — the arrows' menus and «Modificar | Paredes» too — drawn here; only the
+        # study's palettes keep their swatches (their own colours: what they choose)
+        from arqbim.ui import ribbon
+        swatches = {"theme_bege", "theme_pedra", "theme_revit", "theme_escuro", "theme_grafite"}
+        for tab in list(ribbon.PANELS) + ["ctx:" + k for k in ribbon.CONTEXTS]:
+            missing = [n for n in ribbon.items_of(tab) if n not in art_icons.DRAWN and n not in swatches]
+            self.assertEqual(missing, [], tab)
 
     def test_icons(self):
         from arqbim.ui import theme

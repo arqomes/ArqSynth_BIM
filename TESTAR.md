@@ -644,6 +644,33 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.536 — Ícones como os do Revit em todos os separadores
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.536.0** (ou uma versão mais recente). Faça
+**Ctrl+N**.
+
+1. Clique em cada separador da fita, um de cada vez, e veja que todos os botões têm desenhos a cores, no mesmo estilo
+   da Modelagem, Arquitetura e Estrutura (0.535):
+   - **Instalações**: Conduta (caixa de chapa), Tubo (azul-água), Louça sanitária, Ponto elétrico (raio amarelo),
+     Luminária.
+   - **Inserir**: Ligar DXF (folha com corrente azul), Nuvem de pontos (pontos coloridos), Imagem de fundo, Importar
+     modelo 3D.
+   - **Anotar**: Cotas exteriores e interiores (planta com cotas), Desenho 2D (lápis), Numerar vãos (1 2 3).
+   - **Analisar**: Analisar (pórtico com cargas vermelhas), Diagramas de momentos, Verificar EC2/EC6 (secção com
+     armaduras e visto verde), Verificação.
+   - **Massa e Estudos**, **Terreno** (relva e terra: Localização com o alfinete vermelho, Plataforma, Aterro e
+     escavação), **Colaborar** (Nota BCF amarela, Partilhar com duas pessoas, Sincronizar).
+   - **Visualizar**: Render realista (esfera e sol), Cenas da apresentação (ecrã com ▶), Corte, Caixa de corte; em
+     **Tema ▾**: Tema claro (sol) e Tema escuro (lua); as cinco paletas mostram as suas cores, como antes.
+   - **Gerenciar**: Tipos (parede em camadas), Padrões (tijolo), Fases, Pavimento acima e abaixo (lajes com seta).
+   - **Início** (o separador da casa, à esquerda): Novo, Abrir (pasta), Guardar (disquete), Vista em PDF (folha com
+     faixa vermelha), Ajuda (? azul), Sair (porta com seta).
+2. Na **Arquitetura**, desenhe uma parede (**Parede**, clique, clique, Esc) e clique nela com a seta: aparece o
+   separador verde **Modificar | Paredes**; os seus botões (**Virar a parede**, **Editar perfil**, **Ligar o topo**,
+   **Eixo a eixo**…) também são desenhos novos.
+3. No cabeçalho, botão da **paleta** ▸ **Tema escuro**: percorra outra vez dois ou três separadores — os desenhos
+   continuam legíveis. Volte a **Tema claro**.
+
 ## 0.535 — Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.535.0** (ou uma versão mais recente). Faça

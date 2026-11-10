@@ -27,6 +27,9 @@ ART = {
     "glass": ("#a9d0f5", "#6fa8e0", "#4f8fd6"),
     "steel": ("#a3bcd8", "#7f9cbf", "#5f7fa3"),
     "room": ("#b9dcf7", "#8cc3ee", "#6aa9de"),
+    "water": ("#9fd8ea", "#5bbad8", "#3a98ba"),         # (0.536) pipes
+    "grass": ("#b5d98f", "#8cbf63", "#6a9c45"),         # the terrain's top
+    "earth": ("#e0bb8e", "#c79a68", "#a37a4c"),         # its ground, the earthworks
     "new": ("#f6d77a", "#e8bb3a", "#c99a1e"),           # what a command makes by itself
     "blue": "#2f6fe4", "yellow": "#f2c94c", "green": "#6aa84f", "red": "#d64545",
 }
