@@ -668,6 +668,7 @@ def bim_flow():
     steel_erection_flow()
     knee_plate_flow()
     steel_assemblies_flow()
+    ec3_colours_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20665,6 +20666,45 @@ def steel_assemblies_flow():
           and any(s.startswith("Conjunto P1") for s in texts) and "a6" in texts and bool(paths),
           "listado={} rotulo={!r} escala={} textos={}".format(listed, label, frame.scale if frame else None,
                                                              [s for s in texts if s.startswith("Conjunto")]))
+
+
+def ec3_colours_flow():
+    """0.517 — Colour by «Utilização EC3 (aço)»: a 12 m shed; the Graphic rules panel's choice: its pieces coloured by
+    their bands of use — the columns green —, the plates grey, the legend in the bands' order; back to the usual
+    colours. Captured: 517_utilizacao_ec3.png."""
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    made = bim_actions.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                                  catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"],
+                                  catalog.BY_KEY["contrav_l80"])
+    pump(300)
+    win.open_view("3d", None)
+    pump(300)
+    win.set_view("iso")
+    vp.zoom_extents()
+    panel = win.rules_panel
+    panel.raise_()
+    pump(300)
+    panel.rule.setCurrentIndex(panel.rule.findText("Utilização EC3 (aço)"))
+    panel.rule.activated.emit(panel.rule.currentIndex())
+    pump(1500)
+    text = panel.text()
+    column = next(g for g in made if doc.ifc.by_guid(g).is_a("IfcColumn"))
+    plate = next((p.id for p in objects() if p.is_bim and p.ifc_class == "IfcPlate"), None)
+    coloured = vp.colours.get(column) == "#59a14f" and plate is not None and vp.colours.get(plate) == "#d9d9d9"
+    shown = text.startswith("até 50 %") and "Sem valor" in text or text.startswith("até 50 %")
+    shot("517_utilizacao_ec3.png")
+    panel.rule.setCurrentIndex(0)
+    panel.rule.activated.emit(0)
+    pump(400)
+    back = vp.colours == {}
+    win.storeys_panel.raise_()
+    pump(100)
+    doc.modified = False
+    check("cores_utilizacao_ec3", coloured and shown and back, "cores={} legenda={!r} voltou={}".format(
+        coloured, text.replace("\n", " | "), back))
 
 
 def steel_sheet_flow():

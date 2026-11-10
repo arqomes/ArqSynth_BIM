@@ -1302,6 +1302,35 @@ class Eurocode3(unittest.TestCase):
         self.assertIsNone(rows[-1]["guid"])
 
 
+class Ec3Colours(unittest.TestCase):
+    """(0.517) The Graphic rules' «Utilização EC3»."""
+
+    def test_bands(self):
+        """The bands: to 50 % green, to 80 %, to 100 %, past it red; a 12 m shed's pieces each in one (the purlins
+        high, the frames low), the other elements grey (no value); its legend in the bands' order."""
+        from arqbim.ifc import catalog
+        from arqbim.model import bim, graphic_rules, steel_analysis
+        from arqbim.model.document import Document
+        self.assertEqual([graphic_rules.ec3_band(u) for u in (0.2, 0.5, 0.7, 0.95, 1.0, 1.3)],
+                         ["low", "low", "mid", "high", "high", "over"])
+        self.assertIn(graphic_rules.EC3, graphic_rules.RULES)
+        doc = Document()
+        bim.steel_shed(doc, (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 12.0, catalog.BY_KEY["pilar_heb200"],
+                       catalog.BY_KEY["viga_ipe300"], catalog.BY_KEY["madre_c160"], catalog.BY_KEY["contrav_l80"])
+        ids = [o.id for o in doc.objects.values() if o.is_bim]
+        values = steel_analysis.bands(doc, ids)
+        self.assertEqual(set(values), set(ids))
+        columns = [g for g in ids if doc.ifc.kind_of(g) == "steel_member" and doc.ifc.by_guid(g).is_a("IfcColumn")]
+        self.assertTrue(all(values[g] == "low" for g in columns))
+        plates = [g for g in ids if doc.ifc.by_guid(g).is_a("IfcPlate")]
+        self.assertTrue(all(values[g] is None for g in plates))
+        lines = graphic_rules.legend(values, graphic_rules.EC3)
+        order = [label for label, _c, _g in lines]
+        self.assertEqual(order[0], "até 50 %")
+        self.assertEqual(lines[0][1], "#59a14f")
+        self.assertEqual(doc.ifc.property_values(ids[:3], graphic_rules.EC3), {g: None for g in ids[:3]})
+
+
 def dataclasses_replace(spec, **fields):
     import dataclasses
     return dataclasses.replace(spec, **fields)

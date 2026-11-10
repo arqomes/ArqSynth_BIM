@@ -198,6 +198,17 @@ def _widths(pieces):
     return out
 
 
+def bands(doc, ids=()):
+    """(0.517) {GlobalId: its band of use} of the steel pieces checked (graphic_rules.ec3_band) — the elements of `ids`
+    that are not, None (grey): the rule «Utilização EC3» of the Graphic rules panel."""
+    from .graphic_rules import ec3_band
+    out = {g: None for g in ids}
+    found = analyse(doc)
+    for r in found.rows:
+        out[r["guid"]] = ec3_band(r["utilisation"])
+    return out
+
+
 def analyse(doc, settings=None):
     """The steel structure analysed and checked: Result (rows a piece — mark, piece, section, grade, N, M, V kN /
     kN·m, deflection, utilisation, the governing check, ok —, the notes, the loads taken)."""

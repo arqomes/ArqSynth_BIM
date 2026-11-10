@@ -5528,8 +5528,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         ids = [o.id for o in self.doc.objects.values() if o.is_bim]
         doc = self.doc
+        if tuple(key) == rules_model.EC3:                  # (0.517) the steel's use by Eurocode 3: analysed
+            from ..model import steel_analysis
+            read = lambda: steel_analysis.bands(doc, ids)  # noqa: E731
+        else:
+            read = lambda: doc.ifc.property_values(ids, key)  # noqa: E731
         try:
-            self._rule_values = self.run_busy(lambda: doc.ifc.property_values(ids, key), t("rules.working"))
+            self._rule_values = self.run_busy(read, t("rules.working"))
         except RuntimeError:                       # the IFC is still being read
             self.rule, self._rule_values = None, {}
             self.rules_panel.reset()
@@ -5554,8 +5559,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """The elements changed while coloured by a rule: their values read again (only theirs)."""
         if getattr(self, "rule", None) is None or self.doc.loading:
             return
-        if changed is None:
-            self.apply_rule(self.rule)
+        if changed is None or tuple(self.rule) == rules_model.EC3:     # (0.517: the whole steel analysed again —
+            self.apply_rule(self.rule)                                 # one piece changes all the forces)
             return
         ids = [i for i in changed if self.doc.get(i) is not None and self.doc.get(i).is_bim]
         gone = [i for i in removed or () if i in self._rule_values]

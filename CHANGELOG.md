@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.517.0 — 2026-11-10
+
+**Estrutura metálica, passo 8: a utilização do EC3 em cores no 3D.**
+
+- No painel **Regras gráficas** (Colorir por), opção nova **Utilização EC3 (aço)**: cada peça de aço pintada pela
+  parte da resistência que gasta — **verde** até 50 %, **amarelo** de 50 a 80 %, **laranja** de 80 a 100 %,
+  **vermelho** acima de 100 % (excede) —, como nos resultados de um programa de cálculo; o resto do modelo a cinzento.
+  A legenda diz quantas peças há em cada faixa e um clique numa linha escolhe-as.
+- As cores voltam a ser calculadas sempre que se muda uma peça (uma peça muda os esforços de todas).
+
 ## 0.516.0 — 2026-11-09
 
 **Estrutura metálica, passo 8 (primeira parte): a verificação pelo Eurocódigo 3.**

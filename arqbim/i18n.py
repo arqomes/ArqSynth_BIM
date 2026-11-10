@@ -2161,6 +2161,11 @@ _STRINGS = {
     "cert.without": ("sem {what}", "no {what}"),
     "rules.title": ("Regras gráficas", "Graphic rules"),
     "rules.colour_by": ("Colorir por:", "Colour by:"),
+    "rules.ec3": ("Utilização EC3 (aço)", "EC3 utilisation (steel)"),                          # (0.517)
+    "rules.ec3.low": ("até 50 %", "up to 50 %"),
+    "rules.ec3.mid": ("50 a 80 %", "50 to 80 %"),
+    "rules.ec3.high": ("80 a 100 %", "80 to 100 %"),
+    "rules.ec3.over": ("mais de 100 % (excede)", "over 100 % (fails)"),
     "rules.none": ("Nada (cores normais)", "Nothing (usual colours)"),
     "rules.other": ("Outra propriedade…", "Another property…"),
     "rules.class": ("Classe IFC", "IFC class"),

@@ -7,7 +7,10 @@ The colours are a way of looking at the model: nothing is written to the IFC.
 from ..i18n import t
 
 STATUS = ("status",)                      # the phase (IFC Status): Portuguese renovation drawings' colours
-RULES = (("class",), ("type",), ("storey",), ("material",), ("external",), ("fire",), STATUS)   # then ("pset", …)
+EC3 = ("ec3",)                            # (0.517) the steel pieces by how much of their resistance they use
+RULES = (("class",), ("type",), ("storey",), ("material",), ("external",), ("fire",), STATUS, EC3)  # then ("pset", …)
+# (0.517) the bands of use, as an engineer's results are coloured: green, yellow, orange, red past 100 %
+EC3_BANDS = (("low", 0.5, "#59a14f"), ("mid", 0.8, "#c9b73a"), ("high", 1.0, "#f28e2b"), ("over", None, "#e15759"))
 PALETTE = ("#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#b07aa1", "#edc948", "#76b7b2", "#ff9da7",
            "#9c755f", "#86bcb6", "#d37295", "#a0cbe8", "#8cd17d", "#f1ce63", "#499894", "#fabfd2")
 NO_VALUE = "#d9d9d9"                      # elements without the property: light grey
@@ -23,9 +26,19 @@ def rule_label(key):
     return t("rules." + key[0])
 
 
+def ec3_band(utilisation):
+    """(0.517) The band a utilisation (0..) falls in: "low" (to 50 %), "mid" (to 80 %), "high" (to 100 %), "over"."""
+    for band, limit, _colour in EC3_BANDS:
+        if limit is None or utilisation <= limit:
+            return band
+    return "over"
+
+
 def value_label(value, key=None):
     if key == STATUS and value in PHASE_COLOURS:
         return t("phase." + value.lower())
+    if key == EC3 and value is not None:
+        return t("rules.ec3." + value)
     if value is None:
         return t("rules.no_value")
     if isinstance(value, bool):
@@ -44,6 +57,8 @@ def legend(values, key=None):
     present = [v for v in groups if v is not None]
     if key == STATUS:
         lines = [(value_label(v, key), PHASE_COLOURS[v], sorted(groups[v])) for v in PHASE_ORDER if v in groups]
+    elif key == EC3:                                    # (0.517) the bands in their order, their own colours
+        lines = [(value_label(b, key), c, sorted(groups[b])) for b, _l, c in EC3_BANDS if b in groups]
     else:
         if all(isinstance(v, bool) for v in present) and present:
             colours = {True: YES, False: NO}

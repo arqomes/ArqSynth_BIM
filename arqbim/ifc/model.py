@@ -2057,6 +2057,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             elif kind == "material":
                 material = _main_material(e)
                 value = material.Name if material is not None else None
+            elif kind == "ec3":                            # (0.517: an analysis's, not the file's — the window's)
+                value = None
             else:
                 psets = ifcopenshell.util.element.get_psets(e)
                 if kind == "pset":

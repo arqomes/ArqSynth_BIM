@@ -644,6 +644,19 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.517 — Utilização do EC3 em cores (estrutura metálica, passo 8)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.517.0**.
+
+1. Faça Ctrl+N e uma nave com o **Pórtico de nave**: dois cliques **12 m** afastados.
+2. Abra o painel **Regras gráficas** (o ícone do rolo de pintura na barra da esquerda).
+3. Em **Colorir por**, escolha **Utilização EC3 (aço)**: os pilares, as asnas e os contraventamentos ficam verdes;
+   as madres a laranja (80 a 100 %) e as da beira e da cumeeira a amarelo; as chapas e o resto a cinzento.
+4. Na legenda, clique em **80 a 100 %**: ficam escolhidas as madres mais carregadas.
+5. Mude uma madre para um perfil fraco (Propriedades ▸ tipo, por exemplo «Contraventamento L 80×8»): as cores voltam
+   a ser calculadas e essa madre fica vermelha (excede).
+6. Em **Colorir por**, escolha **Nada**: voltam as cores normais.
+
 ## 0.516 — Verificação pelo Eurocódigo 3 (estrutura metálica, passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.516.0**.
