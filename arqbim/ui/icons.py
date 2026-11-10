@@ -1159,6 +1159,20 @@ def rebar_schedule_icon():
     return theme.icon(pm)
 
 
+def rebar_mesh_icon():
+    """Welded mesh (0.522): a slab's edge in grey, the mesh's wires both ways over it."""
+    pm, p = _canvas()
+    p.setPen(_pen(INK, 1.2))
+    p.setBrush(QtGui.QColor("#d6d6d6"))
+    p.drawRect(QtCore.QRectF(4, 4, 24, 24))
+    p.setPen(_pen(QtGui.QColor("#9e3d29"), 1.6))
+    for v in (9, 14, 19, 24):
+        p.drawLine(QtCore.QPointF(v, 6), QtCore.QPointF(v, 26))
+        p.drawLine(QtCore.QPointF(6, v), QtCore.QPointF(26, v))
+    p.end()
+    return theme.icon(pm)
+
+
 def cabinet_icon():
     """Cabinet (0.169): a base unit seen from the front — two doors with their handles, the worktop over, the plinth
     under."""

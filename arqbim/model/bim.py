@@ -2198,6 +2198,25 @@ def make_rebars(doc, designs, settings=None):
     return len(stored), sum(r["count"] for r in doc.ifc.rebar_rows() if r["guid"] in made)
 
 
+def put_mesh(doc, hosts, mesh):
+    """(0.522) A welded mesh (core.rebar_mesh.Mesh) on these slabs, the one each had replaced. One undo step.
+    Returns the IfcReinforcingMeshes made."""
+    hosts = [g for g in hosts if doc.ifc.by_guid(g) is not None and doc.ifc.by_guid(g).is_a("IfcSlab")]
+    if not hosts:
+        return []
+    language = lang()
+    return doc.execute(IfcCommand(t("cmd.mesh"), lambda ifc: ifc.write_meshes(hosts, mesh, language))).result or []
+
+
+def remove_meshes(doc, hosts=None):
+    """(0.522) The welded meshes of these slabs (None: all) taken out. One undo step. False if none."""
+    if not doc.ifc.meshes_of(hosts):
+        return False
+    hosts = list(doc.ifc.meshes_of(hosts))
+    doc.execute(IfcCommand(t("cmd.remove_mesh"), lambda ifc: ifc.remove_meshes(hosts)))
+    return True
+
+
 def remove_rebars(doc, hosts=None):
     """(0.166) The reinforcement of these members (None: all of it) taken out. One undo step. False if none."""
     if hosts is None:

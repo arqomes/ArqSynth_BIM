@@ -470,6 +470,8 @@ class IfcCommand(Command):
                 self.changed += [g for g in doc.ifc.follow_connections(self.changed) if g not in self.changed]
                 # the reinforcement of the members it changed laid out again on them (0.166)
                 doc.ifc.follow_rebars(self.changed)
+                # (0.522) …and the welded meshes of the slabs it changed
+                self.changed += [g for g in doc.ifc.follow_meshes(self.changed) if g not in self.changed]
                 # …and the worktops over the cabinets it changed (0.170)
                 self.changed += [g for g in doc.ifc.follow_worktops(self.changed) if g not in self.changed]
                 # …and the combined footings under the columns it changed (0.249)

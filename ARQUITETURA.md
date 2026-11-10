@@ -11,7 +11,7 @@ Versão 0.482.0 (**A fita organizada como a do Revit**: os separadores pela orde
 
 Versão 0.484.0 (**Cortes na interface do Presentation**: o separador «Cortes» com planos Horizontal, Vertical X e Vertical Z, vistos no 3D com o enchimento do corte, guardados na cena ao Criar/Atualizar e exportados como planos de corte da cena).
 
-Versão 0.521.0 (**Memória de cálculo da estrutura metálica**: normas, materiais, ações, modelo, verificação das peças e das ligações, lista de material, em PDF ou HTML).
+Versão 0.522.0 (**Malhas eletrossoldadas** genéricas nas lajes — `core/rebar_mesh.py`, `IfcReinforcingMesh` em `ifc/rebar.py`, `ui/mesh_dialog.py`).
 
 Versão 0.490.0 (**A mesma regra do «Atualizar» para as etiquetas dos ambientes e o Passeio Virtual**: nome, área e número das etiquetas do BIM, o aspeto e o sítio dentro do ambiente do Presentation; os pisos, zonas, caminhos, escadas, início, visita e tempo do BIM, o desenhado e afinado no Presentation fica; só o importador do Presentation mudou).
 

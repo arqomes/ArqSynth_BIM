@@ -670,6 +670,7 @@ def bim_flow():
     steel_assemblies_flow()
     ec3_colours_flow()
     steel_report_flow()
+    rebar_mesh_flow()
     walk_tour_flow()
     line_loops_flow()
     free_drawing_flow()
@@ -20737,6 +20738,47 @@ def steel_report_flow():
     doc.modified = False
     check("memoria_aco", nothing and pdf and html_ok and win.ribbon_item("steel_report") is not None,
           "sem_aco={} pdf={} html={} fita={}".format(nothing, pdf, html_ok, win.ribbon_item("steel_report") is not None))
+
+
+def rebar_mesh_flow():
+    """0.522 — A welded mesh by hand (Estrutura ▸ Armadura ▸ Malha eletrossoldada): nothing selected, said; a slab
+    selected, its dialog's checks; Ø8 // 0,15 on both faces put on it, in the IFC and in the view; undone. Captured:
+    522_malha.png."""
+    import numpy as np
+    from arqbim.core import rebar_mesh as rm
+    from arqbim.ifc import catalog
+    from arqbim.model import bim as bim_actions
+    from arqbim.ui import mesh_dialog
+    key(Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+    pump(400)
+    vp.set_selection(set())
+    nothing = win.rebar_mesh(rm.Mesh()) is None
+    slab = bim_actions.add_slab(doc, np.array((0.0, 0.0, 3.0)), 6.0, 4.0, catalog.BY_KEY["laje_15"])
+    pump(300)
+    win._select_from_tree([slab])
+    pump(200)
+    dialog = mesh_dialog.MeshDialog(win, rm.Mesh(5, 0.15), 0.15)       # (0,98 cm²/m < 1,59: short)
+    shown = "✗" in dialog.checks.text() and "EC2 9.2.1.1" in dialog.checks.text()
+    dialog.diameter.setCurrentIndex(rm.DIAMETERS.index(8))
+    pump(50)
+    fixed = "✗" not in dialog.checks.text()
+    dialog.deleteLater()
+    made = win.rebar_mesh(rm.Mesh(8, 0.15, "both"))
+    pump(400)
+    rows = doc.ifc.mesh_rows()
+    in_view = bool(made) and all(doc.get(g) is not None for g in made)
+    win.set_view("iso")
+    vp.zoom_extents()
+    pump(600)
+    shot("522_malha.png")
+    ribbon = win.ribbon_item("rebar_mesh") is not None
+    doc.undo()
+    pump(200)
+    undone = len(doc.ifc.file.by_type("IfcReinforcingMesh")) == 0
+    doc.modified = False
+    check("malha_eletrossoldada", nothing and shown and fixed and len(rows) == 2 and in_view and ribbon and undone,
+          "sem_laje={} verif={} corrigida={} malhas={} vista={} fita={} desfeito={}".format(
+              nothing, shown, fixed, len(rows), in_view, ribbon, undone))
 
 
 def steel_sheet_flow():

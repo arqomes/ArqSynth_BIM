@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.522.0 — 2026-11-10
+
+**Estrutura metálica e pormenores, passo 9: malhas eletrossoldadas.**
+
+- Comando novo **Malha eletrossoldada** (separador **Estrutura**, painel novo **Armadura**): põe nas lajes
+  selecionadas uma malha genérica, pelo diâmetro dos fios (Ø5 a Ø12) e o espaçamento (0,10 a 0,30 m), na face
+  inferior, na superior ou nas duas, com o recobrimento e a direção dos fios. As designações comerciais ficam por
+  confirmar.
+- Os fios são cortados pelo contorno da laje menos o recobrimento; a malha segue a laje quando esta muda.
+- A janela mostra logo a verificação: recobrimento mínimo, espaçamento máximo (EC2 9.3.1.1), aço mínimo (EC2 9.2.1.1)
+  e se as camadas cabem na espessura.
+- No IFC: `IfcReinforcingMesh` (uma por face), com os diâmetros, as secções e os espaçamentos, os painéis de
+  6,00 × 2,40 m (sobreposição 0,30 m) e o peso; agregada à laje.
+
 ## 0.521.0 — 2026-11-10
 
 **Estrutura metálica, passo 8: a memória de cálculo.**

@@ -2694,6 +2694,7 @@ _STRINGS = {
     "tree.cat.IfcBeam": ("Vigas", "Beams"),
     "tree.cat.IfcFooting": ("Sapatas", "Footings"),
     "tree.cat.IfcReinforcingBar": ("Armaduras", "Reinforcement"),
+    "tree.cat.IfcReinforcingMesh": ("Malhas eletrossoldadas", "Welded meshes"),          # (0.522)
     "tree.cat.IfcPipeSegment": ("Tubagens", "Pipes"),
     "tree.cat.IfcDuctSegment": ("Condutas", "Ducts"),
     "props.connections": ("Ligações", "Connections"),
@@ -9509,6 +9510,39 @@ _STRINGS = {
     "act.structure_quantities": ("Quantidades da estrutura…", "Structure quantities…"),
     "act.calc_report": ("Memória de cálculo…", "Calculation report…"),
     "act.steel_report": ("Memória de cálculo (aço)…", "Steel calculation report…"),                 # (0.521)
+    # (0.522) welded meshes drawn by hand
+    "act.rebar_mesh": ("Malha eletrossoldada", "Welded mesh"),
+    "tip.rebar_mesh": ("Põe uma malha eletrossoldada nas lajes selecionadas (Ø e espaçamento, face inferior, superior "
+                       "ou as duas), cortada pelo contorno menos o recobrimento.",
+                       "Puts a welded mesh on the slabs selected (Ø and spacing, bottom face, top or both), cut by the "
+                       "outline less the cover."),
+    "rpanel.reinforcement": ("Armadura", "Reinforcement"),
+    "cmd.mesh": ("Malha eletrossoldada", "Welded mesh"),
+    "cmd.remove_mesh": ("Tirar a malha", "Remove the mesh"),
+    "mesh.title": ("Malha eletrossoldada", "Welded mesh"),
+    "mesh.diameter": ("Diâmetro dos fios", "Wires' diameter"),
+    "mesh.spacing": ("Espaçamento", "Spacing"),
+    "mesh.face": ("Face", "Face"),
+    "mesh.face.bottom": ("Inferior", "Bottom"),
+    "mesh.face.top": ("Superior", "Top"),
+    "mesh.face.both": ("As duas", "Both"),
+    "mesh.cover": ("Recobrimento (mm)", "Cover (mm)"),
+    "mesh.angle": ("Direção dos fios (°)", "Wires' direction (°)"),
+    "mesh.remove": ("Tirar a malha", "Remove the mesh"),
+    "mesh.note": ("Malhas genéricas pelo Ø e espaçamento dos fios; painéis de 6,00 × 2,40 m sobrepostos 0,30 m. As "
+                  "designações comerciais (do fabricante) ficam por confirmar.",
+                  "Generic meshes by their wires' Ø and spacing; 6.00 × 2.40 m sheets lapped 0.30 m. The makers' names "
+                  "are to be confirmed."),
+    "mesh.check.cover": ("Recobrimento {c} mm (mínimo {min} mm)", "Cover {c} mm (least {min} mm)"),
+    "mesh.check.spacing": ("Espaçamento {s} mm (máximo {max} mm, EC2 9.3.1.1)",
+                           "Spacing {s} mm (most {max} mm, EC2 9.3.1.1)"),
+    "mesh.check.minimum": ("Aço {as} cm²/m (mínimo {min} cm²/m, EC2 9.2.1.1)",
+                           "Steel {as} cm²/m (least {min} cm²/m, EC2 9.2.1.1)"),
+    "mesh.check.fits": ("As camadas cabem na laje de {t} mm", "The layers fit in the {t} mm slab"),
+    "mesh.no_slab": ("Selecione uma ou mais lajes primeiro.", "Select one or more slabs first."),
+    "mesh.done": ("Malha {m} posta em {n} laje(s): {s} painéis, {kg} kg.",
+                  "Mesh {m} put on {n} slab(s): {s} sheets, {kg} kg."),
+    "mesh.removed": ("Malha tirada.", "Mesh removed."),
     "tip.steel_report": ("A memória de cálculo da estrutura metálica (ações, modelo, verificação EC3 das peças e das "
                          "ligações, lista de material), em PDF ou HTML.",
                          "The steel structure's calculation report (actions, model, the EC3 check of the pieces and the "

@@ -1655,7 +1655,11 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
 9. **Armaduras à mão e malhas** (o lado de betão do DetailCraft que aqui falta): varão desenhado (reto, L, U, estribo,
    livre) com o código de forma BS 8666 (o que o ArqSynth já usa), malhas eletrossoldadas (`IfcReinforcingMesh`, as
    designações comerciais portuguesas), verificação de recobrimento, espaçamento livre e congestionamento (EC2 4.4.1.2,
-   8.2), no mapa de armaduras que já existe.
+   8.2), no mapa de armaduras que já existe. (0.522.0: as **malhas eletrossoldadas** genéricas — por Ø e espaçamento
+   dos fios, a escolha do dono, as designações comerciais por confirmar —, na face inferior, superior ou nas duas,
+   cortadas pelo contorno da laje menos o recobrimento, seguem a laje quando muda; painéis 6,00 × 2,40 m com 0,30 m de
+   sobreposição, peso; verificação do recobrimento, do espaçamento (EC2 9.3.1.1) e do aço mínimo (9.2.1.1). Faltam: o
+   varão desenhado à mão, as malhas no mapa de armaduras e na memória de cálculo, o congestionamento.)
 10. **Montagem e construtibilidade** (0.514.0: a tabela **Estrutura metálica: montagem** — cada conjunto, peça com
     as chapas soldadas, pela ordem de montagem por fases, com o peso a içar e o centro de gravidade. Faltam: as fases
     escolhidas à mão, a ordem pelos apoios, a construtibilidade.) Fases de montagem, peso e centro de gravidade de cada conjunto, ordem

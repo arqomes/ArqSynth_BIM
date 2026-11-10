@@ -644,6 +644,22 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.522 — Malhas eletrossoldadas (passo 9)
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.522.0**.
+
+1. Faça Ctrl+N. No separador **Estrutura**, painel **Armadura**, clique em **Malha eletrossoldada** sem nada
+   selecionado: aparece «Selecione uma ou mais lajes primeiro».
+2. Faça uma **Laje** de 6 × 4 m (separador Estrutura ▸ **Laje**) e deixe-a selecionada.
+3. Clique outra vez em **Malha eletrossoldada**: abre a janela. Escolha **Ø5** e **0,15 m**: a linha do aço fica
+   vermelha (✗, abaixo do mínimo do EC2 9.2.1.1).
+4. Mude para **Ø8**: as quatro linhas ficam verdes (✓). Em **Face** escolha **As duas** e clique **OK**.
+5. Em cima aparece «Malha Ø8 // 0,15 posta em 1 laje(s): … painéis, … kg». No Navegador do Projeto, debaixo do
+   Térreo, há **Malhas eletrossoldadas (2)** — a inferior e a superior.
+6. Mude o modo de vista para **Raio-X** e veja os fios dentro da laje.
+7. Estique a laje (pega da face): a malha refaz-se no novo contorno.
+8. Selecione a laje, clique **Malha eletrossoldada** e depois **Tirar a malha**: a malha sai. Ctrl+Z volta a pô-la.
+
 ## 0.521 — Memória de cálculo da estrutura metálica (passo 8)
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.521.0**.

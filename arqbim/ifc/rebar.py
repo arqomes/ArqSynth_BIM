@@ -278,6 +278,132 @@ class RebarMixin:
                     out.append(pts @ m[:3, :3].T + m[:3, 3])
         return out
 
+    # ------------------------------------------------------------ (0.522) welded meshes drawn by hand
+
+    def meshes_of(self, hosts=None):
+        """{slab GlobalId: [the GlobalIds of its IfcReinforcingMeshes]} (hosts None: all)."""
+        wanted, out = (set(hosts) if hosts is not None else None), {}
+        for e in self.file.by_type("IfcReinforcingMesh"):
+            host = self._params(e).get("Armadura")
+            if host and (wanted is None or host in wanted):
+                out.setdefault(host, []).append(e.GlobalId)
+        return out
+
+    def mesh_of(self, host):
+        """The core.rebar_mesh.Mesh on a slab, or None."""
+        from ..core import rebar_mesh as rm
+        for g in self.meshes_of([host]).get(host, ()):
+            text = self._params(self.by_guid(g)).get("Malha")
+            if text:
+                return rm.Mesh.from_stored(json.loads(text))
+        return None
+
+    def remove_meshes(self, hosts):
+        for guids in self.meshes_of(hosts).values():
+            for g in guids:
+                e = self.by_guid(g)
+                if e is not None:
+                    api.root.remove_product(self.file, product=e)
+
+    def write_meshes(self, hosts, mesh, lang="pt"):
+        """A welded mesh (core.rebar_mesh.Mesh) on each of these slabs, the one each had replaced: one
+        IfcReinforcingMesh per face, its wires IfcSweptDiskSolids. Returns the GlobalIds made."""
+        self.remove_meshes(hosts)
+        made = []
+        for host in hosts:
+            made += self._lay_mesh(host, mesh, lang)
+        return made
+
+    def _lay_mesh(self, host, mesh, lang="pt"):
+        from ..core import rebar_mesh as rm
+        f, u = self.file, 1.0 / self.unit_scale
+        member = self.by_guid(host)
+        s = self.slab_outline(host) if member is not None else None
+        if s is None:
+            return []
+        laid = rm.wires(mesh, s["outline"], float(s["top"]), float(s["thickness"]))
+        if not laid:
+            return []
+        self._ensure_mass_unit()
+        material = self._material("a500", lang)
+        d = mesh.diameter / 1000.0
+        sheet_n = rm.sheets(mesh, s["outline"])
+        made = []
+        for face, (along, across) in laid.items():
+            bars = along + across
+            if not bars:
+                continue
+            label = {"bottom": ("malha inferior", "bottom mesh"), "top": ("malha superior", "top mesh")}[face]
+            e = api.root.create_entity(f, ifc_class="IfcReinforcingMesh",
+                                       name="{} — {} {}".format(member.Name or "", label[0 if lang == "pt" else 1],
+                                                                mesh.name("," if lang == "pt" else ".")))
+            for attr, value in (("MeshLength", rm.SHEET[0] * u), ("MeshWidth", rm.SHEET[1] * u),
+                                ("LongitudinalBarNominalDiameter", d * u), ("TransverseBarNominalDiameter", d * u),
+                                ("LongitudinalBarCrossSectionArea", ec2.bar_area(mesh.diameter) * u * u),
+                                ("TransverseBarCrossSectionArea", ec2.bar_area(mesh.diameter) * u * u),
+                                ("LongitudinalBarSpacing", mesh.spacing * u), ("TransverseBarSpacing", mesh.spacing * u),
+                                ("SteelGrade", "A500 EL")):
+                try:
+                    setattr(e, attr, value)
+                except (AttributeError, TypeError):     # (an older schema without it)
+                    pass
+            first = np.asarray(bars[0][0], dtype=float)
+            m = np.eye(4)
+            m[:3, 3] = first
+            self._place(e, m)
+            items = [f.createIfcSweptDiskSolid(f.createIfcPolyline(
+                [f.createIfcCartesianPoint(tuple(float(c) for c in (np.asarray(p, dtype=float) - first) * u))
+                 for p in bar]), d / 2.0 * u, None, None, None) for bar in bars]
+            api.geometry.assign_representation(f, product=e, representation=f.createIfcShapeRepresentation(
+                self.body, self.body.ContextIdentifier, "AdvancedSweptSolid", items))
+            api.material.assign_material(f, products=[e], type="IfcMaterial", material=material)
+            length = sum(rb.BarSet.length_of(b) for b in bars)
+            self._set_qto(e, "Qto_ReinforcingElementBaseQuantities",
+                          {"Count": sheet_n, "Length": round(length * u, 3),
+                           "Weight": round(sheet_n * rm.SHEET[0] * rm.SHEET[1] * mesh.mass_per_m2(), 2)})
+            self._set_params(e, {"Elemento": "mesh", "Armadura": host, "Funcao": face,
+                                 "Malha": json.dumps(mesh.stored())})
+            api.aggregate.assign_object(f, products=[e], relating_object=member)
+            made.append(e.GlobalId)
+        return made
+
+    def follow_meshes(self, changed):
+        """The meshes of the slabs among `changed` laid out again on their new outline."""
+        meshes = self.file.by_type("IfcReinforcingMesh")
+        if not changed or not meshes:
+            return []
+        from ..core import rebar_mesh as rm
+        wanted = set(changed)
+        again = {}
+        for e in meshes:
+            p = self._params(e)
+            if p.get("Armadura") in wanted and p.get("Malha"):
+                again.setdefault(p["Armadura"], rm.Mesh.from_stored(json.loads(p["Malha"])))
+        made = []
+        for host, mesh in again.items():
+            self.remove_meshes([host])
+            if self.by_guid(host) is not None:
+                made += self._lay_mesh(host, mesh)
+        return made
+
+    def mesh_rows(self):
+        """[{guid, host, host_name, name, face, diameter mm, spacing m, sheets, weight kg}] of the welded meshes."""
+        out = []
+        for e in self.file.by_type("IfcReinforcingMesh"):
+            p = self._params(e)
+            qto = ifcopenshell.util.element.get_psets(e).get("Qto_ReinforcingElementBaseQuantities", {})
+            host = self.by_guid(p.get("Armadura") or "")
+            stored = json.loads(p["Malha"]) if p.get("Malha") else {}
+            diameter = float(e.LongitudinalBarNominalDiameter or 0.0) * self.unit_scale * 1000.0 \
+                if hasattr(e, "LongitudinalBarNominalDiameter") else float(stored.get("diameter", 0))
+            spacing = float(e.LongitudinalBarSpacing or 0.0) * self.unit_scale \
+                if hasattr(e, "LongitudinalBarSpacing") else float(stored.get("spacing", 0.0))
+            out.append({"guid": e.GlobalId, "host": host.GlobalId if host else None,
+                        "host_name": (host.Name if host else "") or "", "name": e.Name or "",
+                        "face": p.get("Funcao") or "", "diameter": round(diameter), "spacing": spacing,
+                        "sheets": int(qto.get("Count") or 0), "weight": float(qto.get("Weight") or 0.0)})
+        return sorted(out, key=lambda r: (_natural(r["host_name"]), r["face"]))
+
     # ------------------------------------------------------------ the bar schedule
 
     def rebar_rows(self):

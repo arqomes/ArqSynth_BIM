@@ -747,6 +747,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_steel_report = self._action(t("act.steel_report"), lambda: self.steel_report(),
                                              icon=icons.steel_report_icon())                            # (0.521)
         self.act_steel_report.setToolTip(t("tip.steel_report"))
+        self.act_rebar_mesh = self._action(t("act.rebar_mesh"), lambda: self.rebar_mesh(),
+                                           icon=icons.rebar_mesh_icon())                                # (0.522)
+        self.act_rebar_mesh.setToolTip(t("tip.rebar_mesh"))
         self.act_cut_list = self._action(t("act.cut_list"), lambda: self.cut_list(), icon=icons.cut_list_icon())   # (0.169)
         self.act_profile_from_face = self._action(t("act.profile_from_face"), lambda: self.profile_from_face(),
                                                   icon=icons.profile_icon())                                # (0.245)
@@ -6195,6 +6198,42 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.message(t("ec2.nothing"), warning=True)
         return members, bars
+
+    def rebar_mesh(self, mesh=None, remove=False):
+        """Structure ▸ Welded mesh (0.522): a mesh on the slabs selected (asked for when `mesh` is not given), or theirs
+        taken out. Returns the IfcReinforcingMeshes made ([] when removed or cancelled), None without slabs."""
+        from ..core import rebar_mesh as rm
+        slabs = [g for g in self.viewport.selection if self.doc.get(g) is not None
+                 and self.doc.get(g).ifc_class == "IfcSlab"]       # (before the tool's cancel clears the selection)
+        self.tool.cancel()
+        if slabs:
+            self.viewport.set_selection(set(slabs))
+        if not slabs:
+            self.message(t("mesh.no_slab"), warning=True)
+            return None
+        if mesh is None and not remove:
+            from . import mesh_dialog
+            outline = self.doc.ifc.slab_outline(slabs[0])
+            thickness = float(outline["thickness"]) if outline else 0.20
+            current = self.doc.ifc.mesh_of(slabs[0])
+            dialog = mesh_dialog.MeshDialog(self, current or rm.Mesh(), thickness,
+                                            can_remove=bool(self.doc.ifc.meshes_of(slabs)))
+            self._mesh_dialog = dialog
+            accepted = dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+            self._mesh_dialog = None
+            if not accepted:
+                return []
+            remove, mesh = dialog.removing, dialog.mesh()
+        if remove:
+            if bim.remove_meshes(self.doc, slabs):
+                self.message(t("mesh.removed"))
+            return []
+        made = self.run_busy(lambda: bim.put_mesh(self.doc, slabs, mesh), t("moments.working"))
+        rows = [r for r in self.doc.ifc.mesh_rows() if r["guid"] in set(made)]
+        self.message(t("mesh.done", m=mesh.name(decimal_sep()), n=len({r["host"] for r in rows}),
+                       s=sum(r["sheets"] for r in rows),
+                       kg="{:.0f}".format(sum(r["weight"] for r in rows))))
+        return made
 
     def rebar_schedule(self):
         """Structure ▸ Bar schedule… (0.166): the reinforcement in the model listed by position, with its totals;
