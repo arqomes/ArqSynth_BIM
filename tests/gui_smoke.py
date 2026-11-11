@@ -37,6 +37,26 @@ results = []
 QtWidgets.QMessageBox.question = staticmethod(lambda *a, **k: QtWidgets.QMessageBox.StandardButton.Discard)
 
 QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("unidades/comprimento", "m")   # (0.186: lengths in m)
+# (0.540) the checks look at the light theme's colours, on white views: the computer's own appearance (the owner's
+# «revit» palette, dark views…) set aside for the run and put back at the end, untouched
+_APPEARANCE = ("aparencia/tema", "aparencia/vistas_escuras", "aparencia/paleta")
+_settings = QtCore.QSettings("ArqSynth", "ArqSynth BIM")
+_owner_appearance = {k: _settings.value(k) for k in _APPEARANCE}
+_settings.setValue("aparencia/tema", "light")
+_settings.setValue("aparencia/vistas_escuras", "false")
+_settings.sync()
+
+
+def _put_back_appearance():
+    s = QtCore.QSettings("ArqSynth", "ArqSynth BIM")
+    for k, v in _owner_appearance.items():
+        if v is None:
+            s.remove(k)
+        else:
+            s.setValue(k, v)
+    s.sync()
+
+
 app, win = create_window()
 win.resize(1280, 740)  # fits a 1080p laptop screen at 125 % scaling
 win.show()
@@ -24809,6 +24829,7 @@ failed = sum(not r["ok"] for r in results)
 print("\n{} verificações, {} falharam. Capturas em {}".format(len(results), failed, OUT), flush=True)
 win.close()
 pump(200)
+_put_back_appearance()                           # (0.540: the owner's theme and views as they were)
 sys.stdout.flush()
 # (not sys.exit: in Linux (WSL), after this long session Python's clean-up of the GPU and Qt objects crashed the
 # process at the very end, once everything had been checked and written; the program itself closes cleanly)
