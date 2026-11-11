@@ -1868,7 +1868,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # (0.468, the owner: «A aba materiais eu quero que fique antes da aba biblioteca»)
     MODULES = ("project", "storeys", "materials", "library", "sheets", "rooms", "quantities", "rules",
-               "presentation", "settings")         # (0.480, the owner's mark: the ArqSynth Presentation after the rules)
+               "presentation", "graph", "settings")  # (0.480, the owner's mark: the ArqSynth Presentation after the
+    #                                                   rules; 0.540: the Visual Graph, its own window)
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
                     "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel",   # (0.468)
                     "rooms": "program_panel",                   # (0.475: the programme's manager, no longer a table)
@@ -2019,6 +2020,17 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 acts["presentation"].setChecked(False)
 
+    def show_visual_graph(self):
+        """(0.540) The Visual Graph's window (one, kept while the program runs), in front."""
+        win = getattr(self, "graph_window", None)
+        if win is None:
+            from . import visual_graph
+            win = self.graph_window = visual_graph.GraphWindow(self)
+        win.show()
+        win.raise_()
+        win.activateWindow()
+        return win
+
     def set_module(self, name):
         """(0.184) A module of the compact bar: its panel up in panel 5 — or, the module in view clicked again,
         the left panels folded away."""
@@ -2046,6 +2058,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close_presentation()
             else:
                 self.show_presentation_tab()
+        elif name == "graph":                               # (0.540) the Visual Graph: its own window
+            self.show_visual_graph()
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])

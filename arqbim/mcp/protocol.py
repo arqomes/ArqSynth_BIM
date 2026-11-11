@@ -3,8 +3,10 @@ The server answers initialize (agreeing a protocol version), ping, tools/list an
 no answer; an unknown method, a bad request: a JSON-RPC error. Nothing but messages goes to stdout — anything
 printed while a tool runs goes to stderr."""
 
+import base64
 import contextlib
 import json
+import os
 import sys
 import traceback
 
@@ -79,6 +81,14 @@ class Server:
         try:
             with contextlib.redirect_stdout(sys.stderr):    # (stdout is the protocol's)
                 text = handler(arguments)
+            if isinstance(text, dict):                      # (0.543) a picture with it: the AI sees the result
+                content = [{"type": "text", "text": text["text"]}]
+                png = text.get("png")
+                if png and os.path.exists(png):
+                    with open(png, "rb") as fh:
+                        content.append({"type": "image", "mimeType": "image/png",
+                                        "data": base64.b64encode(fh.read()).decode("ascii")})
+                return {"content": content, "isError": False}
             return {"content": [{"type": "text", "text": text}], "isError": False}
         except ToolError as exc:
             return {"content": [{"type": "text", "text": "error: {}".format(exc)}], "isError": True}

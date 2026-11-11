@@ -14,7 +14,7 @@ from . import theme
 REF = QtCore.Qt.ItemDataRole.UserRole
 OWN = "own"
 # the program's tables, by what they list (each its group's name in i18n «tables.group.<key>»)
-GROUPS = (("quantities", ("walls", "slabs", "roofs", "columns", "carpentry", "tiles", "other")),
+GROUPS = (("quantities", ("walls", "slabs", "roofs", "columns", "carpentry", "tiles", "perforated", "other")),
           ("rooms", ("rooms", "finishes")),
           ("openings", ("doors", "windows")),
           ("services", ("circuits", "electrical")),

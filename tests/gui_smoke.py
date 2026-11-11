@@ -24770,6 +24770,24 @@ def navigation():
     drift = np.linalg.norm(np.array(at(p)) - start)
     check("orbitar_a_volta_do_ponto", moved > 0.5 and drift < 2.0, "camara moveu {:.2f} m, ponto desviou {:.2f}px".format(moved, drift))
     shot("9_depois_de_orbitar.png")
+    grafico_visual()
+
+
+def grafico_visual():
+    """(0.540) The left bar's «Gráfico Visual» opens its window, with the starting graph worked out."""
+    act = win.module_actions.get("graph")
+    check("grafico_icone", act is not None)
+    if act is None:
+        return
+    act.trigger()
+    pump(400)
+    gw = getattr(win, "graph_window", None)
+    check("grafico_janela", gw is not None and gw.isVisible() and len(gw.cards) == 6 and not gw.graph.errors
+          .get("n5"), "cartões {}".format(len(gw.cards) if gw else 0))
+    if gw is not None:
+        gw.grab().save(os.path.join(OUT, "grafico_visual.png"))
+        gw.close()
+        pump(100)
 
 
 try:

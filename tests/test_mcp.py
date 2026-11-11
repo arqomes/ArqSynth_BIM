@@ -49,7 +49,8 @@ class McpProtocol(unittest.TestCase):
         self.assertEqual(self.server.handle({"jsonrpc": "2.0", "id": 3, "method": "ping"})["result"], {})
         listed = self.server.handle({"jsonrpc": "2.0", "id": 4, "method": "tools/list"})["result"]["tools"]
         names = [t["name"] for t in listed]
-        self.assertEqual(names, ["summary", "query", "get", "create", "edit", "delete", "undo", "file"])
+        self.assertEqual(names, ["summary", "query", "get", "create", "edit", "delete", "undo", "file",
+                                 "graph_nodes", "graph", "graph_eval", "graph_apply"])     # (0.543: the Visual Graph)
         self.assertTrue(next(t for t in listed if t["name"] == "query")["annotations"]["readOnlyHint"])
         self.assertEqual(self.server.handle({"jsonrpc": "2.0", "id": 5, "method": "nope"})["error"]["code"], -32601)
         size = len(json.dumps(listed, ensure_ascii=False, separators=(",", ":")))

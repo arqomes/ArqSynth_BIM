@@ -2508,6 +2508,11 @@ _STRINGS = {
     "mod.materials": ("Materiais", "Materials"),
     "mod.rules": ("Regras gráficas", "Graphic rules"),
     "mod.presentation": ("ArqSynth Presentation", "ArqSynth Presentation"),
+    "mod.graph": ("Gráfico Visual", "Visual Graph"),            # (0.540)
+    "tip.mod.graph": ("Nós que mostram o resultado: painéis perfurados a partir de padrões, atratores ou imagens, "
+                      "verificados para fabrico, em DXF ou numa parede do modelo.",
+                      "Nodes that show their result: perforated panels from patterns, attractors or pictures, checked "
+                      "for fabrication, as DXF or on a wall of the model."),
     "tip.mod.presentation": ("A interface do ArqSynth Presentation: as páginas e as cenas à esquerda, as camadas e os "
                              "ajustes da cena à direita, os comandos sobre o 3D. Outra vez (ou outro ícone): o BIM.",
                              "The ArqSynth Presentation's interface: the pages and scenes on the left, the layers and "
@@ -4854,6 +4859,10 @@ _STRINGS = {
     "props.tiles_roof": ("Cobertura", "Roof"),
     "props.tiles_select_roof": ("Selecionar a cobertura", "Select the roof"),
     "sched.cat.tiles": ("Telhas", "Tiles"),
+    "sched.cat.perforated": ("Painéis perfurados", "Perforated panels"),            # (0.544)
+    "sched.col.panels": ("Painéis", "Panels"),
+    "sched.col.holes": ("Furos", "Holes"),
+    "sched.col.open_area": ("Área aberta", "Open area"),
     "sched.col.tile": ("Telha", "Tile"),
     "sched.col.tiles": ("Telhas", "Tiles"),
     "sched.col.cut": ("Cortadas", "Cut"),

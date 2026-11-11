@@ -204,7 +204,8 @@ def atrator(x, y, raio, suave, inverter):
 def gradiente(painel, angulo, inicio, fim):
     a = math.radians(angulo)
     d = np.array([math.cos(a), math.sin(a)])
-    corners = np.array(painel["shape"].exterior.coords)
+    x0, y0, x1, y1 = painel["shape"].bounds
+    corners = np.array([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
     proj = corners @ d
     lo, hi = proj.min(), proj.max()
 
@@ -276,12 +277,13 @@ SHAPES = ("redondo", "quadrado", "hexagonal")
         "Um furo em cada ponto. Sem modulador, todos do diâmetro máximo; com ele, entre o mínimo e o máximo.",
         inputs=[Port("pontos", "points", "Pontos"), Port("campo", "field", "Modulador", optional=True)],
         outputs=[Port("furos", "holes", "Furos")],
-        params=[_num("d_min", "Diâmetro mínimo", 0.0, 0.0, 0.5, 0.001),
-                _num("d_max", "Diâmetro máximo", 0.03, 0.001, 0.5, 0.001),
+        params=[_num("d_min", "Diâmetro mínimo", 0.0, 0.0, 0.2, 0.001),
+                _num("d_max", "Diâmetro máximo", 0.03, 0.001, 0.2, 0.001),
                 Port("forma", "choice", "Forma", default="redondo", choices=SHAPES),
-                Port("inverter", "bool", "Inverter", default=False)],
+                Port("inverter", "bool", "Inverter", default=False),
+                _num("sem_furo", "Sem furo abaixo de", MIN_CUT, MIN_CUT, 0.05, 0.0005)],
         example="Furos de 0 a 3 cm a seguir uma imagem.")
-def perfurar(pontos, campo, d_min, d_max, forma, inverter):
+def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT):
     xy = pontos["xy"]
     if campo is None:
         f = np.ones(len(xy))
@@ -291,7 +293,7 @@ def perfurar(pontos, campo, d_min, d_max, forma, inverter):
             f = 1.0 - f
     lo, hi = min(d_min, d_max), max(d_min, d_max)
     d = lo + (hi - lo) * f
-    keep = d >= MIN_CUT
+    keep = d >= max(MIN_CUT, sem_furo)       # (0.540: those smaller not cut at all — the picture's light parts)
     return {"furos": {"panel": pontos["panel"], "xy": xy[keep], "d": d[keep], "shape": forma,
                       "pitch": pontos["pitch"], "bad": np.zeros(int(keep.sum()), dtype=bool)}}
 
@@ -397,8 +399,9 @@ def dxf_text(furos, name="Painel"):
     from ...model import dxf
     w = dxf._Writer()
     panel = furos["panel"]
-    for ring in [panel["shape"].exterior, *panel["shape"].interiors]:
-        w.polyline("CONTORNO", [(x * 1000.0, y * 1000.0) for x, y in ring.coords[:-1]], closed=True)
+    for part in getattr(panel["shape"], "geoms", [panel["shape"]]):     # (0.542: modules too)
+        for ring in [part.exterior, *part.interiors]:
+            w.polyline("CONTORNO", [(x * 1000.0, y * 1000.0) for x, y in ring.coords[:-1]], closed=True)
     shape = furos["shape"]
     for (x, y), d in zip(furos["xy"], furos["d"]):
         cx, cy, dd = x * 1000.0, y * 1000.0, d * 1000.0
@@ -427,11 +430,21 @@ def exportar_dxf(furos, ficheiro, nome):
 
 
 # ------------------------------------------------------------------ BIM
+def cladding_pattern(bim):
+    """(0.540) The perforated finish's measures for `bim.add_cladding(doc, wall, side, "perfurado", height, …)`
+    from what «Aplicar à parede/fachada» hands over: its holes kept as free holes, its panel as the boards."""
+    from .. import surfaces
+    p = bim["panel"]
+    return {"free": surfaces.free_text(bim["shape"], bim["holes"]), "free_repeat": 1.0 if bim["repeat"] else 0.0,
+            "sheet_w": p["width"], "sheet_h": p["height"], "margin": p["margin"], "joint": 0.0,
+            "thickness": p["thickness"]}
+
+
 @r.node("aplicar_parede", "BIM", "Aplicar à parede/fachada",
         "Põe o painel perfurado como revestimento na parede escolhida (com quantidades e IFC).",
         inputs=[Port("furos", "holes", "Furos")], outputs=[Port("bim", "bim", "BIM")],
         params=[Port("parede", "text", "Parede (GlobalId)", default=""),
-                Port("lado", "choice", "Lado", default="exterior", choices=("exterior", "interior")),
+                Port("lado", "choice", "Lado", default="frente", choices=("frente", "trás")),
                 Port("repetir", "bool", "Repetir pela parede", default=True)],
         example="O mesmo painel repetido ao longo da fachada sul.")
 def aplicar_parede(furos, parede, lado, repetir):

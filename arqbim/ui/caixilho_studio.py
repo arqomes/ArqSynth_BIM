@@ -21,7 +21,7 @@ from . import theme
 # blue header, its blue —; the owner's prototype's dark one (0.338: both in ui/theme, the program's).
 THEMES = theme.THEMES
 THEME = theme.NAME
-C = dict(THEMES[THEME])
+C = dict(THEMES.get(THEME) or theme.C)    # (0.540: a study palette in use — «revit», «bege»… — its own colours)
 BG, BAR, LINE, CANVAS, GRID = C["window"], C["bar"], C["line"], C["canvas"], C["grid"]
 TEXT, MUTED, CARD, EDGE, EDGE_2 = C["text"], C["muted"], C["card"], C["edge"], C["edge_2"]
 ACCENT, ACCENT_STRONG, SELECT = C["accent"], C["accent_strong"], C["select"]

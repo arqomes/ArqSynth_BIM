@@ -1701,15 +1701,23 @@ de `core/surfaces.py` (0.389), a Superfície paramétrica (0.395), o `manifold3d
 2. ~~Primeiros nós: Painel plano, Grelha, Hexágono, Voronoi, Atrator, Gradiente, Imagem (luminância), Ruído, Perfurar,
    Verificar fabrico (furo mínimo, ponte mínima), Exportar DXF, Aplicar à parede/fachada (o perfurado do BIM).~~
    (0.539.0) Por fazer no passo 3: o revestimento do BIM aceitar a lista de furos do nó «Aplicar à parede/fachada»
-   (hoje o perfurado do BIM é grelha + imagem).
-3. Módulo «Gráfico Visual» na barra da esquerda: tela de nós com cartões, ligações a arrastar, miniatura viva em cada
-   nó, barras deslizantes; cores de `ui/theme.py`.
-4. O caso forte: imagem → painel perfurado, com aviso de fabrico em cada furo que falha.
-5. Relevo/Emboss, Extrudir, Dobrar, Subdividir; Fachada a partir do BIM (a face escolhida como base).
-6. MCP: `list_nodes`, `describe_node`, `create_graph`, `add_node`, `connect`, `set_param`, `evaluate`,
-   `render_preview` (imagem para a IA ver), `export` — gerados do mesmo registo de nós.
-7. Biblioteca com miniatura/animação curta de cada nó; quantidades do painel nas Tabelas.
-- Depois (fora do 1.º lote): formas orgânicas (SubD, Relaxar malha, Crescimento, Superfície mínima), Planificar.
+   (hoje o perfurado do BIM é grelha + imagem). ~~Feito na 0.540: furos livres no revestimento perfurado
+   (`FurosLivres`).~~
+3. ~~Módulo «Gráfico Visual» na barra da esquerda: tela de nós com cartões, ligações a arrastar, miniatura viva em cada
+   nó, barras deslizantes; cores de `ui/theme.py`.~~ (0.540.0: janela própria, `ui/visual_graph.py`)
+4. ~~O caso forte: imagem → painel perfurado, com aviso de fabrico em cada furo que falha.~~ (0.540.0: Modelos ▾,
+   `core/graph/templates.py`)
+5. ~~Relevo/Emboss, Extrudir, Dobrar, Subdividir; Fachada a partir do BIM (a face escolhida como base).~~ (0.540.0,
+   `core/graph/nodes_3d.py`) Por fazer: levar o sólido Extrudido/Dobrado/Relevo para o modelo (hoje vai a chapa
+   plana perfurada); o Relevo não fura.
+6. ~~MCP~~ (0.540.0: `graph_nodes`, `graph`, `graph_eval` com imagem, `graph_apply` — quatro em vez de nove, pela
+   regra de poucos tokens; `mcp/graph_tools.py`). Por fazer: o gráfico da IA ligado à janela aberta (hoje cada um
+   tem o seu).
+7. ~~Biblioteca com miniatura/animação curta de cada nó; quantidades do painel nas Tabelas.~~ (0.540.0: animação na
+   lista de nós, `core/graph/examples.py`; Tabelas ▸ Painéis perfurados)
+- Depois (fora do 1.º lote): formas orgânicas (SubD, Relaxar malha, Crescimento, Superfície mínima), Planificar;
+  arrastar nós da lista para a tela (hoje: duplo clique); desfazer dentro do gráfico; o gráfico guardado dentro do
+  projeto (hoje: ficheiro .json à parte).
 
 ## 5. Como se trabalha cada passo
 

@@ -449,6 +449,9 @@ def linked_tools():
                                 .format(exc))
             if error:
                 raise ToolError(text[len("error: "):] if text.startswith("error: ") else text)
+            png = next((ln[len("picture "):] for ln in text.splitlines() if ln.startswith("picture ")), None)
+            if png and png.endswith(".png") and os.path.exists(png):      # (0.543) the window's picture, seen
+                return {"text": text, "png": png}
             return text
         return handler
     return [(name, description, schema, send(name), read_only)
@@ -495,4 +498,10 @@ def definitions(live=False):
          False),
         ("file", "action new|open|save; path (save: the same file if none).",
          _schema({"action": {"type": "string"}, "path": {"type": "string"}}, ["action"]), file_, False),
-    ]
+    ] + _graph_definitions()
+
+
+def _graph_definitions():
+    """(0.543) The Visual Graph's tools."""
+    from . import graph_tools
+    return graph_tools.definitions(_schema)

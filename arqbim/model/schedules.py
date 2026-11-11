@@ -28,6 +28,9 @@ CATEGORIES = {
     "carpentry": ((), ("roof", "piece", "section", "pieces", "metres", "volume")),
     # (0.279) the roofs' tiles: a line a roof (its tile, the tiles and those cut, the ridge tiles, kg, m²)
     "tiles": ((), ("roof", "tile", "tiles", "cut", "caps", "weight", "area")),
+    # (0.544) the perforated panels (the Visual Graph's and the others): a line a finish — its wall, its boards, its
+    # holes, its open area, its area
+    "perforated": ((), ("name", "host", "panels", "holes", "open_area", "area")),
     "columns": (("IfcColumn",), ("name", "type", "storey", "height", "volume")),
     # (0.500) the steel structure: a line a mark (its pieces, their section, grade, cut length, kg/m, kg, paint m²); the
     # bolts and anchor bolts: a line a kind and size
@@ -59,13 +62,14 @@ CATEGORIES = {
     "keynotes": ((), ("code", "keynote_text", "count")),
     "other": (None, ("name", "class", "type", "storey", "volume")),
 }
-ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "columns", "steel", "bolts", "cutting", "erection",
+ORDER = ("walls", "slabs", "roofs", "carpentry", "tiles", "perforated", "columns", "steel", "bolts", "cutting", "erection",
          "steel_check", "steel_joints", "doors", "windows",
          "rooms", "finishes", "circuits", "electrical", "keynotes", "other")
 ROOMS = ("rooms", "finishes")
 EDGES = ("eaves", "ridges", "hips", "valleys", "gables", "tops")         # (0.265) a roof's edges, by kind
 NUMBERS = {"length", "height", "thickness", "width", "area", "volume", "perimeter", "projected", "cut_length", *EDGES}
 SUMMED = {"length", "area", "volume", "power", "conduit", "metres", "projected", "pieces", "tiles", "cut", "caps",
+          "panels", "holes",                                                                   # (0.544)
           "weight", "paint", *EDGES}
 UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "section": "{:g} mm²",   # (0.144)
          "conduit": "{:.2f} m", "metres": "{:.2f} m",                                        # (its conduits, 0.146)
@@ -74,8 +78,9 @@ UNITS = {"power": "{:.0f} W", "current": "{:.2f} A", "breaker": "{:.0f} A", "sec
          "bought": "{:.2f} m", "used": "{:.2f} m", "waste": "{:.1f} %",                     # (0.501: the bars)
          "n_ed": "{:.1f} kN", "m_ed": "{:.1f} kN·m", "v_ed": "{:.1f} kN",                   # (0.516: EC3)
          "deflection": "{:.0f} %", "utilisation": "{:.0f} %",
-         "bolt_shear": "{:.1f} kN", "bolt_tension": "{:.1f} kN", "weld_use": "{:.0f} %"}       # (0.520)
-COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps")
+         "bolt_shear": "{:.1f} kN", "bolt_tension": "{:.1f} kN", "weld_use": "{:.0f} %",       # (0.520)
+         "open_area": "{:.0f} %"}                                                            # (0.544)
+COUNTS = ("count", "points", "pieces", "tiles", "cut", "caps", "panels", "holes")
 # column -> (Properties panel action, element kinds it applies to) for the cells one can edit
 EDITABLE = {"name": ("name", None), "length": ("length", ("wall",)), "height": ("height", ("wall",))}
 COLUMN_HEIGHT = ("column_height", ("column",))     # a column's height
@@ -115,6 +120,7 @@ def counts(doc):
     out["circuits"] = len(circuit_rows(doc))
     out["carpentry"] = len(carpentry_rows(doc))
     out["tiles"] = len(tiles_rows(doc))
+    out["perforated"] = len(_perforated_finishes(doc))   # (0.544)
     out["steel"] = len(steel_rows(doc))                # (0.500)
     out["bolts"] = len(bolt_rows(doc))
     out["cutting"] = len(cutting_rows(doc))            # (0.501)
@@ -423,6 +429,32 @@ def tiles_rows(doc):
     return out
 
 
+def _perforated_finishes(doc):
+    try:
+        return [e for e in doc.ifc.file.by_type("IfcCovering")
+                if doc.ifc._params(e).get("Acabamento") == "perfurado"]
+    except Exception:                                  # (the IFC still being read)
+        return []
+
+
+def perforated_rows(doc):
+    """(0.544) The perforated panels: dicts with "guid", "kind" "perforated", "name", "host" (its wall), "panels",
+    "holes", "open_area" (%), "area" (m², its face)."""
+    out = []
+    for e in _perforated_finishes(doc):
+        try:
+            d = doc.ifc.pattern_params(e.GlobalId)
+        except Exception:                              # (its wall gone: left out)
+            continue
+        wall = doc.get(doc.ifc._params(e).get("Parede") or "")
+        out.append({"guid": e.GlobalId, "kind": "perforated", "name": e.Name or "", "type": "", "storey": "",
+                    "host": wall.name if wall is not None else "", "panels": len(d.get("panels") or []),
+                    "holes": d.get("count", 0), "open_area": 100.0 * d.get("open_area", 0.0),
+                    "area": float(d["face"].area) if d.get("face") is not None else None})
+    out.sort(key=lambda r: (_natural(r["host"]), _natural(r["name"])))
+    return out
+
+
 def circuit_rows(doc):
     """The circuits (0.144, the load schedule): dicts with "guid", "kind" "circuit", "name", "circuit_type",
     "board", "points", "power" (W), "current" (A), "breaker" (A), "section" (mm²), "check" — in name order."""
@@ -476,6 +508,8 @@ def rows(doc, category):
         return carpentry_rows(doc)
     if category == "tiles":                            # (0.279)
         return tiles_rows(doc)
+    if category == "perforated":                       # (0.544)
+        return perforated_rows(doc)
     if category == "steel":                            # (0.500)
         return steel_rows(doc)
     if category == "bolts":

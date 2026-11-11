@@ -112,6 +112,8 @@ class AiLink(QtCore.QObject):
         self.calls += 1
         try:
             text = run(self.session, tool, args)
+            if isinstance(text, dict):                       # (0.543) a picture: its file named (same computer)
+                text = text["text"]
         except ToolError as exc:
             return {"text": "error: {}".format(exc), "error": True}
         except (ValueError, KeyError, TypeError) as exc:

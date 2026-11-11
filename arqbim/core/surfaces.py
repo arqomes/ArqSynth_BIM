@@ -25,7 +25,9 @@ DEFAULTS = {                    # slat / flute width, gap, direction; hole diame
     # (0.389) and the holes' shape, their grid, the boards' size, the joint between them, a picture («Imagem»: its
     # dark parts big holes, its light parts small ones or none)
     "perfurado": {"diameter": 0.03, "pitch": 0.06, "margin": 0.05, "hole": "redondo", "grid": "reta",
-                  "sheet_w": 1.22, "sheet_h": 2.44, "joint": 0.0, "mask": ""},
+                  "sheet_w": 1.22, "sheet_h": 2.44, "joint": 0.0, "mask": "",
+                  # (0.540) free holes from the Visual Graph (free_text: one panel's, repeated board by board or not)
+                  "free": "", "free_repeat": 1.0},
     # (0.175) a wavy surface of ribs: their thickness, the gap, level or upright; the wave's amplitude and length,
     # its shift (degrees for each metre across: the waves turn), how far its trough stands out of the wall
     "ondulado": {"width": 0.018, "gap": 0.018, "direction": "horizontal", "amplitude": 0.06, "wavelength": 1.20,
@@ -341,6 +343,120 @@ def _sheet_mesh(face, thickness, centres, sizes, pitch, square=False):
         base = count + np.arange(k)[:, None] * 4
         tris += [np.hstack((base, base + 1, base + 2)), np.hstack((base, base + 2, base + 3))]
         count += 4 * k
+    return np.concatenate(verts), np.concatenate(tris).astype(np.int64)
+
+
+# ---------------------------------------------------------------- (0.540) free holes, from the Visual Graph
+FREE_SHAPES = ("redondo", "quadrado", "hexagonal")
+
+
+def free_text(shape, holes):
+    """The text a finish keeps its free holes in: «shape|x,y,d;…», mm, one panel's (its corner at 0, 0)."""
+    if shape not in FREE_SHAPES:
+        raise ValueError(shape)
+    return shape + "|" + ";".join("{:.1f},{:.1f},{:.1f}".format(x * 1000.0, y * 1000.0, d * 1000.0)
+                                  for x, y, d in holes)
+
+
+def free_read(text):
+    """(shape, (n, 3) x, y, d in m) of free_text — or None (none, or not readable)."""
+    if not text or "|" not in text:
+        return None
+    shape, _, rows = text.partition("|")
+    if shape not in FREE_SHAPES:
+        return None
+    try:
+        vals = [[float(c) / 1000.0 for c in row.split(",")] for row in rows.split(";") if row]
+    except ValueError:
+        return None
+    arr = np.array(vals, dtype=float).reshape(-1, 3) if vals else np.zeros((0, 3))
+    return shape, arr
+
+
+def hole_reach(shape, d):
+    """How far a hole reaches from its centre (its corners)."""
+    return d / 2.0 * {"redondo": 1.0, "quadrado": math.sqrt(2.0), "hexagonal": 2.0 / math.sqrt(3.0)}[shape]
+
+
+def free_perforation(face, shape, holes, margin, size, repeat=True):
+    """[(panel, centres (k, 2), sizes (k,))] free holes (one panel's: x, y, d from its corner) on the face: boards
+    of `size` from its corner, each with the same holes (`repeat`) — or only the first board —, only those wholly
+    `margin` clear of the board's edges and the openings."""
+    import shapely
+    holes = np.asarray(holes, dtype=float).reshape(-1, 3)
+    out = []
+    u0, v0 = face.bounds[:2]
+    for board in panels(face, size):
+        i = math.floor((board.bounds[0] - u0) / size[0] + 1e-6)   # (the board's tile, even where an opening cut it)
+        j = math.floor((board.bounds[1] - v0) / size[1] + 1e-6)
+        if not repeat and (i, j) != (0, 0):
+            continue
+        ox, oy = u0 + i * size[0], v0 + j * size[1]
+        if not len(holes):
+            out.append((board, np.zeros((0, 2)), np.zeros(0)))
+            continue
+        c = holes[:, :2] + (ox, oy)
+        d = holes[:, 2]
+        room = board.buffer(-margin, join_style=2) if margin > 0 else board
+        keep = np.zeros(len(c), dtype=bool)
+        if not room.is_empty:
+            pts = shapely.points(c)
+            keep = shapely.contains_xy(room, c[:, 0], c[:, 1]) & \
+                (shapely.distance(room.boundary, pts) >= hole_reach(shape, d) - 1e-9)
+        out.append((board, c[keep], d[keep]))
+    return out
+
+
+def _hole_polygons(shape, centres, sizes):
+    import shapely
+    n = {"redondo": SEGMENTS, "quadrado": 4, "hexagonal": 6}[shape]
+    start = {"redondo": 0.0, "quadrado": 45.0, "hexagonal": 0.0}[shape]
+    ang = np.radians(start + np.arange(n) * 360.0 / n)
+    r = hole_reach(shape, np.asarray(sizes, dtype=float))[:, None]
+    ring = np.stack((centres[:, 0:1] + r * np.cos(ang), centres[:, 1:2] + r * np.sin(ang)), axis=-1)
+    return shapely.polygons(ring)
+
+
+def free_mesh(face, thickness, found, shape):
+    """(vertices (u, v, w), triangles) of a sheet with free holes (free_perforation's): the face less its holes,
+    top and bottom by a constrained triangulation, the sides of every edge (outline, openings, holes)."""
+    import shapely
+    from shapely.geometry.polygon import orient
+    t = float(thickness)
+    centres = np.concatenate([c for _q, c, _d in found]) if found else np.zeros((0, 2))
+    sizes = np.concatenate([d for _q, _c, d in found]) if found else np.zeros(0)
+    sheet = face
+    if len(centres):
+        sheet = face.difference(shapely.union_all(_hole_polygons(shape, centres, sizes)))
+    verts, tris, count = [], [], 0
+    for part in getattr(sheet, "geoms", [sheet]):
+        if part.geom_type != "Polygon" or part.area < 1e-8:
+            continue
+        part = orient(part, 1.0)
+        tri = shapely.constrained_delaunay_triangles(part)
+        coords = np.array([np.asarray(g.exterior.coords)[:3] for g in tri.geoms]).reshape(-1, 3, 2)
+        if len(coords):
+            a, b, c = coords[:, 0], coords[:, 1], coords[:, 2]
+            cw = (b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]) < 0
+            coords[cw] = coords[cw][:, ::-1]
+            flat = coords.reshape(-1, 2)
+            k = len(flat)
+            verts += [np.column_stack((flat, np.full(k, t))), np.column_stack((flat, np.zeros(k)))]
+            idx = np.arange(k).reshape(-1, 3)
+            tris += [idx + count, idx[:, ::-1] + count + k]
+            count += 2 * k
+        for ring in [np.asarray(part.exterior.coords)] + [np.asarray(h.coords) for h in part.interiors]:
+            a, b = ring[:-1], ring[1:]
+            k = len(a)
+            quad = np.zeros((k * 4, 3))
+            quad[0::4, :2], quad[1::4, :2], quad[2::4, :2], quad[3::4, :2] = a, b, b, a
+            quad[2::4, 2], quad[3::4, 2] = t, t
+            verts.append(quad)
+            base = count + np.arange(k)[:, None] * 4
+            tris += [np.hstack((base, base + 1, base + 2)), np.hstack((base, base + 2, base + 3))]
+            count += 4 * k
+    if not verts:
+        return np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64)
     return np.concatenate(verts), np.concatenate(tris).astype(np.int64)
 
 

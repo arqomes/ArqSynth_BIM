@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.540.0 — 2026-11-11
+
+**Gráfico Visual: a janela, os modelos prontos, o 3D, a ligação à IA e a biblioteca (passos 3 a 7 do plano).**
+
+- **Ícone «Gráfico Visual»** na barra da esquerda (dois cartões ligados por um fio): abre a janela dos nós. À esquerda
+  a lista de nós por família; ao centro os cartões, cada um com a imagem do seu resultado ao vivo; à direita as
+  medidas do nó escolhido (barras deslizantes com o número ao lado) e o resultado em grande.
+- Ligar nós: **arrastar de uma saída** (bolinha à direita do cartão) **para uma entrada** (à esquerda). Ligações de
+  tipos diferentes são recusadas com aviso no rodapé. Delete apaga cartões ou fios escolhidos; roda do rato aproxima;
+  botão do meio arrasta a tela.
+- **Modelos ▾** na barra: «Imagem → painel perfurado» (pede a fotografia), «Atrator em favo», «Voronoi denso no
+  centro», «Gradiente em quincôncio», «Folhagem (ruído)». A janela abre já com o «Atrator em favo».
+- «Verificar fabrico» escreve no cartão quantos furos há a corrigir; esses furos ficam a vermelho.
+- **Aplicar ao modelo**: cada nó «Aplicar à parede/fachada» põe o painel como revestimento perfurado na parede
+  escolhida, painel a painel ao longo da parede. O revestimento perfurado do BIM aceita agora **furos livres**
+  (quaisquer posições e tamanhos, redondos, quadrados ou hexagonais), guardados no IFC.
+- Nós novos: **Fachada do modelo** (a face de uma parede, já sem portas e janelas, como painel), **Subdividir**
+  (módulos com junta), **Extrudir** (a chapa em 3D), **Relevo** (chapa estampada a seguir um modulador), **Dobrar**
+  (abas dobradas).
+- **IA (MCP)**: ferramentas `graph_nodes`, `graph`, `graph_eval` (com imagem do resultado para a IA ver) e
+  `graph_apply`.
+- **Biblioteca**: ao escolher um nó na lista, uma pequena animação mostra o seu efeito (uma medida a variar) com a
+  explicação por baixo.
+- **Tabelas ▸ Painéis perfurados**: parede, painéis, furos, área aberta e área de cada revestimento perfurado.
+- Testes: `tests/test_graph_bim.py`, `test_graph_window.py`, `test_graph_templates.py`, `test_graph_3d.py`,
+  `test_graph_mcp.py`, `test_graph_library.py`; verificação «grafico_janela» no gui_smoke.
+- (Os passos 3 a 7 foram feitos de seguida, a pedido do dono, e ficam numa só versão.)
+
 ## 0.539.0 — 2026-11-11
 
 **Gráfico Visual, passo 2: os primeiros 12 nós dos painéis perfurados (ainda sem janela).**

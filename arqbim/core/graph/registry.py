@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 # Kinds of data a link carries. A link joins an output to an input of the same kind ("any" takes everything).
 KINDS = ("number", "int", "bool", "text", "choice", "point", "image", "panel", "points", "field", "holes", "report",
-         "file", "bim", "any")
+         "file", "bim", "mesh", "any")
 
 
 @dataclass(frozen=True)

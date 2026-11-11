@@ -40,10 +40,12 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  # (0.389) a perforated panel's: the holes' shape, their grid, the boards' size, the joint, a picture
                  "hole": "FormaFuro", "grid": "Malha", "sheet_w": "PainelLargura", "sheet_h": "PainelAltura",
                  "joint": "Junta", "mask": "Imagem",
+                 # (0.540) free holes from the Visual Graph (core_surfaces.free_text), repeated board by board or not
+                 "free": "FurosLivres", "free_repeat": "FurosRepetir",
                  # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
                  "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
                  "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
-TEXT_KEYS = {"direction", "hole", "grid", "mask"}
+TEXT_KEYS = {"direction", "hole", "grid", "mask", "free"}
 CHOICES = {"direction": ("vertical", "horizontal"), "hole": core_surfaces.HOLE_SHAPES, "grid": core_surfaces.GRIDS}
 REGION_NAMES = {"start": "Inicio", "end": "Fim", "base": "Base"}      # (0.389) a rectangle on the face (m)
 
@@ -70,8 +72,17 @@ def _mask(d):
     return image_masks.load(d["mask"])
 
 
+def _free(d):
+    """(0.540) (shape, holes) of a perforated finish's free holes (the Visual Graph's), or None."""
+    return core_surfaces.free_read(d.get("free") or "")
+
+
 def _perforation(face, d):
-    """(0.389) core_surfaces.perforation with a finish's measures."""
+    """(0.389) core_surfaces.perforation with a finish's measures (0.540: or its free holes)."""
+    free = _free(d)
+    if free is not None:
+        return core_surfaces.free_perforation(face, free[0], free[1], d["margin"], (d["sheet_w"], d["sheet_h"]),
+                                              float(d.get("free_repeat", 1.0)) > 0.5)
     return core_surfaces.perforation(face, d["diameter"], d["pitch"], d["margin"], (d["sheet_w"], d["sheet_h"]),
                                      d["joint"], d["grid"], _mask(d))
 LIGHTS = core_ceilings.LIGHTS
@@ -465,11 +476,17 @@ class CoveringMixin:
         z0 = frame.z0
         items = []
         if finish == "perfurado":
-            if sum(len(c) for _q, c, _s in _perforation(face, d)) > core_surfaces.MAX_HOLES:
+            found = _perforation(face, d)
+            if sum(len(c) for _q, c, _s in found) > core_surfaces.MAX_HOLES:
                 raise EditRefused("pattern_many")
-            verts, tris = core_surfaces.perforated_mesh(face, t, d["diameter"], d["pitch"], d["margin"],
-                                                        (d["sheet_w"], d["sheet_h"]), d["joint"], d["grid"],
-                                                        d["hole"], _mask(d))
+            free = _free(d)
+            if free is not None:                           # (0.540) the Visual Graph's holes
+                from shapely.geometry.polygon import orient
+                verts, tris = core_surfaces.free_mesh(orient(face, 1.0), t, found, free[0])
+            else:
+                verts, tris = core_surfaces.perforated_mesh(face, t, d["diameter"], d["pitch"], d["margin"],
+                                                            (d["sheet_w"], d["sheet_h"]), d["joint"], d["grid"],
+                                                            d["hole"], _mask(d))
             if not len(tris):
                 raise EditRefused("too_small")
             yface = frame.y1 if side > 0 else frame.y0
@@ -662,10 +679,15 @@ class CoveringMixin:
                 changes[PATTERN_NAMES[key]] = str(value)
             elif key == "mask":
                 changes[PATTERN_NAMES[key]] = str(value)
+            elif key == "free":                          # (0.540) the Visual Graph's holes («» none)
+                if value and core_surfaces.free_read(str(value)) is None:
+                    raise EditRefused("pattern_bad")
+                changes[PATTERN_NAMES[key]] = str(value)
             elif key == "shift":                         # (0.175) any angle — negative: the waves turn the other way
                 changes[PATTERN_NAMES[key]] = float(value)
             else:
-                if float(value) <= 0.0 and key not in ("gap", "margin", "depth", "joint", "frame", "battens") \
+                if float(value) <= 0.0 and key not in ("gap", "margin", "depth", "joint", "frame", "battens",
+                                                       "free_repeat") \
                         or float(value) < 0.0:
                     raise EditRefused("pattern_bad")
                 if key in ("sheet_w", "sheet_h") and float(value) < 0.1:
