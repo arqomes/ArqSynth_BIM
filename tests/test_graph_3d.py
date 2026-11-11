@@ -73,8 +73,7 @@ class Nodes3D(unittest.TestCase):
         g = Graph()
         fb = g.add_node("fachada_bim", {"parede": wall})
         nodes_3d.MODEL["doc"] = None
-        g.evaluate()
-        self.assertIn("modelo", g.errors[fb])
+        self.assertAlmostEqual(g.evaluate()[fb]["painel"]["width"], 4.0)     # (0.541: no model — the example face)
         nodes_3d.MODEL["doc"] = doc
         try:
             g.set_param(fb, "margem", 0.06)                  # (a new key: worked out again)

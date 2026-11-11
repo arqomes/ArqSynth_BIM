@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.541.0 — 2026-11-11
+
+**Gráfico Visual, 2.ª fase: operadores no painel lateral, a superfície do modelo ao vivo, Shift+A (passos 1 a 5).**
+O dono: «eu esperava um fluxo mais intuitivo».
+
+- O ícone **Gráfico Visual** da barra da esquerda abre agora só o **painel lateral «Operadores»**: os operadores
+  guardados, cada um com miniatura e nome, e os botões **Aplicar**, **Criar novo**, **Editar**, Duplicar, Mudar o
+  nome, Apagar, Importar… e Exportar…. Duplo clique num operador aplica-o.
+- **Operadores para todos os projetos**: ficam na pasta do programa (`…\ArqSynth\operadores`), fora do projeto. Na
+  primeira vez a biblioteca recebe quatro de origem (Atrator em favo, Voronoi denso no centro, Gradiente em
+  quincôncio, Folhagem).
+- **Aplicar** põe o operador na face de cada parede escolhida no modelo (várias de uma vez). A face é a que está
+  virada para si na vista, ou a que escolher em «Face» (frente / trás).
+- **Criar novo / Editar** com uma parede escolhida: o editor abre já com a **face dessa parede** (sem as portas e as
+  janelas) como ponto de partida — o nó «Superfície do modelo». Sem parede escolhida, trabalha-se numa face de exemplo.
+- No editor, à esquerda, **a superfície com o resultado ao vivo**: muda a cada medida que se mexe, com o veredicto do
+  fabrico por baixo (furos, área aberta, furos a corrigir a vermelho). «Usar a parede escolhida» troca de parede.
+- **Shift+A** (ou botão direito na tela, ou «＋ Nó»): menu de nós no sítio do rato, cada um com o desenho do que faz e
+  o nome, por famílias; escrever filtra, Enter insere. Com um fio escolhido, o nó entra no meio dele; com um cartão
+  escolhido, fica já ligado a ele.
+- **Guardar operador** / **Guardar como…** na barra do editor: vai para a biblioteca com a miniatura do resultado.
+- A lista de nós à esquerda e a sua animação saíram (o menu Shift+A tomou o lugar delas).
+- Por fazer (PLANO): a parede guardar o operador que recebeu, superfícies curvas e paramétricas, a pré-visualização
+  em 3D, medidas expostas no painel, desfazer no editor.
+- Testes: `tests/test_graph_operators.py`; verificações «operadores_painel» e «grafico_janela» no gui_smoke.
+
 ## 0.540.0 — 2026-11-11
 
 **Gráfico Visual: a janela, os modelos prontos, o 3D, a ligação à IA e a biblioteca (passos 3 a 7 do plano).**

@@ -1873,7 +1873,8 @@ class MainWindow(QtWidgets.QMainWindow):
     LEFT_MODULES = {"project": "tree_panel", "library": "library_panel", "sheets": "tree_panel",    # (0.466: its own)
                     "storeys": "storeys_panel", "rules": "rules_panel", "materials": "materials_panel",   # (0.468)
                     "rooms": "program_panel",                   # (0.475: the programme's manager, no longer a table)
-                    "quantities": "tables_panel"}               # (0.477: the tables' tree, each opened in its tab)
+                    "quantities": "tables_panel",               # (0.477: the tables' tree, each opened in its tab)
+                    "graph": "operators_panel"}                 # (0.541: the operators kept; the editor from it)
 
     def _build_modules(self):
         """(0.184) Panel 4, the compact bar at the far left — icons only — and panel 5 beside it: the Project
@@ -1921,6 +1922,19 @@ class MainWindow(QtWidgets.QMainWindow):
         tp.on_insert = lambda kind, key: self.schedules_panel.insert(kind, key) if self.table_shown() else None
         tp.on_make_own = lambda: self.schedules_panel.make_own() if self.table_shown() else None      # (0.478)
         tp.visibilityChanged.connect(lambda shown: self._refresh_tables_panel() if shown else None)
+        # (0.541, the owner: «O botão no BIM deve abrir apenas o painel lateral com os operadores guardados») the
+        # «Gráfico Visual» module's panel: the library of operators, with Aplicar / Criar novo / Editar
+        from . import operators_panel as operators_ui
+        self.operators_panel = operators_ui.OperatorsPanel(self)
+        self.addDockWidget(left, self.operators_panel)
+        self.operators_panel.hide()
+        self.left_panels.append(self.operators_panel)
+        self.operators_panel.raise_ = lambda p=self.operators_panel: self._left_up(p)
+        op = self.operators_panel
+        op.target = lambda: len(self.chosen_walls())
+        op.on_apply, op.on_new, op.on_edit = self.apply_operator, self.new_operator, self.edit_operator
+        self.viewport.selection_listeners.append(
+            lambda _ids: op.refresh_target() if op.isVisible() else None)
         # (0.479) the ArqSynth Presentation tab: its two columns and its commands over the 3D view, hidden until the
         # tab is chosen (ui/presentation_mode.py). (0.480, the owner: «não quero essa divisão na coluna») it took the
         # place of the 0.363 Presentation panel, which split the left column under the navigator
@@ -1994,7 +2008,8 @@ class MainWindow(QtWidgets.QMainWindow):
             panel.show()
         QtWidgets.QDockWidget.raise_(panel)
         names = {"tree_panel": "project", "storeys_panel": "storeys", "rules_panel": "rules", "library_panel": "library",
-                 "materials_panel": "materials", "program_panel": "rooms", "tables_panel": "quantities"}
+                 "materials_panel": "materials", "program_panel": "rooms", "tables_panel": "quantities",
+                 "operators_panel": "graph"}
         name = names.get(next((a for a in names if getattr(self, a, None) is panel), ""))
         if name and getattr(self, "module_actions", None) and \
                 not (name == "project" and self.module in ("library", "sheets")):
@@ -2020,16 +2035,76 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 acts["presentation"].setChecked(False)
 
-    def show_visual_graph(self):
-        """(0.540) The Visual Graph's window (one, kept while the program runs), in front."""
-        win = getattr(self, "graph_window", None)
-        if win is None:
-            from . import visual_graph
-            win = self.graph_window = visual_graph.GraphWindow(self)
+    def chosen_walls(self):
+        """(0.541) The walls chosen in the model (their GlobalIds), in a stable order."""
+        out = []
+        for guid in sorted(self.viewport.selection, key=str):
+            try:
+                if self.doc.ifc.kind_of(guid) == "wall":
+                    out.append(guid)
+            except Exception:  # (an id not of the IFC: a sketch, a dimension)
+                continue
+        return out
+
+    def face_in_view(self, wall):
+        """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
+        view not telling: the front)."""
+        try:
+            frame = self.doc.ifc.element_frame(wall)
+            across = frame.matrix[:3, 1] / np.linalg.norm(frame.matrix[:3, 1])
+            middle = frame.to_world((frame.x0 + frame.length / 2.0, (frame.y0 + frame.y1) / 2.0,
+                                     (frame.z0 + frame.z1) / 2.0))
+            eye = np.asarray(self.viewport.camera_position(), dtype=float) - middle
+            d = float(eye @ across) / max(float(np.linalg.norm(eye)), 1e-9)
+        except Exception:  # (no camera yet, a wall gone)
+            return "frente"
+        return "trás" if d < -0.05 else "frente"
+
+    def show_visual_graph(self, graph=None, slug=None, name="", side=None):
+        """(0.540) The Visual Graph's window, in front. (0.541) Opened from the «Operadores» panel: on the face of
+        the wall chosen in the model (none: the example face), with the operator being edited (None: a new one)."""
+        from . import visual_graph
+        walls = self.chosen_walls()
+        wall = walls[0] if walls else ""
+        side = side or (self.face_in_view(wall) if wall else "frente")
+        old = getattr(self, "graph_window", None)
+        if old is not None:
+            old.close()
+        win = self.graph_window = visual_graph.GraphWindow(self, graph, slug=slug, name=name, wall=wall, side=side)
         win.show()
         win.raise_()
         win.activateWindow()
         return win
+
+    def new_operator(self, side=None):
+        """«Criar novo»: the editor on the wall's face chosen, with a first graph to change."""
+        return self.show_visual_graph(side=side)
+
+    def edit_operator(self, slug, side=None):
+        from ..core.graph import operators
+        from ..core.graph.graph import GraphError
+        try:
+            name, _about, graph = operators.load(slug)
+        except GraphError as e:
+            QtWidgets.QMessageBox.warning(self, "Operadores", str(e))
+            return None
+        return self.show_visual_graph(graph, slug=slug, name=name, side=side)
+
+    def apply_operator(self, slug, side=None):
+        """«Aplicar»: the operator on the face (`side`; None: the one in view) of every wall chosen. Returns the
+        finishes made."""
+        from ..core.graph import operators
+        made, problems = [], []
+        for wall in self.chosen_walls():
+            try:
+                made += operators.apply_to(self.doc, slug, wall, side or self.face_in_view(wall))
+            except ValueError as e:                              # (GraphError too)
+                problems.append(str(e))
+        if problems:
+            QtWidgets.QMessageBox.warning(self, "Operadores", "Não aplicado:\n" + "\n".join(sorted(set(problems))))
+        if made:
+            self.statusBar().showMessage("{} painel(éis) perfurado(s) aplicado(s).".format(len(made)), 6000)
+        return made
 
     def set_module(self, name):
         """(0.184) A module of the compact bar: its panel up in panel 5 — or, the module in view clicked again,
@@ -2058,8 +2133,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close_presentation()
             else:
                 self.show_presentation_tab()
-        elif name == "graph":                               # (0.540) the Visual Graph: its own window
-            self.show_visual_graph()
         elif name == "settings":
             menu = QtWidgets.QMenu(self)
             menu.addActions([self.act_mouse_sketchup, self.act_mouse_revit])

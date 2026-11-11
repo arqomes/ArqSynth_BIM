@@ -37,13 +37,8 @@ class Library(unittest.TestCase):
 
         from arqbim.ui import visual_graph as vg
         QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-        win = vg.GraphWindow()
-        top = win.palette.topLevelItem(1)                  # Padrões
-        win.palette.setCurrentItem(top.child(0))
-        self.assertIsNotNone(win.demo.pixmap())
-        self.assertTrue(win.demo_timer.isActive())
-        win._demo_step()
-        win.close()
+        for key in ("grelha", "atrator", "perfurar", "extrudir"):      # (0.541: each node's picture, Shift+A's menu)
+            self.assertIsNotNone(vg.node_thumb(key), key)
 
     def test_table(self):
         from arqbim.core.graph import templates

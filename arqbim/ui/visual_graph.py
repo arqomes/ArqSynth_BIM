@@ -191,6 +191,280 @@ def _outline_dashed(p, shape, s, ox, oy):
             p.drawPolyline(QtGui.QPolygonF([QtCore.QPointF(ox + x * s, oy - y * s) for x, y in ring.coords]))
 
 
+# ------------------------------------------------------------------ the result on the surface (0.541)
+RANK = {"mesh": 5, "bim": 4, "holes": 3, "points": 2, "field": 1, "panel": 1}
+WALL = QtGui.QColor("#cfd4da")
+
+
+def final_result(graph, results):
+    """(node id, kind, value) of what the graph ends in — what the surface shows: the solid, else the panel on its
+    wall, else the holes, the points, the modulator, the bare surface. The last of the best kind; None: nothing."""
+    best = None
+    for nid in graph.order():
+        out = results.get(nid)
+        spec = graph.registry.get(graph.nodes[nid]["type"])
+        if out is None or not spec.outputs:
+            continue
+        port = spec.outputs[0]
+        rank = RANK.get(port.kind, 0)
+        if rank and (best is None or rank >= best[0]):
+            best = (rank, nid, port.kind, out.get(port.name))
+    return None if best is None else best[1:]
+
+
+def _holes(p, shape, xy, d, s, ox, oy, bad=None, limit=40000):
+    dark, red = QtGui.QColor("#1d2025"), QtGui.QColor(theme.ART["red"])
+    p.setPen(QtCore.Qt.PenStyle.NoPen)
+    for k, ((x, y), size) in enumerate(zip(xy[:limit], d[:limit])):
+        p.setBrush(red if bad is not None and len(bad) > k and bad[k] else dark)
+        cx, cy, r = ox + x * s, oy - y * s, max(0.6, size * s / 2.0)
+        if shape == "redondo":
+            p.drawEllipse(QtCore.QPointF(cx, cy), r, r)
+        elif shape == "quadrado":
+            p.drawRect(QtCore.QRectF(cx - r, cy - r, 2 * r, 2 * r))
+        else:
+            rr = r * 2.0 / math.sqrt(3.0)
+            p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(cx + rr * math.cos(math.radians(a)),
+                                                          cy + rr * math.sin(math.radians(a)))
+                                           for a in range(0, 360, 60)]))
+
+
+def _draw_applied(p, value, w, h, source=None):
+    """The panel as it will stand on its wall's face (the example face: no wall): the face with its doors and
+    windows, the boards, every hole — those «Verificar fabrico» refused in red (the face covered whole)."""
+    from ..core import surfaces
+    from ..core.graph import nodes_3d
+    try:
+        face = nodes_3d.target_face(value["wall"])
+    except ValueError:
+        face = nodes_3d.example_face()
+    s, ox, oy = _frame(w, h, face.bounds, pad=14)
+    _outline(p, face, s, ox, oy, WALL)
+    panel = value["panel"]
+    holes = np.asarray(value["holes"], dtype=float).reshape(-1, 3)
+    if not value["repeat"] and source is not None and len(source["xy"]) == len(holes):
+        _holes(p, value["shape"], source["xy"], source["d"], s, ox, oy, source.get("bad"))
+        return
+    found = surfaces.free_perforation(face, value["shape"], holes, panel["margin"],
+                                      (panel["width"], panel["height"]), bool(value["repeat"]))
+    p.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+    for board, centres, sizes in found:
+        p.setPen(QtGui.QPen(QtGui.QColor("#7d8794"), 1.0))
+        _outline_dashed(p, board, s, ox, oy)
+        _holes(p, value["shape"], centres, sizes, s, ox, oy)
+
+
+def surface_picture(graph, results, w, h, nid=None):
+    """(0.541) The picture of the surface being worked on: what the graph ends in (`nid`: that node's result
+    instead) drawn on it."""
+    img = QtGui.QImage(int(w), int(h), QtGui.QImage.Format.Format_ARGB32_Premultiplied)
+    img.fill(PAPER)
+    found = None
+    if nid is not None and results.get(nid) is not None:
+        spec = graph.registry.get(graph.nodes[nid]["type"])
+        if spec.outputs and spec.outputs[0].kind in RANK:
+            found = (nid, spec.outputs[0].kind, results[nid].get(spec.outputs[0].name))
+    found = found or final_result(graph, results)
+    if found is None:
+        return img
+    node, kind, value = found
+    p = QtGui.QPainter(img)
+    p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+    try:
+        if kind == "bim":
+            link = next((l for l in graph.links if l[2] == node and l[3] == "furos"), None)
+            source = results.get(link[0], {}).get(link[1]) if link else None
+            _draw_applied(p, value, w, h, source)
+        else:
+            _draw(p, kind, value, w, h, domain_of(results, graph))
+    finally:
+        p.end()
+    return img
+
+
+def png_bytes(image):
+    data = QtCore.QByteArray()
+    buffer = QtCore.QBuffer(data)
+    buffer.open(QtCore.QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    buffer.close()
+    return bytes(data)
+
+
+def operator_png(graph, w=240, h=152):
+    """An operator's thumbnail: its result on the example face."""
+    from ..core.graph import operators
+    operators.retarget(graph, "")
+    return png_bytes(surface_picture(graph, graph.evaluate(), w, h))
+
+
+_THUMBS = {}
+
+
+def node_thumb(key, w=96, h=60):
+    """(0.541) A node's small picture of what it does (its example worked out once), for the Shift+A menu."""
+    if key not in _THUMBS:
+        from ..core.graph import examples
+        image = None
+        try:
+            g, nid, _sweep = examples.example(key)
+            for node in g.nodes.values():               # (few and big: read at a glance in a small picture)
+                if "passo" in node["params"]:
+                    node["params"]["passo"] = 0.2
+                if node["type"] == "perfurar":
+                    node["params"].update(d_min=0.03, d_max=0.17)
+            results = g.evaluate()
+            out = results.get(nid)
+            port = g.registry.get(g.nodes[nid]["type"]).outputs[0]
+            if out is not None:
+                image = picture(port.kind, out.get(port.name), w, h, domain_of(results, g))
+        except Exception:  # (a node with no example: its name alone)
+            image = None
+        _THUMBS[key] = image
+    return _THUMBS[key]
+
+
+class SurfacePreview(QtWidgets.QWidget):
+    """The surface being worked on, with the graph's result on it — redrawn whenever the graph is worked out."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(260, 200)
+        self.image = None
+        self.source = None                       # () -> QImage of (w, h)
+
+    def refresh(self):
+        self.image = None
+        self.update()
+
+    def resizeEvent(self, e):
+        self.image = None
+        super().resizeEvent(e)
+
+    def paintEvent(self, _e):
+        p = QtGui.QPainter(self)
+        if self.image is None and self.source is not None:
+            self.image = self.source(self.width(), self.height())
+        if self.image is not None:
+            p.drawImage(0, 0, self.image)
+        else:
+            p.fillRect(self.rect(), PAPER)
+        p.setPen(QtGui.QPen(theme.qcolor(theme.C["edge"]), 1.0))
+        p.drawRect(self.rect().adjusted(0, 0, -1, -1))
+
+
+class NodeMenu(QtWidgets.QFrame):
+    """(0.541, the owner: «Podemos optar pela tecla Shift+A para inserir os nós. As opções poderiam vir com nomes e
+    representação visual do que o comando faz») The menu of nodes at the mouse: each with its picture and name, by
+    family; typing narrows it; Enter (or a click) puts the node where the mouse was."""
+    chosen = QtCore.Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent, QtCore.Qt.WindowType.Popup)
+        self.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(6, 6, 6, 6)
+        self.search = QtWidgets.QLineEdit()
+        self.search.setPlaceholderText("Procurar nó… (escreva o nome)")
+        self.search.textChanged.connect(self._filter)
+        self.search.installEventFilter(self)
+        self.list = QtWidgets.QListWidget()
+        self.list.setIconSize(QtCore.QSize(96, 60))
+        self.list.itemClicked.connect(self._pick)
+        self.list.itemActivated.connect(self._pick)
+        self.list.currentItemChanged.connect(lambda it, _old: self._about(it))
+        self.about = QtWidgets.QLabel()
+        self.about.setWordWrap(True)
+        self.about.setMinimumHeight(48)
+        self.about.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.about.setStyleSheet("color: %s;" % theme.qcolor(theme.C["muted"]).name())
+        lay.addWidget(self.search)
+        lay.addWidget(self.list, 1)
+        lay.addWidget(self.about)
+        self.resize(330, 520)
+        by_family = {}
+        for spec in REGISTRY.catalog():
+            by_family.setdefault(spec["family"], []).append(spec)
+        for family in FAMILIES:
+            if family not in by_family:
+                continue
+            head = QtWidgets.QListWidgetItem(family.upper())
+            head.setFlags(QtCore.Qt.ItemFlag.NoItemFlags)
+            head.setForeground(QtGui.QBrush(QtGui.QColor(FAMILY_COLOURS[family])))
+            f = head.font()
+            f.setBold(True)
+            head.setFont(f)
+            self.list.addItem(head)
+            for spec in by_family[family]:
+                item = QtWidgets.QListWidgetItem(spec["label"])
+                item.setData(QtCore.Qt.ItemDataRole.UserRole, spec["key"])
+                item.setData(QtCore.Qt.ItemDataRole.UserRole + 1, spec["description"])
+                thumb = node_thumb(spec["key"])
+                if thumb is not None:
+                    item.setIcon(QtGui.QIcon(QtGui.QPixmap.fromImage(thumb)))
+                self.list.addItem(item)
+
+    def keys(self):
+        """The nodes in view (not narrowed away), in order."""
+        return [self.list.item(k).data(QtCore.Qt.ItemDataRole.UserRole) for k in range(self.list.count())
+                if not self.list.item(k).isHidden() and self.list.item(k).data(QtCore.Qt.ItemDataRole.UserRole)]
+
+    def open_at(self, point):
+        from . import menus
+        self.search.clear()
+        self._filter("")
+        screen = QtGui.QGuiApplication.screenAt(point) or QtGui.QGuiApplication.primaryScreen()
+        if screen is not None:                       # (wholly on the screen, clear of the taskbar's room)
+            area = screen.availableGeometry()
+            point = QtCore.QPoint(min(point.x(), area.right() - self.width()),
+                                  max(area.top(), min(point.y(), area.bottom() - menus.TASKBAR_PX - self.height())))
+        self.move(point)
+        self.show()
+        self.search.setFocus()
+
+    def _filter(self, text):
+        text = str(text).strip().lower()
+        first = None
+        for k in range(self.list.count()):
+            item = self.list.item(k)
+            key = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if not key:
+                item.setHidden(bool(text))
+                continue
+            hit = not text or text in item.text().lower() or text in \
+                str(item.data(QtCore.Qt.ItemDataRole.UserRole + 1)).lower()
+            item.setHidden(not hit)
+            if hit and first is None:
+                first = item
+        self.list.setCurrentItem(first)
+
+    def _about(self, item):
+        self.about.setText(str(item.data(QtCore.Qt.ItemDataRole.UserRole + 1) or "") if item is not None else "")
+
+    def _pick(self, item):
+        key = item.data(QtCore.Qt.ItemDataRole.UserRole) if item is not None else None
+        if key:
+            self.hide()
+            self.chosen.emit(key)
+
+    def eventFilter(self, obj, event):
+        if obj is self.search and event.type() == QtCore.QEvent.Type.KeyPress:
+            if event.key() in (QtCore.Qt.Key.Key_Down, QtCore.Qt.Key.Key_Up):
+                step = 1 if event.key() == QtCore.Qt.Key.Key_Down else -1
+                k = self.list.currentRow()
+                while 0 <= k + step < self.list.count():
+                    k += step
+                    item = self.list.item(k)
+                    if not item.isHidden() and item.data(QtCore.Qt.ItemDataRole.UserRole):
+                        self.list.setCurrentItem(item)
+                        break
+                return True
+            if event.key() in (QtCore.Qt.Key.Key_Return, QtCore.Qt.Key.Key_Enter):
+                self._pick(self.list.currentItem())
+                return True
+        return super().eventFilter(obj, event)
+
+
 # ------------------------------------------------------------------ the canvas
 class PortItem(QtWidgets.QGraphicsEllipseItem):
     def __init__(self, card, group, port):
@@ -215,7 +489,10 @@ class LinkItem(QtWidgets.QGraphicsPathItem):
         self.update_path()
 
     def update_path(self):
-        self.setPath(_wire(self.a.centre(), self.b.centre()))
+        try:
+            self.setPath(_wire(self.a.centre(), self.b.centre()))
+        except RuntimeError:            # (asked for just before the canvas was drawn anew: its cards are gone)
+            return
         colour = QtGui.QColor(KIND_COLOURS.get(self.a.port.kind, "#888888"))
         self.setPen(QtGui.QPen(colour, 4.0 if self.isSelected() else 2.4))
 
@@ -315,6 +592,7 @@ class GraphView(QtWidgets.QGraphicsView):
     canvas dragged) pans; Delete removes the chosen cards and wires."""
     link_made = QtCore.Signal(str, str, str, str)
     delete_pressed = QtCore.Signal()
+    add_requested = QtCore.Signal(QtCore.QPoint, QtCore.QPointF)
 
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
@@ -395,7 +673,23 @@ class GraphView(QtWidgets.QGraphicsView):
         if e.key() in (QtCore.Qt.Key.Key_Delete, QtCore.Qt.Key.Key_Backspace):
             self.delete_pressed.emit()
             return
+        if e.key() == QtCore.Qt.Key.Key_A and e.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier:
+            self.ask_node()                                 # (0.541) Shift+A: the menu of nodes at the mouse
+            return
         super().keyPressEvent(e)
+
+    def ask_node(self):
+        """The menu of nodes asked for where the mouse is (the canvas's middle: the mouse elsewhere)."""
+        here = self.viewport().mapFromGlobal(QtGui.QCursor.pos())
+        if not self.viewport().rect().contains(here):
+            here = self.viewport().rect().center()
+        self.add_requested.emit(self.viewport().mapToGlobal(here), self.mapToScene(here))
+
+    def contextMenuEvent(self, e):
+        if self.itemAt(e.pos()) is None:                    # (the right button on the empty canvas: the same menu)
+            self.add_requested.emit(e.globalPos(), self.mapToScene(e.pos()))
+            return
+        super().contextMenuEvent(e)
 
 
 # ------------------------------------------------------------------ the measures of the chosen node
@@ -437,8 +731,8 @@ class ParamsPanel(QtWidgets.QWidget):
             self.form.removeRow(0)
         if nid is None or graph is None or nid not in graph.nodes:
             self.title.setText("Nenhum nó escolhido")
-            self.about.setText("Escolha um cartão para mudar as suas medidas. Junte nós pela lista à esquerda "
-                               "(duplo clique) e ligue-os arrastando de uma saída (à direita do cartão) para uma "
+            self.about.setText("Escolha um cartão para mudar as suas medidas. Junte nós com Shift+A (ou o botão "
+                               "direito na tela) e ligue-os arrastando de uma saída (à direita do cartão) para uma "
                                "entrada (à esquerda).")
             self.preview.clear()
             return
@@ -564,21 +858,29 @@ class ParamsPanel(QtWidgets.QWidget):
 def starter_graph():
     """What the window opens with: a panel with hexagonal holes, bigger near an attractor, checked for
     fabrication and ready for a wall — something to see at once, and to change."""
-    from ..core.graph import templates
-    return templates.atrator_hexagono()
+    from ..core.graph import operators
+    return operators.starter()
 
 
 class GraphWindow(QtWidgets.QMainWindow):
-    """The Visual Graph. `main`: the program's window (its model and its chosen wall) — None to use it alone."""
+    """The Visual Graph: an operator's editor. `main`: the program's window (its model and its chosen wall) — None
+    to use it alone. (0.541) `slug`/`name`: the library's operator being edited (None: a new one); `wall`, `side`:
+    the wall's face it is worked on (""/"frente": the example face)."""
 
-    def __init__(self, main=None, graph=None):
+    def __init__(self, main=None, graph=None, slug=None, name="", wall="", side="frente"):
         super().__init__(main)
         self.setWindowFlag(QtCore.Qt.WindowType.Window)
         self.main = main
-        self.setWindowTitle("Gráfico Visual — ArqSynth BIM")
-        self.resize(1400, 820)
+        self.resize(1500, 860)
         self.path = None
+        self.slug, self.name = slug, name
+        self.wall, self.side = wall or "", side or "frente"
         self.graph = graph or starter_graph()
+        from ..core.graph import nodes_3d, operators
+        nodes_3d.MODEL["doc"] = getattr(main, "doc", None)
+        operators.retarget(self.graph, self.wall, self.side)
+        self.node_menu = None
+        self._drop = None                       # (where the node asked for by Shift+A goes)
         self.results = {}
         self.cards, self.wires = {}, []
         self.scene = QtWidgets.QGraphicsScene(self)
@@ -586,6 +888,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.view)
         self.view.link_made.connect(self._link)
         self.view.delete_pressed.connect(self.delete_chosen)
+        self.view.add_requested.connect(self.ask_node)
         self.scene.selectionChanged.connect(self._chosen)
         self.timer = QtCore.QTimer(self)
         self.timer.setSingleShot(True)
@@ -602,95 +905,135 @@ class GraphWindow(QtWidgets.QMainWindow):
 
     # ---- around the canvas
     def _build_palette(self):
-        dock = QtWidgets.QDockWidget("Nós", self)
-        dock.setObjectName("graph_palette")
+        """(0.541, the owner: «A superfície fica visível numa tela, enquanto trabalho com os nós, fica a
+        previsualização na superfície») The left side: the surface being worked on with the graph's result on it,
+        alive; what it is (the wall, its face); the fabrication's verdict under it. The list of nodes that stood
+        here is the Shift+A menu now."""
+        dock = QtWidgets.QDockWidget("Superfície", self)
+        dock.setObjectName("graph_surface")
         dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-        self.palette = QtWidgets.QTreeWidget()
-        self.palette.setHeaderHidden(True)
-        by_family = {}
-        for spec in REGISTRY.catalog():
-            by_family.setdefault(spec["family"], []).append(spec)
-        for family in FAMILIES:
-            if family not in by_family:
-                continue
-            top = QtWidgets.QTreeWidgetItem([family])
-            top.setForeground(0, QtGui.QBrush(QtGui.QColor(FAMILY_COLOURS[family])))
-            f = top.font(0)
-            f.setBold(True)
-            top.setFont(0, f)
-            for spec in by_family[family]:
-                it = QtWidgets.QTreeWidgetItem([spec["label"]])
-                it.setData(0, QtCore.Qt.ItemDataRole.UserRole, spec["key"])
-                it.setToolTip(0, spec["description"])
-                top.addChild(it)
-            self.palette.addTopLevelItem(top)
-        self.palette.expandAll()
-        self.palette.itemDoubleClicked.connect(lambda it, _c: self.add_from_palette(it))
         holder = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(holder)
-        lay.setContentsMargins(4, 4, 4, 4)
-        hint = QtWidgets.QLabel("Duplo clique para juntar um nó.")
+        lay.setContentsMargins(6, 6, 6, 6)
+        self.target_label = QtWidgets.QLabel()
+        self.target_label.setWordWrap(True)
+        f = self.target_label.font()
+        f.setBold(True)
+        self.target_label.setFont(f)
+        lay.addWidget(self.target_label)
+        self.surface = SurfacePreview()
+        self.surface.source = lambda w, h: surface_picture(self.graph, self.results, w, h, self._shown_node())
+        lay.addWidget(self.surface, 1)
+        self.show_final = QtWidgets.QCheckBox("Mostrar sempre o resultado final")
+        self.show_final.setChecked(True)
+        self.show_final.setToolTip("Ligado: a superfície mostra sempre o fim do gráfico. Desligado: mostra o "
+                                   "resultado do cartão escolhido.")
+        self.show_final.toggled.connect(lambda _on: self.surface.refresh())
+        lay.addWidget(self.show_final)
+        self.verdict = QtWidgets.QLabel()
+        self.verdict.setWordWrap(True)
+        lay.addWidget(self.verdict)
+        row = QtWidgets.QHBoxLayout()
+        self.take_button = QtWidgets.QPushButton("Usar a parede escolhida")
+        self.take_button.setToolTip("Passa a trabalhar sobre a parede que estiver escolhida no modelo.")
+        self.take_button.clicked.connect(self.take_chosen_wall)
+        self.take_button.setEnabled(self.main is not None)
+        self.side_box = QtWidgets.QComboBox()
+        self.side_box.addItems(["frente", "trás"])
+        self.side_box.setCurrentText(self.side)
+        self.side_box.currentTextChanged.connect(lambda s: self.set_target(self.wall, s))
+        row.addWidget(self.take_button, 1)
+        row.addWidget(QtWidgets.QLabel("Face:"))
+        row.addWidget(self.side_box)
+        lay.addLayout(row)
+        hint = QtWidgets.QLabel("Shift+A (ou o botão direito na tela): juntar um nó.")
         hint.setWordWrap(True)
+        hint.setStyleSheet("color: %s;" % theme.qcolor(theme.C["muted"]).name())
         lay.addWidget(hint)
-        lay.addWidget(self.palette, 1)
-        # (0.544) the chosen node at work: a short loop of its effect, and what it does
-        self.demo = QtWidgets.QLabel()
-        self.demo.setFixedHeight(130)
-        self.demo.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.demo_text = QtWidgets.QLabel()
-        self.demo_text.setWordWrap(True)
-        self.demo_text.setStyleSheet("color: %s;" % theme.qcolor(theme.C["muted"]).name())
-        lay.addWidget(self.demo)
-        lay.addWidget(self.demo_text)
-        self._demo = None
-        self.demo_timer = QtCore.QTimer(self)
-        self.demo_timer.setInterval(110)
-        self.demo_timer.timeout.connect(self._demo_step)
-        self.palette.currentItemChanged.connect(lambda it, _old: self.show_demo(it))
         dock.setWidget(holder)
-        dock.setMinimumWidth(190)
+        dock.setMinimumWidth(420)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+        self._titles()
 
-    DEMO_FRAMES = 24
+    def _shown_node(self):
+        return None if self.show_final.isChecked() else self.params.nid
 
-    def show_demo(self, item):
-        """(0.544) The palette's chosen node playing its loop (its measure swept there and back)."""
-        from ..core.graph import examples
-        self.demo_timer.stop()
-        key = item.data(0, QtCore.Qt.ItemDataRole.UserRole) if item is not None else None
-        if not key:
-            self._demo = None
-            self.demo.clear()
-            self.demo_text.clear()
-            return
-        g, nid, sweep = examples.example(key)
-        spec = REGISTRY.get(key)
-        self._demo = [g, nid, sweep, 0]
-        text = spec.description
-        if sweep:
-            p = spec.port("params", sweep[0])
-            text += "\n(a variar: {})".format((p.label or p.name).lower())
-        self.demo_text.setText(text)
-        self._demo_step()
-        if sweep:
-            self.demo_timer.start()
+    def _titles(self):
+        name = self.name or "operador novo"
+        self.setWindowTitle("{} — Gráfico Visual — ArqSynth BIM".format(name))
+        where = "Face de exemplo (nenhuma parede escolhida)"
+        if self.wall:
+            obj = self.main.doc.get(self.wall) if self.main is not None else None
+            where = "{} · face {}".format(getattr(obj, "name", None) or "Parede", self.side)
+        self.target_label.setText(where)
 
-    def _demo_step(self):
-        from ..core.graph import examples
-        if self._demo is None:
+    def set_target(self, wall, side="frente"):
+        """(0.541) The wall's face the graph works on (""/…: the example face): worked out and shown again."""
+        from ..core.graph import operators
+        self.wall, self.side = wall or "", side or "frente"
+        operators.retarget(self.graph, self.wall, self.side)
+        if self.side_box.currentText() != self.side:
+            self.side_box.blockSignals(True)
+            self.side_box.setCurrentText(self.side)
+            self.side_box.blockSignals(False)
+        self._titles()
+        if self.params.nid is not None:
+            self.params.show_node(self.params.nid, self.graph)
+        self.evaluate()
+
+    def take_chosen_wall(self):
+        wall = self.chosen_wall()
+        if not wall:
+            QtWidgets.QMessageBox.information(self, "Gráfico Visual", "Escolha primeiro uma parede no modelo.")
             return
-        g, nid, sweep, k = self._demo
-        if sweep:
-            g.set_param(nid, sweep[0], examples.frame_value(sweep, k, self.DEMO_FRAMES))
-            self._demo[3] = k + 1
-        results = g.evaluate()
-        out = results.get(nid)
-        if out is None:
-            self.demo.setText(g.errors.get(nid, ""))
-            return
-        port = g.registry.get(g.nodes[nid]["type"]).outputs[0]
-        self.demo.setPixmap(QtGui.QPixmap.fromImage(picture(port.kind, out.get(port.name), 180, 122,
-                                                            domain_of(results, g))))
+        self.set_target(wall, self.side)
+
+    # ---- Shift+A: the menu of nodes
+    def ask_node(self, point=None, scene_pos=None):
+        """(0.541) The menu of nodes shown at `point` (the screen's); the one picked goes to `scene_pos`."""
+        if self.node_menu is None:
+            self.node_menu = NodeMenu(self)
+            self.node_menu.chosen.connect(lambda key: self.add_node_at(key, self._drop))
+        if point is None:
+            centre = self.view.viewport().rect().center()
+            point, scene_pos = self.view.viewport().mapToGlobal(centre), self.view.mapToScene(centre)
+        self._drop = scene_pos
+        self.node_menu.open_at(point)
+
+    def add_node_at(self, key, scene_pos=None):
+        """A node put on the canvas (at the mouse). Logical joins made at once: a wire chosen — the node goes in the
+        middle of it (where its kinds fit); a card chosen — its output joined to the new node's first input of the
+        same kind."""
+        if scene_pos is None:
+            scene_pos = self.view.mapToScene(self.view.viewport().rect().center())
+        chosen = self.scene.selectedItems()
+        wire = next((it for it in chosen if isinstance(it, LinkItem)), None) if len(chosen) == 1 else None
+        card = next((it for it in chosen if isinstance(it, CardItem)), None) if len(chosen) == 1 else None
+        nid = self.graph.add_node(key, pos=(scene_pos.x() - CARD_W / 2, scene_pos.y() - TITLE_H))
+        spec = self.graph.registry.get(key)
+        try:
+            if wire is not None:
+                f, o, t, i = wire.link
+                kind_in = self.graph.registry.get(self.graph.nodes[f]["type"]).port("outputs", o).kind
+                kind_out = self.graph.registry.get(self.graph.nodes[t]["type"]).port("inputs", i).kind
+                into = next((p for p in spec.inputs if p.kind == kind_in), None)
+                out = next((p for p in spec.outputs if p.kind == kind_out), None)
+                if into is not None and out is not None:
+                    self.graph.connect(f, o, nid, into.name)
+                    self.graph.connect(nid, out.name, t, i)
+            elif card is not None:
+                taken = set()
+                for port in card.spec.outputs:
+                    into = next((p for p in spec.inputs if p.kind == port.kind and p.name not in taken), None)
+                    if into is not None:
+                        self.graph.connect(card.nid, port.name, nid, into.name)
+                        taken.add(into.name)
+        except GraphError as e:
+            self.status.showMessage(str(e), 6000)
+        self.rebuild()
+        self.cards[nid].setSelected(True)
+        self.schedule()
+        return nid
 
     def _build_params(self):
         dock = QtWidgets.QDockWidget("Propriedades do nó", self)
@@ -711,9 +1054,23 @@ class GraphWindow(QtWidgets.QMainWindow):
         bar.setObjectName("graph_bar")
         bar.setMovable(False)
         bar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly)
-        self.act_new = bar.addAction("Novo", self.new_graph)
-        self.act_open = bar.addAction("Abrir…", self.open_graph)
-        self.act_save = bar.addAction("Gravar…", self.save_graph)
+        self.act_add = bar.addAction("＋ Nó  (Shift+A)", lambda: self.ask_node())
+        self.act_add.setToolTip("Junta um nó: o menu mostra cada um com o desenho do que faz.")
+        bar.addSeparator()
+        self.act_keep = bar.addAction("Guardar operador", self.save_operator)
+        self.act_keep.setToolTip("Guarda este gráfico na biblioteca de operadores (o painel lateral do BIM): fica "
+                                 "para todos os projetos.")
+        self.act_keep_as = bar.addAction("Guardar como…", lambda: self.save_operator(new=True))
+        bar.addSeparator()
+        files = QtWidgets.QToolButton()
+        files.setText("Ficheiro ▾")
+        files.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        fmenu = QtWidgets.QMenu(files)
+        self.act_new = fmenu.addAction("Limpar a tela", self.new_graph)
+        self.act_open = fmenu.addAction("Abrir gráfico de um ficheiro…", self.open_graph)
+        self.act_save = fmenu.addAction("Gravar gráfico num ficheiro…", self.save_graph)
+        files.setMenu(fmenu)
+        bar.addWidget(files)
         from ..core.graph import templates                  # (0.541) ready graphs to start from
         button = QtWidgets.QToolButton()
         button.setText("Modelos ▾")
@@ -732,6 +1089,29 @@ class GraphWindow(QtWidgets.QMainWindow):
         self.act_apply.setToolTip("Põe cada «Aplicar à parede/fachada» do gráfico como revestimento perfurado na sua "
                                   "parede.")
         self.act_apply.setEnabled(self.main is not None)
+
+    def save_operator(self, new=False):
+        """(0.541) The graph kept in the library of operators (asked its name the first time, or `new`): its
+        thumbnail what the surface shows. Returns its slug (None: given up)."""
+        from ..core.graph import operators
+        if new or not self.slug:
+            name, ok = QtWidgets.QInputDialog.getText(self, "Guardar operador", "Nome do operador:",
+                                                      text=self.name or "Painel perfurado")
+            if not ok or not name.strip():
+                return None
+            self.name, self.slug = name.strip(), None
+        try:
+            png = png_bytes(surface_picture(self.graph, self.results, 240, 152))
+            self.slug = operators.save(self.name, Graph.from_dict(self.graph.to_dict()), slug=self.slug, png=png)
+        except (GraphError, OSError) as e:
+            QtWidgets.QMessageBox.warning(self, "Gráfico Visual", str(e))
+            return None
+        self._titles()
+        self.status.showMessage("Operador «{}» guardado na biblioteca.".format(self.name), 6000)
+        panel = getattr(self.main, "operators_panel", None)
+        if panel is not None:
+            panel.reload(self.slug)
+        return self.slug
 
     # ---- the cards
     def rebuild(self):
@@ -761,19 +1141,6 @@ class GraphWindow(QtWidgets.QMainWindow):
         for w in self.wires:
             if card.nid in (w.link[0], w.link[2]):
                 w.update_path()
-
-    def add_from_palette(self, item):
-        key = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-        if not key:
-            return None
-        centre = self.view.mapToScene(self.view.viewport().rect().center())
-        nid = self.graph.add_node(key, pos=(centre.x() - CARD_W / 2 + 20 * (len(self.cards) % 5),
-                                            centre.y() - 80 + 20 * (len(self.cards) % 5)))
-        card = self._card(nid, self.graph.nodes[nid])
-        self.scene.clearSelection()
-        card.setSelected(True)
-        self.schedule()
-        return nid
 
     def _link(self, f, o, t, i):
         try:
@@ -805,6 +1172,8 @@ class GraphWindow(QtWidgets.QMainWindow):
         if nid != self.params.nid:
             self.params.show_node(nid, self.graph)
         self._show_big()
+        if not self.show_final.isChecked():
+            self.surface.refresh()
 
     def set_param(self, nid, name, value):
         try:
@@ -845,8 +1214,31 @@ class GraphWindow(QtWidgets.QMainWindow):
                 card.image = picture(port.kind, out.get(port.name), CARD_W - 12, THUMB_H, domain)
             card.update()
         self._show_big()
+        self.surface.refresh()                                 # (0.541) the surface follows every change
+        self._verdict()
         bad = len(self.graph.errors)
         self.status.showMessage("Calculado." if not bad else f"{bad} nós com avisos (ver a vermelho).", 4000)
+
+    def _verdict(self):
+        """(0.541) Under the surface: the last «Verificar fabrico»'s verdict (how many holes, the open area, what
+        fails) — else how many holes there are."""
+        text, good = "", True
+        for nid in self.graph.order():
+            out = self.results.get(nid)
+            if out is None:
+                continue
+            if "relatorio" in out:
+                rep = out["relatorio"]
+                good = rep["ok"]
+                text = "{} furos · área aberta {:.0f} % · {}".format(
+                    rep["holes"], rep["open_area"] * 100,
+                    "fabricável" if good else "{} furos a corrigir (a vermelho)".format(rep["bad"]))
+                if rep["problems"]:
+                    text += "\n" + "; ".join(rep["problems"][:2])
+            elif "furos" in out and not text:
+                text = "{} furos (por verificar)".format(len(out["furos"]["xy"]))
+        self.verdict.setText(text)
+        self.verdict.setStyleSheet("color: %s; font-weight: 600;" % (theme.ART["green"] if good else theme.ART["red"]))
 
     def _show_big(self):
         nid = self.params.nid
@@ -878,6 +1270,7 @@ class GraphWindow(QtWidgets.QMainWindow):
                 "Imagens (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff)")
             kw["ficheiro"] = path or ""
         self.graph = templates.make(key, **kw)
+        self._retarget()
         self.path = None
         self.rebuild()
         self.params.show_node(None, None)
@@ -898,6 +1291,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
             QtWidgets.QMessageBox.warning(self, "Gráfico Visual", f"Não foi possível abrir:\n{e}")
             return False
+        self._retarget()
         self.path = path
         self.rebuild()
         self.params.show_node(None, None)
@@ -916,6 +1310,10 @@ class GraphWindow(QtWidgets.QMainWindow):
         self.path = path
         self.status.showMessage(f"Gravado em {path}", 5000)
         return True
+
+    def _retarget(self):
+        from ..core.graph import operators
+        operators.retarget(self.graph, self.wall, self.side)
 
     def fit(self):
         rect = self.scene.itemsBoundingRect()
@@ -950,9 +1348,9 @@ class GraphWindow(QtWidgets.QMainWindow):
             if out is None:
                 problems.append(self.graph.errors.get(nid, "nó por calcular"))
                 continue
-            wall = out["wall"] or self.chosen_wall()
+            wall = out["wall"] or self.wall or self.chosen_wall()
             if not wall:
-                problems.append("escolha a parede (no modelo, e depois «Parede escolhida» no nó)")
+                problems.append("escolha uma parede no modelo e carregue em «Usar a parede escolhida»")
                 continue
             side = 1 if out["side"] == "frente" else -1
             try:

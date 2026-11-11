@@ -24805,20 +24805,29 @@ def navigation():
 
 
 def grafico_visual():
-    """(0.540) The left bar's «Gráfico Visual» opens its window, with the starting graph worked out."""
+    """(0.541) The left bar's «Gráfico Visual» opens only the side panel of the operators kept; «Criar novo» there
+    opens the editor on the wall's face chosen, the surface alive beside the nodes."""
     act = win.module_actions.get("graph")
     check("grafico_icone", act is not None)
     if act is None:
         return
     act.trigger()
     pump(400)
+    panel = win.operators_panel
+    check("operadores_painel", panel.isVisible() and panel.list.count() >= 4 and getattr(win, "graph_window", None)
+          is None and not panel.list.item(0).icon().isNull(), "operadores {}".format(panel.list.count()))
+    win.grab().save(os.path.join(OUT, "operadores_painel.png"))
+    panel.new_button.click()
+    pump(400)
     gw = getattr(win, "graph_window", None)
     check("grafico_janela", gw is not None and gw.isVisible() and len(gw.cards) == 6 and not gw.graph.errors
-          .get("n5"), "cartões {}".format(len(gw.cards) if gw else 0))
+          .get("n5") and gw.surface.isVisible(), "cartões {}".format(len(gw.cards) if gw else 0))
     if gw is not None:
         gw.grab().save(os.path.join(OUT, "grafico_visual.png"))
         gw.close()
         pump(100)
+    win.set_module("project")
+    pump(100)
 
 
 try:

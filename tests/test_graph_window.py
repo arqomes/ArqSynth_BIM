@@ -38,10 +38,8 @@ class Window(unittest.TestCase):
             self.win.grab().save(out)
 
     def test_palette_link_and_params(self):
-        top = self.win.palette.topLevelItem(0)
-        item = next(top.child(k) for k in range(top.childCount())
-                    if top.child(k).data(0, 256) == "painel_plano")     # Base ▸ Painel plano
-        nid = self.win.add_from_palette(item)
+        self.win.scene.clearSelection()
+        nid = self.win.add_node_at("painel_plano")                # (0.541: Shift+A's menu puts it)
         self.assertIn(nid, self.win.graph.nodes)
         self.win.scene.clearSelection()
         self.win.cards[nid].setSelected(True)
@@ -85,8 +83,7 @@ class Window(unittest.TestCase):
         made = self.win.apply_to_model()
         self.assertEqual(len(made), 1)
         d = doc.ifc.pattern_params(made[0])
-        per_panel = len(self.win.results["n6"]["bim"]["holes"])
-        self.assertGreaterEqual(d["count"], 2 * per_panel)       # two 3 m boards along the 6 m wall (at least)
+        self.assertGreater(d["count"], 100)                      # (0.541: the example face's holes on the wall)
 
     def test_report_picture(self):
         rep = {"ok": False, "bad": 3, "holes": 10, "open_area": 0.3, "min_bridge": 0.001, "problems": ["x"]}

@@ -34,27 +34,43 @@ def _panel(shape, margin, thickness):
 
 
 # ------------------------------------------------------------------ Base
-@r.node("fachada_bim", "Base", "Fachada do modelo",
-        "A face de uma parede do modelo, já sem as portas e as janelas, como painel.",
-        outputs=[Port("painel", "panel", "Painel")],
+def example_face():
+    """(0.541) The face worked on when no wall is chosen: 4 × 2,7 m with a window — an operator of the library is
+    seen (and drawn in its thumbnail) on it."""
+    from shapely.geometry import box
+    return box(0.0, 0.0, 4.0, 2.7).difference(box(1.4, 0.9, 2.6, 2.1))
+
+
+def wall_face(doc, wall):
+    """(0.541) A wall's face — less its doors and windows — in its own measures (x along it from its start, y up
+    from its base). ValueError where the wall is gone."""
+    from shapely.geometry import box
+    if doc is None or doc.ifc.by_guid(wall) is None or doc.ifc.kind_of(wall) != "wall":
+        raise ValueError("essa parede já não existe")
+    frame = doc.ifc.element_frame(wall)
+    face = box(0.0, 0.0, frame.length, frame.height)
+    for _gid, lo, hi, _filled, _box in doc.ifc.voids(wall):
+        face = face.difference(box(lo[0] - frame.x0, lo[2] - frame.z0, hi[0] - frame.x0, hi[2] - frame.z0))
+    return face
+
+
+def target_face(wall):
+    """The face of the wall the graph works on (MODEL's) — or the example one (no wall chosen, no model)."""
+    if wall and MODEL["doc"] is not None:
+        return wall_face(MODEL["doc"], wall)
+    return example_face()
+
+
+@r.node("fachada_bim", "Base", "Superfície do modelo",
+        "A face da parede escolhida no modelo, já sem as portas e as janelas. Sem parede escolhida: uma face de "
+        "exemplo, de 4 × 2,7 m com uma janela.",
+        outputs=[Port("painel", "panel", "Superfície")],
         params=[Port("parede", "text", "Parede (GlobalId)", default=""),
                 _num("margem", "Margem", 0.05, 0.0, 1.0, 0.005),
                 _num("espessura", "Espessura", 0.003, 0.0005, 0.1, 0.0005)],
         example="A fachada sul, perfurada à volta das janelas.")
 def fachada_bim(parede, margem, espessura):
-    from shapely.geometry import box
-    doc = MODEL["doc"]
-    if doc is None:
-        raise ValueError("abra o Gráfico Visual a partir do modelo")
-    if not parede:
-        raise ValueError("escolha a parede (no modelo, e depois «Parede escolhida»)")
-    if doc.ifc.by_guid(parede) is None or doc.ifc.kind_of(parede) != "wall":
-        raise ValueError("essa parede já não existe")
-    frame = doc.ifc.element_frame(parede)
-    face = box(0.0, 0.0, frame.length, frame.height)
-    for _gid, lo, hi, _filled, _box in doc.ifc.voids(parede):
-        face = face.difference(box(lo[0], lo[2] - frame.z0, hi[0], hi[2] - frame.z0))
-    return {"painel": _panel(face, margem, espessura)}
+    return {"painel": _panel(target_face(parede), margem, espessura)}
 
 
 # ------------------------------------------------------------------ Operações

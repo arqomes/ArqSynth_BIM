@@ -1719,6 +1719,36 @@ de `core/surfaces.py` (0.389), a Superfície paramétrica (0.395), o `manifold3d
   arrastar nós da lista para a tela (hoje: duplo clique); desfazer dentro do gráfico; o gráfico guardado dentro do
   projeto (hoje: ficheiro .json à parte).
 
+#### Gráfico Visual, 2.ª fase — fluxo de trabalho intuitivo (pedido do dono, 2026-11-11)
+
+O dono esperava outro fluxo: o botão do BIM abre só um **painel lateral com os operadores guardados**; o gráfico
+trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquanto se mexe nos nós.
+
+1. ~~Painel lateral «Operadores» (o ícone da barra da esquerda deixa de abrir a janela): lista com miniatura e nome de
+   cada operador guardado; botões **Aplicar** (à superfície/face selecionada), **Criar novo**, **Editar**,
+   Duplicar, Apagar, Importar/Exportar.~~ (0.541.0, `ui/operators_panel.py`)
+2. ~~Biblioteca de operadores fora do projeto (`<suite>/operadores/*.json` com miniatura PNG), servindo todos os
+   projetos~~ (0.541.0, `core/graph/operators.py`). Por fazer: o elemento guardar o operador usado e as medidas, para
+   se poder reabrir e reaplicar.
+3. ~~«Criar»/«Editar» com uma parede selecionada: abre o editor já com o nó de entrada «Superfície do modelo» ligado
+   a ela (aberturas, contorno). Sem nada selecionado, uma face de exemplo.~~ (0.541.0) Por fazer: paredes curvas,
+   a Superfície paramétrica e lajes como superfície; a face de trás espelhada (hoje as duas faces usam as mesmas
+   medidas ao longo da parede).
+4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
+   superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) Por fazer: a
+   pré-visualização na própria vista 3D do modelo; aproximar/arrastar a superfície.
+5. ~~**Shift+A** na tela: menu de procura com nome e desenho do que cada nó faz (como o Blender), por famílias;
+   escrever filtra; o nó aparece onde está o rato e, se houver uma ligação selecionada, entra no meio dela.~~
+   (0.541.0)
+6. Operadores poderosos e lógicos (nós novos): Dividir superfície (UV/painéis), Distância a curva/aresta,
+   Distância a aberturas (afastar dos vãos), Máscara/Excluir zona, Misturar campos (soma, máximo, multiplicar),
+   Remapear (curva de resposta), Aleatório com semente, Rodar/escala por campo, Formas (círculo, polígono, ranhura,
+   desenho próprio), Juntar/Escolher, Matemática, Contar/Área aberta (%), Avisos de fabrico na própria superfície.
+7. Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
+   ajustar sem abrir o editor).
+8. Aplicar a várias superfícies de uma vez; reaplicar quando a parede muda (como o «Combinar e recortar»).
+9. Desfazer (Ctrl+Z) no editor; o gráfico da IA aparece na janela aberta.
+
 ## 5. Como se trabalha cada passo
 
 1. Uma versão por passo, com testes automáticos (núcleo e janela real) e uma captura do que o dono do projeto deve
