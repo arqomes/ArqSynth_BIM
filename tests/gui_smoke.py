@@ -20,6 +20,12 @@ sys.path.insert(0, ROOT)
 os.environ.setdefault("ARQBIM_CACHE_DIR", os.path.join(os.environ.get("TEMP", "."), "arqbim_test_cache"))
 os.environ.setdefault("ARQBIM_SHARE_DIR", os.path.join(os.environ.get("TEMP", "."), "arqbim_test_share"))
 os.environ.setdefault("ARQBIM_RECENT_GROUP", "recentes_dos_testes")     # (0.387: not the user's recent documents)
+# (0.540) the suite's shared folder (the office's title block, carimbo.json…) a fresh one of the tests', never the
+# owner's AppData\Roaming\ArqSynth: «Guardar no escritório» wrote over the owner's own there, run after run
+_SUITE = os.path.join(os.environ.get("TEMP", "/tmp"), "arqsynth_test_suite")
+shutil.rmtree(_SUITE, ignore_errors=True)
+os.makedirs(_SUITE, exist_ok=True)
+os.environ["ARQSYNTH_HOME"] = _SUITE
 
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402,F401
 
@@ -39,11 +45,16 @@ QtWidgets.QMessageBox.question = staticmethod(lambda *a, **k: QtWidgets.QMessage
 QtCore.QSettings("ArqSynth", "ArqSynth BIM").setValue("unidades/comprimento", "m")   # (0.186: lengths in m)
 # (0.540) the checks look at the light theme's colours, on white views: the computer's own appearance (the owner's
 # «revit» palette, dark views…) set aside for the run and put back at the end, untouched
-_APPEARANCE = ("aparencia/tema", "aparencia/vistas_escuras", "aparencia/paleta")
+# — and (0.540) the Properties panel's groups folded by hand and its divider (the owner's «Dados IFC» folded)
+_FOR_THE_RUN = {"aparencia/tema": "light", "aparencia/vistas_escuras": "false", "aparencia/paleta": None,
+                "propriedades/fechados": None, "propriedades/divisor": None}      # (None: as never chosen)
 _settings = QtCore.QSettings("ArqSynth", "ArqSynth BIM")
-_owner_appearance = {k: _settings.value(k) for k in _APPEARANCE}
-_settings.setValue("aparencia/tema", "light")
-_settings.setValue("aparencia/vistas_escuras", "false")
+_owner_appearance = {k: _settings.value(k) for k in _FOR_THE_RUN}
+for _k, _v in _FOR_THE_RUN.items():
+    if _v is None:
+        _settings.remove(_k)
+    else:
+        _settings.setValue(_k, _v)
 _settings.sync()
 
 
