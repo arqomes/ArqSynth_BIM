@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.538.0 — 2026-11-11
+
+**Gráfico Visual, passo 1: o motor dos nós (ainda sem janela).**
+
+- Novo `arqbim/core/graph/`: cada tipo de nó é descrito uma só vez (entradas, saídas, medidas com limites, descrição,
+  exemplo); daí sairão a paleta da janela, a documentação e as ferramentas da IA.
+- Os nós ligam-se de uma saída a uma entrada do mesmo tipo; ligações que fechariam um ciclo são recusadas; as medidas
+  ficam sempre dentro dos limites.
+- O gráfico calcula-se por ordem e só refaz o nó que mudou e os que vêm depois. Um nó que falha mostra a mensagem e
+  pára os seguintes, sem fechar o programa.
+- Guarda-se em JSON (`arqsynth-grafo`, versão 1). Testes em `tests/test_graph_core.py`.
+
 ## 0.537.0 — 2026-11-10
 
 **Plantas e cortes outra vez com as paredes cortadas tracejadas; abrir um IFC grande outra vez aos poucos.**

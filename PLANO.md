@@ -1689,6 +1689,26 @@ Passos propostos (cada um uma ou mais versões; a ordem decide-a o dono — a re
   bloqueio também nas edições feitas por fórmulas/IA (hoje: não se escolhe na vista, nem se exclui ou duplica pelo
   Navegador), a impressora nas imagens 3D das folhas (hoje: plantas, cortes, alçados e PDF/DWG/SVG dessas vistas).
 
+### Gráfico Visual — nós que mostram resultados (pedido do dono do projeto, 2026-11-11)
+
+Um editor de nós (como o Grasshopper, mas para arquitetos): cada nó é um cartão com miniatura viva do resultado,
+parâmetros em barras deslizantes, sem listas nem árvores de dados à vista. Decisões do dono: começar pelos **painéis
+perfurados** (cerca de 15 nós); a saída é **BIM (IFC, na parede/fachada) e fabrico (DXF/CNC)**. Aproveita o perfurado
+de `core/surfaces.py` (0.389), a Superfície paramétrica (0.395), o `manifold3d` (0.493), o DXF e o MCP (`arqbim/mcp`).
+
+1. ~~Núcleo sem janela: `core/graph/` — registo de nós com esquema (entradas, saídas, limites, descrição, exemplo),
+   avaliação por ordem com cache, grafo guardado em JSON (`arqsynth-grafo`, versão 1). Testes.~~ (0.538.0)
+2. Primeiros nós: Painel plano, Grelha, Hexágono, Voronoi, Atrator, Gradiente, Imagem (luminância), Ruído, Perfurar,
+   Verificar fabrico (furo mínimo, ponte mínima), Exportar DXF, Aplicar à parede/fachada (o perfurado do BIM).
+3. Módulo «Gráfico Visual» na barra da esquerda: tela de nós com cartões, ligações a arrastar, miniatura viva em cada
+   nó, barras deslizantes; cores de `ui/theme.py`.
+4. O caso forte: imagem → painel perfurado, com aviso de fabrico em cada furo que falha.
+5. Relevo/Emboss, Extrudir, Dobrar, Subdividir; Fachada a partir do BIM (a face escolhida como base).
+6. MCP: `list_nodes`, `describe_node`, `create_graph`, `add_node`, `connect`, `set_param`, `evaluate`,
+   `render_preview` (imagem para a IA ver), `export` — gerados do mesmo registo de nós.
+7. Biblioteca com miniatura/animação curta de cada nó; quantidades do painel nas Tabelas.
+- Depois (fora do 1.º lote): formas orgânicas (SubD, Relaxar malha, Crescimento, Superfície mínima), Planificar.
+
 ## 5. Como se trabalha cada passo
 
 1. Uma versão por passo, com testes automáticos (núcleo e janela real) e uma captura do que o dono do projeto deve
