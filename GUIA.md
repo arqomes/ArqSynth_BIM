@@ -1,4 +1,4 @@
-# Guia das ferramentas — ArqSynth BIM 0.536.0
+# Guia das ferramentas — ArqSynth BIM 0.537.0
 
 Este guia descreve **todas as ferramentas e comandos da fita**, separador a separador, para as poder experimentar.
 Para cada uma diz:
@@ -9,7 +9,7 @@ Para cada uma diz:
 - **onde estão os passos de teste** — as secções do [TESTAR.md](TESTAR.md) que a experimentam clique a clique.
 
 O guia é feito pelo próprio programa (`scripts/guia_ferramentas.py`): os nomes e os textos são exatamente os do
-ArqSynth BIM 0.536.0.
+ArqSynth BIM 0.537.0.
 
 **Uma nota sobre o TESTAR:** as secções antigas (antes da 0.182) falam dos menus de então — «Ficheiro ▸», «Vista ▸»,
 «BIM ▸», o separador «Conceito». Hoje esses comandos estão nos separadores da fita, com o mesmo nome ou parecido: use
@@ -142,7 +142,7 @@ Criar, abrir e gravar projetos; exportar; ajuda.
 #### Abrir…  ·  tecla Ctrl+O
 
 - **O que faz:** Abre um projeto (IFC). Da segunda vez abre muito mais depressa: as formas ficam guardadas.
-- **Passos de teste (TESTAR.md):** 0.347 «O guia de todas as ferramentas»; 0.344 «Reabrir um modelo grande mais depressa»; 0.328 «Reabrir um modelo grande sem a janela parar»; 0.296 «Folhas de abrir dentro do arco»; 0.255 «Abrir um projeto com o ficheiro lateral lido uma vez»
+- **Passos de teste (TESTAR.md):** 0.537 «Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos»; 0.347 «O guia de todas as ferramentas»; 0.344 «Reabrir um modelo grande mais depressa»; 0.328 «Reabrir um modelo grande sem a janela parar»; 0.296 «Folhas de abrir dentro do arco»; 0.255 «Abrir um projeto com o ficheiro lateral lido uma vez»
 
 #### Guardar  ·  tecla Ctrl+S
 
@@ -437,7 +437,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Parede alvenaria 20 cm · desenha-se pelo eixo (Tab muda): clique no início, depois em cada canto; digite o comprimento (ex.: 4,50) e Enter para medidas exatas.
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.474 «Correções encontradas pela bateria de testes»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.436 «Fachada de vidro em arco e por face»; 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»; 0.428 «Paredes em planta com as canetas do papel»
+- **Passos de teste (TESTAR.md):** 0.537 «Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos»; 0.474 «Correções encontradas pela bateria de testes»; 0.437 «Estrutura leve (Steel frame e Wood frame)»; 0.436 «Fachada de vidro em arco e por face»; 0.434 «Ripado como ferramenta própria»; 0.431 «Avisos do modelo»
 
 #### Porta  ·  tecla D
 
@@ -466,7 +466,7 @@ Elementos arquitetónicos: paredes, portas, janelas, coberturas, mobiliário.
 
 - **Como se usa:** Pilar de concreto 30×30, 2,80 m de altura: clique onde fica o pilar (o meio do pé; snaps e alinhamentos). Digite a altura (ex.: 3,00) e Enter para a mudar. Esc termina.
 - **Teclas:** R / Shift+R: rodar 90° · Espaço / Shift+Espaço: ponto de inserção · Esc: Selecionar
-- **Passos de teste (TESTAR.md):** 0.345 «As paredes de fachada à flexão pelo vento»; 0.254 «O pilar recorta a parede no papel»; 0.227 «Os pilares circulares, em L e em T»; 0.211 «Pilares a partir do desenho»
+- **Passos de teste (TESTAR.md):** 0.537 «Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.254 «O pilar recorta a parede no papel»; 0.227 «Os pilares circulares, em L e em T»; 0.211 «Pilares a partir do desenho»
 
 #### Cobertura
 
@@ -747,7 +747,7 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 
 - **Como se usa:** Viga Viga IPE 300 — S275: clique no início da linha (as cotas na barra; em 3D, «pelos pontos» apanha o topo de um pilar).
 - **Teclas:** X / Y: bloquear o eixo vermelho / verde · N: soltar · Shift: bloquear a linha seguida
-- **Passos de teste (TESTAR.md):** 0.535 «Ícones da fita desenhados como os do Revit (Modelagem, Arquitetura, Estrutura)»; 0.496 «Meia-esquadria e recortes (estrutura metálica, passo 2b)»; 0.495 «Peças metálicas e contraventamentos (estrutura metálica, passo 2)»
+- **Passos de teste (TESTAR.md):** 0.537 «Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos»
 
 #### Pórtico de nave
 
@@ -864,7 +864,7 @@ Vigas, paredes, pilares, lajes, fundações e a estrutura proposta de uma vez.
 #### Paredes
 
 - **O que faz:** Paredes entre os pilares, sob as vigas selecionadas (nenhuma: todas as do pavimento): de face a face dos pilares, da base deles até à face de baixo da viga, com o tipo da ferramenta Parede. Ficam presas à viga: acompanham-na.
-- **Passos de teste (TESTAR.md):** 0.428 «Paredes em planta com as canetas do papel»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»; 0.342 «As paredes de betão armado pelo Eurocódigo 2»
+- **Passos de teste (TESTAR.md):** 0.537 «Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos»; 0.428 «Paredes em planta com as canetas do papel»; 0.409 «Snaps da porta e da janela; cotas interiores com esquinas e com as duas paredes»; 0.383 «As prévias das paredes em volume»; 0.361 «A cota temporária: a relação com as outras paredes»; 0.345 «As paredes de fachada à flexão pelo vento»
 
 #### Lajes
 
@@ -1903,4 +1903,4 @@ Os modificadores das paredes selecionadas. Aparece quando se selecionam paredes 
 
 ---
 
-*259 comandos descritos, gerados do ArqSynth BIM 0.536.0.*
+*259 comandos descritos, gerados do ArqSynth BIM 0.537.0.*

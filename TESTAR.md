@@ -644,6 +644,30 @@ O rodapé é a barra de baixo da janela. Comece com uma parede desenhada, na vis
 5. Faça o mesmo com o tipo 3/8" e o sistema **Refrigerante — gás**: liga as duas portas de gás.
 6. Selecione um dos tubos: nas Propriedades, o sistema é o do refrigerante e o material o cobre.
 
+## 0.537 — Plantas com as paredes cortadas tracejadas; abrir um IFC aos poucos
+
+Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.537.0** (ou uma versão mais recente).
+
+1. Faça **Ctrl+N**. Na **Arquitetura**, escolha **Parede** e desenhe quatro paredes em retângulo (clique em quatro
+   cantos e outra vez no primeiro; Esc).
+2. Carregue em **F4** (a planta). As paredes cortadas aparecem com **trama às riscas** e contorno grosso, e os quatro
+   símbolos dos alçados (N, S, E, O) têm o **círculo** à volta da letra. (Na 0.532–0.536 as paredes ficavam brancas e
+   os círculos não apareciam.)
+3. Carregue em **F8** (o 3D) e veja que as arestas continuam bem em cima das faces, como na 0.532.
+4. Guarde o projeto (**Ctrl+S**, dê-lhe um nome), feche-o com **Ctrl+N** e abra-o outra vez (**Ctrl+O**). Abre sem
+   mensagem de erro; os elementos aparecem logo e, um instante depois, com as cores dos materiais.
+5. No separador **Visualizar**, clique em **Estilos de vista**: a janela abre ao centro do programa, sem erro.
+   Feche-a com **Cancelar**.
+6. No **Navegador** (à esquerda), abra **Projeto ▸ Terreno ▸ Edifício ▸ Térreo ▸ Paredes**. Arraste a divisória entre
+   o Navegador e o 3D para a esquerda, até a coluna ficar estreita: os nomes das paredes continuam a ler-se; os ícones
+   (seta, olho, câmara, impressora) passam para lá da borda e aparece em baixo uma barra para deslizar até eles.
+   Clique no nome de uma parede: fica escolhida (no 3D também). Volte a alargar a coluna.
+7. No Navegador, clique com o botão direito em **Vistas ▸ Plantas ▸ Térreo** ▸ **Pôr na folha** ▸ **Nova folha**:
+   abre a folha e, no Navegador, **Vistas ▸ Folhas (1)** aparece aberto com **Folha 1** e a planta por baixo.
+8. Num projeto novo (**Ctrl+N**), ponha dois pilares de aço afastados (**Estrutura ▸ Pilar**, tipo HEB). Escolha
+   **Estrutura ▸ Peça metálica**, na barra de parâmetros, em **Desenhar**, escolha **Contraventamento em X**, e clique
+   em cada pilar — mesmo em cima de uma aresta: fazem-se as duas diagonais.
+
 ## 0.536 — Ícones como os do Revit em todos os separadores
 
 Abra o programa por **`C:\BIM\ArqSynth BIM.bat`**; o título deve dizer **0.536.0** (ou uma versão mais recente). Faça

@@ -784,6 +784,33 @@ class BrowserTabs(unittest.TestCase):
     Project Browser's own tabs at its foot — what its tree shows: all of it, the views, the library, the model —; a
     group focused from the module bar brings its tab up; the search within the tab."""
 
+    def test_names_keep_room_and_first_sheet_shown(self):
+        """0.537 — a narrow panel: the names' column keeps NAME_MIN (the controls 22 px each, scrolled to sideways),
+        not what is left after them (82 px: a door 5 levels deep had no room for its name, a click on it fell on its
+        controls). And an empty group is not «closed by hand»: the first sheet made shows in «Folhas»."""
+        from PySide6 import QtTest
+        from arqbim.ui import project_tree
+        panel = project_tree.ProjectTree(None)
+        try:
+            panel.state_of = lambda ids, flag: False
+            panel.show_project(None, [], {"sheets": []})
+            panel.resize(200, 400)
+            panel.show()
+            QtTest.QTest.qWait(50)
+            header = panel.tree.header()
+            self.assertEqual([header.sectionSize(c) for c in range(1, header.count())],
+                             [project_tree.COLUMN_WIDTH] * len(project_tree.CONTROL_COLUMNS))
+            self.assertGreaterEqual(header.sectionSize(0), project_tree.NAME_MIN)
+            panel.resize(600, 400)
+            QtTest.QTest.qWait(50)
+            self.assertGreater(header.sectionSize(0), project_tree.NAME_MIN)        # (wide: all the room again)
+            panel.show_project(None, [], {"sheets": [("Folha 1", [("Alçado Sul", "elevation", "S")])]})
+            self.assertTrue(panel.item_for(("views", "sheets")).isExpanded())
+            self.assertIn("Alçado Sul", panel.text())
+        finally:
+            panel.hide()
+            panel.deleteLater()
+
     def test_scopes(self):
         from arqbim.ui import project_tree
         panel = project_tree.ProjectTree(None)

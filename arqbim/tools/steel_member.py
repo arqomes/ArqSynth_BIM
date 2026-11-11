@@ -176,13 +176,14 @@ class SteelMemberTool(_PointTool):
 
     # ------------------------------------------------------------ bracing between two columns
 
-    def _column_at(self, x, y):
-        hit = self.viewport.pick(x, y)
+    def _column_at(self, x, y, near=False):
+        hit = self.viewport.pick_near(x, y) if near else self.viewport.pick(x, y)
         obj = self.doc.get(hit[0]) if hit is not None else None
         return obj.id if obj is not None and obj.is_bim and obj.ifc_class == "IfcColumn" else None
 
     def _brace_click(self, x, y):
-        guid = self._column_at(x, y)
+        # (0.537) the click: on the column's edge line too (its tip had named it, the click said «Clique num pilar»)
+        guid = self._column_at(x, y, near=True)
         if guid is None:
             self.host.message(t("info.steel_pick_column"), warning=True)
             return

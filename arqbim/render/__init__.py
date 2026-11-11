@@ -42,6 +42,13 @@ if not HARFBUZZ:
 # a fixed fraction of the distance to the eye, so on screen the line stays exactly on the face's edge at any zoom).
 # Before, the edges were moved 2 mm out along the faces' normals: up close that was many pixels off the solid.
 LINE_DEPTH_BIAS = 0.005             # 0.5 % of the distance (0.002 still left half a thick line in a slanted face)
+# (0.537) Without perspective (plans, sections, elevations, axonometries) the depth is linear and the clip range is
+# thousands of times deeper than the model (Viewport._set_focus: far = 3000 × the distance), so the whole model lies in
+# the first thousandth of it: k(w − z) = 0.5 % pushed every line past the near plane — clipped away (the walls' cut
+# hatch, the elevation marks, every edge: white walls in every plan since 0.532). There the lines go a fixed hair nearer
+# instead, in metres (the 2 mm the edges were lifted by before 0.532): δ·|P[2][2]| in depth (P = the projection; its
+# P[3][3] is 1 without perspective, 0 with it). And never pushed out of the near plane (z < 0 is clipped).
+LINE_DEPTH_ORTHO = 0.002            # m
 from pygfx.renderers.wgpu.shaders import lineshader as _lineshader  # noqa: E402
 
 _line_code = _lineshader.LineShader.get_code
@@ -50,7 +57,10 @@ _line_code = _lineshader.LineShader.get_code
 def _line_code_in_front(self):
     return _line_code(self).replace(
         "varyings.position = vec4<f32>(the_pos_n);",
-        f"varyings.position = vec4<f32>(the_pos_n.xy, the_pos_n.z - {LINE_DEPTH_BIAS} * (the_pos_n.w - the_pos_n.z),"
+        "let line_ortho = u_stdinfo.projection_transform[3][3];\n"
+        f"    let line_bias = mix({LINE_DEPTH_BIAS} * (the_pos_n.w - the_pos_n.z),"
+        f" {LINE_DEPTH_ORTHO} * abs(u_stdinfo.projection_transform[2][2]), line_ortho);\n"
+        "    varyings.position = vec4<f32>(the_pos_n.xy, max(the_pos_n.z - line_bias, min(the_pos_n.z, 0.0)),"
         " the_pos_n.w);", 1)
 
 

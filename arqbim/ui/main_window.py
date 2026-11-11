@@ -9963,18 +9963,22 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.526, the owner: «organize melhor as janelas flutuantes, para ficar mais centralizada») A dialog or a
         floating panel, the first time it is shown, centred over the program's window (not left where the system put
         it — under WSLg, often at the screen's corner), and kept inside the screen. Moved by hand later: left there."""
-        if window is self or window.property("arq_centred") or window.windowType() == QtCore.Qt.WindowType.Popup:
+        # (0.537) by QWidget's own methods: a dialog may have a field of the same name — the View styles' «width» (its
+        # lines' thickness, a QComboBox) made «window.width()» fail each time it opened
+        widget = QtWidgets.QWidget
+        if window is self or widget.property(window, "arq_centred") or \
+                widget.windowType(window) == QtCore.Qt.WindowType.Popup:
             return False
-        window.setProperty("arq_centred", True)
-        if window.width() < 50:
-            window.adjustSize()
-        frame = window.frameGeometry()
+        widget.setProperty(window, "arq_centred", True)
+        if widget.width(window) < 50:
+            widget.adjustSize(window)
+        frame = widget.frameGeometry(window)
         centre = self.frameGeometry().center()
         frame.moveCenter(centre)
         screen = (self.screen() or QtGui.QGuiApplication.primaryScreen()).availableGeometry()
         frame.moveLeft(max(screen.left(), min(frame.left(), screen.right() - frame.width())))
         frame.moveTop(max(screen.top(), min(frame.top(), screen.bottom() - frame.height())))
-        window.move(frame.topLeft())
+        widget.move(window, frame.topLeft())
         return True
 
     def _footer_tip(self, widget):

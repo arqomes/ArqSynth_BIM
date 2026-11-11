@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.537.0 — 2026-11-10
+
+**Plantas e cortes outra vez com as paredes cortadas tracejadas; abrir um IFC grande outra vez aos poucos.**
+
+- Desde a 0.532, nas **plantas, cortes e alçados** (as vistas sem perspetiva) as linhas desapareciam: as paredes
+  cortadas ficavam brancas, sem trama nem contorno grosso, e os símbolos dos alçados sem o círculo. O desvio que põe
+  as arestas à frente das faces era uma fração da distância — certo na perspetiva, mas nas vistas sem perspetiva
+  empurrava todas as linhas para fora do que se vê. Agora, nessas vistas, as linhas ficam 2 mm à frente; no 3D com
+  perspetiva tudo fica como na 0.532.
+- Desde a 0.533, ao **abrir um IFC já aberto antes** (mostrado logo pelas formas guardadas enquanto o ficheiro é lido)
+  dava um erro e a abertura deixava de ser aos poucos: a vista tentava mostrar os materiais e a pintura antes de o IFC
+  estar lido. Agora mostra os elementos primeiro e veste-os com os materiais quando a leitura acaba.
+- A janela **Estilos de vista…** dava um erro ao abrir (ao ser posta ao centro do programa, 0.526); já não dá.
+- **Navegador** com a coluna estreita: a coluna dos nomes ficava com o que sobrava dos quatro ícones de controlo — uma
+  porta cinco níveis abaixo ficava sem nome visível e o clique nela caía nos ícones. Agora os nomes têm sempre 140 px
+  (os ícones voltam aos 22 px previstos) e, se não couber, a lista desliza para o lado até aos ícones, como no Outliner
+  do Blender.
+- **Navegador**: a primeira folha criada ficava escondida no grupo «Folhas» fechado (um grupo vazio contava como
+  fechado à mão). Agora aparece aberta, com as suas vistas.
+- **Peça metálica ▸ Contraventamento em X**: um clique em cima de uma aresta do pilar dizia «Clique num pilar»; agora
+  encontra o pilar.
+- A bateria de testes da janela volta a passar inteira (tinha 14 falhas desde a 0.533): três testes postos em dia —
+  dois com mudanças de propósito da 0.533 (o vidro transparente no Sombreado, os materiais desde o arranque) e o do
+  Shift no Navegador, que clicava numa linha fora da parte visível da lista.
+
 ## 0.536.0 — 2026-11-10
 
 **Ícones como os do Revit em todos os separadores.**

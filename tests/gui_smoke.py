@@ -1777,6 +1777,8 @@ def tree_controls_flow():
           vp.selection)
     # Shift: a run of rows; the menu on them
     tree_click(rows[0])
+    tree.scrollToItem(rows[2])                                  # (0.537: in sight first, as a person scrolls — with a
+    pump(100)                                                   # whole building listed it was below the panel's foot)
     QtTest.QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
                             tree.visualRect(tree.indexFromItem(rows[2], 0)).center())
     pump(200)
@@ -10447,8 +10449,8 @@ def view_styles_flow():
     win.set_plan(False)
     pump(300)
     footer_style("shaded")
-    plain = vp.bim.style == "shaded" and not vp.bim.shadows and not vp.sun.cast_shadow and \
-        not any(b.clear for b in vp.bim.batches)            # (0.317: the stone's courses stay: Shaded shows them)
+    # (0.317: the stone's courses stay: Shaded shows them; 0.533: and its glass seen through — its clear batch stays)
+    plain = vp.bim.style == "shaded" and not vp.bim.shadows and not vp.sun.cast_shadow
     check("estilos_de_vista_do_projeto", own and in_plan and undone and plain and sun_set,
           "do_projeto={} planta={} desfeito={} sombreado={} sol={}".format(own, in_plan, undone, plain,
                                                                           made[0].sun_azimuth if made else None))
@@ -18961,7 +18963,10 @@ def element_hatches_flow():
     win.element_hatches((None, None, ("brick", "#7a3f2a"), None))
     pump(300)
     dressed = vp._dress(doc.get(walls[1]))
-    brick = dressed is not None and dressed[1] is not None and vp._dress(doc.get(walls[3])) is None
+    # (0.537) the brick its own, not the others' (since 0.533 Shaded dresses every wall in its materials' patterns
+    # from the start: the other walls are dressed too — but by their materials, not by this hatch)
+    brick = dressed is not None and dressed[1] is not None \
+        and vp._surface_override(doc.get(walls[1])) is not None and vp._surface_override(doc.get(walls[3])) is None
     key(Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     pump(400)
     undone = vp.element_hatches == {}

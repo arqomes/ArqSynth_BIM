@@ -23,6 +23,10 @@ from .storeys import level_text
 CONTROL_COLUMNS = ("locked", "hidden", "no_render", "no_print")
 ICON_SIZE = 16
 COLUMN_WIDTH = 22
+# (0.537) the names' column never narrower than this: in a narrow panel (the column of panels made narrower) it took
+# what the four controls left — 82 px, less than a door's indentation 5 levels deep: its name had no room at all and a
+# click on it fell on the controls. Narrower: the controls go off to the right, the tree scrolls sideways to them
+NAME_MIN = 140                     # px (an element 5 levels deep is indented 84: its name keeps more than half)
 
 
 def _control_pixmap(flag, state):
@@ -182,6 +186,7 @@ class ProjectTree(QtWidgets.QDockWidget):
         self.tree.setColumnCount(1 + len(CONTROL_COLUMNS))
         header = self.tree.header()
         header.setStretchLastSection(False)
+        header.setMinimumSectionSize(COLUMN_WIDTH)   # (0.537: the style's minimum made them 26 px)
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
         for c in range(1, 1 + len(CONTROL_COLUMNS)):
             header.setSectionResizeMode(c, QtWidgets.QHeaderView.ResizeMode.Fixed)
@@ -189,6 +194,7 @@ class ProjectTree(QtWidgets.QDockWidget):
         self.tree.setIconSize(QtCore.QSize(ICON_SIZE, ICON_SIZE))
         self.tree.setMouseTracking(True)
         self.tree.viewport().installEventFilter(self)
+        self.tree.installEventFilter(self)            # (0.537: its size — the names' column, _fit_names)
         self.state_of = None         # (ids, flag) -> True | False | None (some): set by the window (model/controls)
         self.on_control = None       # (ids, flag, on): a control switched — on many rows at once when dragged
         self.on_element = None       # (action, ids, arg): the elements' right-click menu
@@ -357,7 +363,10 @@ class ProjectTree(QtWidgets.QDockWidget):
         self._listed = {row[0]: row[1:] for row in objects}
         # what the user opened or closed stays so (spatial levels and views are open unless closed by hand)
         folds = ("spatial", "views", "library", "sheet")
-        self._closed |= {k for k, item in self._items.items() if k[0] in folds and not item.isExpanded()}
+        # (0.537) a group closed by hand has something in it: an empty one cannot be opened — «Folhas (0)» counted as
+        # closed, and the first sheet made was then hidden in it
+        self._closed |= {k for k, item in self._items.items()
+                         if k[0] in folds and item.childCount() and not item.isExpanded()}
         self._closed -= {k for k, item in self._items.items() if k[0] in folds and item.isExpanded()}
         opened = {k for k, item in self._items.items() if k[0] == "cat" and item.isExpanded()}
         self._building = True
@@ -628,12 +637,29 @@ class ProjectTree(QtWidgets.QDockWidget):
             return None
         return item, column, CONTROL_COLUMNS[column - 1]
 
+    def _fit_names(self):
+        """(0.537) The names' column: all the room the controls leave — but never under NAME_MIN (then fixed at it, and
+        the controls past the panel's edge, reached by scrolling sideways)."""
+        header = self.tree.header()
+        room = self.tree.viewport().width() - COLUMN_WIDTH * len(CONTROL_COLUMNS)
+        mode = QtWidgets.QHeaderView.ResizeMode.Interactive if room < NAME_MIN else \
+            QtWidgets.QHeaderView.ResizeMode.Stretch
+        if header.sectionResizeMode(0) != mode:
+            header.setSectionResizeMode(0, mode)
+        if mode == QtWidgets.QHeaderView.ResizeMode.Interactive and header.sectionSize(0) != NAME_MIN:
+            header.resizeSection(0, NAME_MIN)
+
     def eventFilter(self, obj, event):  # noqa: N802
         """(0.524) As Blender's Outliner: a click on an icon switches it; dragged down (or up) the column, the same
         state on every row the mouse runs over — applied in one undo step when the button is let go."""
+        kind = event.type()
+        if kind in (QtCore.QEvent.Type.Resize, QtCore.QEvent.Type.Show) and obj in (self.tree, self.tree.viewport()):
+            # (0.537; the viewport alone is not told when first shown — and the tree is told before its viewport has
+            # its new size: looked at a moment later)
+            QtCore.QTimer.singleShot(0, self._fit_names)
+            return False
         if getattr(self, "state_of", None) is None or obj is not self.tree.viewport():
             return False
-        kind = event.type()
         if kind == QtCore.QEvent.Type.MouseButtonPress and event.button() == QtCore.Qt.MouseButton.LeftButton:
             found = self._control_at(event.position().toPoint())
             if found is None:

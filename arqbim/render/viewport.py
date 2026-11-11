@@ -467,6 +467,7 @@ class Viewport:
         self._overrides = ()              # (0.318) the view style's hatches by category the pieces were made with
         self.element_hatches = {}         # (0.331) the view's own by element (set_element_hatches)
         self._dressed = {}                # obj_id -> (its mesh, materials' generation, dressing, (colours, patterns, clear))
+        self._dress_when_read = False     # (0.537) shown undressed while the IFC was read: dressed once it is
         self._shadow_ground = None        # (0.315) under the model when the sun casts shadows
         self._sun_preview = None          # (0.365) a scene's sun previewed: towards it (else the view style's)
         self._sun_box = None              # (0.365) …the model's (middle, radius, bottom), measured once for it
@@ -1319,6 +1320,19 @@ class Viewport:
             return None
         return obj_id, int(owner[tri])
 
+    def pick_near(self, x, y, radius=2):
+        """(0.537) pick(), or — nothing under that very pixel — the nearest of the pixels `radius` round it that has
+        something: a click right on an element's edge line (drawn in front of its faces, it hides them from the pick
+        buffer there) still finds the element. For clicks only: up to 8 more reads of the pick buffer."""
+        hit = self.pick(x, y)
+        if hit is not None:
+            return hit
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+            hit = self.pick(x + dx * radius, y + dy * radius)
+            if hit is not None:
+                return hit
+        return None
+
     def pick_point(self, x, y):
         """(obj_id, face_index, world point) of the displayed face under the pixel, or None."""
         hit = self.pick(x, y)
@@ -1402,6 +1416,9 @@ class Viewport:
                 obj = self.doc.get(obj_id)
                 if obj is not None and (every or obj.ifc_class in moved):
                     self.show_object(obj_id, obj.mesh)
+        if self._dress_when_read and not getattr(self.doc, "loading", False):
+            self._dress_when_read = False          # (0.537) the IFC read: the elements shown meanwhile dressed now
+            self.materials_changed()
         if STOREY_CHANGED in changed:
             # (the IFC of a file shown from its kept shapes is read: its doors may have plan symbols)
             for obj_id, batch in list(self.bim.where.items()):
@@ -4092,6 +4109,11 @@ class Viewport:
         colours, patterns, clear = self._dressing
         override = self._surface_override(obj)
         if not obj.is_bim:
+            return None
+        if getattr(self.doc, "loading", False):
+            # (0.537) shown from its kept shapes while the IFC is read: no materials, no paint to read yet — asking
+            # raised («the IFC is still being read»), now that Shaded dresses from the start (0.533). Dressed when read
+            self._dress_when_read = True
             return None
         from ..model import paint as paint_model
         painted = paint_model.signature(getattr(self.doc, "ifc", None), obj.id)     # (0.391: its paint, any style)
