@@ -2,6 +2,7 @@
 
 from .graph import FORMAT, VERSION, Graph, GraphError
 from .registry import FAMILIES, KINDS, REGISTRY, NodeSpec, Port, Registry
+from . import nodes_panels  # noqa: E402,F401  (0.539) the first nodes register themselves
 
 __all__ = ["FORMAT", "VERSION", "Graph", "GraphError", "FAMILIES", "KINDS", "REGISTRY", "NodeSpec", "Port",
            "Registry"]

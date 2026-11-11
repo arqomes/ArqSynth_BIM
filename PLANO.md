@@ -1698,8 +1698,10 @@ de `core/surfaces.py` (0.389), a Superfície paramétrica (0.395), o `manifold3d
 
 1. ~~Núcleo sem janela: `core/graph/` — registo de nós com esquema (entradas, saídas, limites, descrição, exemplo),
    avaliação por ordem com cache, grafo guardado em JSON (`arqsynth-grafo`, versão 1). Testes.~~ (0.538.0)
-2. Primeiros nós: Painel plano, Grelha, Hexágono, Voronoi, Atrator, Gradiente, Imagem (luminância), Ruído, Perfurar,
-   Verificar fabrico (furo mínimo, ponte mínima), Exportar DXF, Aplicar à parede/fachada (o perfurado do BIM).
+2. ~~Primeiros nós: Painel plano, Grelha, Hexágono, Voronoi, Atrator, Gradiente, Imagem (luminância), Ruído, Perfurar,
+   Verificar fabrico (furo mínimo, ponte mínima), Exportar DXF, Aplicar à parede/fachada (o perfurado do BIM).~~
+   (0.539.0) Por fazer no passo 3: o revestimento do BIM aceitar a lista de furos do nó «Aplicar à parede/fachada»
+   (hoje o perfurado do BIM é grelha + imagem).
 3. Módulo «Gráfico Visual» na barra da esquerda: tela de nós com cartões, ligações a arrastar, miniatura viva em cada
    nó, barras deslizantes; cores de `ui/theme.py`.
 4. O caso forte: imagem → painel perfurado, com aviso de fabrico em cada furo que falha.

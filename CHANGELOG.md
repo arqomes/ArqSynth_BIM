@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.539.0 — 2026-11-11
+
+**Gráfico Visual, passo 2: os primeiros 12 nós dos painéis perfurados (ainda sem janela).**
+
+- Base: **Painel plano** (largura, altura, margem, espessura).
+- Padrões: **Grelha** (reta ou em quincôncio, rodada), **Hexágono** (favo), **Voronoi** (pontos soltos bem espaçados,
+  mais densos onde um modulador ligado à «Densidade» é forte).
+- Moduladores: **Atrator**, **Gradiente**, **Imagem** (escuro = furos grandes, com contraste) e **Ruído**.
+- Operações: **Perfurar** — furos redondos, quadrados ou hexagonais entre o diâmetro mínimo e o máximo.
+- Fabrico: **Verificar fabrico** (furo mínimo, ponte mínima entre furos, furos na margem; marca cada furo que falha e
+  dá a área aberta e a ponte mais fina) e **Exportar DXF** (mm; camadas CONTORNO, FUROS, TEXTOS).
+- BIM: **Aplicar à parede/fachada** prepara o painel para o modelo; aplicá-lo de facto à parede fica para o passo 3,
+  com a janela.
+- Testes em `tests/test_graph_panels.py`.
+
 ## 0.538.0 — 2026-11-11
 
 **Gráfico Visual, passo 1: o motor dos nós (ainda sem janela).**
