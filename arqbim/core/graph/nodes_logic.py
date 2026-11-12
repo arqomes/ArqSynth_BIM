@@ -9,7 +9,7 @@ import math
 
 import numpy as np
 
-from .nodes_panels import Field, _close_pairs, _keep_inside, _num, _radius_out, r
+from .nodes_panels import Field, _close_pairs, _keep_inside, _num, _radius_out, hole_extras, r, take_holes
 from .registry import Port
 
 HOLE_AREA = {"redondo": math.pi / 4.0, "quadrado": 1.0, "hexagonal": math.sqrt(3.0) / 2.0}
@@ -310,7 +310,7 @@ def escalar_furos(furos, campo, fator):
     k = fator if campo is None or not len(furos["xy"]) else 1.0 + (fator - 1.0) * campo(furos["xy"])
     d = furos["d"] * k
     keep = d >= 0.001
-    return {"furos": dict(furos, xy=furos["xy"][keep], d=d[keep], bad=np.zeros(int(keep.sum()), dtype=bool))}
+    return {"furos": take_holes(furos, keep, d=d[keep])}
 
 
 @r.node("juntar_furos", "Operações", "Juntar furos",
@@ -320,12 +320,68 @@ def escalar_furos(furos, campo, fator):
         example="Furos grandes à volta das janelas mais uma grelha fina no resto.")
 def juntar_furos(a, b):
     xy = np.vstack((a["xy"], b["xy"]))
+    (aa, ar), (ba, br) = hole_extras(a), hole_extras(b)
     return {"furos": dict(a, xy=xy, d=np.concatenate((a["d"], b["d"])), pitch=min(a["pitch"], b["pitch"]),
+                          angle=np.concatenate((aa, ba)), ratio=np.concatenate((ar, br)),
                           bad=np.zeros(len(xy), dtype=bool))}
 
 
 def open_area(furos):
-    return float((HOLE_AREA[furos["shape"]] * furos["d"] ** 2).sum() / max(furos["panel"]["shape"].area, 1e-12))
+    from .. import surfaces
+    area = surfaces.hole_area(furos["shape"], furos["d"], hole_extras(furos)[1]).sum()
+    return float(area / max(furos["panel"]["shape"].area, 1e-12))
+
+
+# ------------------------------------------------------------------ (0.545) each hole turned, each hole stretched
+TURNS = ("ângulo fixo", "pelo modulador", "ao longo do modulador", "para um ponto", "ao acaso")
+
+
+@r.node("rodar_furos", "Operações", "Rodar furos",
+        "Vira cada furo: todos pelo mesmo ângulo; pelo modulador (0 a 1 = de 0 ao ângulo); ao longo do modulador "
+        "(cada furo deitado segundo as suas curvas de nível — ranhuras a fluir à volta de um atrator); a apontar "
+        "para um ponto; ou ao acaso.",
+        inputs=[Port("furos", "holes", "Furos"), Port("campo", "field", "Modulador", optional=True)],
+        outputs=[Port("furos", "holes", "Furos")],
+        params=[Port("modo", "choice", "Modo", default="ângulo fixo", choices=TURNS),
+                _num("angulo", "Ângulo", 45.0, -180.0, 180.0, 1.0, "°"),
+                _num("x", "Ponto X", 1.5, -50.0, 50.0, 0.01), _num("y", "Ponto Y", 0.6, -50.0, 50.0, 0.01),
+                _int("semente", "Semente", 1, 0, 9999)],
+        example="Ranhuras «ao longo do modulador» de um Ruído: um campo de linhas a fluir.")
+def rodar_furos(furos, campo, modo, angulo, x, y, semente):
+    xy = furos["xy"]
+    old = hole_extras(furos)[0]
+    if modo in ("pelo modulador", "ao longo do modulador") and campo is None:
+        raise ValueError("ligue um modulador")
+    if not len(xy):
+        return {"furos": furos}
+    if modo == "ângulo fixo":
+        turn = np.full(len(xy), float(angulo))
+    elif modo == "pelo modulador":
+        turn = campo(xy) * angulo
+    elif modo == "ao longo do modulador":         # (square to the way the modulator grows fastest)
+        h = max(float(furos.get("pitch") or 0.05) * 0.5, 1e-3)
+        gx = campo(xy + (h, 0.0)) - campo(xy - (h, 0.0))
+        gy = campo(xy + (0.0, h)) - campo(xy - (0.0, h))
+        turn = np.degrees(np.arctan2(gy, gx)) + 90.0 + angulo
+        turn = np.where(np.hypot(gx, gy) < 1e-9, float(angulo), turn)
+    elif modo == "para um ponto":
+        turn = np.degrees(np.arctan2(y - xy[:, 1], x - xy[:, 0])) + angulo
+    else:
+        turn = np.random.default_rng(semente).uniform(-abs(angulo), abs(angulo), len(xy))
+    return {"furos": dict(furos, angle=old + turn, bad=np.zeros(len(xy), dtype=bool))}
+
+
+@r.node("alongar_furos", "Operações", "Alongar furos",
+        "Estica cada furo ao comprido (círculos em ovais, quadrados em retângulos, ranhuras mais longas): todos pelo "
+        "mesmo valor — ou, com um modulador, de 1 (fraco) até ao valor (forte).",
+        inputs=[Port("furos", "holes", "Furos"), Port("campo", "field", "Modulador", optional=True)],
+        outputs=[Port("furos", "holes", "Furos")],
+        params=[_num("alongar", "Alongar", 3.0, 1.0, 12.0, 0.05, "×")],
+        example="Ranhuras curtas em cima e compridas em baixo, com um Gradiente.")
+def alongar_furos(furos, campo, alongar):
+    xy = furos["xy"]
+    k = np.full(len(xy), float(alongar)) if campo is None or not len(xy) else 1.0 + (alongar - 1.0) * campo(xy)
+    return {"furos": dict(furos, ratio=k, bad=np.zeros(len(xy), dtype=bool))}
 
 
 @r.node("area_aberta", "Operações", "Levar à área aberta",
@@ -363,12 +419,13 @@ def corrigir_fabrico(furos, furo_min, ponte_min):
     xy, d, shape, panel = furos["xy"], furos["d"].copy(), furos["shape"], furos["panel"]
     if not len(xy):
         return {"furos": furos}
-    out_of = float(_radius_out(shape, 1.0))       # (how far a hole of size 1 reaches)
+    # (how far a hole of size 1 reaches: each its own, 0.545 — a slot's end, a stretched one's)
+    out_of = np.asarray(_radius_out(shape, np.ones(len(d)), hole_extras(furos)[1]), dtype=float)
     within = shapely.contains_xy(panel["inside"], xy[:, 0], xy[:, 1])
     room = shapely.distance(panel["inside"].boundary, shapely.points(xy))
     d = np.where(within, np.minimum(d, room / out_of * 0.999), 0.0)
     for _ in range(6):                            # (each pair's bridge shared by its two holes, as they are big)
-        i, j, dist = _close_pairs(xy, 2.0 * out_of * float(d.max(initial=0.0)) + ponte_min)
+        i, j, dist = _close_pairs(xy, 2.0 * float((out_of * d).max(initial=0.0)) + ponte_min)
         if not len(i):
             break
         reach = out_of * d
@@ -379,8 +436,8 @@ def corrigir_fabrico(furos, furo_min, ponte_min):
         total = np.maximum(reach[i] + reach[j], 1e-12)
         room_ij = np.maximum(dist - ponte_min, 0.0) * 0.999
         limit = np.full(len(d), np.inf)
-        np.minimum.at(limit, i, room_ij * reach[i] / total / out_of)
-        np.minimum.at(limit, j, room_ij * reach[j] / total / out_of)
+        np.minimum.at(limit, i, room_ij * reach[i] / total / out_of[i])
+        np.minimum.at(limit, j, room_ij * reach[j] / total / out_of[j])
         d = np.minimum(d, limit)
     keep = d >= furo_min
-    return {"furos": dict(furos, xy=xy[keep], d=d[keep], bad=np.zeros(int(keep.sum()), dtype=bool))}
+    return {"furos": take_holes(furos, keep, d=d[keep])}

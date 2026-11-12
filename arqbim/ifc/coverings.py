@@ -439,12 +439,18 @@ class CoveringMixin:
         if finish in core_surfaces.PATTERNS:              # (how many slats / holes; its pieces, its sheets)
             _frame, face, _h = self.cladding_face(guid)
             if finish == "perfurado":                    # (0.389: each hole its size — a picture —, its shape)
+                found = _perforation(face, d)
                 d["panels"] = [(q, [tuple(c) for c in centres], [float(s) for s in sizes])
-                               for q, centres, sizes in _perforation(face, d)]
+                               for q, centres, sizes in found]
                 d["holes"] = [c for _q, centres, _s in d["panels"] for c in centres]
                 d["count"] = len(d["holes"])
-                hole_area = sum((s * s if d["hole"] == "quadrado" else math.pi * s * s / 4.0)
-                                for _q, _c, sizes in d["panels"] for s in sizes)
+                free = _free(d)
+                if free is not None:                     # (0.545) the Visual Graph's: each its shape, its stretch
+                    hole_area = sum(float(core_surfaces.hole_area(free[0], sizes, core_surfaces.extras(sizes)[1])
+                                          .sum()) for _q, _c, sizes in found)
+                else:
+                    hole_area = sum((s * s if d["hole"] == "quadrado" else math.pi * s * s / 4.0)
+                                    for _q, _c, sizes in d["panels"] for s in sizes)
                 d["open_area"] = hole_area / face.area if face.area > 1e-9 else 0.0
                 d["mask_found"] = bool(d["mask"]) and _mask(d) is not None
             elif finish == "ondulado":                    # (0.175) its ribs

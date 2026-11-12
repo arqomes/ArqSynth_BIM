@@ -126,6 +126,21 @@ def aneis_ventilacao():
     return g
 
 
+def ranhuras_a_fluir():
+    """(0.545) Slots lying along a noise's level lines: a field of strokes that flows, longer where it is strong."""
+    g = Graph()
+    s = g.add_node("fachada_bim", pos=(0, 0))
+    q = g.add_node("grelha", {"passo": 0.09, "disposicao": "diagonal"}, pos=(260, -60))
+    n = g.add_node("ruido", {"escala": 1.4, "camadas": 1, "semente": 4}, pos=(260, 260))
+    f = g.add_node("perfurar", {"d_min": 0.012, "d_max": 0.012, "forma": "ranhura"}, pos=(520, -60))
+    k = g.add_node("alongar_furos", {"alongar": 5.0}, pos=(780, -60))
+    t = g.add_node("rodar_furos", {"modo": "ao longo do modulador", "angulo": 0.0}, pos=(780, 200))
+    _chain(g, (s, "painel", q, "painel"), (q, "pontos", f, "pontos"), (f, "furos", k, "furos"),
+           (n, "campo", k, "campo"), (k, "furos", t, "furos"), (n, "campo", t, "campo"))
+    _on_surface(g, t)
+    return g
+
+
 # key -> (name, description, maker)
 TEMPLATES = {
     "imagem_painel": ("Imagem → painel perfurado", "Uma fotografia nos furos: escuro = furo grande; verificado, "
@@ -141,6 +156,8 @@ TEMPLATES = {
                       "vãos.", ondas_degraus),
     "aneis_ventilacao": ("Espiral com 25 % de área aberta", "Furos em espiral a partir do meio da parede, levados "
                          "a 25 % de área aberta para ventilação.", aneis_ventilacao),
+    "ranhuras_a_fluir": ("Ranhuras a fluir", "Ranhuras deitadas ao longo de um ruído, mais compridas onde ele é "
+                         "forte: um campo de traços que flui pela parede.", ranhuras_a_fluir),
 }
 
 

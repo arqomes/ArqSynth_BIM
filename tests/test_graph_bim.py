@@ -37,7 +37,8 @@ class FreeHoles(unittest.TestCase):
         text = surfaces.free_text("hexagonal", [(0.1, 0.2, 0.03), (0.5, 0.6, 0.012)])
         shape, holes = surfaces.free_read(text)
         self.assertEqual(shape, "hexagonal")
-        np.testing.assert_allclose(holes, [(0.1, 0.2, 0.03), (0.5, 0.6, 0.012)])
+        np.testing.assert_allclose(holes[:, :3], [(0.1, 0.2, 0.03), (0.5, 0.6, 0.012)])
+        np.testing.assert_allclose(holes[:, 3:], [(0.0, 1.0), (0.0, 1.0)])     # (0.545: not turned, not stretched)
         self.assertIsNone(surfaces.free_read("estrela|1,2,3"))
 
     def test_boards_repeat_and_openings(self):

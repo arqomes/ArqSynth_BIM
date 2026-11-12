@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.545.0 — 2026-11-12
+
+**Gráfico Visual: formas de furo novas, e cada furo rodado e alongado.**
+
+- **Perfurar** tem três formas novas — **triangular**, **losango** e **ranhura** — e duas medidas novas: **Alongar**
+  (estica o furo: círculos em ovais, quadrados em retângulos; na ranhura é o comprimento sobre a largura) e **Rodar**.
+- Nó novo **Rodar furos**: todos pelo mesmo ângulo, pelo modulador, **ao longo do modulador** (cada furo deitado
+  segundo as curvas de nível — ranhuras a fluir à volta de um atrator ou de um ruído), a apontar para um ponto, ou ao
+  acaso.
+- Nó novo **Alongar furos**: todos pelo mesmo valor, ou mais onde o modulador é forte.
+- Tudo o resto acompanha: o painel na parede (o sólido 3D e o IFC), a pré-visualização, o DXF de corte, a área aberta,
+  «Verificar fabrico» e «Corrigir para fabrico» (contam com a ponta da ranhura), a tabela dos painéis perfurados.
+- Operador novo de origem: **Ranhuras a fluir**.
+- **Formato dos dados**: o texto «FurosLivres» do revestimento ganhou, só nos furos rodados ou alongados, dois valores
+  a mais (ângulo e alongamento). Os projetos feitos antes abrem como estavam.
+- Corrigido: no editor, as barras deslizantes das medidas ficavam espremidas ao lado da caixa «à vista».
+- Por fazer: furo de desenho próprio (um contorno desenhado pelo utilizador).
+- Testes: `tests/test_graph_shapes.py`.
+
 ## 0.544.0 — 2026-11-12
 
 **Gráfico Visual: o painel refaz-se sozinho quando a parede muda.**

@@ -115,7 +115,8 @@ def extrudir(furos, espessura):
     t = espessura or panel["thickness"]
     shape = panel["shape"]
     shape = orient(shape, 1.0) if shape.geom_type == "Polygon" else shape
-    found = [(shape, furos["xy"], furos["d"])]
+    from .nodes_panels import hole_extras
+    found = [(shape, furos["xy"], surfaces.with_extras(furos["d"], *hole_extras(furos)))]   # (0.545: turned…)
     verts, tris = surfaces.free_mesh(shape, t, found, furos["shape"])
     if len(tris) > 400000:
         raise ValueError("sólido pesado demais: menos furos")

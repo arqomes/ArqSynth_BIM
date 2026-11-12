@@ -1743,9 +1743,9 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
 6. ~~Operadores poderosos e lógicos (nós novos): Distância a aresta/linha, Distância a aberturas, Zona, Misturar
    campos, Remapear (curva, degraus), Aleatório com semente, Ondas, Anéis, Ao longo do contorno, Escolher / Desalinhar
    / Juntar pontos, Escalar / Juntar furos, Levar à área aberta, Corrigir para fabrico.~~ (0.542.0,
-   `core/graph/nodes_logic.py`; três operadores novos de origem) Por fazer: formas de furo (polígono, ranhura,
-   desenho próprio) e rodar por campo — o `FurosLivres` do BIM só guarda x, y, d e uma forma para todos (mudar o
-   formato pergunta-se antes); a área aberta por módulo; um nó de número/matemática para ligar medidas entre nós.
+   `core/graph/nodes_logic.py`; três operadores novos de origem) ~~Formas de furo (triângulo, losango, ranhura), rodar e alongar por
+   campo~~ (0.545.0: «FurosLivres» com ângulo e alongamento por furo; nós Rodar furos e Alongar furos). Por fazer: o
+   furo de desenho próprio; a área aberta por módulo; um nó de número/matemática para ligar medidas entre nós.
 7. ~~Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
    ajustar sem abrir o editor).~~ (0.543.0: caixa «à vista» em cada medida; `operators.exposed_of`)
 8. ~~Aplicar a várias superfícies de uma vez~~ (0.541); ~~a parede guarda o operador~~ (0.543.0: propriedade

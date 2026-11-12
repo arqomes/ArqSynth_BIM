@@ -270,20 +270,41 @@ def ruido(escala, semente, camadas):
 
 
 # ------------------------------------------------------------------ Operações
-SHAPES = ("redondo", "quadrado", "hexagonal")
+SHAPES = ("redondo", "quadrado", "hexagonal", "triangular", "losango", "ranhura")     # (0.545: the last three)
+
+
+def hole_extras(furos):
+    """(0.545) (angle (n,) °, ratio (n,)) of holes: each one's turn and stretch (none: 0 and 1)."""
+    n = len(furos["xy"])
+    angle, ratio = furos.get("angle"), furos.get("ratio")
+    return (np.zeros(n) if angle is None else np.asarray(angle, dtype=float),
+            np.ones(n) if ratio is None else np.asarray(ratio, dtype=float))
+
+
+def take_holes(furos, keep, **changes):
+    """Holes chosen (`keep`: a mask or indices), all that each carries going with it; not checked any more."""
+    angle, ratio = hole_extras(furos)
+    out = dict(furos, xy=furos["xy"][keep], d=furos["d"][keep], angle=angle[keep], ratio=ratio[keep])
+    out.update(changes)
+    out["bad"] = np.zeros(len(out["xy"]), dtype=bool)
+    return out
 
 
 @r.node("perfurar", "Operações", "Perfurar",
-        "Um furo em cada ponto. Sem modulador, todos do diâmetro máximo; com ele, entre o mínimo e o máximo.",
+        "Um furo em cada ponto. Sem modulador, todos do tamanho máximo; com ele, entre o mínimo e o máximo. O "
+        "tamanho é o diâmetro do círculo, o lado do quadrado ou do triângulo, a largura do hexágono ou da ranhura, a "
+        "diagonal do losango. «Alongar» estica o furo (a ranhura: o comprimento sobre a largura); «Rodar» vira-o.",
         inputs=[Port("pontos", "points", "Pontos"), Port("campo", "field", "Modulador", optional=True)],
         outputs=[Port("furos", "holes", "Furos")],
-        params=[_num("d_min", "Diâmetro mínimo", 0.0, 0.0, 0.2, 0.001),
-                _num("d_max", "Diâmetro máximo", 0.03, 0.001, 0.2, 0.001),
+        params=[_num("d_min", "Tamanho mínimo", 0.0, 0.0, 0.2, 0.001),
+                _num("d_max", "Tamanho máximo", 0.03, 0.001, 0.2, 0.001),
                 Port("forma", "choice", "Forma", default="redondo", choices=SHAPES),
                 Port("inverter", "bool", "Inverter", default=False),
-                _num("sem_furo", "Sem furo abaixo de", MIN_CUT, MIN_CUT, 0.05, 0.0005)],
-        example="Furos de 0 a 3 cm a seguir uma imagem.")
-def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT):
+                _num("sem_furo", "Sem furo abaixo de", MIN_CUT, MIN_CUT, 0.05, 0.0005),
+                _num("alongar", "Alongar", 1.0, 1.0, 12.0, 0.05, "×"),
+                _num("rodar", "Rodar", 0.0, -180.0, 180.0, 1.0, "°")],
+        example="Ranhuras de 8 × 32 mm (alongar 4) a 45°.")
+def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT, alongar=1.0, rodar=0.0):
     xy = pontos["xy"]
     if campo is None:
         f = np.ones(len(xy))
@@ -294,14 +315,17 @@ def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT):
     lo, hi = min(d_min, d_max), max(d_min, d_max)
     d = lo + (hi - lo) * f
     keep = d >= max(MIN_CUT, sem_furo)       # (0.540: those smaller not cut at all — the picture's light parts)
+    n = int(keep.sum())
     return {"furos": {"panel": pontos["panel"], "xy": xy[keep], "d": d[keep], "shape": forma,
-                      "pitch": pontos["pitch"], "bad": np.zeros(int(keep.sum()), dtype=bool)}}
+                      "pitch": pontos["pitch"], "bad": np.zeros(n, dtype=bool),
+                      "angle": np.full(n, float(rodar)), "ratio": np.full(n, float(alongar))}}
 
 
 # ------------------------------------------------------------------ Fabrico
-def _radius_out(shape, d):
-    """How far a hole reaches from its centre at most (a square's corner, a hexagon's)."""
-    return d / 2.0 * {"redondo": 1.0, "quadrado": math.sqrt(2.0), "hexagonal": 2.0 / math.sqrt(3.0)}[shape]
+def _radius_out(shape, d, ratio=None):
+    """How far a hole reaches from its centre at most (a square's corner, a hexagon's; 0.545: a slot's end)."""
+    from .. import surfaces
+    return surfaces.hole_reach(shape, d, ratio)
 
 
 def _close_pairs(xy, reach):
@@ -345,8 +369,10 @@ def _close_pairs(xy, reach):
         example="Regra prática: furo e ponte nunca menores que a espessura da chapa.")
 def verificar_fabrico(furos, furo_min, ponte_min):
     import shapely
+    from .. import surfaces
     xy, d, shape, panel = furos["xy"], furos["d"], furos["shape"], furos["panel"]
-    reach = _radius_out(shape, d)
+    ratio = hole_extras(furos)[1]
+    reach = _radius_out(shape, d, ratio) if len(d) else np.zeros(0)
     small = d < furo_min
     bad = small.copy()
     min_bridge = math.inf
@@ -370,8 +396,7 @@ def verificar_fabrico(furos, furo_min, ponte_min):
         within = shapely.contains_xy(panel["inside"], xy[:, 0], xy[:, 1])
         edge = ~within | (to_edge < reach)
         bad |= edge
-    hole_area = {"redondo": math.pi / 4.0, "quadrado": 1.0, "hexagonal": math.sqrt(3.0) / 2.0}[shape]
-    open_area = float((hole_area * d ** 2).sum() / max(panel["shape"].area, 1e-12))
+    open_area = float(surfaces.hole_area(shape, d, ratio).sum() / max(panel["shape"].area, 1e-12))
     problems = []
     if small.any():
         problems.append(f"{int(small.sum())} furos menores que {furo_min * 1000:.1f} mm")
@@ -402,13 +427,19 @@ def dxf_text(furos, name="Painel"):
     for part in getattr(panel["shape"], "geoms", [panel["shape"]]):     # (0.542: modules too)
         for ring in [part.exterior, *part.interiors]:
             w.polyline("CONTORNO", [(x * 1000.0, y * 1000.0) for x, y in ring.coords[:-1]], closed=True)
+    from .. import surfaces
     shape = furos["shape"]
-    for (x, y), d in zip(furos["xy"], furos["d"]):
+    angle, ratio = hole_extras(furos)
+    for k, ((x, y), d) in enumerate(zip(furos["xy"], furos["d"])):
         cx, cy, dd = x * 1000.0, y * 1000.0, d * 1000.0
-        if shape == "redondo":
+        plain = abs(angle[k]) < 1e-9 and abs(ratio[k] - 1.0) < 1e-9
+        if shape == "redondo" and plain:
             w.circle("FUROS", (cx, cy), dd / 2.0)
-        else:
+        elif shape in ("quadrado", "hexagonal") and plain:
             w.polyline("FUROS", hole_outline(shape, cx, cy, dd), closed=True)
+        else:                                     # (0.545) turned, stretched, a triangle, a lozenge, a slot
+            ring = surfaces.hole_rings(shape, [(cx, cy)], [dd], [angle[k]], [ratio[k]])[0]
+            w.polyline("FUROS", [tuple(p) for p in ring], closed=True)
     text = 0.02 * 1000.0
     w.text("TEXTOS", (0.0, -2 * text), text, name)
     w.text("TEXTOS", (0.0, -3.5 * text), text, "{:.0f} × {:.0f} mm — {} furos".format(
@@ -453,4 +484,16 @@ def aplicar_parede(furos, parede, lado, repetir):
                     "panel": {"width": panel["width"], "height": panel["height"], "margin": panel["margin"],
                               "thickness": panel["thickness"]},
                     "shape": furos["shape"],
-                    "holes": [(float(x), float(y), float(d)) for (x, y), d in zip(furos["xy"], furos["d"])]}}
+                    "holes": _hole_rows(furos)}}
+
+
+def _hole_rows(furos):
+    """(x, y, d) of each hole — (x, y, d, angle, ratio) of those turned or stretched (0.545)."""
+    angle, ratio = hole_extras(furos)
+    out = []
+    for k, ((x, y), d) in enumerate(zip(furos["xy"], furos["d"])):
+        row = (float(x), float(y), float(d))
+        if abs(angle[k]) > 1e-9 or abs(ratio[k] - 1.0) > 1e-9:
+            row += (float(angle[k]), float(ratio[k]))
+        out.append(row)
+    return out

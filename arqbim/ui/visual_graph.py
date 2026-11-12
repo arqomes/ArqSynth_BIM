@@ -105,22 +105,8 @@ def _draw(p, kind, value, w, h, domain):
         panel = value["panel"]
         s, ox, oy = _frame(w, h, panel["shape"].bounds)
         _outline(p, panel["shape"], s, ox, oy, QtGui.QColor("#d9dee5"))
-        p.setPen(QtCore.Qt.PenStyle.NoPen)
-        dark, red = QtGui.QColor("#1d2025"), QtGui.QColor(theme.ART["red"])
-        bad = value.get("bad")
-        shape = value["shape"]
-        for k, ((x, y), d) in enumerate(zip(value["xy"][:20000], value["d"][:20000])):
-            p.setBrush(red if bad is not None and len(bad) > k and bad[k] else dark)
-            cx, cy, r = ox + x * s, oy - y * s, max(0.6, d * s / 2.0)
-            if shape == "redondo":
-                p.drawEllipse(QtCore.QPointF(cx, cy), r, r)
-            elif shape == "quadrado":
-                p.drawRect(QtCore.QRectF(cx - r, cy - r, 2 * r, 2 * r))
-            else:
-                rr = r * 2.0 / math.sqrt(3.0)
-                p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(cx + rr * math.cos(math.radians(a)),
-                                                              cy + rr * math.sin(math.radians(a)))
-                                               for a in range(0, 360, 60)]))
+        _holes(p, value["shape"], value["xy"], value["d"], s, ox, oy, value.get("bad"), 20000,
+               *_extras_of(value))
     elif kind == "report":
         good = value["ok"]
         p.setPen(QtGui.QColor(theme.ART["green"] if good else theme.ART["red"]))
@@ -212,13 +198,22 @@ def final_result(graph, results):
     return None if best is None else best[1:]
 
 
-def _holes(p, shape, xy, d, s, ox, oy, bad=None, limit=40000):
+def _holes(p, shape, xy, d, s, ox, oy, bad=None, limit=40000, angle=None, ratio=None):
+    """(0.545) `angle`, `ratio`: each hole's turn (°) and stretch — None: as the sizes carry them (surfaces.extras)."""
+    from ..core import surfaces
     dark, red = QtGui.QColor("#1d2025"), QtGui.QColor(theme.ART["red"])
     p.setPen(QtCore.Qt.PenStyle.NoPen)
+    if angle is None or ratio is None:
+        angle, ratio = surfaces.extras(d)
+    angle, ratio = np.asarray(angle, dtype=float), np.asarray(ratio, dtype=float)
+    plain = shape in ("redondo", "quadrado", "hexagonal") and not np.any(angle) and np.allclose(ratio, 1.0)
+    rings = None if plain else surfaces.hole_rings(shape, xy[:limit], d[:limit], angle[:limit], ratio[:limit])
     for k, ((x, y), size) in enumerate(zip(xy[:limit], d[:limit])):
         p.setBrush(red if bad is not None and len(bad) > k and bad[k] else dark)
         cx, cy, r = ox + x * s, oy - y * s, max(0.6, size * s / 2.0)
-        if shape == "redondo":
+        if rings is not None:
+            p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(ox + u * s, oy - v * s) for u, v in rings[k]]))
+        elif shape == "redondo":
             p.drawEllipse(QtCore.QPointF(cx, cy), r, r)
         elif shape == "quadrado":
             p.drawRect(QtCore.QRectF(cx - r, cy - r, 2 * r, 2 * r))
@@ -227,6 +222,11 @@ def _holes(p, shape, xy, d, s, ox, oy, bad=None, limit=40000):
             p.drawPolygon(QtGui.QPolygonF([QtCore.QPointF(cx + rr * math.cos(math.radians(a)),
                                                           cy + rr * math.sin(math.radians(a)))
                                            for a in range(0, 360, 60)]))
+
+
+def _extras_of(holes):
+    from ..core.graph.nodes_panels import hole_extras
+    return hole_extras(holes)
 
 
 def _draw_applied(p, value, w, h, source=None):
@@ -241,9 +241,10 @@ def _draw_applied(p, value, w, h, source=None):
     s, ox, oy = _frame(w, h, face.bounds, pad=14)
     _outline(p, face, s, ox, oy, WALL)
     panel = value["panel"]
-    holes = np.asarray(value["holes"], dtype=float).reshape(-1, 3)
+    holes = surfaces.hole_rows(value["holes"])
     if not value["repeat"] and source is not None and len(source["xy"]) == len(holes):
-        _holes(p, value["shape"], source["xy"], source["d"], s, ox, oy, source.get("bad"))
+        _holes(p, value["shape"], source["xy"], source["d"], s, ox, oy, source.get("bad"), 40000,
+               *_extras_of(source))
         return
     found = surfaces.free_perforation(face, value["shape"], holes, panel["margin"],
                                       (panel["width"], panel["height"]), bool(value["repeat"]))
@@ -317,6 +318,8 @@ def node_thumb(key, w=96, h=60):
                     node["params"]["passo"] = 0.2
                 if node["type"] == "perfurar":
                     node["params"].update(d_min=0.03, d_max=0.17)
+                    if key in ("rodar_furos", "alongar_furos"):     # (0.545) seen on slots: round ones do not show
+                        node["params"].update(forma="ranhura", d_min=0.04, d_max=0.05, alongar=2.5)
             g.nodes[nid]["params"].update(THUMB_PARAMS.get(key, {}))
             results = g.evaluate()
             out = results.get(nid)
@@ -874,6 +877,7 @@ class ParamsPanel(QtWidgets.QWidget):
         slider.valueChanged.connect(from_slider)
         spin.valueChanged.connect(from_spin)
         spin.setMinimumWidth(92)
+        slider.setMinimumWidth(90)                 # (0.545: beside «à vista» it was squeezed to nothing)
         lay.addWidget(slider, 1)
         lay.addWidget(spin)
         return row
@@ -1081,7 +1085,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.params)
         dock.setWidget(scroll)
-        dock.setMinimumWidth(320)
+        dock.setMinimumWidth(430)
         self.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
     def _build_toolbar(self):

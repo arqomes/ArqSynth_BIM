@@ -347,43 +347,162 @@ def _sheet_mesh(face, thickness, centres, sizes, pitch, square=False):
 
 
 # ---------------------------------------------------------------- (0.540) free holes, from the Visual Graph
-FREE_SHAPES = ("redondo", "quadrado", "hexagonal")
+# (0.545) triangles, lozenges and slots too; each hole may be turned (its angle, °) and stretched (its ratio: as many
+# times longer than wide — a slot's length over its width)
+FREE_SHAPES = ("redondo", "quadrado", "hexagonal", "triangular", "losango", "ranhura")
+SLOT_RATIO = 3.0                     # a slot's, where none is given (ratio 1)
+
+
+def hole_rows(holes):
+    """(n, 5) x, y, d, angle (°), ratio of holes given as rows of 3 (x, y, d: not turned, not stretched) or 5."""
+    rows = [list(h) for h in holes]
+    out = np.zeros((len(rows), 5))
+    out[:, 4] = 1.0
+    for k, row in enumerate(rows):
+        out[k, :len(row)] = row[:5]
+    out[:, 4] = np.where(out[:, 4] > 0, out[:, 4], 1.0)
+    return out
 
 
 def free_text(shape, holes):
-    """The text a finish keeps its free holes in: «shape|x,y,d;…», mm, one panel's (its corner at 0, 0)."""
+    """The text a finish keeps its free holes in: «shape|x,y,d;…», mm, one panel's (its corner at 0, 0). (0.545) A
+    hole turned or stretched: «x,y,d,angle,ratio» (° and times)."""
     if shape not in FREE_SHAPES:
         raise ValueError(shape)
-    return shape + "|" + ";".join("{:.1f},{:.1f},{:.1f}".format(x * 1000.0, y * 1000.0, d * 1000.0)
-                                  for x, y, d in holes)
+    rows = []
+    for x, y, d, a, k in hole_rows(holes):
+        row = "{:.1f},{:.1f},{:.1f}".format(x * 1000.0, y * 1000.0, d * 1000.0)
+        if abs(a) > 1e-9 or abs(k - 1.0) > 1e-9:
+            row += ",{:.1f},{:.3f}".format(a, k)
+        rows.append(row)
+    return shape + "|" + ";".join(rows)
 
 
 def free_read(text):
-    """(shape, (n, 3) x, y, d in m) of free_text — or None (none, or not readable)."""
+    """(shape, (n, 5) x, y, d in m, angle in °, ratio) of free_text — or None (none, or not readable)."""
     if not text or "|" not in text:
         return None
     shape, _, rows = text.partition("|")
     if shape not in FREE_SHAPES:
         return None
     try:
-        vals = [[float(c) / 1000.0 for c in row.split(",")] for row in rows.split(";") if row]
+        vals = []
+        for row in rows.split(";"):
+            if not row:
+                continue
+            c = [float(v) for v in row.split(",")]
+            if len(c) not in (3, 5):
+                return None
+            vals.append([c[0] / 1000.0, c[1] / 1000.0, c[2] / 1000.0] + c[3:])
     except ValueError:
         return None
-    arr = np.array(vals, dtype=float).reshape(-1, 3) if vals else np.zeros((0, 3))
-    return shape, arr
+    return shape, hole_rows(vals)
 
 
-def hole_reach(shape, d):
-    """How far a hole reaches from its centre (its corners)."""
-    return d / 2.0 * {"redondo": 1.0, "quadrado": math.sqrt(2.0), "hexagonal": 2.0 / math.sqrt(3.0)}[shape]
+_UNIT = {}
+
+
+def unit_ring(shape):
+    """A hole of size 1's outline ((m, 2), about its centre, counter-clockwise): a circle's diameter, a square's
+    side, a hexagon's width between flats, a triangle's side, a lozenge's diagonal — 1. (A slot is not one outline
+    stretched: slot_ring.)"""
+    if shape not in _UNIT:
+        n, start, radius = {"redondo": (SEGMENTS, 0.0, 0.5), "quadrado": (4, 45.0, math.sqrt(2.0) / 2.0),
+                            "hexagonal": (6, 0.0, 1.0 / math.sqrt(3.0)),
+                            "triangular": (3, 90.0, 1.0 / math.sqrt(3.0)), "losango": (4, 0.0, 0.5),
+                            "ranhura": (SEGMENTS, 0.0, 0.5)}[shape]
+        ang = np.radians(start + np.arange(n) * 360.0 / n)
+        _UNIT[shape] = np.column_stack((radius * np.cos(ang), radius * np.sin(ang)))
+    return _UNIT[shape]
+
+
+def slot_ring(ratio):
+    """A slot of width 1 and length `ratio` (≥ 1) along x: two half circles joined."""
+    half = max(float(ratio), 1.0) / 2.0 - 0.5
+    n = max(SEGMENTS // 2, 4)
+    right = np.radians(-90.0 + np.arange(n + 1) * 180.0 / n)
+    left = right + math.pi
+    return np.vstack((np.column_stack((half + 0.5 * np.cos(right), 0.5 * np.sin(right))),
+                      np.column_stack((-half + 0.5 * np.cos(left), 0.5 * np.sin(left)))))
+
+
+def _ratio(shape, ratio, n):
+    k = np.ones(n) if ratio is None else np.broadcast_to(np.asarray(ratio, dtype=float), (n,)).copy()
+    if shape == "ranhura":
+        k = np.where(k > 1.0 + 1e-9, k, SLOT_RATIO)
+    return np.maximum(k, 1e-6)
+
+
+def hole_rings(shape, centres, sizes, angle=None, ratio=None):
+    """Each hole's outline, a list of (m, 2) arrays (m): its unit outline stretched along its own x, sized, turned
+    and put at its centre."""
+    centres = np.asarray(centres, dtype=float).reshape(-1, 2)
+    sizes = np.asarray(sizes, dtype=float).reshape(-1)
+    n = len(sizes)
+    k = _ratio(shape, ratio, n)
+    a = np.zeros(n) if angle is None else np.radians(np.broadcast_to(np.asarray(angle, dtype=float), (n,)))
+    out = []
+    unit = unit_ring(shape)
+    for i in range(n):
+        ring = slot_ring(k[i]) if shape == "ranhura" else unit * (k[i], 1.0)
+        c, s = math.cos(a[i]), math.sin(a[i])
+        ring = ring * sizes[i]
+        out.append(np.column_stack((ring[:, 0] * c - ring[:, 1] * s, ring[:, 0] * s + ring[:, 1] * c)) + centres[i])
+    return out
+
+
+def hole_reach(shape, d, ratio=None):
+    """How far a hole reaches from its centre (its corners; stretched: its far end)."""
+    d = np.asarray(d, dtype=float)
+    if ratio is None and shape != "ranhura":
+        return d / 2.0 * {"redondo": 1.0, "quadrado": math.sqrt(2.0), "hexagonal": 2.0 / math.sqrt(3.0),
+                          "triangular": 2.0 / math.sqrt(3.0), "losango": 1.0}[shape]
+    k = _ratio(shape, ratio, d.size).reshape(d.shape)
+    if shape == "ranhura":
+        return d * k / 2.0
+    unit = unit_ring(shape)
+    far = np.hypot(unit[:, 0][None, :] * k.reshape(-1, 1), unit[:, 1][None, :]).max(axis=1)
+    return d * far.reshape(d.shape)
+
+
+def hole_area(shape, d, ratio=None):
+    """Each hole's area."""
+    d = np.asarray(d, dtype=float)
+    k = _ratio(shape, ratio, d.size).reshape(d.shape)
+    if shape == "ranhura":
+        return d * d * (k - 1.0) + math.pi * d * d / 4.0
+    unit = {"redondo": math.pi / 4.0, "quadrado": 1.0, "hexagonal": math.sqrt(3.0) / 2.0,
+            "triangular": math.sqrt(3.0) / 4.0, "losango": 0.5}[shape]
+    return unit * d * d * k
+
+
+class HoleSizes(np.ndarray):
+    """Holes' sizes (as free_perforation always gave them) that also carry each hole's `angle` (°) and `ratio`."""
+    angle = None
+    ratio = None
+
+
+def with_extras(sizes, angle, ratio):
+    out = np.asarray(sizes, dtype=float).view(HoleSizes)
+    out.angle, out.ratio = np.asarray(angle, dtype=float), np.asarray(ratio, dtype=float)
+    return out
+
+
+def extras(sizes):
+    """(angle (n,), ratio (n,)) of sizes (HoleSizes: its own; plain numbers: none turned, none stretched)."""
+    n = len(sizes)
+    angle, ratio = getattr(sizes, "angle", None), getattr(sizes, "ratio", None)
+    return (np.zeros(n) if angle is None or len(angle) != n else angle,
+            np.ones(n) if ratio is None or len(ratio) != n else ratio)
 
 
 def free_perforation(face, shape, holes, margin, size, repeat=True):
     """[(panel, centres (k, 2), sizes (k,))] free holes (one panel's: x, y, d from its corner) on the face: boards
     of `size` from its corner, each with the same holes (`repeat`) — or only the first board —, only those wholly
-    `margin` clear of the board's edges and the openings."""
+    `margin` clear of the board's edges and the openings. (0.545) The sizes carry each hole's angle and ratio
+    (extras)."""
     import shapely
-    holes = np.asarray(holes, dtype=float).reshape(-1, 3)
+    holes = hole_rows(holes)
     out = []
     u0, v0 = face.bounds[:2]
     for board in panels(face, size):
@@ -402,19 +521,23 @@ def free_perforation(face, shape, holes, margin, size, repeat=True):
         if not room.is_empty:
             pts = shapely.points(c)
             keep = shapely.contains_xy(room, c[:, 0], c[:, 1]) & \
-                (shapely.distance(room.boundary, pts) >= hole_reach(shape, d) - 1e-9)
-        out.append((board, c[keep], d[keep]))
+                (shapely.distance(room.boundary, pts) >= hole_reach(shape, d, holes[:, 4]) - 1e-9)
+        out.append((board, c[keep], with_extras(d[keep], holes[keep, 3], holes[keep, 4])))
     return out
 
 
-def _hole_polygons(shape, centres, sizes):
+def _hole_polygons(shape, centres, sizes, angle=None, ratio=None):
     import shapely
-    n = {"redondo": SEGMENTS, "quadrado": 4, "hexagonal": 6}[shape]
-    start = {"redondo": 0.0, "quadrado": 45.0, "hexagonal": 0.0}[shape]
-    ang = np.radians(start + np.arange(n) * 360.0 / n)
-    r = hole_reach(shape, np.asarray(sizes, dtype=float))[:, None]
-    ring = np.stack((centres[:, 0:1] + r * np.cos(ang), centres[:, 1:2] + r * np.sin(ang)), axis=-1)
-    return shapely.polygons(ring)
+    sizes = np.asarray(sizes, dtype=float)
+    plain = (angle is None or not np.any(angle)) and (ratio is None or np.allclose(ratio, 1.0))
+    if plain and shape in ("redondo", "quadrado", "hexagonal"):       # (as before 0.545, all at once)
+        n = {"redondo": SEGMENTS, "quadrado": 4, "hexagonal": 6}[shape]
+        start = {"redondo": 0.0, "quadrado": 45.0, "hexagonal": 0.0}[shape]
+        ang = np.radians(start + np.arange(n) * 360.0 / n)
+        r = hole_reach(shape, sizes)[:, None]
+        ring = np.stack((centres[:, 0:1] + r * np.cos(ang), centres[:, 1:2] + r * np.sin(ang)), axis=-1)
+        return shapely.polygons(ring)
+    return np.array([shapely.Polygon(ring) for ring in hole_rings(shape, centres, sizes, angle, ratio)], dtype=object)
 
 
 def free_mesh(face, thickness, found, shape):
@@ -425,9 +548,11 @@ def free_mesh(face, thickness, found, shape):
     t = float(thickness)
     centres = np.concatenate([c for _q, c, _d in found]) if found else np.zeros((0, 2))
     sizes = np.concatenate([d for _q, _c, d in found]) if found else np.zeros(0)
+    angle = np.concatenate([extras(d)[0] for _q, _c, d in found]) if found else np.zeros(0)       # (0.545)
+    ratio = np.concatenate([extras(d)[1] for _q, _c, d in found]) if found else np.zeros(0)
     sheet = face
     if len(centres):
-        sheet = face.difference(shapely.union_all(_hole_polygons(shape, centres, sizes)))
+        sheet = face.difference(shapely.union_all(_hole_polygons(shape, centres, sizes, angle, ratio)))
     verts, tris, count = [], [], 0
     for part in getattr(sheet, "geoms", [sheet]):
         if part.geom_type != "Polygon" or part.area < 1e-8:
