@@ -67,10 +67,21 @@ def target_face(wall):
         outputs=[Port("painel", "panel", "Superfície")],
         params=[Port("parede", "text", "Parede (GlobalId)", default=""),
                 _num("margem", "Margem", 0.05, 0.0, 1.0, 0.005),
-                _num("espessura", "Espessura", 0.003, 0.0005, 0.1, 0.0005)],
+                _num("espessura", "Espessura", 0.003, 0.0005, 0.1, 0.0005),
+                Port("lado", "choice", "Face", default="frente", choices=("frente", "trás"))],
         example="A fachada sul, perfurada à volta das janelas.")
-def fachada_bim(parede, margem, espessura):
-    return {"painel": _panel(target_face(parede), margem, espessura)}
+def fachada_bim(parede, margem, espessura, lado="frente"):
+    face = target_face(parede)
+    if lado == "trás":                  # (0.546) as it is seen standing before that face: left and right swapped
+        face = mirrored(face)
+    return {"painel": dict(_panel(face, margem, espessura), mirror=lado == "trás")}
+
+
+def mirrored(shape):
+    """A face seen from its other side: turned about the upright line through its middle."""
+    from shapely import affinity
+    x0, _y0, x1, _y1 = shape.bounds
+    return affinity.scale(shape, xfact=-1.0, yfact=1.0, origin=((x0 + x1) / 2.0, 0.0))
 
 
 # ------------------------------------------------------------------ Operações

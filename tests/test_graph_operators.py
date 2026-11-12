@@ -283,6 +283,36 @@ class KeptOnTheWall(unittest.TestCase):
         operators.update(doc, made)                                            # (the button still does it)
         self.assertLess(doc.ifc.pattern_params(made)["count"], before)
 
+    def test_back_face_as_it_is_seen(self):
+        """0.546 — the back face is worked on as one sees it standing before it: left and right swapped."""
+        from arqbim.core import surfaces
+        doc, wall = a_wall()
+        frame = bim.wall_frame(doc, wall)
+        bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 1.0, 1)    # (1,0–1,8 m)
+        nodes_3d.MODEL["doc"] = doc
+        g = operators.retarget(operators.starter(), wall, "trás")
+        g.set_param("n3", "x", 5.5)                                           # (the attractor: at the viewer's right)
+        g.set_param("n3", "raio", 1.5)
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        face = out["n1"]["painel"]["shape"]
+        from shapely.geometry import Point
+        self.assertFalse(face.contains(Point(4.6, 1.0)))                       # (the door seen at 4,2–5,0 m)
+        self.assertTrue(face.contains(Point(1.4, 1.0)))
+        self.assertTrue(out["n6"]["bim"]["mirror"])
+        back = operators.apply_to(doc, g, wall, "trás")[0]
+        rows = surfaces.free_read(doc.ifc._params(doc.ifc.by_guid(back))["FurosLivres"])[1]
+        big = rows[rows[:, 2] > 0.05]
+        self.assertTrue(len(big) and big[:, 0].max() < 2.2)                    # (in the wall's measures: 0,5 m)
+        front = operators.apply_to(doc, operators.starter(), wall, "frente")[0]
+        self.assertFalse(operators.operator_of(doc, front)["graph"].nodes["n1"]["params"]["lado"] == "trás")
+        rows = surfaces.free_read(doc.ifc._params(doc.ifc.by_guid(front))["FurosLivres"])[1]
+        self.assertLess(rows[rows[:, 2].argmax(), 0], 2.5)                     # (starter's attractor at 1 m: as drawn)
+        from arqbim.ui import visual_graph as vgm
+        img = vgm.surface_picture(g, out, 600, 300)                            # (the door drawn where it is seen)
+        self.assertGreater(img.pixelColor(int(600 * 4.6 / 6.0), 220).lightness(), 240)
+        self.assertLess(img.pixelColor(int(600 * 1.4 / 6.0), 220).lightness(), 240)
+
     def test_a_broken_operator_never_stops_the_wall(self):
         doc, wall = a_wall()
         made = operators.apply_to(doc, operators.starter(), wall)[0]

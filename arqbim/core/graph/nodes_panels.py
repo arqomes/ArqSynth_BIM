@@ -480,7 +480,14 @@ def cladding_pattern(bim):
         example="O mesmo painel repetido ao longo da fachada sul.")
 def aplicar_parede(furos, parede, lado, repetir):
     panel = furos["panel"]
-    return {"bim": {"wall": parede, "side": lado, "repeat": repetir,
+    mirror = bool(panel.get("mirror")) and not repetir
+    if mirror:                 # (0.546) drawn as seen from the back face: put back in the wall's own measures
+        x0, _y0, x1, _y1 = panel["shape"].bounds
+        angle, ratio = hole_extras(furos)
+        xy = furos["xy"].copy()
+        xy[:, 0] = x0 + x1 - xy[:, 0]
+        furos = dict(furos, xy=xy, angle=180.0 - angle, ratio=ratio)
+    return {"bim": {"wall": parede, "side": lado, "repeat": repetir, "mirror": mirror,
                     "panel": {"width": panel["width"], "height": panel["height"], "margin": panel["margin"],
                               "thickness": panel["thickness"]},
                     "shape": furos["shape"],

@@ -238,6 +238,8 @@ def _draw_applied(p, value, w, h, source=None):
         face = nodes_3d.target_face(value["wall"])
     except ValueError:
         face = nodes_3d.example_face()
+    if value.get("mirror") and source is not None:   # (0.546) the back face as one sees it: the holes as drawn
+        face = nodes_3d.mirrored(face)
     s, ox, oy = _frame(w, h, face.bounds, pad=14)
     _outline(p, face, s, ox, oy, WALL)
     panel = value["panel"]

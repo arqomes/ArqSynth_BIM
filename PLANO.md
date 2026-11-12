@@ -1732,8 +1732,8 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    se poder reabrir e reaplicar.
 3. ~~«Criar»/«Editar» com uma parede selecionada: abre o editor já com o nó de entrada «Superfície do modelo» ligado
    a ela (aberturas, contorno). Sem nada selecionado, uma face de exemplo.~~ (0.541.0) Por fazer: paredes curvas,
-   a Superfície paramétrica e lajes como superfície; a face de trás espelhada (hoje as duas faces usam as mesmas
-   medidas ao longo da parede).
+   a Superfície paramétrica e lajes como superfície; ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
+   «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
    superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) Por fazer: a
    pré-visualização na própria vista 3D do modelo; aproximar/arrastar a superfície.

@@ -239,6 +239,7 @@ def retarget(graph, wall, side="frente"):
     for nid, node in graph.nodes.items():
         if node["type"] == "fachada_bim":
             graph.set_param(nid, "parede", wall or "")
+            graph.set_param(nid, "lado", side if side in SIDES else SIDES[0])     # (0.546: seen from that face)
             whole |= graph._downstream(nid)
     for nid, node in graph.nodes.items():
         if node["type"] == "aplicar_parede":

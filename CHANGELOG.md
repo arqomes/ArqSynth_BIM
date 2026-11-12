@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.546.0 — 2026-11-12
+
+**Gráfico Visual: a face de trás trabalha-se como se vê.**
+
+- Ao escolher a face **trás** de uma parede, a superfície do editor aparece como a vê quem está desse lado: a
+  esquerda e a direita trocadas, as portas e janelas no sítio onde as vê. O que desenhar (uma fotografia, um atrator
+  à direita, ranhuras inclinadas) fica na parede tal como o vê na pré-visualização, sem sair espelhado.
+- Vale para os operadores que partem da «Superfície do modelo». Os que repetem um módulo («Painel plano») ficam como
+  estavam.
+- Testes: `tests/test_graph_operators.py` (test_back_face_as_it_is_seen).
+
 ## 0.545.0 — 2026-11-12
 
 **Gráfico Visual: formas de furo novas, e cada furo rodado e alongado.**
