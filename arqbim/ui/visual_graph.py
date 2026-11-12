@@ -702,10 +702,12 @@ class ParamsPanel(QtWidgets.QWidget):
     """The chosen node's measures — sliders with their number beside, ticks, lists, file fields —, its result in big
     and its description."""
     changed = QtCore.Signal(str, str, object)
+    expose = QtCore.Signal(str, str, bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.nid = None
+        self.exposed = None                    # (0.543) the window's list of (node id, measure) in sight — or None
         self.pick_wall = None                  # set by the window: () -> GlobalId of the wall chosen, or ""
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
@@ -746,7 +748,21 @@ class ParamsPanel(QtWidgets.QWidget):
         self.title.setText(spec.label)
         self.about.setText(spec.description + (f"\nExemplo: {spec.example}" if spec.example else ""))
         for port in spec.params:
-            self.form.addRow(port.label or port.name, self._editor(port, node["params"][port.name], node["type"]))
+            editor = self._editor(port, node["params"][port.name], node["type"])
+            if self.exposed is not None and port.kind in ("number", "int", "bool", "choice"):
+                # (0.543) «à vista»: this measure stands in the BIM's side panel, changed without the editor
+                row = QtWidgets.QWidget()
+                lay = QtWidgets.QHBoxLayout(row)
+                lay.setContentsMargins(0, 0, 0, 0)
+                pin = QtWidgets.QCheckBox("à vista")
+                pin.setToolTip("Mostrar esta medida no painel lateral «Operadores», para a mudar sem abrir o "
+                               "Gráfico Visual.")
+                pin.setChecked((nid, port.name) in self.exposed)
+                pin.toggled.connect(lambda on, n=port.name: self.expose.emit(self.nid, n, on))
+                lay.addWidget(editor, 1)
+                lay.addWidget(pin)
+                editor = row
+            self.form.addRow(port.label or port.name, editor)
 
     def show_picture(self, image):
         if image is None:
@@ -758,19 +774,22 @@ class ParamsPanel(QtWidgets.QWidget):
         if self.nid is not None:
             self.changed.emit(self.nid, name, value)
 
-    def _editor(self, port, value, node_type):
+    def _editor(self, port, value, node_type, emit=None):
+        """`emit(name, value)`: where a change goes (the node shown: its own; 0.543: the side panel's)."""
+        emit = emit or self._emit
         if port.kind in ("number", "int"):
-            return self._slider(port, value)
+            return self._slider(port, value, emit)
         if port.kind == "bool":
             box = QtWidgets.QCheckBox()
             box.setChecked(bool(value))
-            box.toggled.connect(lambda v, n=port.name: self._emit(n, v))
+            box.toggled.connect(lambda v, n=port.name: emit(n, v))
             return box
         if port.kind == "choice":
             combo = QtWidgets.QComboBox()
             combo.addItems(list(port.choices))
             combo.setCurrentText(str(value))
-            combo.currentTextChanged.connect(lambda v, n=port.name: self._emit(n, v))
+            combo.setMinimumWidth(40)
+            combo.currentTextChanged.connect(lambda v, n=port.name: emit(n, v))
             return combo
         row = QtWidgets.QWidget()
         lay = QtWidgets.QHBoxLayout(row)
@@ -809,7 +828,8 @@ class ParamsPanel(QtWidgets.QWidget):
         edit.setText(guid)
         self._emit(name, guid)
 
-    def _slider(self, port, value):
+    def _slider(self, port, value, emit=None):
+        emit = emit or self._emit
         row = QtWidgets.QWidget()
         lay = QtWidgets.QHBoxLayout(row)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -842,7 +862,7 @@ class ParamsPanel(QtWidgets.QWidget):
                 v = lo + round((v - lo) / port.step) * port.step
             spin.setValue(int(round(v)) if port.kind == "int" else v)
             guard[0] = False
-            self._emit(port.name, spin.value())
+            emit(port.name, spin.value())
 
         def from_spin(v):
             if guard[0]:
@@ -850,7 +870,7 @@ class ParamsPanel(QtWidgets.QWidget):
             guard[0] = True
             slider.setValue(to_slider(v))
             guard[0] = False
-            self._emit(port.name, v)
+            emit(port.name, v)
         slider.valueChanged.connect(from_slider)
         spin.valueChanged.connect(from_spin)
         spin.setMinimumWidth(92)
@@ -872,8 +892,13 @@ class GraphWindow(QtWidgets.QMainWindow):
     to use it alone. (0.541) `slug`/`name`: the library's operator being edited (None: a new one); `wall`, `side`:
     the wall's face it is worked on (""/"frente": the example face)."""
 
-    def __init__(self, main=None, graph=None, slug=None, name="", wall="", side="frente"):
+    def __init__(self, main=None, graph=None, slug=None, name="", wall="", side="frente", exposed=(), cladding=None):
+        """(0.543) `exposed`: the operator's measures in sight in the side panel; `cladding`: the wall's finish
+        being edited («Aplicar ao modelo» works it again instead of making another)."""
         super().__init__(main)
+        self.exposed = [tuple(p) for p in exposed]
+        self.cladding = cladding
+        self._undo, self._redo, self._last_set = [], [], None
         self.setWindowFlag(QtCore.Qt.WindowType.Window)
         self.main = main
         self.resize(1500, 860)
@@ -975,6 +1000,8 @@ class GraphWindow(QtWidgets.QMainWindow):
     def set_target(self, wall, side="frente"):
         """(0.541) The wall's face the graph works on (""/…: the example face): worked out and shown again."""
         from ..core.graph import operators
+        if ((wall or ""), (side or "frente")) != (self.wall, self.side):
+            self.cladding = None                    # (another face: «Aplicar» makes its own panel there)
         self.wall, self.side = wall or "", side or "frente"
         operators.retarget(self.graph, self.wall, self.side)
         if self.side_box.currentText() != self.side:
@@ -1014,6 +1041,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         chosen = self.scene.selectedItems()
         wire = next((it for it in chosen if isinstance(it, LinkItem)), None) if len(chosen) == 1 else None
         card = next((it for it in chosen if isinstance(it, CardItem)), None) if len(chosen) == 1 else None
+        self.remember()
         nid = self.graph.add_node(key, pos=(scene_pos.x() - CARD_W / 2, scene_pos.y() - TITLE_H))
         spec = self.graph.registry.get(key)
         try:
@@ -1045,6 +1073,8 @@ class GraphWindow(QtWidgets.QMainWindow):
         dock.setObjectName("graph_params")
         dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.params = ParamsPanel()
+        self.params.exposed = self.exposed
+        self.params.expose.connect(self.set_exposed)
         self.params.changed.connect(self.set_param)
         self.params.pick_wall = self.chosen_wall
         scroll = QtWidgets.QScrollArea()
@@ -1061,6 +1091,14 @@ class GraphWindow(QtWidgets.QMainWindow):
         bar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.act_add = bar.addAction("＋ Nó  (Shift+A)", lambda: self.ask_node())
         self.act_add.setToolTip("Junta um nó: o menu mostra cada um com o desenho do que faz.")
+        bar.addSeparator()
+        self.act_undo = bar.addAction("Desfazer", self.undo)             # (0.543)
+        self.act_undo.setShortcut(QtGui.QKeySequence.StandardKey.Undo)
+        self.act_undo.setToolTip("Desfaz a última alteração ao gráfico (Ctrl+Z).")
+        self.act_redo = bar.addAction("Refazer", self.redo)
+        self.act_redo.setShortcuts([QtGui.QKeySequence.StandardKey.Redo, QtGui.QKeySequence("Ctrl+Y")])
+        self.act_redo.setToolTip("Refaz o que se desfez (Ctrl+Y).")
+        self._undo_buttons()
         bar.addSeparator()
         self.act_keep = bar.addAction("Guardar operador", self.save_operator)
         self.act_keep.setToolTip("Guarda este gráfico na biblioteca de operadores (o painel lateral do BIM): fica "
@@ -1095,6 +1133,70 @@ class GraphWindow(QtWidgets.QMainWindow):
                                   "parede.")
         self.act_apply.setEnabled(self.main is not None)
 
+    # ---- undo (0.543): the graph (and what is in sight) as it was before each change
+    UNDO_DEPTH = 80
+
+    def remember(self, measure=None):
+        """The graph kept before a change. `measure` (node id, name): a slider being dragged — its many steps are
+        one change."""
+        if measure is not None and measure == self._last_set:
+            return
+        self._last_set = measure
+        self._undo.append((self.graph.to_json(), list(self.exposed)))
+        del self._undo[:-self.UNDO_DEPTH]
+        self._redo.clear()
+        self._undo_buttons()
+
+    def _undo_buttons(self):
+        self.act_undo.setEnabled(bool(self._undo))
+        self.act_redo.setEnabled(bool(self._redo))
+
+    def _restore(self, state):
+        text, exposed = state
+        self.graph = Graph.from_json(text)
+        self.exposed[:] = exposed
+        self._retarget()
+        self._last_set = None
+        self.rebuild()
+        self.params.show_node(None, None)
+        self.evaluate()
+        self._undo_buttons()
+
+    def undo(self):
+        if self._undo:
+            self._redo.append((self.graph.to_json(), list(self.exposed)))
+            self._restore(self._undo.pop())
+
+    def redo(self):
+        if self._redo:
+            self._undo.append((self.graph.to_json(), list(self.exposed)))
+            self._restore(self._redo.pop())
+
+    def set_exposed(self, nid, name, on):
+        """(0.543) A measure put in (or taken from) the side panel's sight."""
+        self.remember()
+        pair = (nid, name)
+        if on and pair not in self.exposed:
+            self.exposed.append(pair)
+        elif not on and pair in self.exposed:
+            self.exposed.remove(pair)
+
+    # ---- the AI's changes (0.543): its graph is this window's while it is open
+    def replace_graph(self, graph):
+        self.remember()
+        self.graph = graph
+        self._retarget()
+        self.rebuild()
+        self.params.show_node(None, None)
+        self.evaluate()
+        self.fit()
+
+    def graph_changed(self):
+        """The graph changed from outside (the AI's tools): drawn and worked out again."""
+        self.rebuild()
+        self.params.show_node(None, None)
+        self.evaluate()
+
     def save_operator(self, new=False):
         """(0.541) The graph kept in the library of operators (asked its name the first time, or `new`): its
         thumbnail what the surface shows. Returns its slug (None: given up)."""
@@ -1107,7 +1209,8 @@ class GraphWindow(QtWidgets.QMainWindow):
             self.name, self.slug = name.strip(), None
         try:
             png = png_bytes(surface_picture(self.graph, self.results, 240, 152))
-            self.slug = operators.save(self.name, Graph.from_dict(self.graph.to_dict()), slug=self.slug, png=png)
+            self.slug = operators.save(self.name, Graph.from_dict(self.graph.to_dict()), slug=self.slug, png=png,
+                                       exposed=self.exposed)
         except (GraphError, OSError) as e:
             QtWidgets.QMessageBox.warning(self, "Gráfico Visual", str(e))
             return None
@@ -1148,6 +1251,7 @@ class GraphWindow(QtWidgets.QMainWindow):
                 w.update_path()
 
     def _link(self, f, o, t, i):
+        self.remember()
         try:
             self.graph.connect(f, o, t, i)
         except (GraphError, KeyError) as e:
@@ -1161,6 +1265,8 @@ class GraphWindow(QtWidgets.QMainWindow):
 
     def delete_chosen(self):
         chosen = self.scene.selectedItems()
+        if chosen:
+            self.remember()
         for it in chosen:
             if isinstance(it, LinkItem) and it in self.wires:
                 self.graph.disconnect(it.link[2], it.link[3])
@@ -1181,6 +1287,7 @@ class GraphWindow(QtWidgets.QMainWindow):
             self.surface.refresh()
 
     def set_param(self, nid, name, value):
+        self.remember((nid, name))
         try:
             self.graph.set_param(nid, name, value)
         except (ValueError, GraphError) as e:
@@ -1259,6 +1366,7 @@ class GraphWindow(QtWidgets.QMainWindow):
 
     # ---- files
     def new_graph(self):
+        self.remember()
         self.graph = Graph()
         self.path = None
         self.rebuild()
@@ -1274,6 +1382,7 @@ class GraphWindow(QtWidgets.QMainWindow):
                 self, "Escolher a imagem (escuro = furos grandes)", "",
                 "Imagens (*.png *.jpg *.jpeg *.bmp *.gif *.tif *.tiff)")
             kw["ficheiro"] = path or ""
+        self.remember()
         self.graph = templates.make(key, **kw)
         self._retarget()
         self.path = None
@@ -1292,7 +1401,9 @@ class GraphWindow(QtWidgets.QMainWindow):
             return False
         try:
             with open(path, encoding="utf-8") as fh:
-                self.graph = Graph.from_json(fh.read())
+                opened = Graph.from_json(fh.read())
+            self.remember()
+            self.graph = opened
         except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
             QtWidgets.QMessageBox.warning(self, "Gráfico Visual", f"Não foi possível abrir:\n{e}")
             return False
@@ -1330,40 +1441,39 @@ class GraphWindow(QtWidgets.QMainWindow):
         """The GlobalId of the wall chosen in the model ("" if none)."""
         if self.main is None:
             return ""
+        from ..core.graph import operators
         doc = self.main.doc
-        for guid in list(self.main.viewport.selection):
-            try:
-                if doc.ifc.kind_of(guid) == "wall":
-                    return guid
-            except Exception:  # (an id not of the IFC: a sketch, a dimension)
-                continue
+        for guid in sorted(self.main.viewport.selection, key=str):
+            wall = operators.host_wall(doc, guid)          # (0.543: a wall's panel chosen stands for its wall)
+            if wall:
+                return wall
         return ""
 
     def apply_to_model(self):
-        """Each «Aplicar à parede/fachada» worked out: its panel as a perforated finish on its wall."""
+        """«Aplicar ao modelo»: the graph's panel as a perforated finish on the wall's face being worked on, the
+        finish keeping the operator. (0.543) Again (or a wall's panel being edited): that finish worked out anew —
+        not another over it."""
         if self.main is None:
             return []
-        from ..core.graph.nodes_panels import cladding_pattern
-        from ..model import bim
-        made, problems = [], []
-        for nid, node in self.graph.nodes.items():
-            if node["type"] != "aplicar_parede":
-                continue
-            out = (self.results.get(nid) or {}).get("bim")
-            if out is None:
-                problems.append(self.graph.errors.get(nid, "nó por calcular"))
-                continue
-            wall = out["wall"] or self.wall or self.chosen_wall()
+        from ..core.graph import operators
+        doc = self.main.doc
+        try:
+            if self.cladding and operators.operator_of(doc, self.cladding) is not None:
+                made = [operators.update(doc, self.cladding, self.graph, self.name, self.slug or "")]
+                self.status.showMessage("Painel da parede atualizado.", 6000)
+                return made
+            wall = self.wall or self.chosen_wall()
             if not wall:
-                problems.append("escolha uma parede no modelo e carregue em «Usar a parede escolhida»")
-                continue
-            side = 1 if out["side"] == "frente" else -1
-            try:
-                made.append(bim.add_cladding(self.main.doc, wall, side, "perfurado", 0.0, cladding_pattern(out)))
-            except ValueError as e:
-                problems.append(str(e))
-        if problems:
-            QtWidgets.QMessageBox.warning(self, "Gráfico Visual", "Não aplicado:\n" + "\n".join(problems))
-        if made:
-            self.status.showMessage(f"{len(made)} painel(éis) perfurado(s) aplicado(s) ao modelo.", 6000)
+                QtWidgets.QMessageBox.warning(self, "Gráfico Visual", "Não aplicado:\nescolha uma parede no modelo "
+                                              "e carregue em «Usar a parede escolhida»")
+                return []
+            if not self.wall:
+                self.set_target(wall, self.side)
+            made = operators.apply_to(doc, self.graph, wall, self.side, name=self.name, slug=self.slug or "")
+        except ValueError as e:                              # (GraphError; the model's refusals)
+            QtWidgets.QMessageBox.warning(self, "Gráfico Visual", "Não aplicado:\n{}".format(e))
+            return []
+        if len(made) == 1:
+            self.cladding = made[0]
+        self.status.showMessage(f"{len(made)} painel(éis) perfurado(s) aplicado(s) ao modelo.", 6000)
         return made

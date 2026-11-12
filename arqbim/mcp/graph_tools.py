@@ -11,11 +11,39 @@ from ..core.graph import REGISTRY, Graph, GraphError, nodes_3d, templates
 from .protocol import ToolError
 
 
+def _editor(session):
+    """(0.544) The Visual Graph's window, open in the program the AI is linked to — or None."""
+    win = getattr(getattr(session, "window", None), "graph_window", None)
+    try:
+        return win if win is not None and win.isVisible() else None
+    except RuntimeError:                               # (closed and gone)
+        return None
+
+
 def _graph(session):
+    """The graph the tools work on: the open editor's (the user sees each change) — else the session's own."""
+    win = _editor(session)
+    if win is not None:
+        return win.graph
     g = getattr(session, "graph", None)
     if g is None:
         g = session.graph = templates.atrator_hexagono()
     return g
+
+
+def _put(session, g):
+    win = _editor(session)
+    if win is not None:
+        win.replace_graph(g)
+        return win.graph
+    session.graph = g
+    return g
+
+
+def _changed(session):
+    win = _editor(session)
+    if win is not None:
+        win.graph_changed()
 
 
 def _v(x):
@@ -71,17 +99,21 @@ def graph(session, args):
     g = _graph(session)
     a = args.get("action") or "show"
     try:
+        win = _editor(session)
+        if win is not None and a in ("add", "connect", "disconnect", "set", "remove"):
+            win.remember()                             # (one step of the editor's Ctrl+Z)
         if a == "new":
-            g = session.graph = Graph()
+            g = _put(session, Graph())
         elif a == "template":
             key = args.get("key")
             if key not in templates.TEMPLATES:
                 raise ToolError("templates: " + " ".join(templates.TEMPLATES))
             kw = {"ficheiro": args["file"]} if key == "imagem_painel" and args.get("file") else {}
-            g = session.graph = templates.make(key, **kw)
+            g = _put(session, templates.make(key, **kw))
         elif a == "add":
             nid = g.add_node(args["type"], args.get("params") or {},
                              pos=(80.0 * len(g.nodes), 40.0 * (len(g.nodes) % 4)))
+            _changed(session)
             return "added " + nid
         elif a == "connect":                       # from "n1.painel" to "n2.painel"
             f, o = str(args["from"]).split(".", 1)
@@ -98,7 +130,7 @@ def graph(session, args):
             g.remove_node(args["id"])
         elif a == "load":
             with open(args["path"], encoding="utf-8") as fh:
-                g = session.graph = Graph.from_json(fh.read())
+                g = _put(session, Graph.from_json(fh.read()))
         elif a == "save":
             with open(args["path"], "w", encoding="utf-8") as fh:
                 fh.write(g.to_json())
@@ -107,6 +139,8 @@ def graph(session, args):
             raise ToolError("action: new template add connect disconnect set remove load save show")
     except (GraphError, KeyError, ValueError) as e:
         raise ToolError(str(e).strip("'\""))
+    if a in ("connect", "disconnect", "set", "remove"):
+        _changed(session)
     return describe(g)
 
 

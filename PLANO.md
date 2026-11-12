@@ -1746,10 +1746,13 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    `core/graph/nodes_logic.py`; três operadores novos de origem) Por fazer: formas de furo (polígono, ranhura,
    desenho próprio) e rodar por campo — o `FurosLivres` do BIM só guarda x, y, d e uma forma para todos (mudar o
    formato pergunta-se antes); a área aberta por módulo; um nó de número/matemática para ligar medidas entre nós.
-7. Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
-   ajustar sem abrir o editor).
-8. Aplicar a várias superfícies de uma vez; reaplicar quando a parede muda (como o «Combinar e recortar»).
-9. Desfazer (Ctrl+Z) no editor; o gráfico da IA aparece na janela aberta.
+7. ~~Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
+   ajustar sem abrir o editor).~~ (0.543.0: caixa «à vista» em cada medida; `operators.exposed_of`)
+8. ~~Aplicar a várias superfícies de uma vez~~ (0.541); ~~a parede guarda o operador~~ (0.543.0: propriedade
+   «Operador» do revestimento, `operators.record/operator_of/update`; botões «Atualizar na parede» e «Editar o da
+   parede»). Por fazer: atualizar **sozinho** quando a parede muda (hoje pelo botão — fazê-lo em cada edição pede uma
+   forma barata de saber que paredes têm operador, sem varrer o modelo).
+9. ~~Desfazer (Ctrl+Z) no editor; o gráfico da IA aparece na janela aberta.~~ (0.543.0)
 
 ## 5. Como se trabalha cada passo
 

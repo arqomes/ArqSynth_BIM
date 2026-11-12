@@ -18,10 +18,14 @@ class OperatorsPanel(QtWidgets.QDockWidget):
     def __init__(self, parent):
         super().__init__("Operadores", parent)
         self.setObjectName("operators")
-        self.on_apply = None             # (slug, side)
+        self.on_apply = None             # (slug, side, values {(node id, measure): value})
         self.on_new = None               # (side)
         self.on_edit = None              # (slug, side)
+        self.on_update = None            # (): the chosen walls' panels worked out again (0.543)
+        self.on_edit_wall = None         # (): the chosen wall's panel opened in the editor (0.543)
         self.target = lambda: 0          # () -> how many walls are chosen in the model
+        self.kept = lambda: 0            # () -> how many panels with an operator the chosen walls have (0.543)
+        self.values = {}                 # the measures in sight changed for the next «Aplicar»
         page = QtWidgets.QWidget()
         column = QtWidgets.QVBoxLayout(page)
         column.setContentsMargins(4, 4, 4, 4)
@@ -39,10 +43,22 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         self.list.setWordWrap(True)
         self.list.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.itemDoubleClicked.connect(lambda _it: self._apply())
-        self.list.currentItemChanged.connect(lambda _a, _b: self.refresh_target())
+        self.list.currentItemChanged.connect(lambda _a, _b: (self._measures(), self.refresh_target()))
         self.list.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._menu)
         column.addWidget(self.list, 1)
+        # (0.543) the chosen operator's measures «à vista»: changed here, without opening the editor
+        self.measures_title = QtWidgets.QLabel("Medidas")
+        self.measures_title.setObjectName("operators_measures_title")
+        column.addWidget(self.measures_title)
+        self.measures_host = QtWidgets.QWidget()
+        self.measures = QtWidgets.QFormLayout(self.measures_host)
+        self.measures.setContentsMargins(0, 0, 0, 0)
+        self.measures.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.WrapAllRows)
+        column.addWidget(self.measures_host)
+        self.measures_hint = QtWidgets.QLabel("Nenhuma à vista (no editor, marque «à vista» numa medida).")
+        self.measures_hint.setWordWrap(True)
+        column.addWidget(self.measures_hint)
         self.target_label = QtWidgets.QLabel()
         self.target_label.setWordWrap(True)
         self.target_label.setObjectName("operators_target")
@@ -75,14 +91,34 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         self.import_button.clicked.connect(self._import)
         self.export_button = QtWidgets.QPushButton("Exportar…")
         self.export_button.clicked.connect(self._export)
+        self.update_button = QtWidgets.QPushButton("Atualizar na parede")
+        self.update_button.setToolTip("Refaz os painéis das paredes escolhidas com o operador que cada um guarda: "
+                                      "depois de mudar a parede (uma janela nova, mais comprida).")
+        self.update_button.clicked.connect(lambda: self.on_update and self.on_update())
+        self.edit_wall_button = QtWidgets.QPushButton("Editar o da parede")
+        self.edit_wall_button.setToolTip("Abre no Gráfico Visual o operador que o painel da parede escolhida guarda; "
+                                         "«Aplicar ao modelo» refaz esse painel.")
+        self.edit_wall_button.clicked.connect(lambda: self.on_edit_wall and self.on_edit_wall())
         grid = QtWidgets.QGridLayout()
         self.apply_button.setDefault(True)
         grid.addWidget(self.apply_button, 0, 0, 1, 2)
-        for k, b in enumerate((self.new_button, self.edit_button, self.dup_button, self.rename_button,
-                               self.delete_button, self.import_button, self.export_button)):
+        for k, b in enumerate((self.new_button, self.edit_button, self.update_button, self.edit_wall_button)):
             grid.addWidget(b, 1 + k // 2, k % 2)
+        # (0.543) the library's housekeeping in one «Mais ▾»: the list of operators keeps the room
+        self.more_button = QtWidgets.QPushButton("Mais ▾")
+        self.more_button.setToolTip("Duplicar, mudar o nome, apagar, importar e exportar operadores.")
+        more = QtWidgets.QMenu(self.more_button)
+        for b in (self.dup_button, self.rename_button, self.delete_button, self.import_button, self.export_button):
+            act = more.addAction(b.text())
+            act.triggered.connect(b.click)
+            b.hide()
+            b.act = act
+        self.more_button.setMenu(more)
+        self.more_button.setMinimumWidth(40)
+        grid.addWidget(self.more_button, 3, 0, 1, 2)
         for b in (self.apply_button, self.new_button, self.edit_button, self.dup_button, self.rename_button,
-                  self.delete_button, self.import_button, self.export_button):
+                  self.delete_button, self.import_button, self.export_button, self.update_button,
+                  self.edit_wall_button):
             b.setMinimumWidth(40)
             b.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
         column.addLayout(grid)
@@ -95,9 +131,35 @@ class OperatorsPanel(QtWidgets.QDockWidget):
 
     def restyle(self):
         muted = "color: %s;" % theme.qcolor(theme.C["muted"]).name()
-        for label in (self.hint, self.folder_label):
+        for label in (self.hint, self.folder_label, self.measures_hint):
             label.setStyleSheet(muted)
         self.target_label.setStyleSheet("font-weight: 600;")
+        self.measures_title.setStyleSheet("font-weight: 600;")
+
+    def _measures(self):
+        """(0.543) The chosen operator's measures in sight, as its editor shows them (sliders, ticks, lists)."""
+        from . import visual_graph
+        self.values = {}
+        while self.measures.rowCount():
+            self.measures.removeRow(0)
+        slug, shown = self.current(), 0
+        if slug is not None:
+            try:
+                graph, exposed = operators.exposed_of(slug)
+            except GraphError:
+                graph, exposed = None, []
+            maker = getattr(self, "_maker", None) or visual_graph.ParamsPanel()
+            self._maker = maker                        # (its editors are made by the editor's own code)
+            for nid, name in exposed:
+                node = graph.nodes[nid]
+                spec = graph.registry.get(node["type"])
+                port = spec.port("params", name)
+                editor = maker._editor(port, node["params"][name], node["type"],
+                                       emit=lambda _n, v, key=(nid, name): self.values.__setitem__(key, v))
+                self.measures.addRow("{} · {}".format(spec.label, port.label or port.name), editor)
+                shown += 1
+        self.measures_hint.setVisible(slug is not None and not shown)
+        self.measures_title.setVisible(slug is not None)
 
     # ---- the list
     def reload(self, keep=None):
@@ -116,8 +178,8 @@ class OperatorsPanel(QtWidgets.QDockWidget):
                 self.list.setCurrentItem(item)
         if self.list.currentItem() is None and self.list.count():
             self.list.setCurrentRow(0)
-        self.folder_label.setText("Guardados para todos os projetos em:\n" + operators.folder().replace("\\", "\\​")
-                                  .replace("/", "/​"))
+        self.folder_label.setText("Guardados para todos os projetos.")
+        self.folder_label.setToolTip(operators.folder())
         self._filter()
         self.refresh_target()
 
@@ -152,9 +214,16 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         self.target_label.setText("Nenhuma parede escolhida no modelo." if not n else
                                   "1 parede escolhida." if n == 1 else "{} paredes escolhidas.".format(n))
         one = self.current() is not None
+        kept = self.kept() if self.kept else 0
+        if kept:
+            self.target_label.setText(self.target_label.text() + " {} painel(éis) com operador.".format(kept))
+        self.update_button.setEnabled(kept > 0)
+        self.edit_wall_button.setEnabled(kept > 0)
         self.apply_button.setEnabled(one and n > 0)
         for b in (self.edit_button, self.dup_button, self.rename_button, self.delete_button, self.export_button):
             b.setEnabled(one)
+            if getattr(b, "act", None) is not None:
+                b.act.setEnabled(one)
 
     # ---- the buttons
     def _apply(self):
@@ -164,7 +233,7 @@ class OperatorsPanel(QtWidgets.QDockWidget):
             QtWidgets.QMessageBox.information(self, "Operadores", "Escolha primeiro uma parede no modelo.")
             return
         if self.on_apply:
-            self.on_apply(self.current(), self.chosen_side())
+            self.on_apply(self.current(), self.chosen_side(), dict(self.values))
 
     def _edit(self):
         if self.current() is not None and self.on_edit:

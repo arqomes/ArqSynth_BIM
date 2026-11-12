@@ -42,10 +42,12 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  "joint": "Junta", "mask": "Imagem",
                  # (0.540) free holes from the Visual Graph (core_surfaces.free_text), repeated board by board or not
                  "free": "FurosLivres", "free_repeat": "FurosRepetir",
+                 # (0.543) the operator that made those holes (core/graph/operators.record): opened and worked again
+                 "operator": "Operador",
                  # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
                  "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
                  "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
-TEXT_KEYS = {"direction", "hole", "grid", "mask", "free"}
+TEXT_KEYS = {"direction", "hole", "grid", "mask", "free", "operator"}
 CHOICES = {"direction": ("vertical", "horizontal"), "hole": core_surfaces.HOLE_SHAPES, "grid": core_surfaces.GRIDS}
 REGION_NAMES = {"start": "Inicio", "end": "Fim", "base": "Base"}      # (0.389) a rectangle on the face (m)
 
@@ -677,7 +679,7 @@ class CoveringMixin:
                 if value not in CHOICES[key]:
                     raise EditRefused("not_editable")
                 changes[PATTERN_NAMES[key]] = str(value)
-            elif key == "mask":
+            elif key in ("mask", "operator"):
                 changes[PATTERN_NAMES[key]] = str(value)
             elif key == "free":                          # (0.540) the Visual Graph's holes («» none)
                 if value and core_surfaces.free_read(str(value)) is None:

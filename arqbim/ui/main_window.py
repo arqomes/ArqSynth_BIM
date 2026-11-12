@@ -1933,6 +1933,8 @@ class MainWindow(QtWidgets.QMainWindow):
         op = self.operators_panel
         op.target = lambda: len(self.chosen_walls())
         op.on_apply, op.on_new, op.on_edit = self.apply_operator, self.new_operator, self.edit_operator
+        op.kept = lambda: len(self.operator_finishes())                 # (0.543) panels that keep their operator
+        op.on_update, op.on_edit_wall = self.update_operators, self.edit_wall_operator
         self.viewport.selection_listeners.append(
             lambda _ids: op.refresh_target() if op.isVisible() else None)
         # (0.479) the ArqSynth Presentation tab: its two columns and its commands over the 3D view, hidden until the
@@ -2037,14 +2039,51 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def chosen_walls(self):
         """(0.541) The walls chosen in the model (their GlobalIds), in a stable order."""
+        from ..core.graph import operators
         out = []
         for guid in sorted(self.viewport.selection, key=str):
-            try:
-                if self.doc.ifc.kind_of(guid) == "wall":
-                    out.append(guid)
-            except Exception:  # (an id not of the IFC: a sketch, a dimension)
-                continue
+            wall = operators.host_wall(self.doc, guid)       # (0.543: a wall's panel chosen stands for its wall)
+            if wall and wall not in out:
+                out.append(wall)
         return out
+
+    def operator_finishes(self):
+        """(0.543) The panels that keep their operator among what is chosen (themselves, or on the walls chosen)."""
+        from ..core.graph import operators
+        if not self.viewport.selection:
+            return []
+        return operators.finishes_of(self.doc, sorted(self.viewport.selection, key=str))
+
+    def update_operators(self):
+        """(0.543) «Atualizar na parede»: each such panel worked out again on its wall as it is now."""
+        from ..core.graph import operators
+        done, problems = [], []
+        for guid in self.operator_finishes():
+            try:
+                done.append(operators.update(self.doc, guid))
+            except ValueError as e:
+                problems.append(str(e))
+        if problems:
+            QtWidgets.QMessageBox.warning(self, "Operadores", "Não atualizado:\n" + "\n".join(sorted(set(problems))))
+        if done:
+            self.statusBar().showMessage("{} painel(éis) atualizado(s).".format(len(done)), 6000)
+        return done
+
+    def edit_wall_operator(self):
+        """(0.543) «Editar o da parede»: the operator the chosen wall's panel keeps, in the editor on that face."""
+        from ..core.graph import operators
+        found = self.operator_finishes()
+        if not found:
+            return None
+        kept = operators.operator_of(self.doc, found[0])
+        exposed = []
+        if kept["slug"]:
+            try:
+                exposed = operators.exposed_of(kept["slug"])[1]
+            except ValueError:                               # (not in this computer's library: edited all the same)
+                kept["slug"] = ""
+        return self.show_visual_graph(kept["graph"], slug=kept["slug"] or None, name=kept["name"], side=kept["side"],
+                                      wall=kept["wall"], exposed=exposed, cladding=found[0])
 
     def face_in_view(self, wall):
         """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
@@ -2060,17 +2099,19 @@ class MainWindow(QtWidgets.QMainWindow):
             return "frente"
         return "trás" if d < -0.05 else "frente"
 
-    def show_visual_graph(self, graph=None, slug=None, name="", side=None):
+    def show_visual_graph(self, graph=None, slug=None, name="", side=None, wall=None, exposed=(), cladding=None):
         """(0.540) The Visual Graph's window, in front. (0.541) Opened from the «Operadores» panel: on the face of
         the wall chosen in the model (none: the example face), with the operator being edited (None: a new one)."""
         from . import visual_graph
-        walls = self.chosen_walls()
-        wall = walls[0] if walls else ""
+        if wall is None:
+            walls = self.chosen_walls()
+            wall = walls[0] if walls else ""
         side = side or (self.face_in_view(wall) if wall else "frente")
         old = getattr(self, "graph_window", None)
         if old is not None:
             old.close()
-        win = self.graph_window = visual_graph.GraphWindow(self, graph, slug=slug, name=name, wall=wall, side=side)
+        win = self.graph_window = visual_graph.GraphWindow(self, graph, slug=slug, name=name, wall=wall, side=side,
+                                                           exposed=exposed, cladding=cladding)
         win.show()
         win.raise_()
         win.activateWindow()
@@ -2085,19 +2126,20 @@ class MainWindow(QtWidgets.QMainWindow):
         from ..core.graph.graph import GraphError
         try:
             name, _about, graph = operators.load(slug)
+            exposed = operators.exposed_of(slug)[1]
         except GraphError as e:
             QtWidgets.QMessageBox.warning(self, "Operadores", str(e))
             return None
-        return self.show_visual_graph(graph, slug=slug, name=name, side=side)
+        return self.show_visual_graph(graph, slug=slug, name=name, side=side, exposed=exposed)
 
-    def apply_operator(self, slug, side=None):
+    def apply_operator(self, slug, side=None, values=None):
         """«Aplicar»: the operator on the face (`side`; None: the one in view) of every wall chosen. Returns the
         finishes made."""
         from ..core.graph import operators
         made, problems = [], []
         for wall in self.chosen_walls():
             try:
-                made += operators.apply_to(self.doc, slug, wall, side or self.face_in_view(wall))
+                made += operators.apply_to(self.doc, slug, wall, side or self.face_in_view(wall), values)
             except ValueError as e:                              # (GraphError too)
                 problems.append(str(e))
         if problems:

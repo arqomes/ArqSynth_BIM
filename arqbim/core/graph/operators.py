@@ -73,8 +73,7 @@ def listing():
     return sorted(out, key=lambda d: d["name"].lower())
 
 
-def load(slug):
-    """(name, about, Graph) of an operator. GraphError where it cannot be read."""
+def _read(slug):
     try:
         with open(_path(slug), encoding="utf-8") as f:
             data = json.load(f)
@@ -84,28 +83,69 @@ def load(slug):
         raise GraphError("não é um operador do ArqSynth")
     if data.get("version", 0) > VERSION:
         raise GraphError("operador feito por uma versão mais nova do ArqSynth")
+    return data
+
+
+def load(slug):
+    """(name, about, Graph) of an operator. GraphError where it cannot be read."""
+    data = _read(slug)
     return str(data.get("name") or slug), str(data.get("about") or ""), Graph.from_dict(data["graph"])
 
 
-def save(name, graph, slug=None, about="", png=None):
+def clean_exposed(graph, exposed):
+    """[(node id, measure)] of those that are in the graph and can stand in the side panel (numbers, ticks,
+    choices), in order, each once."""
+    out = []
+    for pair in exposed or ():
+        try:
+            nid, name = str(pair[0]), str(pair[1])
+            port = graph.registry.get(graph.nodes[nid]["type"]).port("params", name)
+        except (KeyError, IndexError, TypeError):
+            continue
+        if port.kind in ("number", "int", "bool", "choice") and (nid, name) not in out:
+            out.append((nid, name))
+    return out
+
+
+def exposed_of(slug):
+    """(0.543) (graph, [(node id, measure)]) of an operator: the measures its maker put in sight, changed in the
+    side panel without opening the editor."""
+    data = _read(slug)
+    graph = Graph.from_dict(data["graph"])
+    return graph, clean_exposed(graph, data.get("exposed"))
+
+
+def save(name, graph, slug=None, about="", png=None, exposed=None):
     """An operator kept in the library (a new one: its file named after it; `slug`: that one written over).
-    `png`: its thumbnail's bytes. The walls it was drawn on are not kept: it serves any. Returns its slug."""
+    `png`: its thumbnail's bytes. The walls it was drawn on are not kept: it serves any. (0.543) `exposed`:
+    [(node id, measure)] in sight in the side panel (None: those it had, written over). Returns its slug."""
     name = str(name).strip()
     if not name:
         raise GraphError("dê um nome ao operador")
     seed()
+    if exposed is None and slug and os.path.exists(_path(slug)):
+        try:
+            exposed = _read(slug).get("exposed")
+        except GraphError:
+            exposed = None
     slug = slug or _free_slug(name)
-    data = graph.to_dict()
-    for node in data["nodes"]:
-        if node["type"] in ("fachada_bim", "aplicar_parede"):
-            node["params"] = dict(node["params"], parede="")
+    data = _portable(graph)
     with open(_path(slug), "w", encoding="utf-8") as f:
-        json.dump({"format": FORMAT, "version": VERSION, "name": name, "about": about, "graph": data}, f,
-                  ensure_ascii=False, indent=1)
+        json.dump({"format": FORMAT, "version": VERSION, "name": name, "about": about, "graph": data,
+                   "exposed": [list(p) for p in clean_exposed(graph, exposed)]}, f, ensure_ascii=False, indent=1)
     if png:
         with open(thumbnail_path(slug), "wb") as f:
             f.write(png)
     return slug
+
+
+def _portable(graph):
+    """The graph's data without the walls it was pointed at."""
+    data = graph.to_dict()
+    for node in data["nodes"]:
+        if node["type"] in ("fachada_bim", "aplicar_parede"):
+            node["params"] = dict(node["params"], parede="")
+    return data
 
 
 def delete(slug):
@@ -118,7 +158,7 @@ def delete(slug):
 
 def duplicate(slug):
     name, about, graph = load(slug)
-    new = save(name + " (cópia)", graph, about=about)
+    new = save(name + " (cópia)", graph, about=about, exposed=exposed_of(slug)[1])
     if os.path.exists(thumbnail_path(slug)):
         shutil.copyfile(thumbnail_path(slug), thumbnail_path(new))
     return new
@@ -142,7 +182,7 @@ def import_from(path):
         raise GraphError("não foi possível ler o ficheiro: {}".format(e)) from None
     if isinstance(data, dict) and data.get("format") == FORMAT:
         return save(data.get("name") or os.path.splitext(os.path.basename(path))[0], Graph.from_dict(data["graph"]),
-                    about=str(data.get("about") or ""))
+                    about=str(data.get("about") or ""), exposed=data.get("exposed"))
     return save(os.path.splitext(os.path.basename(path))[0], Graph.from_dict(data))
 
 
@@ -223,17 +263,110 @@ def applied(graph, results):
     return out
 
 
-def apply_to(doc, slug_or_graph, wall, side="frente"):
-    """An operator (its slug, or a graph) applied to a wall's face: its perforated finishes made. Returns their
-    GlobalIds. GraphError where it has nothing to apply or a node failed."""
-    from ...model import bim
+def _worked(doc, graph, wall, side):
     from . import nodes_3d
-    graph = load(slug_or_graph)[2] if isinstance(slug_or_graph, str) else slug_or_graph
     nodes_3d.MODEL["doc"] = doc
     retarget(graph, wall, side)
-    results = graph.evaluate()
-    found = applied(graph, results)
+    found = applied(graph, graph.evaluate())
     if not found:
         failed = next(iter(graph.errors.values()), "")
         raise GraphError(failed or "o operador não tem «Aplicar à parede/fachada»")
-    return [bim.add_cladding(doc, w or wall, s, "perfurado", 0.0, pattern) for w, s, pattern in found]
+    return found
+
+
+def record(graph, name="", slug=""):
+    """(0.543) What a finish keeps of the operator that made it (its «Operador» text): its name, the library's
+    slug and the graph itself with the measures used — so it is worked out again when the wall changes, and opened
+    in the editor, even in another computer without that library."""
+    return json.dumps({"name": name, "slug": slug, "graph": _portable(graph)}, ensure_ascii=False,
+                      separators=(",", ":"))
+
+
+def set_values(graph, values):
+    """The measures changed in the side panel ({(node id, measure): value}) put in the graph."""
+    for (nid, name), value in (values or {}).items():
+        if nid in graph.nodes:
+            graph.set_param(nid, name, value)
+    return graph
+
+
+def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug=""):
+    """An operator (its slug, or a graph) applied to a wall's face: its perforated finishes made, each keeping the
+    operator (record). `values`: measures changed for this time. Returns their GlobalIds. GraphError where it has
+    nothing to apply or a node failed."""
+    from ...model import bim
+    if isinstance(slug_or_graph, str):
+        slug = slug_or_graph
+        name, _about, graph = load(slug)
+    else:
+        graph = slug_or_graph
+    set_values(graph, values)
+    text = record(graph, name, slug)
+    return [bim.add_cladding(doc, w or wall, s, "perfurado", 0.0, dict(pattern, operator=text))
+            for w, s, pattern in _worked(doc, graph, wall, side)]
+
+
+def operator_of(doc, guid):
+    """(0.543) {"name", "slug", "graph": Graph, "wall", "side"} of the operator a finish keeps — None: it has none
+    (or it is not a finish)."""
+    try:
+        p = doc.ifc._params(doc.ifc.by_guid(guid))
+    except Exception:  # (not of the IFC: a sketch, a dimension)
+        return None
+    if p.get("Elemento") != "cladding" or not p.get("Operador"):
+        return None
+    try:
+        data = json.loads(p["Operador"])
+        graph = Graph.from_dict(data["graph"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    return {"name": str(data.get("name") or ""), "slug": str(data.get("slug") or ""), "graph": graph,
+            "wall": p.get("Parede"), "side": SIDES[0] if int(p.get("Lado") or 1) > 0 else SIDES[1]}
+
+
+def finishes_of(doc, guids):
+    """(0.543) The finishes that keep an operator among `guids` — those chosen themselves, and those on the walls
+    chosen. Asked for by the side panel (a look through the model's finishes: not done at every edit)."""
+    guids = list(guids)
+    out = [g for g in guids if operator_of(doc, g) is not None]
+    walls = {g for g in guids if _kind(doc, g) == "wall"}
+    if walls:
+        for e in doc.ifc.file.by_type("IfcCovering"):
+            p = doc.ifc._params(e)
+            if p.get("Elemento") == "cladding" and p.get("Parede") in walls and p.get("Operador") \
+                    and e.GlobalId not in out:
+                out.append(e.GlobalId)
+    return out
+
+
+def _kind(doc, guid):
+    try:
+        return doc.ifc.kind_of(guid)
+    except Exception:  # (not of the IFC)
+        return None
+
+
+def host_wall(doc, guid):
+    """The wall a thing chosen stands for: itself, or — a wall's finish — the wall it is on (None: neither)."""
+    kind = _kind(doc, guid)
+    if kind == "wall":
+        return guid
+    if kind == "cladding":
+        return doc.ifc._params(doc.ifc.by_guid(guid)).get("Parede") or None
+    return None
+
+
+def update(doc, guid, graph=None, name=None, slug=None):
+    """(0.543) A finish's holes worked out again on its wall as it is now (a window more, the wall longer) with
+    the operator it keeps — or with `graph`, the editor's. One undo step. GraphError where it keeps none or a node
+    failed."""
+    from ...model import bim
+    kept = operator_of(doc, guid)
+    if kept is None:
+        raise GraphError("este painel não guarda o operador que o fez")
+    graph = graph or kept["graph"]
+    found = _worked(doc, graph, kept["wall"], kept["side"])
+    _wall, _side, pattern = found[0]
+    text = record(graph, kept["name"] if name is None else name, kept["slug"] if slug is None else slug)
+    bim.set_cladding(doc, guid, **dict(pattern, operator=text))
+    return guid

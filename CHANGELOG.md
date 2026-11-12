@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.543.0 — 2026-11-12
+
+**Gráfico Visual: medidas à vista, a parede guarda o operador, desfazer no editor, a IA na janela (passos 7 a 9).**
+
+- **Medidas à vista**: no editor, cada medida de um nó tem a caixa **«à vista»**. As marcadas aparecem no painel
+  lateral «Operadores», por baixo da lista, com as mesmas barras deslizantes: muda-se o valor e carrega-se em
+  **Aplicar**, sem abrir o editor. A biblioteca guarda o operador como estava; o valor mudado vale para essa vez.
+- **A parede guarda o operador**: cada painel perfurado aplicado por um operador guarda o gráfico e as medidas usadas
+  (no IFC, propriedade «Operador»). Vai com o projeto, mesmo para um computador sem essa biblioteca.
+- **Atualizar na parede** (painel lateral): refaz os painéis das paredes escolhidas com o operador que guardam — depois
+  de alongar a parede ou pôr uma janela nova. Um só passo de desfazer.
+- **Editar o da parede**: abre no editor o operador que o painel da parede escolhida guarda, sobre essa face.
+  «Aplicar ao modelo» refaz esse mesmo painel (já não põe outro por cima). O mesmo ao aplicar duas vezes seguidas.
+- Escolher o próprio painel perfurado no modelo conta como escolher a sua parede.
+- **Desfazer / Refazer no editor** (Ctrl+Z, Ctrl+Y e botões na barra): nós juntos ou apagados, ligações, medidas
+  (arrastar uma barra conta como um passo), modelos carregados.
+- **IA**: com o editor aberto, as ferramentas `graph` da IA trabalham no gráfico da janela — vê-se cada alteração e
+  desfaz-se com Ctrl+Z. Com o editor fechado, como antes.
+- Painel lateral: Duplicar, Mudar o nome, Apagar, Importar e Exportar passaram para o botão **Mais ▾**, para a lista
+  de operadores ter espaço.
+- Por fazer (PLANO): atualizar sozinho quando a parede muda (hoje é pelo botão).
+- Testes: `tests/test_graph_operators.py` (classes InSight, KeptOnTheWall, UndoAndAI).
+
 ## 0.542.0 — 2026-11-11
 
 **Gráfico Visual: 17 operadores novos, «poderosos e lógicos» (passo 6 da 2.ª fase).** Todos no menu Shift+A, cada um

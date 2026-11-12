@@ -185,7 +185,7 @@ class Panel(unittest.TestCase):
         seen = []
         chosen = [0]
         panel.target = lambda: chosen[0]
-        panel.on_apply = lambda slug, side: seen.append(("apply", slug, side))
+        panel.on_apply = lambda slug, side, _values: seen.append(("apply", slug, side))
         panel.on_new = lambda side: seen.append(("new", side))
         panel.on_edit = lambda slug, side: seen.append(("edit", slug, side))
         panel.reload()
@@ -204,6 +204,146 @@ class Panel(unittest.TestCase):
         self.assertEqual(seen, [("apply", slug, None), ("edit", slug, "trás"), ("new", "trás")])
         panel.search.setText("voronoi")
         self.assertEqual(sum(not panel.list.item(k).isHidden() for k in range(panel.list.count())), 1)
+
+
+class InSight(unittest.TestCase):
+    """0.543 — step 7: an operator's measures «à vista», changed in the side panel."""
+
+    def test_exposed_kept_and_used(self):
+        g = operators.starter()
+        slug = operators.save("Com medidas", g, exposed=[("n2", "passo"), ("n4", "forma"), ("n1", "parede"),
+                                                         ("zz", "x"), ("n2", "passo")])
+        graph, exposed = operators.exposed_of(slug)
+        self.assertEqual(exposed, [("n2", "passo"), ("n4", "forma")])          # (a text, a node gone: left out)
+        operators.save("Com medidas", graph, slug=slug)                        # (written over: kept)
+        self.assertEqual(operators.exposed_of(slug)[1], exposed)
+        self.assertEqual(operators.exposed_of(operators.duplicate(slug))[1], exposed)
+        host = QtWidgets.QMainWindow()
+        panel = operators_panel.OperatorsPanel(host)
+        got = []
+        panel.target = lambda: 1
+        panel.on_apply = lambda s, side, values: got.append(values)
+        panel.reload(slug)
+        self.assertEqual(panel.current(), slug)
+        self.assertEqual(panel.measures.rowCount(), 2)
+        self.assertTrue(panel.measures_hint.isHidden())
+        spin = panel.measures_host.findChild(QtWidgets.QDoubleSpinBox)
+        spin.setValue(0.2)
+        panel.apply_button.click()
+        self.assertEqual(got, [{("n2", "passo"): 0.2}])
+        doc, wall = a_wall()
+        wide = operators.apply_to(doc, slug, wall, values={("n2", "passo"): 0.2})
+        fine = operators.apply_to(doc, slug, wall, "trás")
+        self.assertLess(doc.ifc.pattern_params(wide[0])["count"], doc.ifc.pattern_params(fine[0])["count"] / 3)
+
+    def test_pin_in_the_editor(self):
+        win = vg.GraphWindow()
+        win.cards["n2"].setSelected(True)
+        APP.processEvents()
+        pins = [b for b in win.params.findChildren(QtWidgets.QCheckBox) if b.text() == "à vista"]
+        self.assertEqual(len(pins), 2)                                         # (passo, rodar)
+        pins[0].setChecked(True)
+        self.assertEqual(win.exposed, [("n2", "passo")])
+        win.name, win.slug = "Fixado", None
+        win.slug = operators.save("Fixado", win.graph)
+        win.save_operator()
+        self.assertEqual(operators.exposed_of(win.slug)[1], [("n2", "passo")])
+        win.close()
+
+
+class KeptOnTheWall(unittest.TestCase):
+    """0.543 — step 8: the wall's panel keeps its operator; worked out again, opened again."""
+
+    def test_update_after_the_wall_changes(self):
+        doc, wall = a_wall()
+        slug = operators.save("Guardado", operators.starter())
+        made = operators.apply_to(doc, slug, wall, "trás")[0]
+        kept = operators.operator_of(doc, made)
+        self.assertEqual((kept["name"], kept["slug"], kept["wall"], kept["side"]), ("Guardado", slug, wall, "trás"))
+        self.assertEqual(len(kept["graph"].nodes), 6)
+        self.assertEqual(operators.finishes_of(doc, [wall]), [made])
+        self.assertEqual(operators.finishes_of(doc, [made]), [made])
+        self.assertEqual(operators.host_wall(doc, made), wall)
+        before = doc.ifc.pattern_params(made)["count"]
+        bim.resize_wall(doc, wall, at_end=3.0)                                 # (the wall 9 m long)
+        self.assertLessEqual(doc.ifc.pattern_params(made)["count"], before)    # (the old holes only)
+        operators.update(doc, made)
+        after = doc.ifc.pattern_params(made)
+        self.assertGreater(after["count"], before * 1.3)
+        self.assertAlmostEqual(after["sheet_w"], 9.0, 1)
+        self.assertEqual(operators.operator_of(doc, made)["slug"], slug)
+        doc.undo()
+        self.assertAlmostEqual(doc.ifc.pattern_params(made)["sheet_w"], 6.0, 1)
+
+    def test_editor_updates_its_panel(self):
+        doc, wall = a_wall()
+        main = types.SimpleNamespace(doc=doc, viewport=types.SimpleNamespace(selection={wall}))
+        win = vg.GraphWindow(graph=None, wall=wall, side="frente")
+        win.main = main
+        vg.nodes_3d = nodes_3d
+        nodes_3d.MODEL["doc"] = doc
+        win.set_target(wall, "frente")
+        first = win.apply_to_model()
+        self.assertEqual(len(first), 1)
+        count = doc.ifc.pattern_params(first[0])["count"]
+        win.set_param("n2", "passo", 0.2)
+        win.evaluate()
+        again = win.apply_to_model()
+        self.assertEqual(again, first)                                         # (the same panel, not another)
+        self.assertEqual(len(operators.finishes_of(doc, [wall])), 1)
+        self.assertLess(doc.ifc.pattern_params(first[0])["count"], count / 3)
+        self.assertEqual(operators.operator_of(doc, first[0])["graph"].nodes["n2"]["params"]["passo"], 0.2)
+        main.viewport.selection = {first[0]}                                   # (the panel chosen: its wall)
+        self.assertEqual(win.chosen_wall(), wall)
+        win.close()
+
+
+class UndoAndAI(unittest.TestCase):
+    """0.543 — step 9: Ctrl+Z in the editor; the AI's graph is the open window's."""
+
+    def test_undo_redo(self):
+        win = vg.GraphWindow()
+        self.assertFalse(win.act_undo.isEnabled())
+        for v in (0.07, 0.08, 0.09):                                           # (a slider dragged: one step)
+            win.set_param("n2", "passo", v)
+        win.cards["n3"].setSelected(True)
+        win.delete_chosen()
+        nid = win.add_node_at("ondas")
+        self.assertEqual(len(win._undo), 3)
+        win.undo()
+        self.assertNotIn(nid, win.graph.nodes)
+        win.undo()
+        self.assertIn("n3", win.graph.nodes)
+        self.assertEqual(len(win.wires), 5)
+        win.undo()
+        self.assertEqual(win.graph.nodes["n2"]["params"]["passo"], 0.08)       # (operators.starter's)
+        self.assertFalse(win.act_undo.isEnabled())
+        win.redo()
+        self.assertEqual(win.graph.nodes["n2"]["params"]["passo"], 0.09)
+        win.redo()
+        self.assertNotIn("n3", win.graph.nodes)
+        self.assertEqual(win.act_undo.shortcut().toString(), "Ctrl+Z")
+        win.close()
+
+    def test_ai_works_on_the_open_window(self):
+        from arqbim.mcp import graph_tools
+        win = vg.GraphWindow()
+        win.show()
+        APP.processEvents()
+        session = types.SimpleNamespace(window=types.SimpleNamespace(graph_window=win), doc=None)
+        graph_tools.graph(session, {"action": "set", "id": "n2", "params": {"passo": 0.15}})
+        self.assertEqual(win.graph.nodes["n2"]["params"]["passo"], 0.15)
+        self.assertAlmostEqual(win.results["n2"]["pontos"]["pitch"], 0.15)     # (worked out and shown)
+        said = graph_tools.graph(session, {"action": "add", "type": "ondas"})
+        self.assertIn(said.split()[-1], win.cards)
+        graph_tools.graph(session, {"action": "template", "key": "voronoi_centro"})
+        self.assertEqual(len(win.cards), 5)
+        win.undo()
+        self.assertEqual(len(win.cards), 7)                                    # (the user's Ctrl+Z takes it back)
+        win.close()
+        APP.processEvents()
+        graph_tools.graph(session, {"action": "new"})                          # (closed: the session's own again)
+        self.assertEqual(len(session.graph.nodes), 0)
 
 
 if __name__ == "__main__":
