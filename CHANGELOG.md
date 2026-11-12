@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.572.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 8: superfícies curvas (paredes curvas).**
+
+- A ferramenta **Revestimento** numa **parede curva**, por fora ou por dentro:
+  - as peças paginam-se na face **desenrolada** (comprimento do arco × altura, com as portas e janelas
+    recortadas, cada uma da largura que tem nessa face);
+  - depois **enrolam-se no cilindro**, para fora da face exterior ou para dentro da interior.
+- Propriedades ▸ **Peças na curva**:
+  - **curvadas**: cada peça fatiada de 8 em 8 cm para seguir a curva;
+  - **planas (facetadas)**: cada peça direita, encostada à curva pelo meio — como se assentam peças grandes
+    numa parede curva.
+- A cola, o betume e a subestrutura também se enrolam.
+- **Segue a parede curva**: muda o raio, a abertura ou uma porta, e o revestimento é refeito.
+- Na vista, só se desenha o contorno de cada peça sobre a curva, como nas faces planas; as costuras das fatias
+  não aparecem.
+- Na Paginação, num revestimento curvo, a origem e o ângulo mudam-se nas Propriedades (as pegas são para faces
+  planas).
+- Testes: `tests/test_tiled_coverings.py` (Curved: por fora, por dentro, peças planas); «revestimento_curvo» no
+  gui_smoke, com captura.
+
 ## 0.571.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 7: subestruturas e fixações.**

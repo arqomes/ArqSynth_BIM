@@ -712,6 +712,10 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._length0_editor(t("props.cov_exp_every"), d.get("exp_every", 0.0), "covering_exp_every", guid)  # (0.568)
         if d.get("exp_every"):
             self._mm_editor(t("props.cov_exp_width"), d.get("exp_width", 0.01), "covering_exp_width", guid)
+        if p.get("cylinder"):                                      # (0.572) on a curved face
+            self._choice_combo(t("props.cov_bent"), "covering_bent", guid,
+                               [(t("cov.bent." + k), k) for k in ("curvas", "planas")],
+                               p["cylinder"].get("pieces", "curvas"))
         from ..core import covering_subframe as csub              # (0.571) what holds it off the face
         sub = p.get("subframe") or {"system": "nenhuma"}
         self._choice_combo(t("props.cov_subframe"), "covering_sub_system", guid,

@@ -89,6 +89,10 @@ class CoveringLayoutTool(Tool):
         if self.guid is None or ifc.by_guid(self.guid) is None:
             self.host.set_tool("select")
             return
+        if ifc.tiled_cylinder(self.guid) is not None:      # (0.572) a curved one: its start and angle in Properties
+            self.host.message(t("info.covering_layout_curved"), warning=True)
+            self.host.set_tool("select")
+            return
         p = ifc.tiled_params(self.guid)
         self._frame, self._face = ifc.tiled_face(self.guid)
         self._d = dict(p["layout"])

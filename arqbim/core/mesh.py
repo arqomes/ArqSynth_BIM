@@ -428,7 +428,7 @@ class TriMesh:
     def silence(self, up):
         """(0.563) Only the edges round the faces looking `up` drawn (a Revestimento: each piece's outline on its
         face, not its sides)."""
-        up = tuple(float(c) for c in up)
+        up = tuple(float(c) for c in up)                   # (0.572: or (cx, cy, out, 0) — on a cylinder)
         if self.quiet != up:
             self.quiet = up
             self._edges = self._edge_array = self._edge_faces = None
@@ -459,11 +459,18 @@ class TriMesh:
         flat = (counts == 2) & (cos > 1 - 1e-6)                  # a diagonal inside a flat face
         keep = ~flat & ~self._smooth(uniq, counts, cos)
         if self.quiet is not False:                              # (0.563) a finish of many pieces: only the outline
-            up = np.asarray(self.quiet, dtype=float)             # of each piece's face seen — as Revit's pattern;
-            on = (self.normals[first] @ up > 0.99) | ((second >= 0) & (self.normals[np.maximum(second, 0)] @ up
-                                                                        > 0.99))
-            keep = keep & on                                     # all of every piece's edges blacken a wall of
-            # small tiles seen from afar
+            q = self.quiet                                       # of each piece's face seen — as Revit's pattern;
+            if len(q) == 4:                                      # (0.572) on a cylinder (cx, cy, out, 0): faces
+                c = self.verts[self.tris].mean(axis=1)           # looking out from its axis (or in)
+                rad = c[:, :2] - np.asarray(q[:2])
+                rad = np.column_stack((rad / np.maximum(np.linalg.norm(rad, axis=1, keepdims=True), 1e-12),
+                                       np.zeros(len(rad)))) * q[2]
+                seen = np.einsum("ij,ij->i", self.normals, rad) > 0.98
+            else:
+                seen = self.normals @ np.asarray(q, dtype=float) > 0.99
+            s2 = np.where(second >= 0, seen[np.maximum(second, 0)], False)
+            keep = keep & (seen[first] != s2)                    # all of every piece's edges blacken a wall of
+            # small tiles seen from afar (and a curve's slices: between two faces seen, no line)
         self._edge_array = uniq[keep]
         self._edge_faces = np.column_stack((first[keep], second[keep]))
         self._closed = bool(np.all(counts == 2))

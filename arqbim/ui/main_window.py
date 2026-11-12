@@ -7741,6 +7741,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     bim.set_covering_extend(doc, guid, **{key[7:]: value})
                 elif key.startswith("sub_"):                       # (0.571) its subframe
                     bim.set_covering_subframe(doc, guid, **{key[4:]: value})
+                elif key == "bent":                                # (0.572) bent or faceted on a curve
+                    _edit_bent = lambda ifc: ifc.set_tiled_bent(guid, value)   # noqa: E731
+                    bim._edit(doc, _edit_bent, [guid], "cmd.tiled_covering")
                 elif key in ("finish", "material", "thickness", "bed", "grout", "recess"):
                     bim.set_covering(doc, guid, **{key: value})
                 else:

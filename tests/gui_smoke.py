@@ -25011,6 +25011,22 @@ def revestimentos():
             walls))
 
 
+    # (0.572) a curved wall, its outside in subway tiles bent round it
+    import math as _math
+    cw = _bim.add_curved_wall(win.doc, np.array((x0 + 40.0, y0, 0.0)), 3.0, _math.pi, _math.pi,
+                              _catalog.BY_KEY["parede_alv_20"])
+    pump(400)
+    a = 1.4 * _math.pi
+    bent = _bim.cover_face(win.doc, cw, (x0 + 40.0 + 3.1 * _math.cos(a), y0 + 3.1 * _math.sin(a), 1.0),
+                           (_math.cos(a), _math.sin(a), 0.0), "metro_10x20")
+    pump(800)
+    win.viewport.set_selection(set())
+    win.viewport.zoom_extents({cw})
+    pump(800)
+    shot("revestimento_curvo.png")
+    check("revestimento_curvo", bent is not None and win.doc.ifc.tiled_cylinder(bent) is not None, str(bent))
+
+
 def Polygon_contains(outline, point):
     from shapely.geometry import Point as _Pt, Polygon as _Pg
     return _Pg(outline).buffer(0).covers(_Pt(*point))

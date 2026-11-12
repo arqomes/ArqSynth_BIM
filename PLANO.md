@@ -1869,7 +1869,8 @@ Falta:
    - **ripado e deck** (barrotes, afastamentos);
    - todas com espaçamentos e afastamentos como parâmetros;
    - todas `IfcMember` / `IfcMechanicalFastener` em IFC.
-8. **Superfícies curvas e não planas:**
+8. ~~**Superfícies curvas e não planas:**~~ (0.572.0: paredes curvas, peças curvadas ou facetadas; **restos**:
+   pilares redondos, e superfícies paramétricas / formas orgânicas em painéis pela grelha):
    - paredes curvas (peças facetadas ou curvadas);
    - pilares redondos;
    - **superfícies paramétricas e formas orgânicas** (painéis pela grelha, com a análise de planaridade da 0.559 a

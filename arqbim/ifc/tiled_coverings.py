@@ -172,6 +172,21 @@ class TiledCoveringMixin:
                 found_on += [c for c in rel.RelatedCoverings if c not in found_on]
         for e in found_on:
             p = self._params(e)
+            if p.get("Elemento") == KIND and p.get("Origem") in changed and p.get("Cilindro") and \
+                    self.kind_of(p["Origem"]) == "curved_wall":       # (0.572) a curved wall's: its face again
+                cyl = json.loads(p["Cilindro"])
+                _fr, face, rf, turn = self.curved_face(p["Origem"], int(cyl.get("side", 1)))
+                centre, _r, start, _s, _h, _t = self.curved_wall_params(p["Origem"])
+                cyl.update(radius=rf, start=start, turn=turn)
+                m = np.eye(4)
+                m[:3, 3] = centre
+                self._set_params(e, {"Cilindro": json.dumps(cyl)})
+                try:
+                    self.set_tiled_covering(e.GlobalId, face=face, frame=m)
+                except EditRefused:
+                    continue
+                out.append(e.GlobalId)
+                continue
             if p.get("Elemento") != KIND or p.get("Origem") not in changed or not p.get("FacePonto"):
                 continue
             host = self.by_guid(p["Origem"])
@@ -308,6 +323,50 @@ class TiledCoveringMixin:
     def tiled_layout(self, guid):
         """core/tiling's Result of a Revestimento's pieces as they are."""
         return self.tiled_pieces(guid)[0]
+
+    def tiled_cylinder(self, guid):
+        """(0.572) The cylinder a curved Revestimento is bent on {radius, start, turn, out, pieces} — None: flat."""
+        p = self._params(self.by_guid(guid))
+        try:
+            return json.loads(p["Cilindro"]) if p.get("Cilindro") else None
+        except ValueError:
+            return None
+
+    def add_tiled_curved(self, wall, side, finish, name, layout=None, lang="pt", **changes):
+        """(0.572) A Revestimento on a curved wall's face (`side` +1 its inside, −1 its outside): laid on the face
+        unrolled (along the arc × up, its doors and windows left out) and bent round it; it follows the wall."""
+        self.load_custom_finishes()
+        if finish not in cf.FINISHES:
+            raise EditRefused("tiling_finish")
+        _frame, face, rf, turn = self.curved_face(wall, side)
+        centre, _r, start, _sweep, _h, _t = self.curved_wall_params(wall)
+        f = self.file
+        e = api.root.create_entity(f, ifc_class="IfcCovering", name=name, predefined_type="CLADDING")
+        m = np.eye(4)
+        m[:3, 3] = centre
+        self._place(e, m)
+        host = self.by_guid(wall)
+        api.spatial.assign_container(f, products=[e], relating_structure=ifcopenshell.util.element.get_container(host)
+                                     or self.storey())
+        self._mark(e, KIND)
+        cyl = {"radius": rf, "start": start, "turn": turn, "out": -1.0 if side > 0 else 1.0, "pieces": "curvas",
+               "side": side}
+        d = cf.FINISHES[finish].layout()
+        d.update(layout or {})
+        self._set_params(e, {"Acabamento": finish, "Origem": wall, "Cilindro": json.dumps(cyl)})
+        self._cover(e, host)
+        self.set_tiled_covering(e.GlobalId, layout=d, face=face, lang=lang, **changes)
+        return e
+
+    def set_tiled_bent(self, guid, pieces, lang="pt"):
+        """(0.572) A curved Revestimento's pieces bent with it («curvas») or each flat on the curve («planas»)."""
+        e, _ = self._require(guid, KIND)
+        cyl = self.tiled_cylinder(guid)
+        if cyl is None or pieces not in ("curvas", "planas"):
+            raise EditRefused("tiling_curved")
+        cyl["pieces"] = pieces
+        self._set_params(e, {"Cilindro": json.dumps(cyl)})
+        self._tiled_body(e, lang)
 
     def tiled_subframe(self, guid):
         """(0.571) A Revestimento's subframe {system, …} (core/covering_subframe; «nenhuma»: bonded to the face)."""
@@ -488,24 +547,42 @@ class TiledCoveringMixin:
             items.append(it)
             styled.append((it, key))
 
+        cyl = self.tiled_cylinder(e.GlobalId)            # (0.572) on a curved face: made unrolled, then bent
+
+        def solid(polys, z0, z1, pieces=False):
+            if cyl is None:
+                return tl.prisms(polys, z0, z1)
+            if pieces and cyl.get("pieces") == "planas":      # (each piece flat, touching the curve)
+                vs, ts, k = [], [], 0
+                for poly in polys:
+                    v_, t_ = tl.prisms([poly], z0, z1)
+                    xc = float(np.mean([q[0] for q in poly[0]]))
+                    v_, t_ = tl.bend(v_, t_, cyl, flat_at=xc)
+                    vs.append(v_)
+                    ts.append(t_ + k)
+                    k += len(v_)
+                return (np.vstack(vs), np.vstack(ts)) if vs else (np.zeros((0, 3)), np.zeros((0, 3), np.int64))
+            v_, t_ = tl.prisms(tl.sliced(polys, 0.08), z0, z1)
+            return tl.bend(v_, t_, cyl)
+
         groups = {}                                      # (0.566: each material its own item — bands, mix, picks)
         for pc, m in zip(result.pieces, mats):
             groups.setdefault(m or p["material"], []).append((pc.points, pc.holes))
         for key, polys in groups.items():
-            verts, tris = tl.prisms(polys, lift + bed, lift + bed + t)
+            verts, tris = solid(polys, lift + bed, lift + bed + t, pieces=True)
             item(verts, tris, key)
         q = orient(face, 1.0)
         outline = (list(q.exterior.coords)[:-1], [list(h.coords)[:-1] for h in q.interiors])
         if bed > 1e-6:                                   # (the bed under the pieces)
-            verts, tris = tl.prisms([outline], lift, lift + bed)
+            verts, tris = solid([outline], lift, lift + bed)
             item(verts, tris, p["bed_material"])
         if p["grout"] and recess > 1e-6 and t - recess > 1e-6:   # (the grout in the joints only, back from the
-            verts, tris = tl.prisms(tl.joints(result, face, p["layout"]), lift + bed,   # face — never behind a
-                                    lift + bed + t - recess)                            # piece, where it would
-            item(verts, tris, p["grout"])                                               # show through)
+            verts, tris = solid(tl.joints(result, face, p["layout"]), lift + bed,   # face — never behind a
+                                lift + bed + t - recess)                            # piece, where it would
+            item(verts, tris, p["grout"])                                           # show through)
         for polys, z0, z1, key in sub_items:             # (0.571) the subframe's parts
             if polys and z1 - z0 > 1e-6:
-                verts, tris = tl.prisms(polys, z0, z1)
+                verts, tris = solid(polys, z0, z1)
                 item(verts, tris, key)
         if not items:
             raise EditRefused("tiling_empty")

@@ -1349,6 +1349,14 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "refuse.tiling_curved": ("só num revestimento curvo", "only on a curved finish"),                    # (0.572)
+    "props.cov_bent": ("Peças na curva", "Pieces on the curve"),
+    "info.covering_layout_curved": ("Num revestimento curvo a origem e o ângulo mudam-se nas Propriedades "
+                                    "(Começa, Deslocar).",
+                                    "On a curved finish the start and angle are changed in Properties (Starts, "
+                                    "Shift)."),
+    "cov.bent.curvas": ("curvadas (seguem a curva)", "bent (follow the curve)"),
+    "cov.bent.planas": ("planas (facetadas)", "flat (faceted)"),
     "props.cov_subframe": ("Subestrutura", "Subframe"),                                               # (0.571)
     "props.cov_sub_insulation": ("Isolamento", "Insulation"),
     "props.cov_sub_cavity": ("Caixa de ar", "Air gap"),

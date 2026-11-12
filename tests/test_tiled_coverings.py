@@ -384,3 +384,30 @@ class Subframes(unittest.TestCase):
         self.assertLess(v[:, 2].min(), 2.7 - 0.3)
         with self.assertRaises(Exception):
             bim.set_covering_subframe(doc, c, system="nada")
+
+
+class Curved(unittest.TestCase):
+    """(0.572) On a curved wall: laid unrolled, bent round it (or each piece flat), following it."""
+
+    def test_curved_wall(self):
+        import math
+        from arqbim.ifc import catalog
+        doc = Document()
+        wall = bim.add_curved_wall(doc, np.array((0.0, 0.0, 0.0)), 4.0, 0.0, math.pi / 2,
+                                   catalog.BY_KEY["parede_alv_20"])
+        g = bim.cover_face(doc, wall, (4.1 * math.cos(0.7), 4.1 * math.sin(0.7), 1.0),
+                           (math.cos(0.7), math.sin(0.7), 0.0), "azulejo_20x20")
+        self.assertIsNotNone(g)
+        v, f = mesh(doc, g)
+        r = np.hypot(v[:, 0], v[:, 1])
+        self.assertGreater(r.min(), 4.1 - 1e-3)               # (outside the wall's outer face)
+        self.assertLess(r.max(), 4.1 + 0.02)
+        self.assertTrue(TriMesh(v, f).is_closed() or len(f) > 1000)
+        inner = bim.cover_face(doc, wall, (3.9 * math.cos(0.7), 3.9 * math.sin(0.7), 1.0),
+                               (-math.cos(0.7), -math.sin(0.7), 0.0), "metro_10x20")
+        v2, _f = mesh(doc, inner)
+        r2 = np.hypot(v2[:, 0], v2[:, 1])
+        self.assertLess(r2.max(), 3.9 + 1e-3)
+        bim._edit(doc, lambda ifc: ifc.set_tiled_bent(g, "planas"), [g], "cmd.tiled_covering")
+        v3, _f = mesh(doc, g)
+        self.assertGreater(np.hypot(v3[:, 0], v3[:, 1]).max(), 4.1)

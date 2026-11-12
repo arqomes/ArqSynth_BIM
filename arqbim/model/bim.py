@@ -623,7 +623,23 @@ def covering_face(doc, guid, point, normal):
 def cover_face(doc, guid, point, normal, finish, layout=None, **changes):
     """(0.564) A Revestimento on the flat face of `guid` (an element: it follows it; a drawing: laid where it is)
     clicked at `point`, facing `normal`. One undo step. Its GlobalId — None when there is no flat face there."""
-    found = covering_face(doc, guid, point, normal)
+    curved = doc.get(guid) is not None and doc.get(guid).is_bim and doc.ifc.kind_of(guid) == "curved_wall"
+    found = None if curved else covering_face(doc, guid, point, normal)
+    if curved and abs(float(np.asarray(normal, float)[2])) < 0.7:     # (0.572) its curved faces: bent round it
+        # (its top and ends, flat, as any face)
+        centre, radius, *_rest = doc.ifc.curved_wall_params(guid)
+        side = 1 if float(np.hypot(*(np.asarray(point, float)[:2] - centre[:2]))) < radius else -1
+        language = lang()
+
+        def bent(ifc):
+            count = sum(1 for e in ifc.file.by_type("IfcCovering")
+                        if ifc._params(e).get("Elemento") == "tiled_covering")
+            return ifc.add_tiled_curved(guid, side, finish, "{} {}".format(t("elem.tiled_covering"), count + 1),
+                                        layout, language, **changes).GlobalId
+
+        return doc.execute(IfcCommand(t("cmd.tiled_covering"), bent)).result
+    if curved:
+        found = covering_face(doc, guid, point, normal)
     if found is None:
         return None
     outline, holes, n = found

@@ -1569,8 +1569,11 @@ class Document:
                 kind = self.ifc.kind_of(obj.id)
                 if kind == "param_surface" and hasattr(obj.mesh, "soften"):
                     obj.mesh.soften(FREEFORM_SOFT_DEG)
-                elif kind == "tiled_covering" and hasattr(obj.mesh, "silence"):   # (0.563) its face's direction
-                    obj.mesh.silence(self.ifc._placement_si(self.ifc.by_guid(obj.id))[:3, 2])
+                elif kind == "tiled_covering" and hasattr(obj.mesh, "silence"):     # (0.563) its face's direction
+                    m = self.ifc._placement_si(self.ifc.by_guid(obj.id))
+                    cyl = self.ifc.tiled_cylinder(obj.id)
+                    obj.mesh.silence(m[:3, 2] if cyl is None else (m[0, 3], m[1, 3], float(cyl["out"]), 0.0))
+                    # (0.572: on a curve, the faces looking out from its axis — or in, on its inside)
             except Exception:  # (an element half made: drawn as it is)
                 pass
         self.objects[obj.id] = obj

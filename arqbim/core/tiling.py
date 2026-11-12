@@ -728,6 +728,50 @@ def joints(result, face, d):
     return out
 
 
+# ---------------------------------------------------------------------------------------------------- bent (0.572)
+
+def sliced(polys, step):
+    """Polygons [(points, holes)] cut in slices `step` wide along x — each small enough to follow a curve."""
+    out = []
+    for points, holes in polys:
+        g = Polygon(points, holes)
+        x0, y0, x1, y1 = g.bounds
+        if x1 - x0 <= step * 1.05:
+            out.append((points, holes))
+            continue
+        n = int(math.ceil((x1 - x0) / step))
+        for k in range(n):
+            part = g.intersection(box(x0 + k * (x1 - x0) / n, y0 - 1, x0 + (k + 1) * (x1 - x0) / n, y1 + 1))
+            for q in getattr(part, "geoms", [part]):
+                if q.geom_type == "Polygon" and q.area > 1e-9:
+                    q = orient(q, 1.0)
+                    out.append(([tuple(c) for c in list(q.exterior.coords)[:-1]],
+                                [[tuple(c) for c in list(r.coords)[:-1]] for r in q.interiors]))
+    return out
+
+
+def bend(verts, tris, cyl, flat_at=None):
+    """A mesh made in a face's unrolled plane (x along the arc, y up, z out of it) put on its cylinder `cyl`
+    {radius, start, turn, out}: (verts, tris) in the cylinder's own coordinates (its centre the origin). `flat_at`:
+    one piece kept flat, on the plane touching the cylinder at that x (a faceted piece)."""
+    v = np.asarray(verts, float)
+    r, a0, turn, out = float(cyl["radius"]), float(cyl["start"]), float(cyl["turn"]), float(cyl["out"])
+    if flat_at is None:
+        ang = a0 + turn * v[:, 0] / r
+        rad = r + out * v[:, 2]
+        w = np.column_stack((rad * np.cos(ang), rad * np.sin(ang), v[:, 1]))
+    else:
+        ac = a0 + turn * flat_at / r
+        c = np.array((r * math.cos(ac), r * math.sin(ac), 0.0))
+        tang = np.array((-math.sin(ac), math.cos(ac), 0.0)) * turn
+        radial = np.array((math.cos(ac), math.sin(ac), 0.0)) * out
+        w = c + (v[:, :1] - flat_at) * tang + v[:, 1:2] * np.array((0.0, 0.0, 1.0)) + v[:, 2:3] * radial
+    t = np.asarray(tris, np.int64).reshape(-1, 3)
+    if turn * out < 0:                                    # (the unrolled frame turned left-handed: faces outwards)
+        t = t[:, [0, 2, 1]]
+    return w, t
+
+
 # ---------------------------------------------------------------------------------------------------- a face in 3D
 
 def face_frame(points):
