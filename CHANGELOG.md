@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.549.0 — 2026-11-12
+
+**Gráfico Visual: teto falso perfurado.**
+
+- **Teto**: escolhe-se um teto do modelo e **Aplicar**, **Criar novo** ou **Editar** como numa parede. O próprio teto
+  fica perfurado (não se cria outro elemento por cima): mantém a altura, a junta de sombra e a sanca que tinha.
+- **Laje**: com uma laje escolhida, **Aplicar** faz um **teto falso perfurado 30 cm por baixo dela**, com o contorno e
+  as aberturas da laje. É um só passo de desfazer.
+- No editor a superfície é a **planta de teto** (vista de cima, como se desenha), já sem as aberturas e sem a faixa da
+  sanca. Os operadores que repetem um módulo usam-no como placa do teto.
+- O teto **acompanha as alterações**: ao mudar-lhe o contorno, a junta de sombra ou a sanca, os furos refazem-se no
+  mesmo passo de desfazer. «Atualizar na parede», «Editar o da parede» e a pré-visualização na vista 3D funcionam
+  nele.
+- O painel lateral diz agora «parede, teto ou laje».
+- Por fazer: tirar os furos de um teto pelo painel (hoje: Ctrl+Z, ou aplicar outro operador); os tetos perfurados na
+  tabela «Painéis perfurados»; a altura do teto falso por baixo da laje como medida a escolher.
+- Testes: `tests/test_graph_operators.py` (OnACeiling); «grafico_teto» no gui_smoke.
+
 ## 0.548.0 — 2026-11-12
 
 **Gráfico Visual: a parede curva como superfície de trabalho — e os painéis desenhados limpos.**

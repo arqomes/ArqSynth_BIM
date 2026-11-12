@@ -2089,6 +2089,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
         view not telling: the front)."""
         try:
+            if self.doc.ifc.kind_of(wall) in ("ceiling", "slab"):   # (0.549) a ceiling has the one face
+                return "frente"
             if self.doc.ifc.kind_of(wall) == "curved_wall":  # (0.548) inside its circle: its inner face ("frente")
                 centre, radius, _s, _sw, _h, _t = self.doc.ifc.curved_wall_params(wall)
                 eye = np.asarray(self.viewport.camera_position(), dtype=float)

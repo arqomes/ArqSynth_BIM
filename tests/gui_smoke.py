@@ -24882,6 +24882,25 @@ def grafico_visual():
     for _ in range(3):
         win.doc.undo()
     pump(200)
+    # (0.549) a ceiling: the operator perforates the ceiling itself — seen from under it
+    ceiling = _bim.add_ceiling(win.doc, [(50.0, 30.0), (55.0, 30.0), (55.0, 34.0), (50.0, 34.0)],
+                               holes=[[(52.0, 31.5), (53.0, 31.5), (53.0, 32.5), (52.0, 32.5)]])
+    pump(300)
+    win.viewport.set_selection({ceiling})
+    pump(200)
+    made = win.apply_operator(slug, None)
+    pump(600)
+    got = win.doc.ifc.ceiling_perforation(ceiling)
+    check("grafico_teto", made == [ceiling] and got is not None and got["count"] > 500 and panel.target() == 1
+          and panel.update_button.isEnabled(), "furos {}".format(got and got["count"]))
+    if os.environ.get("ARQBIM_COMPARE"):
+        win.viewport.zoom_extents({ceiling})
+        pump(800)
+        shot("grafico_teto.png")
+    win.viewport.set_selection(set())
+    win.doc.undo()
+    win.doc.undo()
+    pump(200)
     win.set_module("project")
     pump(100)
 

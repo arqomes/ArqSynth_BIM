@@ -29,7 +29,10 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         page = QtWidgets.QWidget()
         column = QtWidgets.QVBoxLayout(page)
         column.setContentsMargins(4, 4, 4, 4)
-        self.hint = QtWidgets.QLabel("Escolha uma parede no modelo, um operador nesta lista, e «Aplicar».")
+        self.hint = QtWidgets.QLabel("Escolha uma parede, um teto ou uma laje no modelo, um operador nesta lista, e "
+                                     "«Aplicar».")
+        self.hint.setToolTip("Parede direita ou curva: o painel fica na face. Teto: o próprio teto fica perfurado. "
+                             "Laje: faz-se um teto falso perfurado 30 cm por baixo dela.")
         self.hint.setWordWrap(True)
         column.addWidget(self.hint)
         self.search = QtWidgets.QLineEdit()
@@ -211,8 +214,8 @@ class OperatorsPanel(QtWidgets.QDockWidget):
     def refresh_target(self):
         """What «Aplicar» would work on, said under the list; the buttons that need something chosen."""
         n = self.target() if self.target else 0
-        self.target_label.setText("Nenhuma parede escolhida no modelo." if not n else
-                                  "1 parede escolhida." if n == 1 else "{} paredes escolhidas.".format(n))
+        self.target_label.setText("Nenhuma parede, teto ou laje escolhida." if not n else
+                                  "1 superfície escolhida." if n == 1 else "{} superfícies escolhidas.".format(n))
         one = self.current() is not None
         kept = self.kept() if self.kept else 0
         if kept:
@@ -230,7 +233,8 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         if self.current() is None:
             return
         if not (self.target() if self.target else 0):
-            QtWidgets.QMessageBox.information(self, "Operadores", "Escolha primeiro uma parede no modelo.")
+            QtWidgets.QMessageBox.information(self, "Operadores", "Escolha primeiro uma parede, um teto ou uma laje "
+                                              "no modelo.")
             return
         if self.on_apply:
             self.on_apply(self.current(), self.chosen_side(), dict(self.values))

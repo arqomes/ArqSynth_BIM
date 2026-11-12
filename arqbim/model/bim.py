@@ -528,6 +528,35 @@ def set_ceiling(doc, guid, style=None, height=None, gap=None, bulkhead=None):
     _edit(doc, lambda ifc: [ifc.set_ceiling(g, style, z, gap, bulkhead) for g in gs], gs, "cmd.ceiling_edit")
 
 
+CEILING_DROP = 0.30          # (0.549) m: a false ceiling made under a slab hangs this far under it
+
+
+def perforate_ceiling(doc, guid, pattern):
+    """(0.549) A ceiling's holes — a Visual Graph operator's (ifc.set_ceiling_perforation: free, free_repeat,
+    sheet_w, sheet_h, margin, operator; free «»: none again). In a group, every copy. One undo step."""
+    gs = _and_copies(doc, guid)
+    _edit(doc, lambda ifc: [ifc.set_ceiling_perforation(g, pattern) for g in gs], gs, "cmd.ceiling_edit", plan=False)
+    return guid
+
+
+def perforated_ceiling_under(doc, slab, pattern, drop=CEILING_DROP):
+    """(0.549) A perforated false ceiling made under a slab: the slab's plan, its underside `drop` under the
+    slab's, with a Visual Graph operator's holes. One undo step. Returns the ceiling's GlobalId."""
+    info = doc.ifc.slab_outline(slab)
+    if info is None:
+        raise ValueError("essa laje não serve para um teto falso")
+    language, prefix = lang(), t("elem.ceiling")
+    z = float(info["bottom"]) - float(drop)
+
+    def action(ifc):
+        name = "{} {}".format(prefix, _coverings(ifc, "CEILING") + 1)
+        ceiling = ifc.add_ceiling(info["outline"], z, name, "continuous", info["holes"], language)
+        ifc.set_ceiling_perforation(ceiling.GlobalId, pattern)
+        return ceiling.GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.ceiling"), action)).result
+
+
 def set_flooring(doc, guid, finish):
     """(0.415) A floor finish's finish (its material and thickness). In a group, every copy. One undo step."""
     gs = _and_copies(doc, guid)

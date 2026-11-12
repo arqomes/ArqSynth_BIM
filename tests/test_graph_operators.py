@@ -433,6 +433,83 @@ class OnACurvedWall(unittest.TestCase):
         win.close()
 
 
+class OnACeiling(unittest.TestCase):
+    """0.549 — a false ceiling perforated by an operator: an existing ceiling, or one made under a slab."""
+
+    OUTLINE = [(0.0, 0.0), (5.0, 0.0), (5.0, 4.0), (0.0, 4.0)]
+
+    def test_a_ceiling_perforated_and_following(self):
+        doc = Document()
+        ceiling = bim.add_ceiling(doc, self.OUTLINE, holes=[[(2.0, 1.5), (3.0, 1.5), (3.0, 2.5), (2.0, 2.5)]])
+        self.assertEqual(operators.host_wall(doc, ceiling), ceiling)
+        face = nodes_3d.wall_face(doc, ceiling)
+        self.assertEqual(face.bounds, (0.0, 0.0, 5.0, 4.0))
+        self.assertEqual(len(face.interiors), 1)                                   # (its opening kept clear)
+        self.assertFalse(nodes_3d.seen_mirrored(doc, ceiling))
+        slug = operators.save("No teto", operators.starter())
+        made = operators.apply_to(doc, slug, ceiling)
+        self.assertEqual(made, [ceiling])                                          # (the ceiling itself)
+        got = doc.ifc.ceiling_perforation(ceiling)
+        self.assertGreater(got["count"], 1000)
+        self.assertTrue(0.01 < got["open_area"] < 0.6)
+        kept = operators.operator_of(doc, ceiling)
+        self.assertEqual((kept["slug"], kept["wall"]), (slug, ceiling))
+        self.assertEqual(operators.finishes_of(doc, [ceiling]), [ceiling])
+        verts, faces = doc.ifc.triangulate([ceiling])[ceiling]
+        z0 = doc.ifc.ceiling_params(ceiling)["z"]
+        self.assertAlmostEqual(verts[:, 2].min(), z0, places=4)                    # (flat, its board's thickness)
+        self.assertAlmostEqual(verts[:, 2].max() - z0, doc.ifc.ceiling_params(ceiling)["thickness"], places=4)
+        from arqbim.core.mesh import TriMesh
+        tris = np.asarray(faces).reshape(-1, 3)
+        self.assertLess(len(TriMesh(verts, tris).edge_array()[0]), 0.5 * 3 * len(tris))     # (drawn clean)
+        bim.set_ceiling(doc, ceiling, gap=0.2)                                     # (a wide shadow gap: less of it)
+        less = doc.ifc.ceiling_perforation(ceiling)["count"]
+        self.assertLess(less, got["count"] * 0.95)
+        np.testing.assert_allclose(nodes_3d.wall_face(doc, ceiling).bounds[2:], (4.6, 3.6))
+        doc.undo()
+        self.assertEqual(doc.ifc.ceiling_perforation(ceiling)["count"], got["count"])
+        g = kept["graph"]
+        g.set_param("n2", "passo", 0.25)
+        operators.update(doc, ceiling, g)
+        self.assertLess(doc.ifc.ceiling_perforation(ceiling)["count"], got["count"] / 4)
+        bim.perforate_ceiling(doc, ceiling, {"free": "", "operator": ""})          # (none again: a plain ceiling)
+        self.assertIsNone(doc.ifc.ceiling_perforation(ceiling))
+        self.assertIsNone(operators.operator_of(doc, ceiling))
+
+    def test_under_a_slab(self):
+        doc = Document()
+        slab = bim.add_slab_outline(doc, self.OUTLINE, 3.0, catalog.BY_KEY["laje_15"])
+        info = doc.ifc.slab_outline(slab)
+        before = len(doc.ifc.file.by_type("IfcCovering"))
+        made = operators.apply_to(doc, operators.starter(), slab)
+        self.assertEqual(len(made), 1)
+        self.assertEqual(doc.ifc.kind_of(made[0]), "ceiling")
+        self.assertEqual(len(doc.ifc.file.by_type("IfcCovering")), before + 1)
+        self.assertAlmostEqual(doc.ifc.ceiling_params(made[0])["z"], info["bottom"] - bim.CEILING_DROP, places=4)
+        self.assertGreater(doc.ifc.ceiling_perforation(made[0])["count"], 1000)
+        doc.undo()                                                                 # (one step: the ceiling gone)
+        self.assertEqual(len(doc.ifc.file.by_type("IfcCovering")), before)
+
+    def test_editor_on_a_ceiling(self):
+        doc = Document()
+        ceiling = bim.add_ceiling(doc, self.OUTLINE)
+        main = types.SimpleNamespace(doc=doc, viewport=types.SimpleNamespace(selection={ceiling}))
+        nodes_3d.MODEL["doc"] = doc
+        win = vg.GraphWindow(graph=None, wall=ceiling, side="frente")
+        win.main = main
+        win.set_target(ceiling, "frente")
+        self.assertIn("planta de teto", win.target_label.text())
+        self.assertAlmostEqual(win.results["n1"]["painel"]["width"], 5.0)
+        last = vg.final_result(win.graph, win.results)
+        tris, _colours = vg.model_preview(doc, last[2])
+        z = doc.ifc.ceiling_params(ceiling)["z"]
+        self.assertTrue(np.all(tris[:, :, 2] < z) and np.all(tris[:, :, 2] > z - 0.01))    # (just under it)
+        self.assertEqual(win.apply_to_model(), [ceiling])
+        self.assertEqual(win.apply_to_model(), [ceiling])                          # (again: the same one)
+        self.assertEqual(len(doc.ifc.file.by_type("IfcCovering")), 1)
+        win.close()
+
+
 class UndoAndAI(unittest.TestCase):
     """0.543 — step 9: Ctrl+Z in the editor; the AI's graph is the open window's."""
 

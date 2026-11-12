@@ -1737,7 +1737,9 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    (`ifc/curved_walls.py`), sem revestimentos; a laje e a Superfície paramétrica também não os têm. Cada uma pede um
    elemento novo: ~~(a) parede curva — a face desenrolada (comprimento do arco × altura) como superfície, e a chapa
    dobrada sobre o arco~~ (0.548.0: `ifc.curved_face`, `_curved_cladding_body`, `surfaces.split_strips/bend/weld`);
-   (b) laje — decidir se o painel é um teto falso, um pavimento ou uma pala; (c) Superfície
+   ~~(b) laje~~ (0.549.0, o dono: «Teto falso» — o próprio teto perfurado, `ifc.set_ceiling_perforation`; com uma
+   laje escolhida, um teto falso 30 cm por baixo, `bim.perforated_ceiling_under`; por fazer: tirar os furos pelo
+   painel, os tetos na tabela dos perfurados, a altura por baixo da laje à escolha) — (b) era: laje — decidir se o painel é um teto falso, um pavimento ou uma pala; (c) Superfície
    paramétrica — a chapa levada à superfície ponto a ponto (furos deformados). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
    «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a

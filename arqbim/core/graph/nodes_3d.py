@@ -56,6 +56,8 @@ def seen_mirrored(doc, wall, side="frente"):
     if is_curved(doc, wall):
         _frame, _face, _radius, turn = doc.ifc.curved_face(wall, _side(side))
         return turn * _side(side) > 0
+    if doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) in ("ceiling", "slab"):
+        return False                    # (0.549) a ceiling: as its plan is drawn
     return _side(side) < 0
 
 
@@ -66,6 +68,20 @@ def wall_face(doc, wall, side="frente"):
     from shapely.geometry import box
     if is_curved(doc, wall):
         return doc.ifc.curved_face(wall, _side(side))[1]
+    kind = doc.ifc.kind_of(wall) if doc is not None and doc.ifc.by_guid(wall) is not None else None
+    if kind in ("ceiling", "slab"):
+        # (0.549) a ceiling's flat part — or a slab's plan, for the false ceiling made under it — as in a ceiling
+        # plan: seen from above (x to the right, y up the sheet), its corner at (0, 0)
+        from shapely import affinity
+        from shapely.geometry import Polygon
+        if kind == "ceiling":
+            face = doc.ifc.ceiling_face(wall)
+        else:
+            info = doc.ifc.slab_outline(wall)
+            if info is None:
+                raise ValueError("essa laje não serve para um teto falso")
+            face = Polygon(info["outline"], info["holes"]).buffer(0)
+        return affinity.translate(face, -face.bounds[0], -face.bounds[1])
     if doc is None or doc.ifc.by_guid(wall) is None or doc.ifc.kind_of(wall) != "wall":
         raise ValueError("essa parede já não existe")
     frame = doc.ifc.element_frame(wall)

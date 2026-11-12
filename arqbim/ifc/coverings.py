@@ -47,6 +47,7 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
                  "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
                  "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
+CEILING_HOLES = ("free", "free_repeat", "sheet_w", "sheet_h", "margin", "operator")   # (0.549) a ceiling's holes
 CURVED_STAND_OFF = 0.0015   # (0.548) m: a sheet bent round a curved wall stands this far off its face
 TEXT_KEYS = {"direction", "hole", "grid", "mask", "free", "operator"}
 CHOICES = {"direction": ("vertical", "horizontal"), "hole": core_surfaces.HOLE_SHAPES, "grid": core_surfaces.GRIDS}
@@ -129,6 +130,7 @@ class CoveringMixin:
         self._set_params(covering, {"Contorno": _text(rings[0]), "Furos": "|".join(_text(h) for h in rings[1:]),
                                     "Desenho": outline_loops.text(local) if outline_loops.curved(local) else None})
         if kind == "ceiling":
+            self._rework_ceiling(covering)                 # (0.549) a perforated one: its holes for its new plan
             self._set_ceiling_body(covering)
         else:
             self._set_flooring_body(covering)
@@ -174,8 +176,8 @@ class CoveringMixin:
         self._set_qto(floor, "Qto_CoveringBaseQuantities", {"Width": thickness * u, "GrossArea": poly.area,
                                                             "NetArea": poly.area})
 
-    def _set_ceiling_body(self, ceiling):
-        f, u = self.file, 1.0 / self.unit_scale
+    def _ceiling_shapes(self, ceiling):
+        """(its measures, its flat part — shapely, its own plan —, its bulkhead's band or None, the band's drop)."""
         p = self.ceiling_params(ceiling.GlobalId)
         poly = Polygon(p["local"], p["local_holes"]).buffer(0)
         params = self._params(ceiling)
@@ -190,9 +192,68 @@ class CoveringMixin:
             inner = poly.buffer(-band_w, join_style="mitre")
             if not inner.is_empty and inner.geom_type == "Polygon":
                 band, poly = poly.difference(inner), inner
+        return p, poly, band, drop
+
+    # ------------------------------------------------------------ a perforated ceiling (0.549)
+
+    def ceiling_face(self, guid):
+        """(0.549) A ceiling's flat part (inside its shadow gap and its bulkhead) in its own plan — what a Visual
+        Graph operator perforates."""
+        ceiling, _ = self._require(guid, "ceiling")
+        return self._ceiling_shapes(ceiling)[1]
+
+    def _ceiling_holes(self, ceiling, poly):
+        """(shape, free_perforation's holes on its flat part) of a perforated ceiling — None: it is not one."""
+        params = self._params(ceiling)
+        free = core_surfaces.free_read(params.get("FurosLivres") or "")
+        if free is None:
+            return None
+        size = (float(params.get("PainelLargura") or 0.6), float(params.get("PainelAltura") or 0.6))
+        repeat = float(params.get("FurosRepetir") if params.get("FurosRepetir") is not None else 1.0) > 0.5
+        return free[0], core_surfaces.free_perforation(poly, free[0], free[1], float(params.get("Margem") or 0.0),
+                                                       size, repeat)
+
+    def ceiling_perforation(self, guid):
+        """(0.549) {"count", "open_area", "shape"} of a perforated ceiling's holes — None: it has none."""
+        ceiling, _ = self._require(guid, "ceiling")
+        _p, poly, _band, _drop = self._ceiling_shapes(ceiling)
+        found = self._ceiling_holes(ceiling, poly)
+        if found is None:
+            return None
+        shape, boards = found
+        area = sum(float(core_surfaces.hole_area(shape, s, core_surfaces.extras(s)[1]).sum()) for _q, _c, s in boards)
+        return {"count": sum(len(c) for _q, c, _s in boards), "shape": shape,
+                "open_area": area / poly.area if poly.area > 1e-9 else 0.0}
+
+    def set_ceiling_perforation(self, guid, pattern):
+        """(0.549) A ceiling's holes (a Visual Graph operator's: free, free_repeat, sheet_w, sheet_h, margin,
+        operator — as a wall finish's; free «»: none again), its body made again."""
+        ceiling, _ = self._require(guid, "ceiling")
+        self._set_params(ceiling, self._pattern_changes({k: v for k, v in pattern.items() if k in CEILING_HOLES}))
+        self._set_ceiling_body(ceiling)
+
+    def _rework_ceiling(self, ceiling):
+        """A perforated ceiling changed (its outline, its gap, its bulkhead): its holes worked out again by the
+        operator it keeps, on it as it is now."""
+        if self._params(ceiling).get("Operador"):
+            from ..core.graph import operators
+            operators.rework(self, ceiling)
+
+    def _set_ceiling_body(self, ceiling):
+        f, u = self.file, 1.0 / self.unit_scale
+        p, poly, band, drop = self._ceiling_shapes(ceiling)
         rings = lambda g: [(list(orient(q, 1.0).exterior.coords)[:-1], [list(h.coords)[:-1] for h in q.interiors])  # noqa
                            for q in getattr(g, "geoms", [g]) if q.geom_type == "Polygon" and q.area > 1e-6]
-        if p["style"] == "tiles":
+        sheet = None
+        perforated = self._ceiling_holes(ceiling, poly)
+        if perforated is not None:                         # (0.549) its flat part a sheet with those holes
+            if sum(len(c) for _q, c, _s in perforated[1]) > core_surfaces.MAX_HOLES:
+                raise EditRefused("pattern_many")
+            sheet = core_surfaces.free_mesh(poly, p["thickness"], perforated[1], perforated[0])
+            if not len(sheet[1]):
+                raise EditRefused("too_small")
+            pieces = []
+        elif p["style"] == "tiles":
             exterior, holes = rings(poly)[0]
             pieces = [(ring, [], 0.0, p["thickness"]) for ring in core_ceilings.tiles(exterior, holes=holes)]
         else:
@@ -200,6 +261,10 @@ class CoveringMixin:
         if band is not None:
             pieces += [(ring, holes, -drop, drop + p["thickness"]) for ring, holes in rings(band)]
         items = []
+        if sheet is not None:
+            items.append(f.createIfcTriangulatedFaceSet(
+                f.createIfcCartesianPointList3D([tuple(float(c) for c in row) for row in sheet[0] * u]), None, False,
+                [tuple(int(i) + 1 for i in row) for row in sheet[1]], None))
         for ring, holes, z0, depth in pieces:
             outer = self._ring_curve(ring)
             if holes:
@@ -212,7 +277,7 @@ class CoveringMixin:
                 f.createIfcDirection((0.0, 0.0, 1.0)), float(depth * u)))
         self._clear_representations(ceiling)
         api.geometry.assign_representation(f, product=ceiling, representation=f.createIfcShapeRepresentation(
-            self.body, self.body.ContextIdentifier, "SweptSolid", items))
+            self.body, self.body.ContextIdentifier, "SweptSolid" if sheet is None else "Tessellation", items))
         area = poly.area + (band.area if band is not None else 0.0)
         self._set_qto(ceiling, "Qto_CoveringBaseQuantities", {"Width": p["thickness"] * u, "GrossArea": area,
                                                               "NetArea": area})
@@ -286,6 +351,8 @@ class CoveringMixin:
             m = self._placement_si(ceiling)
             m[2, 3] = float(z)
             self._place(ceiling, m)
+        if gap is not None or bulkhead is not None:
+            self._rework_ceiling(ceiling)                  # (0.549) its flat part changed: its holes again
         self._set_ceiling_body(ceiling)
 
     def ceiling_z_at(self, point, storey=None):

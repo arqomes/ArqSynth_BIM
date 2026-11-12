@@ -303,9 +303,21 @@ def model_preview(doc, value, bad=None):
     if doc is None or not wall:
         return None
     front = value["side"] == "frente"
+    flat = None                                          # (0.549) a ceiling, a slab: (its placement, its level)
     try:
         curved = nodes_3d.is_curved(doc, wall)
-        if curved:                                       # (0.548) its face unrolled, the sheet bent round it
+        kind = doc.ifc.kind_of(wall)
+        if kind == "ceiling":
+            face, frame = doc.ifc.ceiling_face(wall), None
+            flat = (doc.ifc._placement_si(doc.ifc.by_guid(wall)), 0.0)
+        elif kind == "slab":
+            from shapely.geometry import Polygon
+
+            from ..model.bim import CEILING_DROP
+            info = doc.ifc.slab_outline(wall)
+            face, frame = Polygon(info["outline"], info["holes"]).buffer(0), None
+            flat = (np.eye(4), float(info["bottom"]) - CEILING_DROP)
+        elif curved:                                     # (0.548) its face unrolled, the sheet bent round it
             frame, face, radius, turn = doc.ifc.curved_face(wall, 1 if front else -1)
         else:
             face = nodes_3d.wall_face(doc, wall)
@@ -319,6 +331,9 @@ def model_preview(doc, value, bad=None):
     step = surfaces.strip_step(radius, frame.length) if curved else None
 
     def world(uv, off):
+        if flat is not None:                             # (seen from under it: a hair under its underside)
+            local = np.column_stack((uv, np.full(len(uv), flat[1] - off), np.ones(len(uv))))
+            return (flat[0] @ local.T).T[:, :3]
         if curved:
             local = surfaces.bend(np.column_stack((uv, np.full(len(uv), off))), radius, turn,
                                   -1.0 if front else 1.0, step)
@@ -336,9 +351,9 @@ def model_preview(doc, value, bad=None):
         cut = shapely.constrained_delaunay_triangles(part)
         t = np.array([np.asarray(g.exterior.coords)[:3] for g in cut.geoms]).reshape(-1, 2)
         if curved:                                       # (fine enough along the arc to follow it)
-            flat = np.column_stack((t, np.zeros(len(t))))
-            flat, index = surfaces.split_strips(flat, np.arange(len(t)).reshape(-1, 3), step)
-            t = flat[index].reshape(-1, 3)[:, :2]
+            unrolled = np.column_stack((t, np.zeros(len(t))))
+            unrolled, index = surfaces.split_strips(unrolled, np.arange(len(t)).reshape(-1, 3), step)
+            t = unrolled[index].reshape(-1, 3)[:, :2]
         tris.append(world(t, lift).reshape(-1, 3, 3))
         colours.append(np.tile(SHEET_RGBA, (len(t) // 3, 1)))
     total = sum(len(c) for _q, c, _s in found)
@@ -1085,13 +1100,19 @@ class GraphWindow(QtWidgets.QMainWindow):
         if self.wall:
             obj = self.main.doc.get(self.wall) if self.main is not None else None
             side = self.side
+            where = None
             try:
                 from ..core.graph import nodes_3d
                 if nodes_3d.is_curved(self.main.doc, self.wall):      # (0.548) a curved wall's faces by where they are
                     side = "de dentro (desenrolada)" if self.side == "frente" else "de fora (desenrolada)"
+                kind = self.main.doc.ifc.kind_of(self.wall)
+                if kind == "ceiling":                                 # (0.549)
+                    where = "{} · em planta de teto".format(getattr(obj, "name", None) or "Teto")
+                elif kind == "slab":
+                    where = "{} · teto falso por baixo (planta de teto)".format(getattr(obj, "name", None) or "Laje")
             except Exception:  # (no model behind the window)
                 pass
-            where = "{} · face {}".format(getattr(obj, "name", None) or "Parede", side)
+            where = where or "{} · face {}".format(getattr(obj, "name", None) or "Parede", side)
         self.target_label.setText(where)
 
     def set_target(self, wall, side="frente"):
