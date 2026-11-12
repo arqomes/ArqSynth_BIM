@@ -1731,8 +1731,13 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    projetos~~ (0.541.0, `core/graph/operators.py`). Por fazer: o elemento guardar o operador usado e as medidas, para
    se poder reabrir e reaplicar.
 3. ~~«Criar»/«Editar» com uma parede selecionada: abre o editor já com o nó de entrada «Superfície do modelo» ligado
-   a ela (aberturas, contorno). Sem nada selecionado, uma face de exemplo.~~ (0.541.0) Por fazer: paredes curvas,
-   a Superfície paramétrica e lajes como superfície; ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
+   a ela (aberturas, contorno). Sem nada selecionado, uma face de exemplo.~~ (0.541.0) Por fazer — **pede decisão do dono** (estudado em
+   2026-11-12): paredes curvas, a Superfície paramétrica e lajes como superfície. O painel perfurado do BIM é hoje um
+   revestimento só de parede direita (`ifc/coverings.py`); a parede curva é outro tipo de elemento
+   (`ifc/curved_walls.py`), sem revestimentos; a laje e a Superfície paramétrica também não os têm. Cada uma pede um
+   elemento novo: (a) parede curva — a face desenrolada (comprimento do arco × altura) como superfície, e a chapa
+   dobrada sobre o arco; (b) laje — decidir se o painel é um teto falso, um pavimento ou uma pala; (c) Superfície
+   paramétrica — a chapa levada à superfície ponto a ponto (furos deformados). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
    «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
    superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) ~~A pré-visualização na própria
