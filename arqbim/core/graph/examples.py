@@ -20,6 +20,7 @@ SWEEP = {           # (the measure that shows the node best; else its first numb
     "desalinhar": ("quanto", 0.0, 1.0), "juntar_pontos": ("folga", 0.0, 1.5), "escalar_furos": ("fator", 0.3, 1.6),
     "juntar_furos": None, "area_aberta": ("alvo", 5.0, 45.0), "corrigir_fabrico": ("ponte_min", 0.002, 0.04),
     "rodar_furos": ("angulo", 0.0, 180.0), "alongar_furos": ("alongar", 1.0, 4.0),            # (0.545)
+    "matriz": ("desvio", 0.0, 1.0),                                                            # (0.553)
 }
 # (0.542) nodes shown on a surface with a window (they read its openings); those whose modulator must be linked
 WITH_WINDOW = {"distancia_vaos", "distancia_contorno", "contorno_pontos"}

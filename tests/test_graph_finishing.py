@@ -174,6 +174,10 @@ class DrawnHole(unittest.TestCase):
             again.show()
             APP.processEvents()
             again.grab().save(out)
+        for d in (dlg, again):                                       # (gone before Qt is: no crash at the end)
+            d.close()
+            d.deleteLater()
+        APP.processEvents()
 
 
 class CutList(unittest.TestCase):
@@ -229,6 +233,154 @@ class PerModule(unittest.TestCase):
         self.assertTrue(all(abs(m - 0.20) < 0.002 for m in each["modules"]), each["modules"])
         from arqbim.core.graph import nodes_logic
         self.assertEqual(len(nodes_logic.modules_of({"shape": __import__("shapely").box(0, 0, 1, 1)})), 1)
+
+
+def polygon_sketch(doc, pts, name="Polígono"):
+    """A flat face drawn (a polygon) — world points (x, y, z)."""
+    from arqbim.core.mesh import PolyMesh
+    from arqbim.model.document import AddObject, SketchObject
+    obj = SketchObject(name, np.eye(4), PolyMesh([np.array(p, float) for p in pts], [list(range(len(pts)))]))
+    doc.execute(AddObject(obj))
+    return obj
+
+
+class AnyFace(unittest.TestCase):
+    """0.553 — a polygon (any flat face drawn, at any angle) takes an operator: a perforated panel on it."""
+
+    HEX = [(2 * np.cos(a), 2 * np.sin(a), 0.5) for a in np.radians(np.arange(0, 360, 60))]
+
+    def test_level_polygon(self):
+        from arqbim.core.graph import sketch_host
+        doc = Document()
+        obj = polygon_sketch(doc, self.HEX)
+        self.assertEqual(operators.host_wall(doc, obj.id), obj.id)
+        frame, face = sketch_host.plane_of(obj)
+        self.assertAlmostEqual(face.area, 6 * np.sqrt(3) / 4 * 4, places=4)
+        np.testing.assert_allclose(frame[:3, 2], (0, 0, 1), atol=1e-9)
+        made = operators.apply_to(doc, operators.starter(), obj.id)
+        self.assertEqual(len(made), 1)
+        panel = made[0]
+        self.assertEqual(doc.ifc.kind_of(panel), "plane_panel")
+        self.assertEqual(doc.ifc.by_guid(panel).is_a(), "IfcPlate")
+        got = doc.ifc.plane_panel_perforation(panel)
+        self.assertGreater(got["count"], 500)
+        verts, _f = doc.ifc.triangulate([panel])[panel]
+        self.assertTrue(np.all(verts[:, 2] > 0.5) and np.all(verts[:, 2] < 0.51))   # (on it, its side up)
+        self.assertLess(np.hypot(verts[:, 0], verts[:, 1]).max(), 2.0 + 1e-6)
+        self.assertEqual(operators.finishes_of(doc, [obj.id]), [panel])            # (the polygon chosen: its panel)
+        self.assertEqual(operators.finishes_of(doc, [panel]), [panel])
+        self.assertIn(panel, {r["guid"] for r in schedules.rows(doc, "perforated")})
+        g = operators.operator_of(doc, panel)["graph"]
+        g.set_param("n2", "passo", 0.3)
+        operators.update(doc, panel, g)
+        self.assertLess(doc.ifc.plane_panel_perforation(panel)["count"], got["count"] / 4)
+        operators.remove(doc, panel)
+        self.assertIsNone(doc.ifc.by_guid(panel))
+        doc.undo()
+        self.assertIsNotNone(doc.ifc.by_guid(panel))
+
+    def test_sloping_face_and_following_it(self):
+        from arqbim.core.graph import sketch_host
+        doc = Document()
+        pts = [(0, 0, 0), (4, 0, 0), (4, 3, 2), (0, 3, 2)]                          # (a roof pitch)
+        obj = polygon_sketch(doc, pts)
+        frame, face = sketch_host.plane_of(obj)
+        self.assertAlmostEqual(frame[2, 0], 0.0, places=9)                         # (its x level)
+        self.assertAlmostEqual(face.area, 4 * np.hypot(3, 2), places=4)
+        panel = operators.apply_to(doc, operators.starter(), obj.id)[0]
+        verts, _f = doc.ifc.triangulate([panel])[panel]
+        n = frame[:3, 2]
+        d = (verts - pts[0]) @ n
+        self.assertTrue(np.all(d > 0) and np.all(d < 0.006))                      # (on the face, off its side)
+        before = doc.ifc.plane_panel_perforation(panel)["count"]
+        live = doc.get(obj.id)                                                     # (the model's own sketch)
+        live.mesh.verts[1] = np.array((8.0, 0.0, 0.0))                            # (the face drawn bigger…)
+        live.mesh.verts[2] = np.array((8.0, 3.0, 2.0))
+        operators.update(doc, panel)                                               # (…«Atualizar o aplicado»)
+        self.assertGreater(doc.ifc.plane_panel_perforation(panel)["count"], before * 1.6)
+
+    def test_upright_face_in_the_editor(self):
+        from arqbim.ui import visual_graph as vg
+        doc = Document()
+        obj = polygon_sketch(doc, [(0, 0, 0), (3, 0, 0), (3, 0, 2), (0, 0, 2)])
+        nodes_3d.MODEL["doc"] = doc
+        main = types.SimpleNamespace(doc=doc, viewport=types.SimpleNamespace(selection={obj.id}))
+        win = vg.GraphWindow(graph=None, wall=obj.id, side="frente")
+        win.main = main
+        win.set_target(obj.id, "frente")
+        self.assertIn("face desenhada", win.target_label.text())
+        self.assertAlmostEqual(win.results["n1"]["painel"]["width"], 3.0)
+        tris, _c = vg.model_preview(doc, vg.final_result(win.graph, win.results)[2])
+        y = tris[:, :, 1]
+        self.assertTrue(np.all(np.abs(y) < 0.01) and np.all(y != 0))               # (on the face, off one side)
+        made = win.apply_to_model()
+        self.assertEqual(len(made), 1)
+        self.assertEqual(win.apply_to_model(), made)                               # (again: that panel)
+        win.close()
+
+
+class CustomMatrix(unittest.TestCase):
+    """0.553 — a motif of one's own (points in a cell, each its size) repeated over the surface."""
+
+    def test_matrix(self):
+        from arqbim.core.graph import nodes_logic
+        motif = nodes_logic.read_motif("0.25,0.5,1 0.75,0.5,0.4")
+        self.assertEqual(motif, [(0.25, 0.5, 1.0), (0.75, 0.5, 0.4)])
+        with self.assertRaises(ValueError):
+            nodes_logic.read_motif("")
+        g = Graph()
+        p = g.add_node("painel_plano", {"largura": 2.0, "altura": 1.0, "margem": 0.0})
+        m = g.add_node("matriz", {"largura": 0.2, "altura": 0.2, "motivo": "0.25,0.5,1 0.75,0.5,0.4"})
+        g.connect(p, "painel", m, "painel")
+        f = g.add_node("perfurar", {"d_min": 0.05, "d_max": 0.05})
+        g.connect(m, "pontos", f, "pontos")
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        pts = out[m]["pontos"]
+        self.assertAlmostEqual(pts["pitch"], 0.1)
+        self.assertEqual(sorted(set(np.round(out[f]["furos"]["d"], 4))), [0.02, 0.05])   # (two sizes, as drawn)
+        self.assertGreaterEqual(len(pts["xy"]), 90)                                # (10 × 5 cells, two a cell)
+        g.set_param(m, "desvio", 0.5)                                               # (every other row shifted)
+        g.set_param(m, "motivo", "0.5,0.5,1")
+        xy = g.evaluate()[m]["pontos"]["xy"]
+        rows = sorted(set(np.round(xy[:, 1], 6)))
+        first = np.sort(xy[np.isclose(xy[:, 1], rows[0]), 0])
+        second = np.sort(xy[np.isclose(xy[:, 1], rows[1]), 0])
+        self.assertAlmostEqual((second[0] - first[0]) % 0.2, 0.1, places=6)
+        g.set_param(m, "motivo", "0.25,0.5,1 0.75,0.5,0.4")
+        e = g.add_node("escolher_pontos", {"limiar": 0.5})                           # (sizes go with the points)
+        z = g.add_node("mascara", {"x": 0.5, "y": 0.5, "largura": 1.0, "altura": 1.0})
+        g.connect(m, "pontos", e, "pontos")
+        g.connect(z, "campo", e, "campo")
+        out = g.evaluate()
+        self.assertEqual(len(out[e]["pontos"]["w"]), len(out[e]["pontos"]["xy"]))
+
+    def test_template_and_motif_window(self):
+        from arqbim.core.graph import templates
+        from arqbim.ui import motif_drawing
+        g = templates.make("matriz_motivo")
+        nodes_3d.MODEL["doc"] = None
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        rep = next(v["relatorio"] for v in out.values() if "relatorio" in v)
+        self.assertTrue(rep["ok"], rep["problems"])
+        dlg = motif_drawing.MotifDrawing("")
+        self.assertEqual(len(dlg.pad.points), 4)
+        dlg.pad.set_points(dlg.ready["Cruz de cinco"])
+        dlg._accept()
+        self.assertEqual(len(motif_drawing.nodes_logic.read_motif(dlg.result_text)), 5)
+        out = os.environ.get("ARQ_SHOT_MOTIF")
+        if out:
+            dlg2 = motif_drawing.MotifDrawing(dlg.result_text, 1.0, 0.5)
+            dlg2.resize(400, 500)
+            dlg2.show()
+            APP.processEvents()
+            dlg2.grab().save(out)
+            dlg2.close()
+            dlg2.deleteLater()
+        dlg.close()
+        dlg.deleteLater()
+        APP.processEvents()
 
 
 class Panel(unittest.TestCase):

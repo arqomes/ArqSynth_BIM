@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.553.0 — 2026-11-12
+
+**Gráfico Visual: qualquer face desenhada como superfície, e a matriz personalizada.** O dono: «se criar um polígono
+e tentar aplicar o painel perfurado o App não aceita. Gostaria que funcionasse com qualquer superfície».
+
+- **Qualquer face plana desenhada** (polígono, retângulo, círculo, uma face desenhada sobre uma parede ou uma
+  cobertura, deitada, de pé ou inclinada) aceita agora um operador: **Aplicar** faz um **painel perfurado** (IFC
+  IfcPlate, chapa de 3 mm) sobre a face, do lado para onde ela olha. Num esboço com várias faces, usa o plano com mais
+  área.
+- No editor a face aparece no seu próprio plano (o x deitado, ao longo do chão, quando a face não é horizontal).
+- O painel guarda a face de onde veio: depois de mudar o desenho, **Atualizar o aplicado** refaz o painel na face
+  como ficou. Escolher o esboço conta como escolher o seu painel («Editar o aplicado», «Tirar o aplicado»).
+- **Matriz personalizada** (nó novo, em Padrões): desenha-se um **motivo** — alguns furos numa célula, cada um com o
+  seu tamanho — que se repete em linhas e colunas por toda a superfície; «Desvio das linhas» desloca uma linha sim,
+  outra não (meia célula: quincôncio). O botão **Desenhar…** abre a célula: clique põe um furo, arrastar muda-o, a
+  roda do rato muda o tamanho, botão direito tira-o; as células à volta aparecem esbatidas.
+- Operador novo de origem: **Matriz personalizada**.
+- Os tamanhos de cada ponto acompanham «Escolher pontos», «Desalinhar» e «Juntar pontos».
+- Tabelas ▸ Painéis perfurados lista também os painéis sobre faces desenhadas.
+- Corrigido nos testes: as janelas de desenho fechadas antes do fim (o processo de teste caía ao sair).
+- Testes: `tests/test_graph_finishing.py` (AnyFace, CustomMatrix); «grafico_poligono» no gui_smoke.
+
 ## 0.552.0 — 2026-11-12
 
 **Gráfico Visual: a chapa na lista de peças da superfície, e a área aberta módulo a módulo.**

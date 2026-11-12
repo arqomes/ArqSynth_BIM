@@ -46,17 +46,22 @@ def _side(side):
 
 
 def is_curved(doc, wall):
-    return doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) == "curved_wall"
+    return doc is not None and isinstance(wall, str) and doc.ifc.by_guid(wall) is not None and \
+        doc.ifc.kind_of(wall) == "curved_wall"
 
 
 def seen_mirrored(doc, wall, side="frente"):
     """(0.548) Whether a wall's face, seen standing before it, has the wall's start at one's right (so that it is
     worked on left and right swapped): a straight wall's back face; a curved wall's inner face when it goes
     counter-clockwise, its outer one when it goes clockwise."""
+    from .sketch_host import is_sketch_surface
+    if is_sketch_surface(doc, wall):                # (0.553) a face drawn: seen from its own side, as it is
+        return False
     if is_curved(doc, wall):
         _frame, _face, _radius, turn = doc.ifc.curved_face(wall, _side(side))
         return turn * _side(side) > 0
-    if doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) in ("ceiling", "slab"):
+    if doc is not None and doc.ifc.by_guid(wall) is not None and \
+            doc.ifc.kind_of(wall) in ("ceiling", "slab", "plane_panel"):
         return False                    # (0.549) a ceiling: as its plan is drawn
     return _side(side) < 0
 
@@ -68,6 +73,11 @@ def wall_face(doc, wall, side="frente"):
     from shapely.geometry import box
     if wall in (MODEL.get("faces") or {}):          # (0.550) a face handed over: an element being made again
         return MODEL["faces"][wall]
+    from .sketch_host import plane_of, sketch_obj
+    if sketch_obj(doc, wall) is not None:           # (0.553) a flat face drawn: in its own plane
+        return plane_of(sketch_obj(doc, wall))[1]
+    if doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) == "plane_panel":
+        return doc.ifc.plane_panel_face(wall)[1]
     if is_curved(doc, wall):
         return doc.ifc.curved_face(wall, _side(side))[1]
     kind = doc.ifc.kind_of(wall) if doc is not None and doc.ifc.by_guid(wall) is not None else None

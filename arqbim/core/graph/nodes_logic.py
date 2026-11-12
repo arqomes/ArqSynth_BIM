@@ -253,6 +253,69 @@ def contorno_pontos(painel, onde, distancia, passo, filas):
     return {"pontos": {"panel": painel, "xy": _keep_inside(painel, xy, 0.0), "pitch": passo}}
 
 
+MOTIF_DEFAULT = "0.25,0.25,1 0.75,0.25,0.5 0.25,0.75,0.5 0.75,0.75,1"
+
+
+def read_motif(text):
+    """(0.553) [(x, y, size)] of a custom matrix's motif text «x,y,s x,y,s …» — x, y in its cell (0–1), s each
+    hole's size as a share of the largest (0,05–2). ValueError where it says nothing."""
+    out = []
+    for item in str(text or "").split():
+        c = [float(v) for v in item.split(",")]
+        if len(c) not in (2, 3):
+            raise ValueError("motivo ilegível: «{}»".format(item))
+        x, y = c[0] % 1.0, c[1] % 1.0
+        out.append((x, y, min(2.0, max(0.05, c[2] if len(c) == 3 else 1.0))))
+    if not out:
+        raise ValueError("desenhe o motivo da matriz (Desenhar…)")
+    return out
+
+
+def motif_text(points):
+    return " ".join("{:.4f},{:.4f},{:.2f}".format(x % 1.0, y % 1.0, s) for x, y, s in points)
+
+
+@r.node("matriz", "Padrões", "Matriz personalizada",
+        "Um motivo desenhado por si — alguns pontos numa célula, cada um com o seu tamanho — repetido em linhas e "
+        "colunas por toda a superfície. «Desvio» desloca cada linha alternada (meia célula: quincôncio).",
+        inputs=[Port("painel", "panel", "Painel")], outputs=[Port("pontos", "points", "Pontos")],
+        params=[_num("largura", "Largura da célula", 0.15, 0.01, 5.0, 0.005),
+                _num("altura", "Altura da célula", 0.15, 0.01, 5.0, 0.005),
+                _num("desvio", "Desvio das linhas", 0.0, 0.0, 1.0, 0.05, ""),
+                _num("rodar", "Rodar", 0.0, -90.0, 90.0, 1.0, "°"),
+                Port("motivo", "text", "Motivo", default=MOTIF_DEFAULT)],
+        example="Dois furos grandes e dois pequenos em cada célula de 15 cm.")
+def matriz(painel, largura, altura, desvio, rodar, motivo):
+    from .nodes_panels import _centred, _rotate
+    motif = read_motif(motivo)
+    x0, y0, x1, y1 = painel["shape"].bounds
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    big = math.hypot(x1 - x0, y1 - y0) / 2.0 + max(largura, altura)
+    cols = _centred(cx - big, cx + big, largura)
+    rows = _centred(cy - big, cy + big, altura)
+    if len(cols) * len(rows) * len(motif) > 400000:
+        raise ValueError("células pequenas demais para esta superfície")
+    gx, gy = np.meshgrid(cols, rows)
+    row = np.arange(len(rows))[:, None].repeat(len(cols), 1)
+    gx = gx + np.where(row % 2 == 1, desvio * largura, 0.0)
+    corner = np.column_stack((gx.ravel() - largura / 2.0, gy.ravel() - altura / 2.0))
+    m = np.array(motif)
+    xy = (corner[:, None, :] + m[None, :, :2] * (largura, altura)).reshape(-1, 2)
+    w = np.tile(m[:, 2], len(corner))
+    xy = _rotate(xy, rodar, np.array([cx, cy]))
+    # the room each point has: its nearest neighbour in the repeated motif (3 × 3 cells)
+    near = np.array([(i * largura + (desvio * largura if j % 2 else 0.0), j * altura) for i in (-1, 0, 1)
+                     for j in (-1, 0, 1)])
+    tile = (near[:, None, :] + m[None, :, :2] * (largura, altura)).reshape(-1, 2)
+    gaps = [np.min(np.where(np.hypot(*(tile - p).T) < 1e-9, np.inf, np.hypot(*(tile - p).T)))
+            for p in m[:, :2] * (largura, altura)]
+    pitch = float(min(gaps)) if gaps else min(largura, altura)
+    import shapely
+    inside = painel["inside"].buffer(-pitch / 2.0 + 1e-9, join_style=2) if pitch / 2.0 > 1e-9 else painel["inside"]
+    keep = shapely.contains_xy(inside, xy[:, 0], xy[:, 1]) if not inside.is_empty else np.zeros(len(xy), bool)
+    return {"pontos": {"panel": painel, "xy": xy[keep], "pitch": pitch, "w": w[keep] / float(m[:, 2].max())}}
+
+
 # ------------------------------------------------------------------ Operações: points
 @r.node("escolher_pontos", "Operações", "Escolher pontos",
         "Fica só com os pontos onde o modulador é forte (acima do limiar) — ou, invertido, onde é fraco. Com uma "
@@ -264,7 +327,11 @@ def contorno_pontos(painel, onde, distancia, passo, filas):
 def escolher_pontos(pontos, campo, limiar, inverter):
     xy = pontos["xy"]
     keep = campo(xy) >= limiar if len(xy) else np.zeros(0, dtype=bool)
-    return {"pontos": dict(pontos, xy=xy[~keep if inverter else keep])}
+    keep = ~keep if inverter else keep
+    out = dict(pontos, xy=xy[keep])
+    if pontos.get("w") is not None and len(pontos["w"]) == len(xy):      # (0.553) each point's size with it
+        out["w"] = np.asarray(pontos["w"])[keep]
+    return {"pontos": out}
 
 
 @r.node("desalinhar", "Operações", "Desalinhar",
@@ -277,10 +344,16 @@ def escolher_pontos(pontos, campo, limiar, inverter):
 def desalinhar(pontos, campo, quanto, semente):
     xy = pontos["xy"]
     rng = np.random.default_rng(semente)
+    import shapely
     ang, rad = rng.uniform(0.0, 2.0 * math.pi, len(xy)), np.sqrt(rng.uniform(size=len(xy)))
     reach = quanto * pontos["pitch"] * rad * (campo(xy) if campo is not None and len(xy) else 1.0)
     moved = xy + np.column_stack((reach * np.cos(ang), reach * np.sin(ang)))
-    return {"pontos": dict(pontos, xy=_keep_inside(pontos["panel"], moved, 0.0))}
+    keep = shapely.contains_xy(pontos["panel"]["inside"], moved[:, 0], moved[:, 1]) if len(moved) else \
+        np.zeros(0, dtype=bool)
+    out = dict(pontos, xy=moved[keep])
+    if pontos.get("w") is not None and len(pontos["w"]) == len(xy):      # (0.553) each point's size with it
+        out["w"] = np.asarray(pontos["w"])[keep]
+    return {"pontos": out}
 
 
 @r.node("juntar_pontos", "Operações", "Juntar pontos",
@@ -295,8 +368,16 @@ def juntar_pontos(a, b, folga):
         both = np.vstack((xa, xb))
         i, j, _d = _close_pairs(both, folga * pitch)
         clash = set(j[(i < len(xa)) & (j >= len(xa))] - len(xa)) | set(i[(j < len(xa)) & (i >= len(xa))] - len(xa))
-        xb = xb[[k for k in range(len(xb)) if k not in clash]]
-    return {"pontos": {"panel": a["panel"], "xy": np.vstack((xa, xb)) if len(xb) else xa, "pitch": pitch}}
+        kept_b = [k for k in range(len(xb)) if k not in clash]
+        xb = xb[kept_b]
+    else:
+        kept_b = list(range(len(xb)))
+    out = {"panel": a["panel"], "xy": np.vstack((xa, xb)) if len(xb) else xa, "pitch": pitch}
+    if a.get("w") is not None or b.get("w") is not None:               # (0.553) each point's size with it
+        wa = np.asarray(a["w"]) if a.get("w") is not None and len(a["w"]) == len(xa) else np.ones(len(xa))
+        wb = np.asarray(b["w"]) if b.get("w") is not None and len(b["w"]) == len(b["xy"]) else np.ones(len(b["xy"]))
+        out["w"] = np.concatenate((wa, wb[kept_b]))
+    return {"pontos": out}
 
 
 # ------------------------------------------------------------------ Operações: holes

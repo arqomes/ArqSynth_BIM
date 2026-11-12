@@ -86,8 +86,11 @@ def _draw(p, kind, value, w, h, domain):
         p.setPen(QtCore.Qt.PenStyle.NoPen)
         p.setBrush(QtGui.QColor(KIND_COLOURS["points"]))
         rr = max(1.0, min(2.5, value["pitch"] * s * 0.18))
-        for x, y in value["xy"][:20000]:
-            p.drawEllipse(QtCore.QPointF(ox + x * s, oy - y * s), rr, rr)
+        w = value.get("w")                                 # (0.553) a custom matrix's: each its own size
+        w = w if w is not None and len(w) == len(value["xy"]) else None
+        for k, (x, y) in enumerate(value["xy"][:20000]):
+            r = rr if w is None else max(0.8, rr * 1.6 * float(w[k]))
+            p.drawEllipse(QtCore.QPointF(ox + x * s, oy - y * s), r, r)
     elif kind == "field":
         s, ox, oy = _frame(w, h, domain)
         x0, y0, x1, y1 = domain
@@ -309,9 +312,15 @@ def model_preview(doc, value, bad=None):
     front = value["side"] == "frente"
     flat = None                                          # (0.549) a ceiling, a slab: (its placement, its level)
     try:
+        from ..core.graph.sketch_host import plane_of, sketch_obj
         curved = nodes_3d.is_curved(doc, wall)
-        kind = doc.ifc.kind_of(wall)
-        if kind == "ceiling":
+        drawn = sketch_obj(doc, wall)
+        kind = "sketch" if drawn is not None else doc.ifc.kind_of(wall)
+        if kind in ("sketch", "plane_panel"):            # (0.553) any flat face: in its own plane, off its side
+            frame_m, face = plane_of(drawn) if drawn is not None else doc.ifc.plane_panel_face(wall)
+            frame = None
+            flat = (frame_m, 0.0, -1.0)                  # (off it along its normal — a ceiling's is under it)
+        elif kind == "ceiling":
             face, frame = doc.ifc.ceiling_face(wall), None
             flat = (doc.ifc._placement_si(doc.ifc.by_guid(wall)), 0.0)
         elif kind == "param_surface":                    # (0.550) unrolled; each point put back on it
@@ -346,7 +355,8 @@ def model_preview(doc, value, bad=None):
                                              1.0 if front else -1.0)          # (0.551: on the side chosen)
             return (flat[0] @ np.column_stack((local, np.ones(len(uv)))).T).T[:, :3]
         if flat is not None:                             # (seen from under it: a hair under its underside)
-            local = np.column_stack((uv, np.full(len(uv), flat[1] - off), np.ones(len(uv))))
+            sign = flat[2] if len(flat) > 2 else 1.0
+            local = np.column_stack((uv, np.full(len(uv), flat[1] - off * sign), np.ones(len(uv))))
             return (flat[0] @ local.T).T[:, :3]
         if curved:
             local = surfaces.bend(np.column_stack((uv, np.full(len(uv), off))), radius, turn,
@@ -918,6 +928,12 @@ class ParamsPanel(QtWidgets.QWidget):
             saving = node_type == "exportar_dxf"
             button.clicked.connect(lambda _=False, e=edit, s=saving, n=port.name: self._choose_file(e, s, n))
             lay.addWidget(button)
+        elif port.name == "motivo":                      # (0.553) a custom matrix's motif
+            edit.setReadOnly(True)
+            button = QtWidgets.QPushButton("Desenhar…")
+            button.setToolTip("Desenha os furos de uma célula da matriz.")
+            button.clicked.connect(lambda _=False, e=edit, n=port.name: self._draw_motif(e, n))
+            lay.addWidget(button)
         elif port.name == "desenho":                     # (0.551) the hole of one's own drawing
             edit.setReadOnly(True)
             edit.setPlaceholderText("estrela (por desenhar)")
@@ -942,6 +958,15 @@ class ParamsPanel(QtWidgets.QWidget):
         if path:
             edit.setText(path)
             self._emit(name, path)
+
+    def _draw_motif(self, edit, name):
+        from . import motif_drawing
+        params = (self.graph_params(self.nid) if getattr(self, "graph_params", None) and self.nid else None) or {}
+        aspect = float(params.get("altura") or 1.0) / max(float(params.get("largura") or 1.0), 1e-9)
+        text = motif_drawing.ask(edit.text(), aspect, float(params.get("desvio") or 0.0), self)
+        if text:
+            edit.setText(text)
+            self._emit(name, text)
 
     def _draw_hole(self, edit, name):
         from . import hole_drawing
@@ -1140,8 +1165,14 @@ class GraphWindow(QtWidgets.QMainWindow):
                 from ..core.graph import nodes_3d
                 if nodes_3d.is_curved(self.main.doc, self.wall):      # (0.548) a curved wall's faces by where they are
                     side = "de dentro (desenrolada)" if self.side == "frente" else "de fora (desenrolada)"
-                kind = self.main.doc.ifc.kind_of(self.wall)
-                if kind == "ceiling":                                 # (0.549)
+                from ..core.graph.sketch_host import sketch_obj
+                drawn = sketch_obj(self.main.doc, self.wall)
+                kind = "sketch" if drawn is not None else self.main.doc.ifc.kind_of(self.wall)
+                if kind == "sketch":                                  # (0.553)
+                    where = "{} · face desenhada".format(getattr(drawn, "name", None) or "Superfície")
+                elif kind == "plane_panel":
+                    where = "{} · na face desenhada".format(getattr(obj, "name", None) or "Painel perfurado")
+                elif kind == "ceiling":                               # (0.549)
                     where = "{} · em planta de teto".format(getattr(obj, "name", None) or "Teto")
                 elif kind == "slab":
                     where = "{} · teto falso por baixo (planta de teto)".format(getattr(obj, "name", None) or "Laje")
@@ -1232,6 +1263,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         self.params.expose.connect(self.set_exposed)
         self.params.changed.connect(self.set_param)
         self.params.graph_forma = self._drawn_shape                     # (0.551)
+        self.params.graph_params = lambda nid: (self.graph.nodes.get(nid) or {}).get("params")   # (0.553)
         self.params.pick_wall = self.chosen_wall
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)

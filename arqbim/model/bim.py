@@ -557,6 +557,25 @@ def perforated_ceiling_under(doc, slab, pattern, drop=CEILING_DROP):
     return doc.execute(IfcCommand(t("cmd.ceiling"), action)).result
 
 
+def add_plane_panel(doc, frame, face, pattern, source=""):
+    """(0.553) A perforated panel on a flat face drawn in the model (ifc.add_plane_panel). One undo step. Its
+    GlobalId."""
+    language = lang()
+
+    def action(ifc):
+        count = sum(1 for e in ifc.file.by_type("IfcPlate") if ifc._params(e).get("Elemento") == "plane_panel")
+        return ifc.add_plane_panel(frame, face, pattern, "{} {}".format(t("elem.perforated"), count + 1),
+                                   source, language).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.perforated"), action)).result
+
+
+def set_plane_panel(doc, guid, pattern=None, frame=None, face=None):
+    """(0.553) A plane panel's holes, plane or shape. One undo step."""
+    _edit(doc, lambda ifc: ifc.set_plane_panel(guid, pattern, frame, face), [guid], "cmd.cladding_edit")
+    return guid
+
+
 def perforate_surface(doc, guid, pattern):
     """(0.550) A parametric surface's perforated sheet — a Visual Graph operator's holes
     (ifc.set_surface_perforation; free «»: none again). In a group, every copy. One undo step."""

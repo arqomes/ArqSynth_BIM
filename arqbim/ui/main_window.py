@@ -2090,8 +2090,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
         view not telling: the front)."""
         try:
-            if self.doc.ifc.kind_of(wall) in ("ceiling", "slab"):   # (0.549) the one face
-                return "frente"
+            from ..core.graph.sketch_host import is_sketch_surface
+            if is_sketch_surface(self.doc, wall) or self.doc.ifc.kind_of(wall) in ("ceiling", "slab", "plane_panel"):
+                return "frente"                                       # (0.549, 0.553) the one face
             if self.doc.ifc.kind_of(wall) == "param_surface":        # (0.551) the side its middle turns to the eye
                 from ..core import param_surface as ps
                 on = ps.Surface(self.doc.ifc.surface_definition(wall))
@@ -2155,7 +2156,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from ..model.bim import CEILING_DROP
         chosen = self.chosen_walls()
         drop = None
-        if any(self.doc.ifc.kind_of(g) == "slab" for g in chosen):   # (0.551) how far under the slab the ceiling hangs
+        if any(isinstance(g, str) and self.doc.ifc.kind_of(g) == "slab" for g in chosen):   # (0.551) how far under
             drop = getattr(self, "_ceiling_drop", CEILING_DROP)
             if not getattr(self, "_quiet_ceiling_drop", False):
                 drop, ok = QtWidgets.QInputDialog.getDouble(

@@ -24935,6 +24935,30 @@ def grafico_visual():
     win.doc.undo()
     win.doc.undo()
     pump(200)
+    # (0.553) a polygon drawn (a sloping hexagon): «Aplicar» makes a perforated panel on it
+    from arqbim.core.mesh import PolyMesh as _PolyMesh
+    from arqbim.model.document import AddObject as _AddObject, SketchObject as _SketchObject
+    hexagon = [np.array((80.0 + 2 * np.cos(a), 30.0 + 2 * np.sin(a), 1.0 + 0.4 * np.sin(a)))
+               for a in np.radians(np.arange(0, 360, 60))]
+    poly = _SketchObject("Polígono", np.eye(4), _PolyMesh(hexagon, [list(range(6))]))
+    win.doc.execute(_AddObject(poly))
+    pump(300)
+    win.viewport.set_selection({poly.id})
+    pump(200)
+    made = win.apply_operator(next(op["slug"] for op in _operators.listing()
+                                   if op["name"] == "Matriz personalizada"), None)
+    pump(600)
+    got = win.doc.ifc.plane_panel_perforation(made[0]) if made else None
+    check("grafico_poligono", len(made) == 1 and got is not None and got["count"] > 100 and panel.target() == 1
+          and panel.update_button.isEnabled(), "furos {}".format(got and got["count"]))
+    if os.environ.get("ARQBIM_COMPARE"):
+        win.viewport.zoom_extents({poly.id, *made})
+        pump(800)
+        shot("grafico_poligono.png")
+    win.viewport.set_selection(set())
+    win.doc.undo()
+    win.doc.undo()
+    pump(200)
     # (0.551) a hole of one's own drawing (a cross) on a wall, seen close
     if os.environ.get("ARQBIM_COMPARE"):
         from arqbim.core import surfaces as _surfaces

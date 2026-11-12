@@ -47,6 +47,9 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
                  "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
                  "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
+PLANE_PANEL_THICKNESS = 0.003      # (0.553) m: a panel on any flat face — a steel sheet
+PLANE_PANEL_STAND_OFF = 0.0015     # m: it stands this far off the face it was drawn on
+PLANE_PANEL_KEYS = ("free", "free_repeat", "sheet_w", "sheet_h", "margin", "thickness", "operator")
 CEILING_HOLES = ("free", "free_repeat", "sheet_w", "sheet_h", "margin", "operator")   # (0.549) a ceiling's holes
 CURVED_STAND_OFF = 0.0015   # (0.548) m: a sheet bent round a curved wall stands this far off its face
 TEXT_KEYS = {"direction", "hole", "grid", "mask", "free", "operator"}
@@ -518,6 +521,97 @@ class CoveringMixin:
         x0, z0, x1, z1 = face.bounds
         self._set_qto(covering, "Qto_CoveringBaseQuantities", {"Width": t * u, "GrossArea": (x1 - x0) * (z1 - z0),
                                                                "NetArea": float(face.area)})
+
+    # ------------------------------------------------------------ a perforated panel on any flat face (0.553)
+
+    def add_plane_panel(self, frame, face, pattern, name, source="", lang="pt", storey=None):
+        """(0.553) A perforated panel (IfcPlate) on a flat face drawn in the model: `frame` (4, 4) its plane — x, y
+        in it, z its normal, its corner the origin —, `face` (shapely, the frame's x, y) its shape; `pattern` a
+        Visual Graph operator's holes (free, sheet_w, …, operator). `source`: the sketch it was made on. Returns
+        it."""
+        f = self.file
+        panel = api.root.create_entity(f, ifc_class="IfcPlate", name=name, predefined_type="NOTDEFINED")
+        container = self.storey(storey) if storey is not None else self.storey_at(float(frame[2, 3]))
+        api.spatial.assign_container(f, products=[panel], relating_structure=container)
+        api.material.assign_material(f, products=[panel], type="IfcMaterial", material=self._material("inox", lang))
+        self._mark(panel, "plane_panel")
+        self._set_params(panel, {"Origem": str(source or ""), "Espessura": PLANE_PANEL_THICKNESS})
+        self.set_plane_panel(panel.GlobalId, pattern, frame, face)
+        return panel
+
+    def plane_panel_face(self, guid):
+        """(0.553) (frame (4, 4) — its placement less the stand-off —, face shapely) of a plane panel."""
+        e, _ = self._require(guid, "plane_panel")
+        p = self._params(e)
+        m = self._placement_si(e)
+        m[:3, 3] -= m[:3, 2] * PLANE_PANEL_STAND_OFF
+        face = Polygon(_pts(p.get("Contorno")), [_pts(h) for h in (p.get("Furos") or "").split("|") if h]).buffer(0)
+        return m, face
+
+    def set_plane_panel(self, guid, pattern=None, frame=None, face=None):
+        """(0.553) A plane panel's holes (`pattern`, as a wall finish's), its plane or its shape changed; its body
+        made again."""
+        e, _ = self._require(guid, "plane_panel")
+        if pattern:
+            self._set_params(e, self._pattern_changes({k: v for k, v in pattern.items() if k in PLANE_PANEL_KEYS}))
+        if frame is not None:
+            m = np.array(frame, dtype=float)
+            m[:3, 3] += m[:3, 2] * PLANE_PANEL_STAND_OFF       # (a hair off the face drawn: clear of it)
+            self._place(e, m)
+        if face is not None:
+            rings = [q for q in getattr(face, "geoms", [face]) if q.geom_type == "Polygon" and q.area > 1e-8]
+            if not rings:
+                raise EditRefused("too_small")
+            q = orient(max(rings, key=lambda r: r.area), 1.0)
+            self._set_params(e, {"Contorno": _text(list(q.exterior.coords)[:-1]),
+                                 "Furos": "|".join(_text(list(h.coords)[:-1]) for h in q.interiors)})
+        self._plane_panel_body(e)
+
+    def plane_panel_perforation(self, guid):
+        """(0.553) {"count", "open_area"} of a plane panel's holes — None: none."""
+        e, _ = self._require(guid, "plane_panel")
+        found = self._plane_panel_holes(e)
+        if found is None:
+            return None
+        shape, boards, face = found
+        area = sum(float(core_surfaces.hole_area(shape, s, core_surfaces.extras(s)[1]).sum()) for _q, _c, s in boards)
+        return {"count": sum(len(c) for _q, c, _s in boards), "open_area": area / face.area if face.area else 0.0}
+
+    def _plane_panel_holes(self, e):
+        p = self._params(e)
+        free = core_surfaces.free_read(p.get("FurosLivres") or "")
+        if free is None:
+            return None
+        _m, face = self.plane_panel_face(e.GlobalId)
+        size = (float(p.get("PainelLargura") or 1.0), float(p.get("PainelAltura") or 1.0))
+        repeat = float(p.get("FurosRepetir") if p.get("FurosRepetir") is not None else 1.0) > 0.5
+        return free[0], core_surfaces.free_perforation(face, free[0], free[1], float(p.get("Margem") or 0.0), size,
+                                                       repeat), face
+
+    def _plane_panel_body(self, e):
+        f, u = self.file, 1.0 / self.unit_scale
+        p = self._params(e)
+        t = float(p.get("Espessura") or PLANE_PANEL_THICKNESS)
+        found = self._plane_panel_holes(e)
+        _m, face = self.plane_panel_face(e.GlobalId)
+        if face.is_empty or face.area < 1e-6:
+            raise EditRefused("too_small")
+        if found is not None:
+            if sum(len(c) for _q, c, _s in found[1]) > core_surfaces.MAX_HOLES:
+                raise EditRefused("pattern_many")
+            verts, tris = core_surfaces.free_mesh(orient(face, 1.0), t, found[1], found[0])
+        else:
+            verts, tris = core_surfaces.free_mesh(orient(face, 1.0), t, [], "redondo")
+        if not len(tris):
+            raise EditRefused("too_small")
+        item = f.createIfcTriangulatedFaceSet(
+            f.createIfcCartesianPointList3D([tuple(float(c) * u for c in row) for row in verts]), None, False,
+            [tuple(int(i) + 1 for i in row) for row in tris], None)
+        self._clear_representations(e)
+        api.geometry.assign_representation(f, product=e, representation=f.createIfcShapeRepresentation(
+            self.body, self.body.ContextIdentifier, "Tessellation", [item]))
+        self._set_qto(e, "Qto_PlateBaseQuantities", {"Width": t * u, "GrossArea": float(face.area),
+                                                    "NetArea": float(face.area)})
 
     @staticmethod
     def cladding_box(p, frame):

@@ -332,6 +332,9 @@ def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT, alo
             f = 1.0 - f
     lo, hi = min(d_min, d_max), max(d_min, d_max)
     d = lo + (hi - lo) * f
+    weight = pontos.get("w")                 # (0.553) a custom matrix's points: each its own size
+    if weight is not None and len(weight) == len(d):
+        d = d * np.asarray(weight, dtype=float)
     keep = d >= max(MIN_CUT, sem_furo)       # (0.540: those smaller not cut at all — the picture's light parts)
     n = int(keep.sum())
     return {"furos": {"panel": pontos["panel"], "xy": xy[keep], "d": d[keep], "shape": forma,

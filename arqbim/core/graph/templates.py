@@ -141,6 +141,17 @@ def ranhuras_a_fluir():
     return g
 
 
+def matriz_motivo():
+    """(0.553) A motif of one's own (two big holes and two small ones a cell) repeated in quincunx over the surface."""
+    g = Graph()
+    s = g.add_node("fachada_bim", pos=(0, 0))
+    m = g.add_node("matriz", {"largura": 0.16, "altura": 0.16, "desvio": 0.5}, pos=(260, 0))
+    f = g.add_node("perfurar", {"d_min": 0.06, "d_max": 0.06}, pos=(520, 0))
+    _chain(g, (s, "painel", m, "painel"), (m, "pontos", f, "pontos"))
+    _on_surface(g, f)
+    return g
+
+
 # key -> (name, description, maker)
 TEMPLATES = {
     "imagem_painel": ("Imagem → painel perfurado", "Uma fotografia nos furos: escuro = furo grande; verificado, "
@@ -158,6 +169,9 @@ TEMPLATES = {
                          "a 25 % de área aberta para ventilação.", aneis_ventilacao),
     "ranhuras_a_fluir": ("Ranhuras a fluir", "Ranhuras deitadas ao longo de um ruído, mais compridas onde ele é "
                          "forte: um campo de traços que flui pela parede.", ranhuras_a_fluir),
+    "matriz_motivo": ("Matriz personalizada", "Um motivo desenhado por si (furos de vários tamanhos numa célula) "
+                      "repetido em quincôncio. Edite-o: nó «Matriz personalizada» ▸ Motivo ▸ Desenhar….",
+                      matriz_motivo),
 }
 
 

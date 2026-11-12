@@ -436,6 +436,8 @@ def _perforated_finishes(doc):
         out = [e for e in doc.ifc.file.by_type("IfcCovering")
                if doc.ifc._params(e).get("Acabamento") == "perfurado"
                or (doc.ifc._params(e).get("Elemento") == "ceiling" and doc.ifc._params(e).get("FurosLivres"))]
+        out += [e for e in doc.ifc.file.by_type("IfcPlate")                    # (0.553) on a face drawn
+                if doc.ifc._params(e).get("Elemento") == "plane_panel"]
         from ..ifc.param_surfaces import USAGES
         for cls in sorted({c for c, _p in USAGES.values()}):
             out += [e for e in doc.ifc.file.by_type(cls) if doc.ifc._params(e).get("Elemento") == "param_surface"
@@ -451,9 +453,11 @@ def perforated_rows(doc):
     out = []
     for e in _perforated_finishes(doc):
         kind = doc.ifc._params(e).get("Elemento")
-        if kind in ("ceiling", "param_surface"):       # (0.551) a ceiling, a surface: itself the host
+        if kind in ("ceiling", "param_surface", "plane_panel"):   # (0.551) a ceiling, a surface: itself the host
             try:
-                if kind == "ceiling":
+                if kind == "plane_panel":
+                    got, face = doc.ifc.plane_panel_perforation(e.GlobalId), doc.ifc.plane_panel_face(e.GlobalId)[1]
+                elif kind == "ceiling":
                     got, face = doc.ifc.ceiling_perforation(e.GlobalId), doc.ifc.ceiling_face(e.GlobalId)
                 else:
                     got, face = doc.ifc.surface_perforation(e.GlobalId), doc.ifc.surface_sheet_face(e.GlobalId)
@@ -462,7 +466,8 @@ def perforated_rows(doc):
             if got is None:
                 continue
             out.append({"guid": e.GlobalId, "kind": "perforated", "name": e.Name or "", "type": "", "storey": "",
-                        "host": "teto" if kind == "ceiling" else "superfície paramétrica", "panels": 1,
+                        "host": {"ceiling": "teto", "plane_panel": "face desenhada"}.get(kind, "superfície paramétrica"),
+                        "panels": 1,
                         "holes": got["count"], "open_area": 100.0 * got["open_area"], "area": float(face.area)})
             continue
         try:

@@ -22,8 +22,9 @@ SEEDED = ".de_origem"
 WALLS = ("wall", "curved_wall")      # (0.548) what an operator's panel can stand on
 # (0.549) what an operator works on: a wall's face (its panel a finish on it), a ceiling (its own holes), a slab (a
 # perforated false ceiling made under it)
-HOSTS = WALLS + ("ceiling", "slab", "param_surface")      # (0.550) a parametric surface: a sheet on it
-OWN = ("ceiling", "param_surface")   # those that carry their holes themselves (no finish apart)
+HOSTS = WALLS + ("ceiling", "slab", "param_surface",      # (0.550) a parametric surface: a sheet on it
+                 "sketch", "plane_panel")                 # (0.553) any flat face drawn; the panel made on one
+OWN = ("ceiling", "param_surface", "plane_panel")   # those that carry their holes themselves (no finish apart)
 _seeding = False
 SIDES = ("frente", "trás")
 
@@ -308,8 +309,20 @@ def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug
         graph = slug_or_graph
     set_values(graph, values)
     text = record(graph, name, slug)
-    found = _worked(doc, graph, wall, side)
     kind = _kind(doc, wall)
+    if kind == "sketch":                             # (0.553) a panel made on a flat face drawn
+        from . import nodes_3d
+        from .sketch_host import plane_of, sketch_obj
+        frame, face = plane_of(sketch_obj(doc, wall))
+        nodes_3d.MODEL["faces"] = {wall: face, str(wall): face}
+        try:
+            found = _worked(doc, graph, wall, side)
+        finally:
+            nodes_3d.MODEL.pop("faces", None)
+        return [bim.add_plane_panel(doc, frame, face, dict(found[0][2], operator=text), source=str(wall))]
+    found = _worked(doc, graph, wall, side)
+    if kind == "plane_panel":                        # (0.553) applied again on a panel: its holes
+        return [bim.set_plane_panel(doc, wall, dict(found[0][2], operator=text))]
     if kind == "ceiling":                            # (0.549) the ceiling itself perforated
         return [bim.perforate_ceiling(doc, wall, dict(found[0][2], operator=text))]
     if kind == "param_surface":                      # (0.550) a perforated sheet on the surface (0.551: its side)
@@ -346,6 +359,12 @@ def finishes_of(doc, guids):
     chosen. Asked for by the side panel (a look through the model's finishes: not done at every edit)."""
     guids = list(guids)
     out = [g for g in guids if operator_of(doc, g) is not None]
+    sketches = {str(g) for g in guids if _kind(doc, g) == "sketch"}
+    if sketches:                                     # (0.553) the panels made on the faces chosen
+        for e in doc.ifc.file.by_type("IfcPlate"):
+            p = doc.ifc._params(e)
+            if p.get("Elemento") == "plane_panel" and str(p.get("Origem")) in sketches and e.GlobalId not in out:
+                out.append(e.GlobalId)
     walls = {g for g in guids if _kind(doc, g) in WALLS}
     if walls:
         for e in doc.ifc.file.by_type("IfcCovering"):
@@ -358,9 +377,27 @@ def finishes_of(doc, guids):
 
 def _kind(doc, guid):
     try:
-        return doc.ifc.kind_of(guid)
+        kind = doc.ifc.kind_of(guid)
     except Exception:  # (not of the IFC)
+        kind = None
+    if kind is None:                                 # (0.553) a sketch with a flat face
+        from .sketch_host import is_sketch_surface
+        try:
+            if is_sketch_surface(doc, guid):
+                return "sketch"
+        except Exception:  # (an id of nothing)
+            return None
+    return kind
+
+
+def _sketch_of(doc, guid):
+    """(0.553) The sketch a plane panel was made on, if it is still in the model (None: gone)."""
+    try:
+        source = doc.ifc._params(doc.ifc.by_guid(guid)).get("Origem")
+    except Exception:  # (not a panel)
         return None
+    from .sketch_host import is_sketch_surface
+    return source if is_sketch_surface(doc, source) else None
 
 
 def host_wall(doc, guid):
@@ -431,10 +468,26 @@ def update(doc, guid, graph=None, name=None, slug=None):
     if kept is None:
         raise GraphError("este painel não guarda o operador que o fez")
     graph = graph or kept["graph"]
-    found = _worked(doc, graph, kept["wall"], kept["side"])
+    plane = None
+    if _kind(doc, guid) == "plane_panel":            # (0.553) the face it was drawn on, as it is now
+        source = _sketch_of(doc, guid)
+        if source is not None:
+            from . import nodes_3d
+            from .sketch_host import plane_of, sketch_obj
+            plane = plane_of(sketch_obj(doc, source))
+            if plane is not None:
+                nodes_3d.MODEL["faces"] = {guid: plane[1]}
+    try:
+        found = _worked(doc, graph, kept["wall"], kept["side"])
+    finally:
+        if plane is not None:
+            from . import nodes_3d
+            nodes_3d.MODEL.pop("faces", None)
     _wall, _side, pattern = found[0]
     text = record(graph, kept["name"] if name is None else name, kept["slug"] if slug is None else slug)
-    if _kind(doc, guid) == "param_surface":          # (0.550)
+    if _kind(doc, guid) == "plane_panel":            # (0.553) its holes — and its plane and shape again
+        bim.set_plane_panel(doc, guid, dict(pattern, operator=text), *(plane or (None, None)))
+    elif _kind(doc, guid) == "param_surface":        # (0.550)
         bim.perforate_surface(doc, guid, dict(pattern, operator=text, side=found[0][1]))
     elif kept["wall"] == guid:                       # (0.549) a ceiling
         bim.perforate_ceiling(doc, guid, dict(pattern, operator=text))
