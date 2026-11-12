@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.554.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 1: o núcleo da procura de forma** (sem janela ainda).
+
+- `core/form_finding.py`: a forma é encontrada, não modelada. Os pontos presos (o contorno, mastros, apoios) ficam; os
+  outros assentam onde as forças os deixam. Quatro comportamentos:
+  - **membrana** — a superfície de menor tensão entre os pontos presos (tendas, velas, palas à Frei Otto);
+  - **almofada** — pressão perpendicular à superfície: incha e a planta alarga (ETFE, coberturas pneumáticas);
+  - **catenária** — o próprio peso, pendurado e virado ao contrário: a casca que só trabalha à compressão (Gaudí,
+    Isler);
+  - **suavizar** — arredonda sem encolher.
+- Só `numpy`; uma grelha de 25 × 25 pontos resolve-se em décimas de segundo.
+- Testes: `tests/test_form_finding.py` (contorno plano dá membrana plana; mastro dá tenda; catenária simétrica e com
+  a altura pedida; almofada a inchar; grelha em anéis com o centro; suavizar sem encolher).
+
 ## 0.553.0 — 2026-11-12
 
 **Gráfico Visual: qualquer face desenhada como superfície, e a matriz personalizada.** O dono: «se criar um polígono

@@ -1781,7 +1781,9 @@ pala), construção (casca, nervuras, ripas, gridshell, painéis, vidro), lista 
 (chapa perfurada, 0.550) e o seguir as curvas de origem. Só `numpy` (já instalado) e o `manifold3d` (já autorizado,
 0.493) — nenhuma biblioteca nova.
 
-1. **Núcleo de procura de forma** (`core/form_finding.py`, sem janela): relaxação dinâmica sobre a grelha da
+O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétrica) e a ordem aprovadas.
+
+1. ~~**Núcleo de procura de forma**~~ (0.554.0) (`core/form_finding.py`, sem janela): relaxação dinâmica sobre a grelha da
    superfície, com os bordos presos. Quatro comportamentos:
    - **Membrana tensionada** (superfície mínima): esticada entre o contorno e pontos altos/baixos — tendas, velas,
      palas tipo Frei Otto.
