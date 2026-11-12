@@ -1766,6 +1766,56 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    `ifc.follow_claddings` no passo de desfazer da própria parede).
 9. ~~Desfazer (Ctrl+Z) no editor; o gráfico da IA aparece na janela aberta.~~ (0.543.0)
 
+### Gerador de formas orgânicas (pedido do dono do projeto, 2026-11-12)
+
+O dono: «gerador de formas orgânicas baseada em polígonos ou faces de parede ou piso, ou com medidas indicadas».
+Parte-se de um **contorno** — um polígono ou qualquer face desenhada (0.553), a face de uma parede, o contorno de uma
+laje, de um piso ou de um teto, ou **medidas escritas** (retângulo L × P, círculo, elipse, polígono regular) — e
+**encontra-se a forma** como um engenheiro de estruturas leves a encontraria: uma membrana esticada, uma almofada
+inflada, uma casca pendurada e invertida, um volume moldado. Não é modelação à mão: escolhem-se os apoios, os pontos
+altos e baixos e as forças, e a forma resolve-se sozinha (como o Kangaroo do Grasshopper ou o Rhino «Membrane»).
+
+**Decisão de arquitetura (proposta):** o resultado é uma **Superfície paramétrica** (0.395) com uma operação nova
+«orgânica», não um elemento novo. Assim herda tudo o que já existe: Uso → classe IFC (estrutura, cobertura, fachada,
+pala), construção (casca, nervuras, ripas, gridshell, painéis, vidro), lista de peças, os operadores do Gráfico Visual
+(chapa perfurada, 0.550) e o seguir as curvas de origem. Só `numpy` (já instalado) e o `manifold3d` (já autorizado,
+0.493) — nenhuma biblioteca nova.
+
+1. **Núcleo de procura de forma** (`core/form_finding.py`, sem janela): relaxação dinâmica sobre a grelha da
+   superfície, com os bordos presos. Quatro comportamentos:
+   - **Membrana tensionada** (superfície mínima): esticada entre o contorno e pontos altos/baixos — tendas, velas,
+     palas tipo Frei Otto.
+   - **Almofada inflada**: pressão para cima (ETFE, coberturas pneumáticas, «nuvens»).
+   - **Catenária invertida**: pesa para baixo e vira-se — a forma de casca que só trabalha à compressão (Gaudí,
+     Isler); dá abóbadas e gridshells «honestos».
+   - **Suavizar** (Laplace/Taubin): arredonda sem encolher; para limpar formas e bordos.
+   Testes de física: contorno plano → membrana plana; catenária com a flecha certa; área mínima a descer a cada passo.
+2. **A ferramenta «Forma orgânica»** (Modelagem ▸ Massa e Estudos, e no painel «Operadores»): escolhe-se o polígono,
+   a face de parede, a laje/piso/teto — ou escrevem-se as medidas num pequeno quadro (retângulo, círculo, elipse,
+   polígono de N lados). Escolhe-se o comportamento e a altura; o resultado aparece logo, como Superfície paramétrica
+   com o contorno guardado. Se o contorno for um desenho do modelo, a forma **segue-o** quando muda.
+3. **Apoios e pontos de controlo na própria forma**: clicar na superfície para pôr um **mastro** (ponto alto), um
+   **apoio** (ponto baixo, até ao chão) ou uma **linha de cumeeira/vale**; arrastá-los muda a altura e a forma
+   resolve-se de novo (com pré-visualização ao vivo). Bordos **livres** (que sobem em arco entre apoios, como uma
+   vela) ou **presos**.
+4. **Óculos e aberturas**: furos na membrana/casca com anel (claraboias, entradas de luz), desenhados como polígonos
+   sobre a planta; a forma contorna-os (anel rígido ou bordo livre).
+5. **Volumes orgânicos** (fechados): «almofada» a partir de um polígono extrudido e arredondado (subdivisão), e
+   **massas fundidas** (pontos/linhas que se fundem como gotas — metaballs) para pavilhões, bancos, pilares árvore;
+   superfície tirada por marching cubes (numpy). Uniões e cortes com o «Combinar e recortar» (0.493).
+6. **Contornos orgânicos**: suavizar um polígono em curva, **crescimento diferencial** (a linha que cresce e se
+   dobra sem se cruzar) para lajes, canteiros, bancos e brises — o resultado é um desenho do modelo, que serve de
+   contorno aos passos 2 e 5.
+7. **No Gráfico Visual**: nós «Membrana», «Inflar», «Catenária», «Suavizar», «Crescimento» — a forma como base dos
+   painéis perfurados, das nervuras e das matrizes.
+8. **Análise e fabrico**: mapa de **curvatura** (onde a forma é plana, cilíndrica ou de dupla curvatura) e de
+   **planaridade dos painéis** (o que pode ser vidro plano), **planificar** em faixas para corte (lona, chapa,
+   madeira), e a lista de peças com áreas reais.
+
+Ordem proposta: 1 → 2 → 3 (é aqui que já se usa a sério) → 4 → 7 → 8 → 5 → 6. Cada passo uma versão, com testes,
+captura e passos de teste para o dono. Por decidir com o dono antes de começar: (a) se o resultado deve mesmo ser
+uma Superfície paramétrica (proposta acima) ou um elemento próprio «Forma orgânica»; (b) a ordem dos passos.
+
 ## 5. Como se trabalha cada passo
 
 1. Uma versão por passo, com testes automáticos (núcleo e janela real) e uma captura do que o dono do projeto deve
