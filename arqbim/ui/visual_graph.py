@@ -235,7 +235,7 @@ def _draw_applied(p, value, w, h, source=None):
     from ..core import surfaces
     from ..core.graph import nodes_3d
     try:
-        face = nodes_3d.target_face(value["wall"])
+        face = nodes_3d.target_face(value["wall"], value.get("side", "frente"))
     except ValueError:
         face = nodes_3d.example_face()
     if value.get("mirror") and source is not None:   # (0.546) the back face as one sees it: the holes as drawn
@@ -302,20 +302,31 @@ def model_preview(doc, value, bad=None):
     wall = value.get("wall")
     if doc is None or not wall:
         return None
+    front = value["side"] == "frente"
     try:
-        face = nodes_3d.wall_face(doc, wall)
-        frame = doc.ifc.element_frame(wall)
+        curved = nodes_3d.is_curved(doc, wall)
+        if curved:                                       # (0.548) its face unrolled, the sheet bent round it
+            frame, face, radius, turn = doc.ifc.curved_face(wall, 1 if front else -1)
+        else:
+            face = nodes_3d.wall_face(doc, wall)
+            frame = doc.ifc.element_frame(wall)
     except Exception:  # (the wall gone meanwhile)
         return None
     panel = value["panel"]
     found = surfaces.free_perforation(face, value["shape"], value["holes"], panel["margin"],
                                       (panel["width"], panel["height"]), bool(value["repeat"]))
-    front = value["side"] == "frente"
     lift = max(float(panel["thickness"]), 0.004)
+    step = surfaces.strip_step(radius, frame.length) if curved else None
 
     def world(uv, off):
-        y = frame.y1 + off if front else frame.y0 - off
-        local = np.column_stack((frame.x0 + uv[:, 0], np.full(len(uv), y), frame.z0 + uv[:, 1], np.ones(len(uv))))
+        if curved:
+            local = surfaces.bend(np.column_stack((uv, np.full(len(uv), off))), radius, turn,
+                                  -1.0 if front else 1.0, step)
+            local = np.column_stack((local, np.ones(len(uv))))
+        else:
+            y = frame.y1 + off if front else frame.y0 - off
+            local = np.column_stack((frame.x0 + uv[:, 0], np.full(len(uv), y), frame.z0 + uv[:, 1],
+                                     np.ones(len(uv))))
         return (frame.matrix @ local.T).T[:, :3]
 
     tris, colours = [], []
@@ -324,6 +335,10 @@ def model_preview(doc, value, bad=None):
             continue
         cut = shapely.constrained_delaunay_triangles(part)
         t = np.array([np.asarray(g.exterior.coords)[:3] for g in cut.geoms]).reshape(-1, 2)
+        if curved:                                       # (fine enough along the arc to follow it)
+            flat = np.column_stack((t, np.zeros(len(t))))
+            flat, index = surfaces.split_strips(flat, np.arange(len(t)).reshape(-1, 3), step)
+            t = flat[index].reshape(-1, 3)[:, :2]
         tris.append(world(t, lift).reshape(-1, 3, 3))
         colours.append(np.tile(SHEET_RGBA, (len(t) // 3, 1)))
     total = sum(len(c) for _q, c, _s in found)
@@ -1069,7 +1084,14 @@ class GraphWindow(QtWidgets.QMainWindow):
         where = "Face de exemplo (nenhuma parede escolhida)"
         if self.wall:
             obj = self.main.doc.get(self.wall) if self.main is not None else None
-            where = "{} · face {}".format(getattr(obj, "name", None) or "Parede", self.side)
+            side = self.side
+            try:
+                from ..core.graph import nodes_3d
+                if nodes_3d.is_curved(self.main.doc, self.wall):      # (0.548) a curved wall's faces by where they are
+                    side = "de dentro (desenrolada)" if self.side == "frente" else "de fora (desenrolada)"
+            except Exception:  # (no model behind the window)
+                pass
+            where = "{} · face {}".format(getattr(obj, "name", None) or "Parede", side)
         self.target_label.setText(where)
 
     def set_target(self, wall, side="frente"):

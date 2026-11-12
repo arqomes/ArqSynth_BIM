@@ -83,6 +83,18 @@ class Library(unittest.TestCase):
         self.assertAlmostEqual(p["sheet_w"], 6.0, 1)                # (the face whole: one board, not repeated)
         self.assertEqual(int(doc.ifc._params(doc.ifc.by_guid(made[0])).get("Lado")), -1)
 
+    def test_the_sheet_is_drawn_clean(self):
+        """0.548 — a panel's flat face shows its holes, not its triangles (each point of its mesh once)."""
+        from arqbim.core.mesh import TriMesh
+        doc, wall = a_wall()
+        made = operators.apply_to(doc, operators.starter(), wall)[0]
+        verts, faces = doc.ifc.triangulate([made])[made]
+        tris = np.asarray(faces).reshape(-1, 3)
+        pairs, _f = TriMesh(verts, tris).edge_array()
+        self.assertLess(len(pairs), 0.5 * 3 * len(tris))                   # (all drawn: three a triangle, each alone)
+        long_ones = np.linalg.norm(verts[pairs[:, 0]] - verts[pairs[:, 1]], axis=1) > 0.5
+        self.assertLessEqual(int(long_ones.sum()), 16)                     # (its outline only: no line across it)
+
     def test_apply_a_module_repeats(self):
         doc, wall = a_wall()
         slug = next(op["slug"] for op in operators.listing() if op["name"] == "Atrator em favo")
@@ -341,6 +353,83 @@ class KeptOnTheWall(unittest.TestCase):
         self.assertEqual(operators.operator_of(doc, first[0])["graph"].nodes["n2"]["params"]["passo"], 0.2)
         main.viewport.selection = {first[0]}                                   # (the panel chosen: its wall)
         self.assertEqual(win.chosen_wall(), wall)
+        win.close()
+
+
+class OnACurvedWall(unittest.TestCase):
+    """0.548 — a curved wall as the surface: its face unrolled in the editor, the sheet bent round it."""
+
+    def setUp(self):
+        import math
+        self.doc = Document()
+        self.wall = bim.add_curved_wall(self.doc, np.array((0.0, 0.0, 0.0)), 4.0, 0.0, math.pi / 2,
+                                        catalog.BY_KEY["parede_alv_20"])
+        self.pi = math.pi
+
+    def test_unrolled_face_and_bent_sheet(self):
+        from arqbim.core import surfaces
+        doc, wall = self.doc, self.wall
+        outer = nodes_3d.wall_face(doc, wall, "trás")
+        inner = nodes_3d.wall_face(doc, wall, "frente")
+        self.assertAlmostEqual(outer.bounds[2], 4.1 * self.pi / 2, places=3)       # (each as long as its own arc)
+        self.assertAlmostEqual(inner.bounds[2], 3.9 * self.pi / 2, places=3)
+        self.assertFalse(nodes_3d.seen_mirrored(doc, wall, "trás"))
+        self.assertTrue(nodes_3d.seen_mirrored(doc, wall, "frente"))
+        self.assertEqual(operators.host_wall(doc, wall), wall)
+        made = operators.apply_to(doc, operators.starter(), wall, "trás")[0]
+        p = doc.ifc.pattern_params(made)
+        self.assertGreater(p["count"], 500)
+        self.assertAlmostEqual(p["sheet_w"], 4.1 * self.pi / 2, places=2)
+        verts, faces = doc.ifc.triangulate([made])[made]
+        r = np.hypot(verts[:, 0], verts[:, 1])
+        self.assertGreaterEqual(r.min(), 4.1 - 1e-3)                               # (on the outer face, out of it…)
+        self.assertLessEqual(r.max(), 4.1 + 0.003 + 0.002)                         # (…its thickness, a hair off)
+        self.assertTrue(verts[:, 0].min() > -0.01 and verts[:, 1].min() > -0.01)   # (the wall's quarter circle)
+        tri = verts[np.asarray(faces).reshape(-1, 3)]
+        turn = np.ptp(np.arctan2(tri[:, :, 1], tri[:, :, 0]), axis=1)
+        self.assertLessEqual(np.degrees(turn.max()), 4.0 + 1e-6)                   # (strips fine enough for the arc)
+        from arqbim.core.mesh import TriMesh                                       # (drawn clean: its strips' folds
+        mesh = TriMesh(verts, np.asarray(faces).reshape(-1, 3))                    #  softened, as the wall's own)
+        pairs, _faces = mesh.edge_array()
+        upright = np.abs(verts[pairs[:, 0], 2] - verts[pairs[:, 1], 2]) > 2.0
+        self.assertLessEqual(int(upright.sum()), 8)                                # (its two ends only, not 50 folds)
+        inside = operators.apply_to(doc, operators.starter(), wall, "frente")[0]
+        verts2, _f = doc.ifc.triangulate([inside])[inside]
+        r2 = np.hypot(verts2[:, 0], verts2[:, 1])
+        self.assertTrue(r2.max() <= 3.9 + 1e-3 and r2.min() >= 3.9 - 0.003 - 0.003)
+        self.assertEqual(len(surfaces.free_read(doc.ifc._params(doc.ifc.by_guid(made))["FurosLivres"])[1]),
+                         p["count"])
+
+    def test_follows_the_wall_and_its_window(self):
+        doc, wall = self.doc, self.wall
+        made = operators.apply_to(doc, operators.starter(), wall, "trás")[0]
+        before = doc.ifc.pattern_params(made)["count"]
+        bim.set_curved_wall(doc, wall, sweep=self.pi)                              # (twice as long)
+        after = doc.ifc.pattern_params(made)
+        self.assertGreater(after["count"], before * 1.6)
+        self.assertAlmostEqual(after["sheet_w"], 4.1 * self.pi, places=2)
+        bim.add_curved_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], 3.0, -1)
+        face = nodes_3d.wall_face(doc, wall, "trás")
+        from shapely.geometry import Point
+        self.assertFalse(face.contains(Point(3.0 * 4.1 / 4.0, 1.0)))               # (its door, on that face)
+        self.assertLess(doc.ifc.pattern_params(made)["count"], after["count"])     # (its holes clear of it)
+        with self.assertRaises(ValueError):                                        # (other finishes: straight walls)
+            bim.add_cladding(doc, wall, 1, "azulejo")
+
+    def test_editor_and_model_picture(self):
+        doc, wall = self.doc, self.wall
+        main = types.SimpleNamespace(doc=doc, viewport=types.SimpleNamespace(selection={wall}))
+        nodes_3d.MODEL["doc"] = doc
+        win = vg.GraphWindow(graph=None, wall=wall, side="trás")
+        win.main = main
+        win.set_target(wall, "trás")
+        self.assertAlmostEqual(win.results["n1"]["painel"]["width"], 4.1 * self.pi / 2, places=2)
+        last = vg.final_result(win.graph, win.results)
+        tris, colours = vg.model_preview(doc, last[2])
+        r = np.hypot(tris[:, :, 0], tris[:, :, 1])
+        self.assertTrue(r.min() > 4.1 and r.max() < 4.12)                          # (round the wall, not across it)
+        self.assertEqual(len(tris), len(colours))
+        self.assertEqual(len(win.apply_to_model()), 1)
         win.close()
 
 

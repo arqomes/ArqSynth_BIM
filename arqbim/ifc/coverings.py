@@ -47,6 +47,7 @@ PATTERN_NAMES = {"width": "Ripa", "gap": "Intervalo", "direction": "Sentido", "d
                  # (0.434) a slatted panel's frame and battens (core_surfaces.ripado_parts); its slats' thickness
                  "frame": "Moldura", "battens": "Fixacoes", "batten_w": "FixacaoLargura",
                  "batten_d": "FixacaoEspessura", "thickness": "Espessura"}
+CURVED_STAND_OFF = 0.0015   # (0.548) m: a sheet bent round a curved wall stands this far off its face
 TEXT_KEYS = {"direction", "hole", "grid", "mask", "free", "operator"}
 CHOICES = {"direction": ("vertical", "horizontal"), "hole": core_surfaces.HOLE_SHAPES, "grid": core_surfaces.GRIDS}
 REGION_NAMES = {"start": "Inicio", "end": "Fim", "base": "Base"}      # (0.389) a rectangle on the face (m)
@@ -319,6 +320,8 @@ class CoveringMixin:
         wall = p.get("Parede")
         if not wall or self.by_guid(wall) is None:
             raise EditRefused("not_editable")
+        if self.kind_of(wall) == "curved_wall":            # (0.548) a Visual Graph panel bent round a curved wall
+            return self._curved_cladding_body(covering, wall, p)
         frame, face, height = self.cladding_face(covering)
         base = self._layer_base(covering, face)            # (0.178) over the layers beneath it on the same face
         if base:
@@ -369,6 +372,9 @@ class CoveringMixin:
             covering = self.by_guid(covering)
         p = self._params(covering)
         wall = p.get("Parede")
+        if self.kind_of(wall) == "curved_wall":            # (0.548) its face unrolled
+            frame, face, _radius, _turn = self.curved_face(wall, 1 if int(p.get("Lado") or 1) > 0 else -1, p)
+            return frame, face, face.bounds[3]
         frame = self.element_frame(wall)
         x0, z0, x1, height = self.cladding_box(p, frame)
         face = shapely_box(x0, z0, x1, height)
@@ -379,6 +385,72 @@ class CoveringMixin:
                 continue                                # (0.305: a reveal on the other face)
             face = face.difference(shapely_box(lo[0], lo[2] - frame.z0, hi[0], hi[2] - frame.z0))
         return frame, face, height
+
+    # ------------------------------------------------------------ on a curved wall (0.548)
+
+    def curved_face(self, wall, side, p=None):
+        """(0.548) A curved wall's face unrolled — `side` +1 its inner face, −1 its outer (as its doors' «Lado») —:
+        (frame, face, the face's radius, turn). The frame: x along the face's arc from the wall's start (its length
+        the arc's), z from its base; the face: shapely (x, z), less its doors and windows (each as wide as it is on
+        that face); turn: +1 the wall goes counter-clockwise. `p`: a finish's own measures (its height, its
+        rectangle)."""
+        from shapely.geometry import box as shapely_box
+        from ..core.openings import WallFrame
+        e = self.by_guid(wall)
+        _centre, radius, _start, sweep, height, thickness = self.curved_wall_params(wall)
+        rf = radius - side * thickness / 2.0
+        frame = WallFrame(self._placement_si(e), rf * abs(sweep), 0.0, -thickness / 2.0, thickness / 2.0, 0.0, height)
+        x0, z0, x1, top = self.cladding_box(p or {}, frame)
+        face = shapely_box(x0, z0, x1, top)
+        for rel in e.HasOpenings or ():
+            q = self._params(rel.RelatedOpeningElement)
+            if q.get("AoLongo") is None or q.get("Largura") is None:
+                continue
+            half = rf * math.asin(min(1.0, float(q["Largura"]) / 2.0 / rf))
+            at = float(q["AoLongo"]) * rf / radius
+            sill = float(q.get("Peitoril") or 0.0)
+            face = face.difference(shapely_box(at - half, sill, at + half, sill + float(q.get("Altura") or 0.0)))
+        return frame, face, rf, (1.0 if sweep >= 0 else -1.0)
+
+    def _curved_cladding_body(self, covering, wall, p):
+        """(0.548) A perforated sheet of free holes (the Visual Graph's) bent round its curved wall's face: the flat
+        sheet of the face unrolled, made fine along the arc, each point put on it."""
+        from shapely.geometry.polygon import orient
+        f, u = self.file, 1.0 / self.unit_scale
+        finish = p.get("Acabamento") or ""
+        d = _pattern_of(p, finish)
+        free = _free(d) if finish == "perfurado" else None
+        if free is None:
+            raise EditRefused("not_editable")
+        side = 1 if int(p.get("Lado") or 1) > 0 else -1
+        frame, face, rf, turn = self.curved_face(wall, side, p)
+        found = _perforation(face, d)
+        if sum(len(c) for _q, c, _s in found) > core_surfaces.MAX_HOLES:
+            raise EditRefused("pattern_many")
+        t = float(p.get("Espessura") or 0.003)
+        verts, tris = core_surfaces.free_mesh(orient(face, 1.0), t, found, free[0])
+        if not len(tris):
+            raise EditRefused("too_small")
+        # in flat upright strips, as the curved wall itself is drawn: only the strips' lines fold (all alike: the
+        # view softens them), each strip within half a millimetre of the arc; a hair off the face, clear of it
+        step = core_surfaces.strip_step(rf, frame.length)
+        verts, tris = core_surfaces.weld(*core_surfaces.split_strips(verts, tris, step))
+        verts = verts + (0.0, 0.0, CURVED_STAND_OFF)
+        out = -float(side)                                # (its outer face: away from the centre)
+        pts = core_surfaces.bend(verts, rf, turn, out, step) * u
+        if turn * out < 0:
+            tris = tris[:, ::-1]                           # (mirrored: its faces turned back out)
+        item = f.createIfcTriangulatedFaceSet(
+            f.createIfcCartesianPointList3D([tuple(float(c) for c in row) for row in pts]), None, False,
+            [tuple(int(i) + 1 for i in row) for row in tris], None)
+        self._cover(covering, self.by_guid(wall))
+        self._place(covering, self._placement_si(self.by_guid(wall)))
+        self._clear_representations(covering)
+        api.geometry.assign_representation(f, product=covering, representation=f.createIfcShapeRepresentation(
+            self.body, self.body.ContextIdentifier, "Tessellation", [item]))
+        x0, z0, x1, z1 = face.bounds
+        self._set_qto(covering, "Qto_CoveringBaseQuantities", {"Width": t * u, "GrossArea": (x1 - x0) * (z1 - z0),
+                                                               "NetArea": float(face.area)})
 
     @staticmethod
     def cladding_box(p, frame):
@@ -648,7 +720,11 @@ class CoveringMixin:
         so that it follows it. (0.389) `pattern`: its pattern's measures (as set_cladding's); `region`: {start, end,
         base} a rectangle on the face (m along the wall from its start, up from its base) — else the whole face.
         Returns the IfcCovering."""
-        self._require(wall, "wall")
+        if self.kind_of(wall) == "curved_wall":            # (0.548) a Visual Graph panel only: its sheet bent
+            if finish != "perfurado" or not (pattern or {}).get("free"):
+                raise EditRefused("not_editable")
+        else:
+            self._require(wall, "wall")
         if finish not in CLADDINGS:
             raise EditRefused("not_editable")
         material, thickness = CLADDINGS[finish]

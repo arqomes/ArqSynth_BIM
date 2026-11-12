@@ -41,10 +41,31 @@ def example_face():
     return box(0.0, 0.0, 4.0, 2.7).difference(box(1.4, 0.9, 2.6, 2.1))
 
 
-def wall_face(doc, wall):
+def _side(side):
+    return -1 if side in ("trás", -1) else 1
+
+
+def is_curved(doc, wall):
+    return doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) == "curved_wall"
+
+
+def seen_mirrored(doc, wall, side="frente"):
+    """(0.548) Whether a wall's face, seen standing before it, has the wall's start at one's right (so that it is
+    worked on left and right swapped): a straight wall's back face; a curved wall's inner face when it goes
+    counter-clockwise, its outer one when it goes clockwise."""
+    if is_curved(doc, wall):
+        _frame, _face, _radius, turn = doc.ifc.curved_face(wall, _side(side))
+        return turn * _side(side) > 0
+    return _side(side) < 0
+
+
+def wall_face(doc, wall, side="frente"):
     """(0.541) A wall's face — less its doors and windows — in its own measures (x along it from its start, y up
-    from its base). ValueError where the wall is gone."""
+    from its base). (0.548) A curved wall's: unrolled — `side` "frente" its inner face, "trás" its outer one, each
+    as long as its own arc. ValueError where the wall is gone."""
     from shapely.geometry import box
+    if is_curved(doc, wall):
+        return doc.ifc.curved_face(wall, _side(side))[1]
     if doc is None or doc.ifc.by_guid(wall) is None or doc.ifc.kind_of(wall) != "wall":
         raise ValueError("essa parede já não existe")
     frame = doc.ifc.element_frame(wall)
@@ -54,10 +75,10 @@ def wall_face(doc, wall):
     return face
 
 
-def target_face(wall):
+def target_face(wall, side="frente"):
     """The face of the wall the graph works on (MODEL's) — or the example one (no wall chosen, no model)."""
     if wall and MODEL["doc"] is not None:
-        return wall_face(MODEL["doc"], wall)
+        return wall_face(MODEL["doc"], wall, side)
     return example_face()
 
 
@@ -71,10 +92,12 @@ def target_face(wall):
                 Port("lado", "choice", "Face", default="frente", choices=("frente", "trás"))],
         example="A fachada sul, perfurada à volta das janelas.")
 def fachada_bim(parede, margem, espessura, lado="frente"):
-    face = target_face(parede)
-    if lado == "trás":                  # (0.546) as it is seen standing before that face: left and right swapped
+    face = target_face(parede, lado)
+    # (0.546) as it is seen standing before that face: left and right swapped (0.548: a curved wall's, by its turn)
+    swap = seen_mirrored(MODEL["doc"], parede, lado) if parede and MODEL["doc"] is not None else lado == "trás"
+    if swap:
         face = mirrored(face)
-    return {"painel": dict(_panel(face, margem, espessura), mirror=lado == "trás")}
+    return {"painel": dict(_panel(face, margem, espessura), mirror=swap)}
 
 
 def mirrored(shape):

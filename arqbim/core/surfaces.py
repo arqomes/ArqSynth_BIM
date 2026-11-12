@@ -582,7 +582,98 @@ def free_mesh(face, thickness, found, shape):
             count += 4 * k
     if not verts:
         return np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64)
-    return np.concatenate(verts), np.concatenate(tris).astype(np.int64)
+    # (0.548) each point once: the view then hides the lines between the triangles of one flat face — they were
+    # all drawn, the sheet crossed by its own triangulation
+    return weld(np.concatenate(verts), np.concatenate(tris).astype(np.int64))
+
+
+def weld(verts, tris, places=7):
+    """(0.548) A mesh with each point once (those at the same place — to a tenth of a micron — made one): the view
+    then knows which triangles are neighbours, and draws no line between two of one flat face."""
+    verts = np.asarray(verts, dtype=float)
+    tris = np.asarray(tris, dtype=np.int64)
+    if not len(verts):
+        return verts, tris
+    _keys, first, inverse = np.unique(np.round(verts, places), axis=0, return_index=True, return_inverse=True)
+    tris = inverse.reshape(-1)[tris]
+    keep = (tris[:, 0] != tris[:, 1]) & (tris[:, 1] != tris[:, 2]) & (tris[:, 0] != tris[:, 2])
+    return verts[first], tris[keep]
+
+
+def strip_step(radius, length, sag=0.0005):
+    """(0.548) How wide the flat strips of a sheet bent round an arc of `radius` are, for each to stay within `sag`
+    of the arc (between 0,5° and 4° of it) — a whole number of them in `length`."""
+    angle = 2.0 * math.acos(max(-1.0, min(1.0, 1.0 - sag / max(radius, 1e-6))))
+    angle = min(max(angle, math.radians(0.5)), math.radians(4.0))
+    n = max(1, int(math.ceil(length / (radius * angle) - 1e-9)))
+    return length / n
+
+
+def split_strips(verts, tris, step):
+    """(0.548) A flat mesh (x along, y up, z out) cut along the upright lines x = k·step, so that no triangle
+    crosses one: bent strip by strip (bend), each strip stays flat and only those lines fold. A cut point is worked
+    out from its edge's two ends in one order, whichever triangle asks: neighbours meet exactly."""
+    verts = np.asarray(verts, dtype=float)
+    tris = np.asarray(tris, dtype=np.int64)
+    x = verts[:, 0][tris]
+    lo = np.floor(x.min(axis=1) / step + 1e-9)
+    hi = np.ceil(x.max(axis=1) / step - 1e-9)
+    crossing = hi - lo > 1
+    if not crossing.any():
+        return verts, tris
+    new_v, new_t, n = [], [], len(verts)
+
+    def cut(p, q, at):                                   # (the point of the edge pq at x = at)
+        if tuple(q) < tuple(p):
+            p, q = q, p
+        f = (at - p[0]) / (q[0] - p[0])
+        out = p + (q - p) * f
+        out[0] = at
+        return out
+
+    def clip(poly, at, keep_left):
+        out = []
+        for i, p in enumerate(poly):
+            q = poly[(i + 1) % len(poly)]
+            pin = p[0] <= at + 1e-12 if keep_left else p[0] >= at - 1e-12
+            qin = q[0] <= at + 1e-12 if keep_left else q[0] >= at - 1e-12
+            if pin:
+                out.append(p)
+            if pin != qin and abs(q[0] - p[0]) > 1e-12:
+                out.append(cut(p, q, at))
+        return out
+
+    for tri, k0, k1 in zip(tris[crossing], lo[crossing].astype(int), hi[crossing].astype(int)):
+        poly = [verts[i] for i in tri]
+        for k in range(k0, k1):
+            part = clip(clip(poly, k * step, False), (k + 1) * step, True)
+            part = [p for i, p in enumerate(part) if np.abs(p - part[i - 1]).max() > 1e-10]
+            for i in range(1, len(part) - 1):
+                new_v += [part[0], part[i], part[i + 1]]
+                new_t.append((n, n + 1, n + 2))
+                n += 3
+    if not new_t:
+        return verts, tris[~crossing]
+    return np.vstack((verts, np.array(new_v))), np.vstack((tris[~crossing], np.array(new_t, dtype=np.int64)))
+
+
+def bend(uvw, radius, turn=1.0, out=1.0, step=None):
+    """(0.548) A flat sheet (u along, v up, w off the face) bent round an upright axis at the origin: u along the
+    arc of `radius` from the x axis (`turn` +1: counter-clockwise), w away from the axis (`out` +1) or towards it.
+    `step`: in flat strips that wide (split_strips's) — each point between its strip's two lines, straight —, as a
+    curved wall itself is drawn; None: on the arc itself."""
+    uvw = np.asarray(uvw, dtype=float)
+
+    def on_arc(u, w):
+        a = turn * u / radius
+        r = radius + out * w
+        return np.column_stack((r * np.cos(a), r * np.sin(a)))
+    if step is None:
+        return np.column_stack((on_arc(uvw[:, 0], uvw[:, 2]), uvw[:, 1]))
+    k = np.floor(uvw[:, 0] / step + 1e-9)
+    f = np.clip(uvw[:, 0] / step - k, 0.0, 1.0)[:, None]
+    xy = on_arc(k * step, uvw[:, 2]) * (1.0 - f) + on_arc((k + 1.0) * step, uvw[:, 2]) * f
+    return np.column_stack((xy, uvw[:, 1]))
 
 
 def open_area(diameter, pitch):

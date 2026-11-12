@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.548.0 — 2026-11-12
+
+**Gráfico Visual: a parede curva como superfície de trabalho — e os painéis desenhados limpos.**
+
+- **Parede curva**: pode escolher-se uma parede curva e **Aplicar**, **Criar novo** ou **Editar** como numa parede
+  direita. No editor a face aparece **desenrolada** (o comprimento do arco × a altura), já sem as portas e janelas; no
+  modelo a chapa perfurada fica **dobrada sobre a face**.
+- As duas faces: **frente** é a de dentro da curva, **trás** a de fora (cada uma com o comprimento do seu arco). Em
+  «à vista (automático)», é a de dentro se a câmara estiver dentro do círculo da parede.
+- O painel **acompanha a parede curva**: ao mudar-lhe o raio, a abertura ou a altura, ou pôr-lhe uma porta ou janela,
+  refaz-se no mesmo passo de desfazer. «Atualizar na parede», «Editar o da parede» e a pré-visualização na vista 3D
+  funcionam nela.
+- A chapa curva é feita em faixas planas verticais muito estreitas (cada uma a menos de meio milímetro do arco), como
+  a própria parede é desenhada, para não se verem linhas de dobra.
+- Na parede curva só existe este painel (o do Gráfico Visual); os outros acabamentos (azulejo, reboco, ripado)
+  continuam só nas paredes direitas.
+- **Corrigido (defeito desde a 0.540)**: os painéis perfurados do Gráfico Visual apareciam na vista 3D com **todos os
+  triângulos da chapa desenhados** por cima dos furos. Agora vê-se a chapa lisa com os furos. Os painéis já aplicados
+  ficam certos ao serem refeitos («Atualizar na parede», ou qualquer alteração à parede).
+- Testes: `tests/test_graph_operators.py` (OnACurvedWall, test_the_sheet_is_drawn_clean); «grafico_parede_curva» no
+  gui_smoke, com captura.
+
 ## 0.547.0 — 2026-11-12
 
 **Gráfico Visual: o painel vê-se na vista 3D do modelo enquanto se trabalha.**

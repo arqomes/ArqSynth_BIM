@@ -2089,6 +2089,10 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
         view not telling: the front)."""
         try:
+            if self.doc.ifc.kind_of(wall) == "curved_wall":  # (0.548) inside its circle: its inner face ("frente")
+                centre, radius, _s, _sw, _h, _t = self.doc.ifc.curved_wall_params(wall)
+                eye = np.asarray(self.viewport.camera_position(), dtype=float)
+                return "frente" if np.linalg.norm((eye - centre)[:2]) < radius else "trás"
             frame = self.doc.ifc.element_frame(wall)
             across = frame.matrix[:3, 1] / np.linalg.norm(frame.matrix[:3, 1])
             middle = frame.to_world((frame.x0 + frame.length / 2.0, (frame.y0 + frame.y1) / 2.0,
@@ -2146,6 +2150,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Operadores", "Não aplicado:\n" + "\n".join(sorted(set(problems))))
         if made:
             self.statusBar().showMessage("{} painel(éis) perfurado(s) aplicado(s).".format(len(made)), 6000)
+            self.operators_panel.refresh_target()            # (0.548: «Atualizar na parede» lit at once)
         return made
 
     def set_module(self, name):

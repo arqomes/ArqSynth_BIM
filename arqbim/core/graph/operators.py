@@ -19,6 +19,7 @@ FORMAT = "arqsynth-operador"
 VERSION = 1
 FOLDER = "operadores"
 SEEDED = ".de_origem"
+WALLS = ("wall", "curved_wall")      # (0.548) what an operator's panel can stand on
 _seeding = False
 SIDES = ("frente", "trás")
 
@@ -330,7 +331,7 @@ def finishes_of(doc, guids):
     chosen. Asked for by the side panel (a look through the model's finishes: not done at every edit)."""
     guids = list(guids)
     out = [g for g in guids if operator_of(doc, g) is not None]
-    walls = {g for g in guids if _kind(doc, g) == "wall"}
+    walls = {g for g in guids if _kind(doc, g) in WALLS}
     if walls:
         for e in doc.ifc.file.by_type("IfcCovering"):
             p = doc.ifc._params(e)
@@ -350,7 +351,7 @@ def _kind(doc, guid):
 def host_wall(doc, guid):
     """The wall a thing chosen stands for: itself, or — a wall's finish — the wall it is on (None: neither)."""
     kind = _kind(doc, guid)
-    if kind == "wall":
+    if kind in WALLS:
         return guid
     if kind == "cladding":
         return doc.ifc._params(doc.ifc.by_guid(guid)).get("Parede") or None
