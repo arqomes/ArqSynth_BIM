@@ -356,6 +356,28 @@ def host_wall(doc, guid):
     return None
 
 
+def rework(ifc, covering):
+    """(0.544) Called by the IFC when a wall changed (ifc.follow_claddings — inside the wall's own undo step): the
+    finish's holes worked out again by the operator it keeps, on the wall's face as it is now. Its «Operador» text
+    stays. Whatever fails (an operator of a newer version, a node's error on the new face), the finish keeps the
+    holes it had: a wall's edit is never refused for it. Returns whether it was worked out."""
+    import types
+
+    from . import nodes_3d
+    p = ifc._params(covering)
+    before = nodes_3d.MODEL["doc"]
+    try:
+        graph = Graph.from_dict(json.loads(p["Operador"])["graph"])
+        side = SIDES[0] if int(p.get("Lado") or 1) > 0 else SIDES[1]
+        found = _worked(types.SimpleNamespace(ifc=ifc), graph, p.get("Parede"), side)
+        ifc._set_params(covering, ifc._pattern_changes(found[0][2]))
+    except Exception:  # noqa: BLE001 (see above)
+        return False
+    finally:
+        nodes_3d.MODEL["doc"] = before
+    return True
+
+
 def update(doc, guid, graph=None, name=None, slug=None):
     """(0.543) A finish's holes worked out again on its wall as it is now (a window more, the wall longer) with
     the operator it keeps — or with `graph`, the editor's. One undo step. GraphError where it keeps none or a node

@@ -265,15 +265,31 @@ class KeptOnTheWall(unittest.TestCase):
         self.assertEqual(operators.finishes_of(doc, [made]), [made])
         self.assertEqual(operators.host_wall(doc, made), wall)
         before = doc.ifc.pattern_params(made)["count"]
+        steps = len(doc.undo_stack) if hasattr(doc, "undo_stack") else None
         bim.resize_wall(doc, wall, at_end=3.0)                                 # (the wall 9 m long)
-        self.assertLessEqual(doc.ifc.pattern_params(made)["count"], before)    # (the old holes only)
-        operators.update(doc, made)
-        after = doc.ifc.pattern_params(made)
-        self.assertGreater(after["count"], before * 1.3)
+        after = doc.ifc.pattern_params(made)                                   # (0.544: worked out again by itself,
+        self.assertGreater(after["count"], before * 1.3)                       #  in the wall's own step)
         self.assertAlmostEqual(after["sheet_w"], 9.0, 1)
         self.assertEqual(operators.operator_of(doc, made)["slug"], slug)
+        if steps is not None:
+            self.assertEqual(len(doc.undo_stack), steps + 1)
         doc.undo()
-        self.assertAlmostEqual(doc.ifc.pattern_params(made)["sheet_w"], 6.0, 1)
+        back = doc.ifc.pattern_params(made)
+        self.assertAlmostEqual(back["sheet_w"], 6.0, 1)
+        self.assertEqual(back["count"], before)
+        frame = bim.wall_frame(doc, wall)                                      # (a door put in: the holes clear of it)
+        bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 3.0, 1)
+        self.assertLess(doc.ifc.pattern_params(made)["count"], before)
+        operators.update(doc, made)                                            # (the button still does it)
+        self.assertLess(doc.ifc.pattern_params(made)["count"], before)
+
+    def test_a_broken_operator_never_stops_the_wall(self):
+        doc, wall = a_wall()
+        made = operators.apply_to(doc, operators.starter(), wall)[0]
+        before = doc.ifc.pattern_params(made)["count"]
+        bim.set_cladding(doc, made, operator="{isto não é um operador")
+        bim.resize_wall(doc, wall, at_end=3.0)
+        self.assertEqual(doc.ifc.pattern_params(made)["count"], before)        # (its old holes kept)
 
     def test_editor_updates_its_panel(self):
         doc, wall = a_wall()

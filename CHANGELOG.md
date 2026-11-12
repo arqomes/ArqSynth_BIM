@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.544.0 — 2026-11-12
+
+**Gráfico Visual: o painel refaz-se sozinho quando a parede muda.**
+
+- Um painel perfurado feito por um operador **acompanha a parede**: ao alongá-la, mudar-lhe a altura ou pôr-lhe uma
+  porta ou janela, os furos são calculados de novo pelo operador que o painel guarda, sobre a face como ficou. É o
+  mesmo passo de desfazer da alteração da parede (um Ctrl+Z desfaz as duas coisas).
+- Sem procuras a mais no modelo: aproveita a passagem que já refazia os revestimentos da parede alterada.
+- Se o operador guardado não puder ser calculado (feito por uma versão mais nova, um nó com erro na face nova), o
+  painel fica com os furos que tinha e a alteração da parede faz-se na mesma.
+- O botão «Atualizar na parede» continua, para refazer à mão.
+- Testes: `tests/test_graph_operators.py` (KeptOnTheWall).
+
 ## 0.543.0 — 2026-11-12
 
 **Gráfico Visual: medidas à vista, a parede guarda o operador, desfazer no editor, a IA na janela (passos 7 a 9).**

@@ -735,6 +735,9 @@ class CoveringMixin:
                 out.append(e.GlobalId)
                 self.remove_cladding(e)
             elif wall in changed:
+                if self._params(e).get("Operador"):   # (0.544) a Visual Graph operator's panel: its holes worked
+                    from ..core.graph import operators  # out again on the wall as it is now, in the same step
+                    operators.rework(self, e)
                 self._cladding_body(e)
                 out.append(e.GlobalId)
         return out
