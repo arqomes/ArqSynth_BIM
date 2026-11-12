@@ -1860,7 +1860,8 @@ Falta:
    - juntas de dilatação;
    - remate em vãos (a peça dobra para a ombreira ou leva perfil);
    - o encontro em esquina (meia-esquadria, sobreposta, perfil).
-7. **Subestruturas e fixações:**
+7. ~~**Subestruturas e fixações:**~~ (0.571.0; as partes no corpo do Revestimento, não `IfcMember` separados —
+   a decidir com o dono se quer «peças separadas» também aqui)
    - **fachada ventilada** (montantes, travessas, esquadros, grampos ou rebites, caixa de ar, isolamento);
    - **ETICS / capoto** (isolamento + rede + reboco delgado);
    - **soalho flutuante e pavimento sobrelevado** (apoios reguláveis);

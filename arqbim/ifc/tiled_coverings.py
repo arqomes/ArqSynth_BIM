@@ -249,8 +249,10 @@ class TiledCoveringMixin:
             if other is not None and self._params(other).get("Elemento") == KIND:
                 q = self._params(other)
                 fin = cf.finish(q.get("Acabamento"))
+                from ..core import covering_subframe as csub
                 out[k] = float(q.get("Cama") if q.get("Cama") is not None else fin.bed) + \
-                    float(q.get("Espessura") if q.get("Espessura") is not None else fin.thickness)
+                    float(q.get("Espessura") if q.get("Espessura") is not None else fin.thickness) + \
+                    csub.depth(self.tiled_subframe(g))                  # (0.571: its subframe too)
         return tuple(out)
 
     def set_tiled_extend(self, guid, start=None, end=None, lang="pt"):
@@ -306,6 +308,32 @@ class TiledCoveringMixin:
     def tiled_layout(self, guid):
         """core/tiling's Result of a Revestimento's pieces as they are."""
         return self.tiled_pieces(guid)[0]
+
+    def tiled_subframe(self, guid):
+        """(0.571) A Revestimento's subframe {system, …} (core/covering_subframe; «nenhuma»: bonded to the face)."""
+        from ..core import covering_subframe as csub
+        p = self._params(self.by_guid(guid))
+        try:
+            return csub.check(json.loads(p.get("Subestrutura") or "{}"))
+        except ValueError:
+            return {"system": "nenhuma"}
+
+    def set_tiled_subframe(self, guid, sub, lang="pt"):
+        """(0.571) Its subframe (a system and its measures; a key alone changes only that measure); its body made
+        again."""
+        from ..core import covering_subframe as csub
+        e, _ = self._require(guid, KIND)
+        now = self.tiled_subframe(guid)
+        if sub.get("system") and sub["system"] != now["system"]:
+            now = {"system": sub["system"]}
+        now.update({k: v for k, v in sub.items() if k != "system"})
+        try:
+            now = csub.check(now)
+        except ValueError as exc:
+            raise EditRefused(str(exc)) from None
+        self._set_params(e, {"Subestrutura": json.dumps(now)})
+        self._tiled_body(e, lang)
+        self._relap(guid, lang)
 
     def tiled_extras(self, guid):
         """(0.566) {zones, mix, picks} of a Revestimento: its bands and border, its mix of materials, the pieces
@@ -445,6 +473,11 @@ class TiledCoveringMixin:
             raise EditRefused("tiling_too_many")
         bed, t, recess = p["bed"], max(p["thickness"], 0.001), min(p["recess"], p["thickness"])
         items, styled = [], []
+        from ..core import covering_subframe as csub     # (0.571) what holds it off the face, the pieces lifted
+        try:
+            lift, sub_items, _sq = csub.lay(face, self.tiled_subframe(e.GlobalId), result.pieces)
+        except ValueError as exc:
+            raise EditRefused(str(exc)) from None
 
         def item(verts, tris, key):
             if not len(tris):
@@ -459,16 +492,21 @@ class TiledCoveringMixin:
         for pc, m in zip(result.pieces, mats):
             groups.setdefault(m or p["material"], []).append((pc.points, pc.holes))
         for key, polys in groups.items():
-            verts, tris = tl.prisms(polys, bed, bed + t)
+            verts, tris = tl.prisms(polys, lift + bed, lift + bed + t)
             item(verts, tris, key)
         q = orient(face, 1.0)
         outline = (list(q.exterior.coords)[:-1], [list(h.coords)[:-1] for h in q.interiors])
         if bed > 1e-6:                                   # (the bed under the pieces)
-            verts, tris = tl.prisms([outline], 0.0, bed)
+            verts, tris = tl.prisms([outline], lift, lift + bed)
             item(verts, tris, p["bed_material"])
         if p["grout"] and recess > 1e-6 and t - recess > 1e-6:   # (the grout in the joints only, back from the
-            verts, tris = tl.prisms(tl.joints(result, face, p["layout"]), bed, bed + t - recess)  # face — never
-            item(verts, tris, p["grout"])                        # behind a piece, where it would show through)
+            verts, tris = tl.prisms(tl.joints(result, face, p["layout"]), lift + bed,   # face — never behind a
+                                    lift + bed + t - recess)                            # piece, where it would
+            item(verts, tris, p["grout"])                                               # show through)
+        for polys, z0, z1, key in sub_items:             # (0.571) the subframe's parts
+            if polys and z1 - z0 > 1e-6:
+                verts, tris = tl.prisms(polys, z0, z1)
+                item(verts, tris, key)
         if not items:
             raise EditRefused("tiling_empty")
         self._clear_representations(e)
@@ -480,7 +518,7 @@ class TiledCoveringMixin:
                 materials[key] = self._material(key, lang)
             f.createIfcStyledItem(it, [self._material_style(materials[key])], None)
         self._tiled_material(e, p, lang)
-        total = bed + t
+        total = lift + bed + t
         self._set_qto(e, "Qto_CoveringBaseQuantities", {"Width": total * u, "GrossArea": float(face.area),
                                                         "NetArea": float(sum(pc.area for pc in result.pieces))})
         s = result.summary(p["layout"]["min_cut"])

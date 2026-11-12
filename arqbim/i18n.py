@@ -1349,6 +1349,17 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_subframe": ("Subestrutura", "Subframe"),                                               # (0.571)
+    "props.cov_sub_insulation": ("Isolamento", "Insulation"),
+    "props.cov_sub_cavity": ("Caixa de ar", "Air gap"),
+    "props.cov_sub_spacing": ("Afastamento dos perfis", "Profile spacing"),
+    "props.cov_sub_bracket_every": ("Esquadros a cada", "Brackets every"),
+    "props.cov_sub_height": ("Altura dos apoios", "Pedestal height"),
+    "props.cov_sub_underlay": ("Manta", "Underlay"),
+    "props.cov_sub_drop": ("Plenum (altura)", "Plenum (drop)"),
+    "props.cov_sub_primary": ("Perfis primários a cada", "Primary profiles every"),
+    "props.cov_sub_batten": ("Ripa (altura)", "Batten (depth)"),
+    "refuse.tiling_subframe": ("a subestrutura não é válida", "the subframe is not valid"),
     "props.cov_quantities": ("Quantidades e desenho", "Quantities and drawing"),                     # (0.570)
     "act.covering_quantities": ("Quantidades…", "Quantities…"),
     "tip.covering_quantities": ("A lista de peças (inteiras, cortadas, a comprar, desperdício), juntas, cola e "

@@ -712,6 +712,15 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         self._length0_editor(t("props.cov_exp_every"), d.get("exp_every", 0.0), "covering_exp_every", guid)  # (0.568)
         if d.get("exp_every"):
             self._mm_editor(t("props.cov_exp_width"), d.get("exp_width", 0.01), "covering_exp_width", guid)
+        from ..core import covering_subframe as csub              # (0.571) what holds it off the face
+        sub = p.get("subframe") or {"system": "nenhuma"}
+        self._choice_combo(t("props.cov_subframe"), "covering_sub_system", guid,
+                           [(v[0 if pt else 1], k) for k, v in csub.SYSTEMS.items()], sub["system"])
+        for k in csub.DEFAULTS.get(sub["system"], {}):
+            if k in ("spacing", "bracket_every", "primary", "height", "drop"):
+                self._length_editor(t("props.cov_sub_" + k), sub[k], "covering_sub_" + k, guid)
+            else:
+                self._mm_editor(t("props.cov_sub_" + k), sub[k], "covering_sub_" + k, guid)
         e0, e1 = p.get("extend") or (0.0, 0.0)
         self._mm_editor(t("props.cov_extend_start"), e0, "covering_extend_start", guid)
         self._mm_editor(t("props.cov_extend_end"), e1, "covering_extend_end", guid)

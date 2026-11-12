@@ -24990,9 +24990,20 @@ def revestimentos():
         header, rows = win.covering_quantities(made_rooms + list(outside), show=False)     # (0.570)
         check("revestimento_quantidades", len(header) == 7 and any(r and r[0] == "Desperdício (%)" for r in rows),
               str(rows[-6:]))
+        for g in outside:                            # (0.571) the façade ventilated: insulation, air gap, rails
+            _bim.set_covering_subframe(win.doc, g, system="ventilada")
+        pump(800)
+        win.viewport.set_selection(set())
+        win.viewport.zoom_extents(set(outside))
+        pump(800)
+        shot("revestimento_ventilada.png")
+        _e, qv = _bim.covering_quantities(win.doc, list(outside))
+        check("revestimento_subestrutura", qv["subframe"].get("montantes_m", 0) > 20, str(qv["subframe"]))
         laps = [max(win.doc.ifc.tiled_extend(g)) for g in outside]
+        win.viewport.set_selection({outside[0]})
+        pump(400)
         check("revestimento_proprio", bool(key) and key in _cf.FINISHES and
-              win.props.editors.get("covering_finish") is not None and 0 < max(laps) < 0.01,
+              win.props.editors.get("covering_finish") is not None and 0.1 < max(laps) < 0.12,
               "{} {}".format(key, laps))
     else:
         check("revestimento_ambientes", False, "sem ambiente: {} {}".format(

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.571.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 7: subestruturas e fixações.**
+
+- Propriedades do Revestimento ▸ **Subestrutura**, com as medidas de cada sistema:
+  - **fachada ventilada**: isolamento (lã de rocha), caixa de ar, montantes de alumínio verticais a um afastamento
+    e esquadros a cada tantos cm;
+  - **ETICS / capoto**: placas de isolamento (EPS) e buchas;
+  - **pavimento sobrelevado**: apoios reguláveis nos cantos das peças, à altura escolhida;
+  - **flutuante**: manta;
+  - **teto falso**: tirantes, perfis primários e secundários, com o plenum (altura);
+  - **sobre ripas / barrotes**: ripado de madeira.
+- As peças sobem tanto quanto a subestrutura. A espessura total entra nas quantidades e nas esquinas sobrepostas.
+- Nas **Quantidades** juntam-se: isolamento (m²), montantes (m), esquadros e fixações, buchas, apoios, perfis
+  (m), tirantes, ripas (m).
+- As partes da subestrutura fazem parte do corpo do Revestimento em IFC, cada uma no seu material (alumínio, lã de
+  rocha, EPS, aço, pinho), e não elementos `IfcMember` separados: assim um revestimento de uma parede não traz
+  centenas de elementos.
+- Testes: `tests/test_tiled_coverings.py` (Subframes: ventilada, sobrelevado, teto falso, recusa);
+  «revestimento_subestrutura» no gui_smoke, com captura da fachada ventilada.
+
 ## 0.570.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 10: quantidades, desenho e fabrico.**

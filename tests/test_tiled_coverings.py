@@ -354,3 +354,33 @@ class Quantities(unittest.TestCase):
         self.assertIn("VAOS", text)
         self.assertTrue(os.path.getsize(os.path.join(folder, "p.xlsx")) > 1000)
         self.assertGreater(rows, 5)
+
+
+class Subframes(unittest.TestCase):
+    """(0.571) What holds the pieces off the face."""
+
+    def test_each_system(self):
+        doc = Document()
+        g = bim.add_covering(doc, WALL, "hpl_fachada")
+        _v, _f = mesh(doc, g)
+        depth0 = -_v[:, 1].min()
+        bim.set_covering_subframe(doc, g, system="ventilada")
+        v, _f = mesh(doc, g)
+        self.assertAlmostEqual(-v[:, 1].min(), depth0 + 0.06 + 0.04, places=3)
+        _each, q = bim.covering_quantities(doc, [g])
+        self.assertGreater(q["subframe"]["montantes_m"], 10.0)
+        self.assertGreater(q["subframe"]["esquadros"], 10)
+        bim.set_covering_subframe(doc, g, cavity=0.08)
+        self.assertAlmostEqual(doc.ifc.tiled_subframe(g)["cavity"], 0.08)
+        f = bim.add_covering(doc, FLOOR, "porcelanico_60x60")
+        bim.set_covering_subframe(doc, f, system="sobrelevado", height=0.2)
+        v, _f = mesh(doc, f)
+        self.assertGreater(v[:, 2].max(), 0.2)
+        _each, q = bim.covering_quantities(doc, [f])
+        self.assertGreater(q["subframe"]["apoios"], 20)
+        c = bim.add_covering(doc, [(x, y, 2.7) for x, y, _z in reversed(FLOOR)], "gesso_cartonado")
+        bim.set_covering_subframe(doc, c, system="teto_falso", drop=0.3)
+        v, _f = mesh(doc, c)
+        self.assertLess(v[:, 2].min(), 2.7 - 0.3)
+        with self.assertRaises(Exception):
+            bim.set_covering_subframe(doc, c, system="nada")

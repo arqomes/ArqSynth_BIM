@@ -90,4 +90,10 @@ def table(q, names=None):
     rows += [[], ["Total assente (m²)", round(q["area"], 2)], ["A comprar (m²)", round(q["buy_area"], 2)],
              ["Desperdício (%)", round(q["waste"] * 100.0, 1)], ["Juntas (m)", round(q["joints_m"], 1)],
              ["Cola (kg)", round(q["glue_kg"], 1)], ["Betume (kg)", round(q["grout_kg"], 1)]]
+    names_sub = {"isolamento_m2": "Isolamento (m²)", "montantes_m": "Montantes (m)", "esquadros": "Esquadros",
+                 "fixacoes": "Fixações", "buchas": "Buchas", "manta_m2": "Manta (m²)", "apoios": "Apoios reguláveis",
+                 "perfis_primarios_m": "Perfis primários (m)", "perfis_secundarios_m": "Perfis secundários (m)",
+                 "tirantes": "Tirantes", "ripas_m": "Ripas / barrotes (m)"}       # (0.571) the subframe's
+    for k, v in (q.get("subframe") or {}).items():
+        rows.append([names_sub.get(k, k), round(v, 1) if isinstance(v, float) else v])
     return header, rows

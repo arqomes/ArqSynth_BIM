@@ -7739,6 +7739,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 key = action[9:]
                 if key in ("extend_start", "extend_end"):        # (0.568) prolonged past a corner
                     bim.set_covering_extend(doc, guid, **{key[7:]: value})
+                elif key.startswith("sub_"):                       # (0.571) its subframe
+                    bim.set_covering_subframe(doc, guid, **{key[4:]: value})
                 elif key in ("finish", "material", "thickness", "bed", "grout", "recess"):
                     bim.set_covering(doc, guid, **{key: value})
                 else:

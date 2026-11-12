@@ -731,8 +731,15 @@ def covering_quantities(doc, guids):
             continue
         result, mats = doc.ifc.tiled_pieces(g)
         each[g] = cq.quantities(result, mats, doc.ifc.tiled_params(g))
+        from ..core import covering_subframe as csub              # (0.571) its subframe's parts
+        _m, face = doc.ifc.tiled_face(g)
+        each[g]["subframe"] = csub.lay(face, doc.ifc.tiled_subframe(g), result.pieces)[2]
     total = {k: sum(q[k] for q in each.values()) for k in ("area", "buy_area", "joints_m", "glue_kg", "grout_kg",
                                                           "pieces", "whole", "cut")}
+    total["subframe"] = {}
+    for q in each.values():
+        for k, v in q["subframe"].items():
+            total["subframe"][k] = total["subframe"].get(k, 0) + v
     total["waste"] = (total["buy_area"] - total["area"]) / total["area"] if total.get("area") else 0.0
     rows = {}
     for q in each.values():
@@ -777,6 +784,15 @@ def save_covering_finish(doc, guid, name, library=True):
     if library:
         cf.save_library([entry])
     return key
+
+
+def set_covering_subframe(doc, guid, **sub):
+    """(0.571) A Revestimento's subframe (system=…, its measures). One undo step."""
+    language = lang()
+    lapped = [e.GlobalId for e in doc.ifc.file.by_type("IfcCovering")
+              if guid in (doc.ifc._params(e).get("ProlongarAuto") or "").split(";")]
+    _edit(doc, lambda ifc: ifc.set_tiled_subframe(guid, sub, language), [guid] + lapped, "cmd.tiled_covering")
+    return guid
 
 
 def set_covering_extend(doc, guid, start=None, end=None):
