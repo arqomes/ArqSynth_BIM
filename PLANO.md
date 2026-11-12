@@ -1735,8 +1735,9 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    a Superfície paramétrica e lajes como superfície; ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
    «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
-   superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) Por fazer: a
-   pré-visualização na própria vista 3D do modelo; aproximar/arrastar a superfície.
+   superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) ~~A pré-visualização na própria
+   vista 3D do modelo~~ (0.547.0: `Viewport.show_operator_preview`, `visual_graph.model_preview`). Por fazer:
+   aproximar/arrastar a superfície no editor.
 5. ~~**Shift+A** na tela: menu de procura com nome e desenho do que cada nó faz (como o Blender), por famílias;
    escrever filtra; o nó aparece onde está o rato e, se houver uma ligação selecionada, entra no meio dela.~~
    (0.541.0)

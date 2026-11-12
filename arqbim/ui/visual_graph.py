@@ -285,6 +285,68 @@ def surface_picture(graph, results, w, h, nid=None):
     return img
 
 
+SHEET_RGBA = (0.80, 0.83, 0.87, 0.93)
+HOLE_RGBA = (0.10, 0.11, 0.13, 0.96)
+BAD_RGBA = (0.85, 0.20, 0.18, 0.98)
+MODEL_HOLES = 25000                 # more than this: the sheet alone is shown in the model (the editor shows all)
+
+
+def model_preview(doc, value, bad=None):
+    """(0.547) The panel as it will stand on its wall, for the model's own 3D view: (triangles (n, 3, 3) world,
+    colours (n, 4)) — the sheet over the wall's face and each hole dark on it (red: refused by the check). Flat (no
+    thickness cut): light enough to follow a slider. None: nothing to show (no wall, the wall gone)."""
+    import shapely
+
+    from ..core import surfaces
+    from ..core.graph import nodes_3d
+    wall = value.get("wall")
+    if doc is None or not wall:
+        return None
+    try:
+        face = nodes_3d.wall_face(doc, wall)
+        frame = doc.ifc.element_frame(wall)
+    except Exception:  # (the wall gone meanwhile)
+        return None
+    panel = value["panel"]
+    found = surfaces.free_perforation(face, value["shape"], value["holes"], panel["margin"],
+                                      (panel["width"], panel["height"]), bool(value["repeat"]))
+    front = value["side"] == "frente"
+    lift = max(float(panel["thickness"]), 0.004)
+
+    def world(uv, off):
+        y = frame.y1 + off if front else frame.y0 - off
+        local = np.column_stack((frame.x0 + uv[:, 0], np.full(len(uv), y), frame.z0 + uv[:, 1], np.ones(len(uv))))
+        return (frame.matrix @ local.T).T[:, :3]
+
+    tris, colours = [], []
+    for part in getattr(face, "geoms", [face]):
+        if part.geom_type != "Polygon" or part.area < 1e-8:
+            continue
+        cut = shapely.constrained_delaunay_triangles(part)
+        t = np.array([np.asarray(g.exterior.coords)[:3] for g in cut.geoms]).reshape(-1, 2)
+        tris.append(world(t, lift).reshape(-1, 3, 3))
+        colours.append(np.tile(SHEET_RGBA, (len(t) // 3, 1)))
+    total = sum(len(c) for _q, c, _s in found)
+    if total <= MODEL_HOLES:
+        flags = None if bad is None or value["repeat"] or len(bad) != total else np.asarray(bad, dtype=bool)
+        done = 0
+        for _board, centres, sizes in found:
+            if not len(centres):
+                continue
+            angle, ratio = surfaces.extras(sizes)
+            for k, ring in enumerate(surfaces.hole_rings(value["shape"], centres, sizes, angle, ratio)):
+                n = len(ring)
+                fan = np.empty((n, 3, 2))
+                fan[:, 0], fan[:, 1], fan[:, 2] = centres[k], ring, np.roll(ring, -1, axis=0)
+                tris.append(world(fan.reshape(-1, 2), lift + 0.002).reshape(-1, 3, 3))
+                red = flags is not None and flags[done + k]
+                colours.append(np.tile(BAD_RGBA if red else HOLE_RGBA, (n, 1)))
+            done += len(centres)
+    if not tris:
+        return None
+    return np.concatenate(tris), np.concatenate(colours)
+
+
 def png_bytes(image):
     data = QtCore.QByteArray()
     buffer = QtCore.QBuffer(data)
@@ -966,6 +1028,13 @@ class GraphWindow(QtWidgets.QMainWindow):
                                    "resultado do cartão escolhido.")
         self.show_final.toggled.connect(lambda _on: self.surface.refresh())
         lay.addWidget(self.show_final)
+        # (0.547) the panel on its wall in the model's own 3D view, following each change
+        self.in_model = QtWidgets.QCheckBox("Ver também na vista 3D do modelo")
+        self.in_model.setChecked(True)
+        self.in_model.setToolTip("Mostra o painel sobre a parede, na vista do modelo, enquanto trabalha. É só para "
+                                 "ver: fica na parede com «Aplicar ao modelo».")
+        self.in_model.toggled.connect(lambda _on: self._show_in_model())
+        lay.addWidget(self.in_model)
         self.verdict = QtWidgets.QLabel()
         self.verdict.setWordWrap(True)
         lay.addWidget(self.verdict)
@@ -1333,9 +1402,37 @@ class GraphWindow(QtWidgets.QMainWindow):
             card.update()
         self._show_big()
         self.surface.refresh()                                 # (0.541) the surface follows every change
+        self._show_in_model()
         self._verdict()
         bad = len(self.graph.errors)
         self.status.showMessage("Calculado." if not bad else f"{bad} nós com avisos (ver a vermelho).", 4000)
+
+    def _show_in_model(self, off=False):
+        """(0.547) The panel shown on its wall in the model's 3D view (taken away: `off`, the box unticked, no wall,
+        nothing to apply)."""
+        show = getattr(getattr(self.main, "viewport", None), "show_operator_preview", None)
+        if show is None:
+            return None
+        found = None
+        if not off and self.in_model.isChecked() and self.wall:
+            last = final_result(self.graph, self.results)
+            if last is not None and last[1] == "bim":
+                link = next((l for l in self.graph.links if l[2] == last[0] and l[3] == "furos"), None)
+                source = self.results.get(link[0], {}).get(link[1]) if link else None
+                try:
+                    found = model_preview(self.main.doc, dict(last[2], wall=last[2]["wall"] or self.wall),
+                                          None if source is None else source.get("bad"))
+                except Exception:  # (a preview never stops the editor)
+                    found = None
+        if found is None:
+            show()
+        else:
+            show(*found)
+        return found
+
+    def closeEvent(self, e):
+        self._show_in_model(off=True)                         # (its picture out of the model's view)
+        super().closeEvent(e)
 
     def _verdict(self):
         """(0.541) Under the surface: the last «Verificar fabrico»'s verdict (how many holes, the open area, what
@@ -1481,5 +1578,6 @@ class GraphWindow(QtWidgets.QMainWindow):
             return []
         if len(made) == 1:
             self.cladding = made[0]
+        self._show_in_model(off=True)                         # (the panel itself is there now)
         self.status.showMessage(f"{len(made)} painel(éis) perfurado(s) aplicado(s) ao modelo.", 6000)
         return made

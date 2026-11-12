@@ -24817,15 +24817,32 @@ def grafico_visual():
     check("operadores_painel", panel.isVisible() and panel.list.count() >= 4 and getattr(win, "graph_window", None)
           is None and not panel.list.item(0).icon().isNull(), "operadores {}".format(panel.list.count()))
     win.grab().save(os.path.join(OUT, "operadores_painel.png"))
+    # (0.547) a wall chosen: the editor opens on its face, and the panel shows on the wall in the model's 3D view
+    from arqbim.ifc import catalog as _catalog
+    from arqbim.model import bim as _bim
+    wall = _bim.add_wall(win.doc, np.array((20.0, 20.0, 0.0)), np.array((25.0, 20.0, 0.0)),
+                         _catalog.BY_KEY["parede_alv_20"])
+    pump(300)
+    win.viewport.set_selection({wall})
+    pump(200)
     panel.new_button.click()
-    pump(400)
+    pump(600)
     gw = getattr(win, "graph_window", None)
     check("grafico_janela", gw is not None and gw.isVisible() and len(gw.cards) == 6 and not gw.graph.errors
-          .get("n5") and gw.surface.isVisible(), "cartões {}".format(len(gw.cards) if gw else 0))
+          .get("n5") and gw.surface.isVisible() and gw.wall == wall, "cartões {}".format(len(gw.cards) if gw else 0))
     if gw is not None:
+        shown = getattr(win.viewport, "operator_preview_shown", 0)
+        win.zoom_selection()
+        pump(500)
+        win.grab().save(os.path.join(OUT, "grafico_na_vista_3d.png"))
         gw.grab().save(os.path.join(OUT, "grafico_visual.png"))
         gw.close()
         pump(100)
+        check("grafico_na_vista_3d", shown > 1000 and win.viewport.operator_preview_shown == 0,
+              "triângulos {} → {}".format(shown, win.viewport.operator_preview_shown))
+    win.viewport.set_selection(set())
+    win.doc.undo()
+    pump(200)
     win.set_module("project")
     pump(100)
 

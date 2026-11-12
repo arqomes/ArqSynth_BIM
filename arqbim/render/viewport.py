@@ -4762,6 +4762,28 @@ class Viewport:
             wobj.visible = False
             self.scene.add(wobj)
 
+    def show_operator_preview(self, triangles=(), colors=()):
+        """(0.547) The Visual Graph's panel being worked on, shown on its wall in the model: triangles (n, 3, 3),
+        world, each with its colour (n, 4). Its own drawing — the tools' previews neither hide it nor are hidden by
+        it. None / empty: taken away."""
+        tris = np.asarray(triangles, dtype=np.float64).reshape(-1, 3, 3)
+        mesh = getattr(self, "_operator_preview", None)
+        if mesh is None:
+            mesh = self._operator_preview = gfx.Mesh(
+                gfx.Geometry(positions=np.zeros((3, 3), np.float32), indices=np.array([[0, 1, 2]], np.uint32),
+                             colors=np.zeros((3, 4), np.float32)),
+                _overlay_material(gfx.MeshBasicMaterial, color_mode="vertex", alpha_mode="blend", side="both"))
+            mesh.visible = False
+            self.scene.add(mesh)
+        if len(tris):
+            rgba = np.asarray(colors, dtype=np.float32).reshape(-1, 4)
+            mesh.geometry = gfx.Geometry(positions=_f32(tris.reshape(-1, 3)),
+                                         indices=np.arange(len(tris) * 3, dtype=np.uint32).reshape(-1, 3),
+                                         colors=np.repeat(rgba, 3, axis=0).astype(np.float32))
+        mesh.visible = bool(len(tris))
+        self.operator_preview_shown = len(tris)          # (tests)
+        self.redraw()
+
     def show_polygon(self, points, segments=(), colors=()):
         """Translucent polygon (convex or not) plus coloured line segments (pairs of points)."""
         pts = _f32(points)

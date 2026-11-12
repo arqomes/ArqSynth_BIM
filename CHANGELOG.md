@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.547.0 — 2026-11-12
+
+**Gráfico Visual: o painel vê-se na vista 3D do modelo enquanto se trabalha.**
+
+- Com o editor aberto sobre uma parede, o painel aparece **sobre essa parede na vista 3D do modelo** e acompanha cada
+  medida que se mexe: a chapa clara, os furos escuros, a vermelho os que «Verificar fabrico» recusa.
+- Caixa **«Ver também na vista 3D do modelo»** por baixo da superfície do editor, ligada de origem. É só para ver: o
+  painel fica na parede com «Aplicar ao modelo». Ao fechar o editor, sai da vista.
+- É um desenho leve (sem cortar a espessura da chapa), para acompanhar uma barra a ser arrastada. Acima de 25 000
+  furos mostra-se só a chapa.
+- Testes: verificação «grafico_na_vista_3d» no gui_smoke (com captura).
+
 ## 0.546.0 — 2026-11-12
 
 **Gráfico Visual: a face de trás trabalha-se como se vê.**
