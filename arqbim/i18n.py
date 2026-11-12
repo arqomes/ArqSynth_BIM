@@ -1306,6 +1306,20 @@ _STRINGS = {
     "refuse.tiling_joint": ("a junta deve ser menor que metade da peça", "the joint must be less than half the piece"),
     "refuse.tiling_unit": ("o padrão livre precisa das peças desenhadas", "the free pattern needs its pieces drawn"),
     "refuse.tiling_empty": ("não há superfície para revestir", "there is no surface to cover"),
+    "refuse.tiling_no_rooms": ("nenhum ambiente corresponde às regras (veja os nomes dos ambientes)",     # (0.567)
+                               "no room matches the rules (see the rooms' names)"),
+    "cmd.covering_rules": ("Regras de revestimento", "Finishing rules"),
+    "act.covering_category": ("Revestir por categoria…", "Finish by category…"),
+    "tip.covering_category": ("Reveste de uma vez todas as paredes (exteriores, interiores ou as duas faces), lajes "
+                              "(topo, por baixo, bordos), pilares ou vigas — os escolhidos, do pavimento ou do modelo.",
+                              "Finishes at once every wall (outside, inside or both faces), slab (top, underside, "
+                              "edges), column or beam — those chosen, of the storey or of the model."),
+    "act.covering_rooms": ("Revestir ambientes…", "Finish rooms…"),
+    "tip.covering_rooms": ("Reveste os ambientes escolhidos de uma vez — pavimento, paredes até uma altura, rodapé, "
+                           "teto — e guarda regras («instalações sanitárias: azulejo até 2,10 m») que se aplicam a "
+                           "todos os ambientes com esse nome.",
+                           "Finishes the rooms chosen at once — floor, walls up to a height, skirting, ceiling — and "
+                           "keeps rules («bathrooms: tile up to 2.10 m») applied to every room of that name."),
     "refuse.tiling_zone": ("a faixa ou a cercadura não é válida (alturas, largura)",                       # (0.566)
                            "the band or the border is not valid (heights, width)"),
     "refuse.tiling_finish": ("esse revestimento não está no catálogo", "that finish is not in the catalogue"),  # (0.563)

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.567.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 4: por categoria, por ambiente e por regras.**
+
+- **Revestimento ▾ Revestir por categoria…**:
+  - todas as **paredes**: as duas faces, só a exterior ou só a interior (é interior a face que tem um ambiente à
+    frente);
+  - todas as **lajes**: o topo, por baixo, os bordos;
+  - todos os **pilares** e **vigas**: os lados;
+  - dos escolhidos, do pavimento ativo ou do modelo todo, num só revestimento e num só Desfazer.
+- **Revestimento ▾ Revestir ambientes…**:
+  - escolhem-se os ambientes;
+  - o **pavimento**, as **paredes até uma altura** (cada face de parede cortada ao troço desse ambiente), o
+    **rodapé** (onde as paredes não são revestidas) e o **teto**, tudo de uma vez.
+- **Regras do projeto** (na mesma janela):
+  - por exemplo «Instalações sanitárias — WC|banho|sanitária: hidráulico no chão, azulejo metro até 2,10 m»;
+  - guardadas no IFC do projeto;
+  - aplicadas a todos os ambientes cujo nome tenha uma das palavras;
+  - aplicadas outra vez (depois de a planta mudar), substituem o que a regra tinha feito, sem duplicar.
+- Os revestimentos das paredes de um ambiente seguem a parede e continuam cortados ao troço do ambiente. Os do
+  pavimento e do teto ficam ligados ao ambiente (`IfcRelCoversSpaces`).
+- Novos no catálogo: **rodapés** de madeira (8 cm), cerâmico (8 cm) e de pedra (10 cm).
+- Testes: `tests/test_tiled_coverings.py` (paredes interiores e exteriores, um ambiente de uma vez, rodapé, regras
+  aplicadas duas vezes); «revestimento_ambientes» no gui_smoke, com captura.
+
 ## 0.566.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 5 (2.ª parte): faixas, cercadura, mistura e peça a peça.**

@@ -67,9 +67,16 @@ FINISHES = {f.key: f for f in (
            recess=0.004, group="tijolo"),
     Finish("tijolo_flamengo", "Tijolo — aparelho flamengo", "Brick — Flemish bond", "tijolo_macico", 0.24, 0.07,
            0.020, pattern="flamengo", joint=0.010, bed=0.010, recess=0.004, group="tijolo"),
+    # (0.567) skirtings, laid along the foot of a room's walls
+    Finish("rodape_madeira", "Rodapé de madeira 8 cm", "Wooden skirting 8 cm", "madeira_branco", 2.40, 0.08, 0.012,
+           joint=0.001, bed=0.0, grout="", recess=0.0, group="remate"),
+    Finish("rodape_ceramico", "Rodapé cerâmico 8 cm", "Ceramic skirting 8 cm", "porcelanico", 0.60, 0.08, 0.009,
+           joint=0.002, bed=0.004, group="remate"),
+    Finish("rodape_pedra", "Rodapé de pedra 10 cm", "Stone skirting 10 cm", "pedra", 0.60, 0.10, 0.015,
+           joint=0.002, bed=0.008, group="remate"),
 )}
 GROUPS = {"ceramico": ("Cerâmico", "Ceramic"), "pedra": ("Pedra", "Stone"), "madeira": ("Madeira", "Wood"),
-          "tijolo": ("Tijolo", "Brick")}
+          "tijolo": ("Tijolo", "Brick"), "remate": ("Rodapés e remates", "Skirtings and trims")}
 
 
 def finish(key):

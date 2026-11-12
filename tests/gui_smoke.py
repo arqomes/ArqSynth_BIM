@@ -24944,6 +24944,40 @@ def revestimentos():
     for _ in range(3):
         win.doc.undo()
     pump(300)
+    # (0.567) a room of four walls, «WC»: its finishes by a rule kept in the project; the outside walls by category
+    from arqbim.model.document import IfcCommand as _IfcCommand
+    bx, by = x0 + 20.0, y0
+    corners = [(bx, by), (bx + 3.0, by), (bx + 3.0, by + 2.4), (bx, by + 2.4)]
+    walls = [_bim.add_wall(win.doc, np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0)),
+                           _catalog.BY_KEY["parede_alv_20"]) for a, b in zip(corners, corners[1:] + corners[:1])]
+    pump(400)
+    _bim.identify_rooms(win.doc)
+    pump(400)
+    rooms = [s["guid"] for s in win.doc.ifc.spaces() if Polygon_contains(s["outline"], (bx + 1.5, by + 1.2))]
+    ok_rooms = False
+    if rooms:
+        win.doc.execute(_IfcCommand("n", lambda ifc: setattr(ifc.by_guid(rooms[0]), "LongName", "WC")))
+        made_rooms = win.covering_rooms({"rooms": [], "choice": {}, "apply_rules": True,
+                                         "rules": [{"name": "Sanitárias", "rooms": "wc|banho",
+                                                    "floor": "hidraulico_20x20", "walls": "metro_10x20",
+                                                    "wall_height": 2.1, "skirting": "", "ceiling": ""}]})
+        pump(800)
+        outside = win.covering_category({"category": "parede", "scope": "modelo", "sides": "exterior",
+                                         "finish": "tijolo_face_vista"})
+        pump(800)
+        win.viewport.set_selection(set())
+        win.viewport.zoom_extents(set(walls))
+        pump(800)
+        shot("revestimento_ambiente.png")
+        ok_rooms = len(made_rooms or []) == 5 and len(outside or []) >= 4
+        check("revestimento_ambientes", ok_rooms, "{} {}".format(len(made_rooms or []), len(outside or [])))
+    else:
+        check("revestimento_ambientes", False, "sem ambiente")
+
+
+def Polygon_contains(outline, point):
+    from shapely.geometry import Point as _Pt, Polygon as _Pg
+    return _Pg(outline).buffer(0).covers(_Pt(*point))
     for _ in range(len(made)):
         win.doc.undo()
     pump(200)

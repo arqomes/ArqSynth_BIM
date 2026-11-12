@@ -1834,7 +1834,8 @@ Falta:
    - **um polígono ou face escolhido** (os desenhos fechados da 0.553);
    - vãos e furos recortados sozinhos;
    - o revestimento **segue** o elemento quando este muda (como os da 0.374).
-4. **Alvos — por categoria:**
+4. ~~**Alvos — por categoria:**~~ (0.567.0: Revestir por categoria, Revestir ambientes, regras do projeto
+   aplicadas quando se pede — não sozinhas a cada edição, pelo peso; o encontro nas esquinas fica com o passo 6)
    - todas as paredes, pisos, tetos, pilares ou vigas de um tipo, de um pavimento ou do modelo;
    - faces exteriores e/ou interiores;
    - **por ambiente**: o pavimento, as paredes até uma altura, o rodapé, o teto, num clique;

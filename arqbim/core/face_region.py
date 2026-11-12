@@ -20,6 +20,26 @@ def _frame(n):
     return x, np.cross(n, x), n
 
 
+def clip_to_stretch(outline, holes, a, b, height):
+    """(0.567) The parts of a face (3D outline and holes) between the two points a, b along it and from their level
+    up `height` — a room's stretch of a wall's face: [(outline, holes)]."""
+    from . import tiling as tl
+    from shapely.geometry import box
+    fr = tl.face_frame(outline)
+    o, x, y, _n = fr
+    flat = Polygon(tl.to_plane(outline, fr), [tl.to_plane(h, fr) for h in holes]).buffer(0)
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    ua, ub = sorted((float((a - o) @ x), float((b - o) @ x)))
+    z0 = float((a - o) @ y)
+    cut = flat.intersection(box(ua, z0 - 1e-6, ub, z0 + float(height)))
+    out = []
+    for part in getattr(cut, "geoms", [cut]):
+        if part.geom_type == "Polygon" and part.area > 1e-3:
+            out.append((tl.to_space(list(part.exterior.coords)[:-1], fr),
+                        [tl.to_space(list(h.coords)[:-1], fr) for h in part.interiors]))
+    return out
+
+
 def face_at(verts, tris, point, normal, reach=0.01):
     """(outline (N, 3), [holes (M, 3)…], normal) of the flat face of the mesh (verts (V, 3), tris (T, 3)) in the
     plane through `point` facing `normal`, the part of it the point is on (or nearest it, within `reach` — a face

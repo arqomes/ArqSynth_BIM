@@ -68,7 +68,7 @@ PANELS = {
                      ("openings", (("wall_opening", "roof_opening", "niche"),)),
                      ("datum", ("storey_new", "grid")),
                      ("work_plane", ("work_plane",)),
-                     ("finishes", ("covering", "paint", "perforated_panel", ("ripado_panel", "wall_finish", "wall_reveal"),
+                     ("finishes", (["covering", "covering_rooms", "covering_category"], "paint", "perforated_panel", ("ripado_panel", "wall_finish", "wall_reveal"),
                                    ("profile", "wall_sweep", "profile_from_face"), ("ripado_screen",))),   # (0.389; 0.434)
                      ("furniture", ("kitchen", "cabinet", ("worktop", "appliance", "cut_list")))),
     # (0.482) as Revit's Structure: Structure (Beam, Wall, Column, Floor, Beam System), Foundation, then ours — the

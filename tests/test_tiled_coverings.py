@@ -195,3 +195,71 @@ class PieceByPiece(unittest.TestCase):
         _r, mats = doc.ifc.tiled_pieces(g)
         self.assertIn("marmore", mats)
         self.assertTrue(tl)
+
+
+class ManyAtOnce(unittest.TestCase):
+    """(0.567) By category and by room."""
+
+    def setUp(self):
+        from arqbim.ifc import catalog
+        self.doc = doc = Document()
+        spec = catalog.BY_KEY["parede_alv_20"]
+        pts = [(0.0, 0.0), (5.0, 0.0), (5.0, 4.0), (0.0, 4.0)]
+        self.walls = []
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            self.walls.append(bim.add_wall(doc, np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0)), spec))
+        rooms = bim.identify_rooms(doc) if hasattr(bim, "identify_rooms") else None
+        self.rooms = [s["guid"] for s in doc.ifc.spaces()]
+
+    def test_walls_inside_and_outside(self):
+        if not self.rooms:
+            self.skipTest("no room found")
+        inside = bim.cover_category(self.doc, self.walls, "parede", "azulejo_20x20", sides="interior")
+        outside = bim.cover_category(self.doc, self.walls, "parede", "pedra_60x40", sides="exterior")
+        self.assertEqual(len(inside), 4)
+        self.assertEqual(len(outside), 4)
+        centre = np.array((2.5, 2.0, 0.0))
+        for g, sign in [(g, 1) for g in inside] + [(g, -1) for g in outside]:
+            m = self.doc.ifc._placement_si(self.doc.ifc.by_guid(g))
+            towards = centre - m[:3, 3]
+            towards[2] = 0.0
+            self.assertGreater(sign * float(m[:3, 2] @ towards), 0.0)     # (inside: facing the room's middle)
+
+    def test_a_room_at_once(self):
+        if not self.rooms:
+            self.skipTest("no room found")
+        made = bim.cover_room(self.doc, self.rooms[0], floor="porcelanico_60x60", walls="azulejo_30x60",
+                              wall_height=2.1, ceiling="porcelanico_60x60")
+        kinds = [ifcopenshell.util.element.get_predefined_type(self.doc.ifc.by_guid(g)) for g in made]
+        self.assertEqual(kinds.count("FLOORING"), 1)
+        self.assertEqual(kinds.count("CEILING"), 1)
+        self.assertEqual(kinds.count("CLADDING"), 4)
+        for g in made:
+            if ifcopenshell.util.element.get_predefined_type(self.doc.ifc.by_guid(g)) == "CLADDING":
+                v, _f = mesh(self.doc, g)
+                self.assertLessEqual(v[:, 2].max(), 2.1 + 1e-3)
+        floor = next(g for g, k in zip(made, kinds) if k == "FLOORING")
+        self.assertAlmostEqual(self.doc.ifc.describe(floor)["params"]["gross"], 4.8 * 3.8, delta=0.3)
+        skirt = bim.cover_room(self.doc, self.rooms[0], skirting="rodape_madeira")
+        self.assertEqual(len(skirt), 4)
+        v, _f = mesh(self.doc, skirt[0])
+        self.assertLessEqual(v[:, 2].max(), 0.08 + 1e-3)
+
+    def test_rules_applied_twice(self):
+        if not self.rooms:
+            self.skipTest("no room found")
+        from arqbim.model import covering_rules as cr
+        room = self.doc.ifc.by_guid(self.rooms[0])
+        from arqbim.model.document import IfcCommand
+        self.doc.execute(IfcCommand("n", lambda ifc: setattr(ifc.by_guid(self.rooms[0]), "LongName", "WC social")))
+        cr.save_rules(self.doc, [{"name": "Sanitárias", "rooms": "wc|banho", "floor": "porcelanico_60x60",
+                                  "walls": "azulejo_30x60", "wall_height": 2.1},
+                                 {"name": "Quartos", "rooms": "quarto", "floor": "soalho_carvalho"}])
+        self.assertEqual(len(cr.rules(self.doc.ifc)), 2)
+        made = cr.apply_rules(self.doc)
+        self.assertEqual(len(made["Sanitárias"]), 5)
+        n1 = sum(1 for e in self.doc.ifc.file.by_type("IfcCovering"))
+        cr.apply_rules(self.doc)                       # (again: replaced, not doubled)
+        n2 = sum(1 for e in self.doc.ifc.file.by_type("IfcCovering"))
+        self.assertEqual(n1, n2)
+        self.assertTrue(room)

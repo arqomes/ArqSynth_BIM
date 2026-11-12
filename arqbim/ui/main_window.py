@@ -768,6 +768,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_organic_form = self._action(t("act.organic_form"), lambda: self.organic_form(),
                                              icon=icons.control_ring_icon())                            # (0.555)
         self.act_organic_form.setToolTip(t("tip.organic_form"))
+        self.act_covering_category = self._action(t("act.covering_category"), lambda: self.covering_category(),
+                                                  icon=icons.paint_icon())                                  # (0.567)
+        self.act_covering_category.setToolTip(t("tip.covering_category"))
+        self.act_covering_rooms = self._action(t("act.covering_rooms"), lambda: self.covering_rooms(),
+                                               icon=icons.paint_icon())
+        self.act_covering_rooms.setToolTip(t("tip.covering_rooms"))
         self.act_organic_line = self._action(t("act.organic_line"), lambda: self.organic_line(),
                                              icon=icons.control_ring_icon())                            # (0.561)
         self.act_organic_line.setToolTip(t("tip.organic_line"))
@@ -6587,6 +6593,67 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewport.set_selection({guid})
         self.message("Forma orgânica criada — mude o comportamento e a altura nas Propriedades.")
         return guid
+
+    def covering_category(self, values=None):
+        """(0.567) «Revestir por categoria»: the faces of every wall, slab, column or beam (chosen, of the storey, of
+        the model) in one finish. Their GlobalIds."""
+        from ..model import covering_targets as ct
+        chosen = [g for g in self.viewport.selection if isinstance(g, str) and self.doc.ifc.by_guid(g) is not None]
+        if values is None:
+            from .covering_many_dialog import CategoryDialog
+            dlg = CategoryDialog(len(chosen), self)
+            if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return None
+            values = dlg.values()
+        classes = ct.IFC_CLASSES[values["category"]]
+        if values.get("scope") == "escolhidos":
+            guids = chosen
+        else:
+            storey = getattr(self.doc, "active_storey", None) if values.get("scope") == "pavimento" else None
+            guids = [e.GlobalId for c in classes[:1] for e in self.doc.ifc.file.by_type(c)
+                     if storey is None or self.doc.ifc.storey_of(e.GlobalId) == storey]
+        try:
+            made = bim.cover_category(self.doc, guids, values["category"], values["finish"],
+                                      values.get("sides", "ambas"), values.get("slab_faces", ("topo",)))
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return None
+        self.viewport.set_selection(set(made))
+        self.message(t("info.covering_made", n=len(made)))
+        return made
+
+    def covering_rooms(self, values=None):
+        """(0.567) «Revestir ambientes»: the rooms ticked finished at once; the project's rules kept and applied."""
+        from ..model import covering_rules as cr
+        storey = getattr(self.doc, "active_storey", None)
+        rooms = self.doc.ifc.spaces(storey) or self.doc.ifc.spaces()
+        if values is None:
+            if not rooms:
+                self.message(t("refuse.tiling_no_rooms"), warning=True)
+                return None
+            from .covering_many_dialog import RoomsDialog
+            dlg = RoomsDialog(rooms, cr.rules(self.doc.ifc), self)
+            if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return None
+            values = dlg.values()
+        made = []
+        try:
+            if values.get("rules") is not None and values["rules"] != cr.rules(self.doc.ifc):
+                cr.save_rules(self.doc, values["rules"])
+            c = values.get("choice") or {}
+            for room in values.get("rooms") or ():
+                if any(c.get(k) for k in ("floor", "walls", "skirting", "ceiling")):
+                    made += bim.cover_room(self.doc, room, c.get("floor") or None, c.get("walls") or None,
+                                           float(c.get("wall_height") or 2.1), c.get("skirting") or None,
+                                           c.get("ceiling") or None)
+            if values.get("apply_rules"):
+                for gs in cr.apply_rules(self.doc).values():
+                    made += gs
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+        self.viewport.set_selection(set(made))
+        self.message(t("info.covering_made", n=len(made)))
+        return made
 
     def covering_extras(self, guid, values=None):
         """(0.566) «Faixas, cercadura e mistura» of a Revestimento: its window (or `values` (zones, mix) given)."""

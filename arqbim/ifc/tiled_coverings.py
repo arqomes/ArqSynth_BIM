@@ -16,6 +16,8 @@ import numpy as np
 
 import ifcopenshell
 import ifcopenshell.api
+import ifcopenshell.api.owner
+import ifcopenshell.guid
 import ifcopenshell.util.element
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
@@ -64,19 +66,40 @@ class TiledCoveringMixin:
             return None
         return face_region.face_at(found[0], found[1], point, normal, reach)
 
-    def remember_face(self, guid, host, point, normal):
+    def remember_face(self, guid, host, point, normal, stretch=None):
         """(0.564) The face a Revestimento was laid on, kept in its host's own coordinates (so that it follows it):
-        Origem, FacePonto, FaceNormal."""
+        Origem, FacePonto, FaceNormal; (0.567) `stretch` (a, b, height): only that stretch of it (a room's) —
+        Recorte."""
         e, _ = self._require(guid, KIND)
         h = self.by_guid(host)
         m = self._placement_si(h)
         inv = np.linalg.inv(m)
         local = inv @ np.append(np.asarray(point, float), 1.0)
         n = inv[:3, :3] @ np.asarray(normal, float)
-        self._set_params(e, {"Origem": host, "FacePonto": "{:.6f},{:.6f},{:.6f}".format(*local[:3]),
-                             "FaceNormal": "{:.6f},{:.6f},{:.6f}".format(*n)})
+        changes = {"Origem": host, "FacePonto": "{:.6f},{:.6f},{:.6f}".format(*local[:3]),
+                   "FaceNormal": "{:.6f},{:.6f},{:.6f}".format(*n)}
+        if stretch is not None:
+            a, b, height = stretch
+            la, lb = (inv @ np.append(np.asarray(q, float), 1.0) for q in (a, b))
+            changes["Recorte"] = "{:.6f},{:.6f},{:.6f};{:.6f},{:.6f},{:.6f};{:.6f}".format(*la[:3], *lb[:3], height)
+        self._set_params(e, changes)
         if h.is_a("IfcElement") and not h.is_a("IfcCovering"):
             self._cover(e, h)                             # (IfcRelCoversBldgElements: the host knows it)
+
+    def cover_space(self, guid, space):
+        """(0.567) A Revestimento tied to the room it finishes (IfcRelCoversSpaces: a floor, a ceiling)."""
+        e, _ = self._require(guid, KIND)
+        s = self.by_guid(space)
+        if s is None:
+            return
+        rel = next((r for r in self.file.by_type("IfcRelCoversSpaces") if r.RelatingSpace == s), None)
+        if rel is None:
+            self.file.create_entity("IfcRelCoversSpaces", GlobalId=ifcopenshell.guid.new(),
+                                    OwnerHistory=api.owner.create_owner_history(self.file), RelatingSpace=s,
+                                    RelatedCoverings=[e])
+        elif e not in rel.RelatedCoverings:
+            rel.RelatedCoverings = list(rel.RelatedCoverings) + [e]
+        self._set_params(e, {"Ambiente": space})
 
     def follow_tiled(self, changed):
         """(0.564) After elements changed: the Revestimentos laid on their faces laid again on those faces as they
@@ -100,7 +123,16 @@ class TiledCoveringMixin:
             found = self.tiled_on(host.GlobalId, point, normal, reach=1e9)
             if found is None:
                 continue
-            frame, face = face_frame_and_shape(found[0], found[1])
+            outline, holes = found[0], found[1]
+            if p.get("Recorte"):                          # (0.567) a room's stretch of the face only
+                from ..core import face_region
+                qa, qb, height = p["Recorte"].split(";")
+                a, b = ((m @ np.append([float(v) for v in q.split(",")], 1.0))[:3] for q in (qa, qb))
+                parts = face_region.clip_to_stretch(outline, holes, a, b, float(height))
+                if not parts:
+                    continue
+                outline, holes = max(parts, key=lambda q: Polygon(tl.to_plane(q[0], tl.face_frame(q[0]))).area)
+            frame, face = face_frame_and_shape(outline, holes)
             try:
                 self.set_tiled_covering(e.GlobalId, frame=frame, face=face)
             except EditRefused:

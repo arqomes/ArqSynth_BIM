@@ -681,6 +681,70 @@ def cover_drawings(doc, sketches, finish, layout=None, **changes):
     return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
 
 
+def _lay_many(ifc, jobs, language):
+    """Revestimentos laid on many faces in one go: jobs [(finish, layout, host, point, normal, outline, holes,
+    stretch, space)] — `space`: the room it covers (IfcRelCoversSpaces), else tied to its host. Their GlobalIds."""
+    from ..ifc.tiled_coverings import face_frame_and_shape
+    out = []
+    count = sum(1 for e in ifc.file.by_type("IfcCovering") if ifc._params(e).get("Elemento") == "tiled_covering")
+    for finish, layout, host, point, normal, outline, holes, stretch, space in jobs:
+        frame, face = face_frame_and_shape(outline, holes)
+        if face.is_empty or face.area < 1e-3:
+            continue
+        count += 1
+        e = ifc.add_tiled_covering(frame, face, finish, "{} {}".format(t("elem.tiled_covering"), count), layout,
+                                   host or space or "", language)
+        if host:
+            ifc.remember_face(e.GlobalId, host, point, normal, stretch)
+        elif space:
+            ifc.cover_space(e.GlobalId, space)
+        out.append(e.GlobalId)
+    return out
+
+
+def cover_category(doc, guids, category, finish, sides="ambas", slab_faces=("topo",), layout=None):
+    """(0.567) A Revestimento on the faces of each element `guids` of a category («parede», «laje», «pilar»,
+    «viga»): a wall's outside, inside or both; a slab's top, underside, edges; a column's or beam's sides. One undo
+    step. Their GlobalIds."""
+    from . import covering_targets as ct
+    faces = ct.by_category(doc.ifc, guids, category, sides, slab_faces)
+    if not faces:
+        raise ValueError("tiling_empty")
+    jobs = [(finish, layout, g, p, n, ol, hs, None, None) for g, p, n, ol, hs in faces]
+    language = lang()
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), lambda ifc: _lay_many(ifc, jobs, language))).result
+
+
+def cover_room(doc, room, floor=None, walls=None, wall_height=2.10, skirting=None, ceiling=None, layout=None):
+    """(0.567) A room finished at once: its floor, its walls up to `wall_height` (each wall's face cut to the room),
+    a skirting at their foot (its own finish's height), its ceiling — each a finish key or None. One undo step.
+    Their GlobalIds."""
+    from ..core import covering_finishes as cf
+    from . import covering_targets as ct
+    info = doc.ifc.space_info(room)
+    if info is None:
+        raise ValueError("tiling_empty")
+    jobs = []
+    up, down = np.array((0.0, 0.0, 1.0)), np.array((0.0, 0.0, -1.0))
+    if floor:
+        ol, hs = ct.room_floor(info)
+        jobs.append((floor, layout, None, None, up, ol, hs, None, room))
+    if walls:
+        for g, p, n, ol, hs, stretch in ct.room_walls(doc.ifc, info, wall_height):
+            jobs.append((walls, layout, g, p, n, ol, hs, stretch, None))
+    if skirting and not walls:                        # (a skirting where the walls are not tiled)
+        h = cf.finish(skirting).h
+        for g, p, n, ol, hs, stretch in ct.room_walls(doc.ifc, info, h):
+            jobs.append((skirting, None, g, p, n, ol, hs, stretch, None))
+    if ceiling:
+        ol, hs = ct.room_ceiling(info)
+        jobs.append((ceiling, layout, None, None, down, ol, hs, None, room))
+    if not jobs:
+        raise ValueError("tiling_empty")
+    language = lang()
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), lambda ifc: _lay_many(ifc, jobs, language))).result
+
+
 def set_covering_extras(doc, guid, zones=None, mix=None, picks=None):
     """(0.566) A Revestimento's bands and border, mix of materials, pieces given their own. One undo step."""
     language = lang()
