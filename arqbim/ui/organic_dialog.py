@@ -61,6 +61,57 @@ class Section(QtWidgets.QWidget):
         p.drawPolyline(QtGui.QPolygonF(pts))
 
 
+class OrganicLineDialog(QtWidgets.QDialog):
+    """(0.561) «Contorno orgânico»: the line chosen rounded, or grown (it meanders without crossing itself)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Contorno orgânico")
+        lay = QtWidgets.QFormLayout(self)
+        self.mode = QtWidgets.QComboBox()
+        self.mode.addItem("Suavizar — arredonda os cantos, mantém a área", "suavizar")
+        self.mode.addItem("Crescer — a linha cresce e dobra-se, sem se cruzar (coral)", "crescer")
+        self.rounds = QtWidgets.QSpinBox()
+        self.rounds.setRange(1, 8)
+        self.rounds.setValue(4)
+        self.steps = QtWidgets.QSpinBox()
+        self.steps.setRange(10, 800)
+        self.steps.setSingleStep(10)
+        self.steps.setValue(150)
+        self.spacing = QtWidgets.QDoubleSpinBox()
+        self.spacing.setRange(0.01, 5.0)
+        self.spacing.setDecimals(2)
+        self.spacing.setSuffix(" m")
+        self.spacing.setValue(0.15)
+        self.seed = QtWidgets.QSpinBox()
+        self.seed.setRange(0, 9999)
+        self.seed.setValue(1)
+        self.inside = QtWidgets.QCheckBox("Dentro da linha original")
+        lay.addRow("Modo", self.mode)
+        lay.addRow("Arredondar (vezes)", self.rounds)
+        lay.addRow("Crescer (passos)", self.steps)
+        lay.addRow("Espaçamento", self.spacing)
+        lay.addRow("Semente (outra variação)", self.seed)
+        lay.addRow("", self.inside)
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok |
+                                             QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        lay.addRow(buttons)
+        self.mode.currentIndexChanged.connect(lambda _k: self._enable())
+        self._enable()
+
+    def _enable(self):
+        grow = self.mode.currentData() == "crescer"
+        self.rounds.setEnabled(not grow)
+        for w in (self.steps, self.spacing, self.seed, self.inside):
+            w.setEnabled(grow)
+
+    def values(self):
+        return {"mode": self.mode.currentData(), "rounds": self.rounds.value(), "steps": self.steps.value(),
+                "spacing": self.spacing.value(), "seed": self.seed.value(), "inside": self.inside.isChecked()}
+
+
 class OrganicDialog(QtWidgets.QDialog):
     """`source_text`: what is selected, in words (None: nothing that serves — only measures)."""
 

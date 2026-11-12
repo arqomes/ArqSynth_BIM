@@ -24930,7 +24930,23 @@ def formas_organicas():
             closed.append(_TriMesh(v, np.asarray(f).reshape(-1, 3)).is_closed())
     check("forma_organica_volumes", cushion is not None and blob is not None and closed == [True, True],
           "{} {} {}".format(cushion, blob, closed))
-    for _ in range(10):
+    # (0.561) «Contorno orgânico»: a square drawn, grown like a coral inside itself — a new line, selected
+    sq = [np.array(p, float) for p in ((160, 16, 0), (166, 16, 0), (166, 22, 0), (160, 22, 0))]
+    sq_obj = _SketchObject("Quadrado", np.eye(4), _PolyMesh(sq, [[0, 1, 2, 3]]))
+    win.doc.execute(_AddObject(sq_obj))
+    win.viewport.set_selection({sq_obj.id})
+    pump(200)
+    in_ribbon = "organic_line" in repr(getattr(_ribbon, "TABS", None) or vars(_ribbon))
+    grown = win.organic_line({"mode": "crescer", "steps": 120, "spacing": 0.2, "seed": 2, "inside": True})
+    pump(400)
+    n_pts = len(win.doc.get(grown).mesh.verts) if grown else 0
+    if grown:
+        win.viewport.zoom_extents({grown, sq_obj.id})
+        pump(600)
+        shot("contorno_organico.png")
+    check("contorno_organico", in_ribbon and grown is not None and n_pts > 60 and win.viewport.selection == {grown},
+          "{} {} {}".format(in_ribbon, grown, n_pts))
+    for _ in range(12):
         win.doc.undo()
     pump(200)
 

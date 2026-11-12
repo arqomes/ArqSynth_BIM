@@ -1230,6 +1230,11 @@ _STRINGS = {
     "schoice.catenaria": ("Catenária (casca)", "Catenary (shell)"),
     "schoice.suavizar": ("Suavizar", "Smooth"),
     "surface.op.blobs": ("Massas fundidas", "Melted masses"),                                    # (0.560)
+    "act.organic_line": ("Contorno orgânico", "Organic outline"),                                # (0.561)
+    "tip.organic_line": ("A linha ou polígono escolhido arredondado (mantém a área) ou a crescer como um coral, "
+                         "sem se cruzar — uma linha nova, para lajes, canteiros, bancos ou para uma Forma orgânica.",
+                         "The line or polygon chosen rounded (its area kept) or grown like a coral without crossing "
+                         "itself — a new line, for slabs, planters, benches or an Organic form."),
     "sfield.volume": ("Corpo", "Body"), "sfield.balls": ("Massas", "Masses"),
     "sfield.fusion": ("Fusão (mais: mais fundidas)", "Fusion (more: more melted)"),
     "schoice.aberta": ("Superfície aberta", "Open surface"),

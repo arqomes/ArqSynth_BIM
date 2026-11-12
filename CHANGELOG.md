@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.561.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 6: contornos orgânicos.** O último passo do plano.
+
+- **Massa e Estudos ▸ Contorno orgânico** (na lista ao lado de «Anel de controlo»): com uma linha ou um polígono
+  desenhado escolhido, abre uma janela pequena:
+  - **Suavizar** — arredonda os cantos (cortes sucessivos dos cantos), mantendo a área do polígono;
+  - **Crescer** — a linha cresce, dobra-se e serpenteia **sem nunca se cruzar**, como um coral ou o bordo de uma
+    folha de alface (crescimento diferencial). Passos, espaçamento entre dobras, semente (outra variação) e
+    «Dentro da linha original» (nasce pequena ao meio e enche o contorno sem sair dele).
+- O resultado é uma **linha nova do modelo** (Linha livre), escolhida, e a original fica: serve para lajes,
+  canteiros, bancos, brises — e de contorno a uma **Forma orgânica** (passos 2 e 5). Um só Desfazer.
+- No **Gráfico Visual**: o nó «Contorno orgânico» (painel → painel, suavizar ou crescer).
+- Testes: `tests/test_organic_lines.py`; «contorno_organico» no gui_smoke, com captura.
+
 ## 0.560.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 5: volumes orgânicos.**

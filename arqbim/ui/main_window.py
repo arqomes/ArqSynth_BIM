@@ -768,6 +768,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_organic_form = self._action(t("act.organic_form"), lambda: self.organic_form(),
                                              icon=icons.control_ring_icon())                            # (0.555)
         self.act_organic_form.setToolTip(t("tip.organic_form"))
+        self.act_organic_line = self._action(t("act.organic_line"), lambda: self.organic_line(),
+                                             icon=icons.control_ring_icon())                            # (0.561)
+        self.act_organic_line.setToolTip(t("tip.organic_line"))
         self.act_keynote_table = self._action(t("act.keynote_table"), lambda: self.edit_keynote_table())    # (0.248)
         self.act_roof_profile = self._action(t("act.roof_profile"), lambda: self.roof_profile_from_face())   # (0.251)
         self.act_roof_profile.setToolTip(t("tip.roof_profile"))
@@ -6583,6 +6586,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewport.set_selection({guid})
         self.message("Forma orgânica criada — mude o comportamento e a altura nas Propriedades.")
         return guid
+
+    def organic_line(self, values=None):
+        """(0.561) «Contorno orgânico»: the line chosen rounded or grown — a new line of the model, selected. Its id."""
+        chosen = [i for i in sorted(list(self.viewport.selection) + list(getattr(self.viewport, "line_selection", {})
+                                                                         or {}), key=str)
+                  if self.doc.get(i) is not None and not self.doc.get(i).is_bim]
+        if not chosen:
+            self.message("Contorno orgânico: escolha primeiro uma linha ou um polígono desenhado.", warning=True)
+            return None
+        if values is None:
+            from .organic_dialog import OrganicLineDialog
+            dlg = OrganicLineDialog(self)
+            if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return None
+            values = dlg.values()
+        try:
+            new = bim.organic_line(self.doc, chosen[0], values.get("mode", "suavizar"), values.get("rounds", 4),
+                                   values.get("steps", 150), values.get("spacing"), values.get("seed", 1),
+                                   values.get("inside", False))
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return None
+        self.viewport.set_selection({new})
+        self.message("Contorno orgânico feito — Forma orgânica faz uma forma sobre ele.")
+        return new
 
     def control_ring(self, height=1.0, factor=0.75):
         """(0.395, the addon's «Anel de controlo») The highest curve selected copied `height` above it, `factor` its

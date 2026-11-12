@@ -851,6 +851,16 @@ def _organic_points(a):
     a.circle((22, 12), 1.8, "red", "red", 0.6)
 
 
+def _organic_line(a):
+    """(0.561) A line meandering like a coral."""
+    path = QtGui.QPainterPath(QtCore.QPointF(4, 24))
+    path.cubicTo(4, 10, 10, 8, 10, 16)
+    path.cubicTo(10, 24, 16, 26, 16, 16)
+    path.cubicTo(16, 6, 22, 6, 22, 14)
+    path.cubicTo(22, 22, 28, 22, 28, 10)
+    a.path(path, None, "blue", 1.8)
+
+
 def _steel_mitre(a):
     a.poly([(3, 8), (26, 8), (19, 15), (3, 15)], theme.ART["steel"][1])
     a.poly([(26, 8), (26, 30), (19, 30), (19, 15)], theme.ART["steel"][2])
@@ -2497,7 +2507,7 @@ DRAWN = {"select": _select, "move": _move, "copy": _copy, "rotate": _rotate, "mi
          "rules_editor": _rules_editor, "check_ifc": _check_ifc, "check_ids": _check_ids,
          "missing_data": _missing_data,
          "calibrate_image": _calibrate_image, "control_ring": _control_ring, "organic_form": _organic_form,
-         "organic_points": _organic_points, "walls_from_cad": _walls_from_cad,
+         "organic_points": _organic_points, "organic_line": _organic_line, "walls_from_cad": _walls_from_cad,
          "model_from_scan": _model_from_scan,
          "site_location": _site_location, "terrain": _terrain_icon, "lot": _lot, "platform": _platform,
          "terrain_ramp": _terrain_ramp, "edit_platform": _edit_platform, "earthworks": _earthworks,

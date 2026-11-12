@@ -1809,7 +1809,9 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
    partir do centro — formas em anel ou arco ficam com o contorno exterior): «almofada» a partir de um polígono extrudido e arredondado (subdivisão), e
    **massas fundidas** (pontos/linhas que se fundem como gotas — metaballs) para pavilhões, bancos, pilares árvore;
    superfície tirada por marching cubes (numpy). Uniões e cortes com o «Combinar e recortar» (0.493).
-6. **Contornos orgânicos**: suavizar um polígono em curva, **crescimento diferencial** (a linha que cresce e se
+6. ~~**Contornos orgânicos**~~ (0.561.0: `core/organic_lines.py`, Massa e Estudos ▸ Contorno orgânico, nó do
+   Gráfico Visual; **o plano está completo** — restos: a Construção não respeita os óculos, óculos não redondos,
+   massas fundidas que um raio do centro atravessa duas vezes): suavizar um polígono em curva, **crescimento diferencial** (a linha que cresce e se
    dobra sem se cruzar) para lajes, canteiros, bancos e brises — o resultado é um desenho do modelo, que serve de
    contorno aos passos 2 e 5.
 7. ~~**No Gráfico Visual**~~ (0.558.0: «Forma orgânica» e «Furos sobre a forma», `core/graph/nodes_organic.py`;

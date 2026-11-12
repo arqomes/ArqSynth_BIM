@@ -426,7 +426,8 @@ _THUMBS = {}
 # (0.542) measures that show a node best in its small picture, where its own would not tell it from its input
 THUMB_PARAMS = {"remapear": {"degraus": 3}, "desalinhar": {"quanto": 0.9}, "escalar_furos": {"fator": 0.4},
                 "contorno_pontos": {"passo": 0.1, "distancia": 0.15, "filas": 2}, "area_aberta": {"alvo": 45.0},
-                "corrigir_fabrico": {"ponte_min": 0.08}}
+                "corrigir_fabrico": {"ponte_min": 0.08},
+                "contorno_organico": {"modo": "crescer", "passos": 80, "espaco": 0.08}}      # (0.561)
 
 
 def node_thumb(key, w=96, h=60):

@@ -4569,6 +4569,33 @@ def organic_shape(kind, centre, length=10.0, width=6.0, sides=6, segments=48):
     return np.array([(c[0] + x, c[1] + y, c[2]) for x, y in pts])
 
 
+def organic_line(doc, sketch, mode="suavizar", rounds=4, steps=150, spacing=None, seed=1, inside=False):
+    """(0.561) A sketch's line made organic — «suavizar»: rounded (its area kept); «crescer»: grown (differential
+    growth: it meanders without crossing itself; `inside`: kept within the line it grew from) — a new sketch of the
+    model (a freehand line), the old one left. One undo step. Its id."""
+    from ..core import organic_lines as ol
+    from ..core.mesh import PolyMesh
+    from .document import AddObject, SketchObject
+    from .surface_curves import sketch_chains
+    obj = doc.get(sketch)
+    if obj is None or obj.is_bim:
+        raise ValueError("surface_no_curves")
+    chains = sketch_chains(obj)
+    if not chains:
+        raise ValueError("surface_no_curves")
+    pts, closed = chains[0]
+    if mode == "crescer":
+        out = ol.grow(pts, closed, steps=int(steps), spacing=spacing, seed=int(seed),
+                      bound=pts if inside and closed else None)
+    else:
+        out = ol.smooth(pts, closed, rounds=int(rounds))
+    pairs = [(k, k + 1) for k in range(len(out) - 1)] + ([(len(out) - 1, 0)] if closed else [])
+    new = SketchObject(t("obj.freehand", n=doc.next_number()), np.eye(4),
+                       PolyMesh([np.asarray(p, float) for p in out], lines=pairs), curve={"kind": "freehand"})
+    doc.execute(AddObject(new, t("cmd.freehand")))
+    return new.id
+
+
 def add_blobs(doc, sketches, usage=None, storey=None, fusion=2.0):
     """(0.560) Masses melted together (op «blobs»): each sketch chosen a ball — at its middle, its size its plan's
     larger half — lying on the working level. One undo step. Its GlobalId."""

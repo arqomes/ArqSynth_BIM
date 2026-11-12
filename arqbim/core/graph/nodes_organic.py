@@ -40,6 +40,35 @@ def forma_organica(painel, comportamento, altura, divisoes, bordos_livres):
     return {"malha": {"verts": verts, "tris": tris, "panel": painel, "rows": surface.rows}}
 
 
+@r.node("contorno_organico", "Orgânico", "Contorno orgânico",
+        "O contorno do painel arredondado (suavizar) ou a crescer como um coral, sem se cruzar (crescer): um painel "
+        "com essa forma.",
+        inputs=[Port("painel", "panel", "Painel")], outputs=[Port("painel", "panel", "Painel")],
+        params=[Port("modo", "choice", "Modo", default="suavizar", choices=("suavizar", "crescer")),
+                Port("passos", "int", "Passos (crescer)", default=120, min=10, max=600, step=10, unit=""),
+                _num("espaco", "Espaçamento (crescer)", 0.05, 0.005, 2.0, 0.005),
+                Port("semente", "int", "Semente", default=1, min=0, max=9999, step=1, unit="")],
+        example="Uma pala de 3 m com o bordo em coral.")
+def contorno_organico(painel, modo, passos, espaco, semente):
+    from shapely.geometry import Polygon
+
+    from .. import organic_lines as ol
+    ring = np.column_stack((_outline(painel), np.zeros(len(_outline(painel)))))
+    if modo == "crescer":
+        out = ol.grow(ring, True, steps=int(passos), spacing=float(espaco), seed=int(semente), max_points=3000)
+    else:
+        out = ol.smooth(ring, True)
+    shape = Polygon(out[:, :2]).buffer(0)
+    if shape.is_empty or shape.area < 1e-6:
+        raise ValueError("o contorno ficou sem área")
+    margin = float(painel.get("margin", 0.0))
+    inside = shape.buffer(-margin, join_style=2) if margin > 0 else shape
+    if inside.is_empty:
+        raise ValueError("a margem não deixa nada para furar")
+    x0, y0, x1, y1 = shape.bounds
+    return {"painel": dict(painel, shape=shape, inside=inside, width=x1 - x0, height=y1 - y0)}
+
+
 def _heights(form, xy):
     """The form's height over each plan point (its triangle's, by barycentric weights; outside it: 0)."""
     v, t = np.asarray(form["verts"], float), np.asarray(form["tris"])
