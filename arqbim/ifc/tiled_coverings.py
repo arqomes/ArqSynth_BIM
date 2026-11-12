@@ -56,7 +56,45 @@ def face_frame_and_shape(outline, holes=()):
     return m, face
 
 
+CUSTOM_KEY = "RevestimentosProprios"
+
+
 class TiledCoveringMixin:
+    def load_custom_finishes(self):
+        """(0.569) The project's own finishes put in the catalogue (once per change of them)."""
+        project = self.file.by_type("IfcProject")
+        raw = self._params(project[0]).get(CUSTOM_KEY) if project else None
+        if raw and raw != getattr(self, "_custom_seen", None):
+            self._custom_seen = raw
+            try:
+                cf.register(json.loads(raw))
+            except ValueError:
+                pass
+
+    def save_custom_finish(self, guid, name):
+        """(0.569) A Revestimento's finish as it is now — piece, bond, joints, bed, grout — kept as a finish of one's
+        own under `name` (in the project, its key returned)."""
+        import re
+        p = self.tiled_params(guid)
+        d = p["layout"]
+        key = cf.CUSTOM_PREFIX + (re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "revestimento")
+        entry = {"key": key, "name_pt": name, "name_en": name, "material": p["material"], "w": d["w"], "h": d["h"],
+                 "thickness": p["thickness"], "pattern": d["pattern"], "joint": d["joint"], "bond": d["bond"],
+                 "bed": p["bed"], "bed_material": p["bed_material"], "grout": p["grout"] or "",
+                 "recess": p["recess"], "lengths": list(d.get("lengths") or [])}
+        project = self.file.by_type("IfcProject")[0]
+        try:
+            old = json.loads(self._params(project).get(CUSTOM_KEY) or "[]")
+        except ValueError:
+            old = []
+        old = [q for q in old if q.get("key") != key] + [entry]
+        self._set_params(project, {CUSTOM_KEY: json.dumps(old, ensure_ascii=False)})
+        cf.register([entry])
+        e = self.by_guid(guid)
+        self._set_params(e, {"Acabamento": key})
+        self._tiled_body(e)                               # (its type now the finish's own name)
+        return key, entry
+
     def tiled_on(self, host, point, normal, reach=0.01):
         """(outline, holes, normal) of the flat face of element `host` round `point` (world), facing `normal` — or
         None. `reach`: how far the face may be from the point (following: anywhere in its plane)."""
@@ -163,6 +201,7 @@ class TiledCoveringMixin:
     def tiled_params(self, guid):
         """{finish, layout, material, thickness, bed, bed_material, grout, recess, source} of a Revestimento."""
         e, _ = self._require(guid, KIND)
+        self.load_custom_finishes()
         p = self._params(e)
         try:
             layout = json.loads(p.get("Paginacao") or "{}")
@@ -203,7 +242,16 @@ class TiledCoveringMixin:
             a, b = (float(v) for v in (p.get("Prolongar") or "0;0").split(";"))
         except ValueError:
             a = b = 0.0
-        return a, b
+        auto = (p.get("ProlongarAuto") or ";").split(";")      # (the corner's neighbour: as thick as it is now)
+        out = [a, b]
+        for k, g in enumerate(auto[:2]):
+            other = self.by_guid(g) if g else None
+            if other is not None and self._params(other).get("Elemento") == KIND:
+                q = self._params(other)
+                fin = cf.finish(q.get("Acabamento"))
+                out[k] = float(q.get("Cama") if q.get("Cama") is not None else fin.bed) + \
+                    float(q.get("Espessura") if q.get("Espessura") is not None else fin.thickness)
+        return tuple(out)
 
     def set_tiled_extend(self, guid, start=None, end=None, lang="pt"):
         """(0.568) Its start / end prolonged (0–1 m); its body made again."""
@@ -232,7 +280,7 @@ class TiledCoveringMixin:
             info.append((g, m, (x0, x1, (y0 + y1) / 2.0), p["bed"] + p["thickness"]))
         out = []
         for i, (g, m, (u0, u1, vm), _t) in enumerate(info):
-            ext = [0.0, 0.0]
+            ext, who = [0.0, 0.0], ["", ""]
             for k, (u, side) in enumerate(((u0, -1.0), (u1, 1.0))):
                 end = m[:3, 3] + m[:3, 0] * u + m[:3, 1] * vm
                 way = m[:3, 0] * side
@@ -240,12 +288,20 @@ class TiledCoveringMixin:
                     if j <= i:
                         continue
                     n2 = m2[:3, 2]
-                    if abs(float(n2 @ (end - m2[:3, 3]))) < 0.03 and float(way @ n2) > 0.99:
-                        ext[k] = max(ext[k], t2)
+                    if abs(float(n2 @ (end - m2[:3, 3]))) < 0.03 and float(way @ n2) > 0.99 and t2 > ext[k]:
+                        ext[k], who[k] = t2, g2
             if ext[0] or ext[1]:
+                self._set_params(self.by_guid(g), {"ProlongarAuto": ";".join(who)})
                 self.set_tiled_extend(g, ext[0] or None, ext[1] or None, lang)
                 out.append(g)
         return out
+
+    def _relap(self, guid, lang="pt"):
+        """(0.569) The Revestimentos lapped over this one's end (at a corner) made again — it got thicker or
+        thinner."""
+        for e in self.file.by_type("IfcCovering"):
+            if guid in (self._params(e).get("ProlongarAuto") or "").split(";") and e.GlobalId != guid:
+                self._tiled_body(e, lang)
 
     def tiled_layout(self, guid):
         """core/tiling's Result of a Revestimento's pieces as they are."""
@@ -305,6 +361,7 @@ class TiledCoveringMixin:
         """A Revestimento on a flat face: `frame` (4, 4) its plane (x, y in it, z out of it, its origin on it),
         `face` (shapely, the frame's x, y) the part covered; `finish` a core/covering_finishes key — its layout
         (`layout` over it) and anything of it changed by `changes` (as set_tiled_covering's). Returns it."""
+        self.load_custom_finishes()
         if finish not in cf.FINISHES:
             raise EditRefused("tiling_finish")
         fin = cf.FINISHES[finish]
@@ -371,6 +428,8 @@ class TiledCoveringMixin:
                             "Furos": "|".join(_text(list(h.coords)[:-1]) for h in q.interiors)})
         self._set_params(e, changes)
         self._tiled_body(e, lang)
+        if any(k in changes for k in ("Espessura", "Cama")):  # (0.569) those lapped over its end follow it
+            self._relap(guid, lang)
 
     def _tiled_body(self, e, lang="pt"):
         f, u = self.file, 1.0 / self.unit_scale

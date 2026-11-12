@@ -31,6 +31,7 @@ PATTERNS = {
     "flamengo": ("Tijolo — aparelho flamengo", "Brick — Flemish bond"),
     "ingles": ("Tijolo — aparelho inglês", "Brick — English bond"),
     "livre": ("Padrão livre (peças desenhadas)", "Free pattern (pieces drawn)"),
+    "continuo": ("Contínuo (sem juntas)", "Continuous (no joints)"),           # (0.569) paint, microcement, plaster
 }
 ORIGINS = ("canto", "centro", "ponto", "auto")
 ALIGNS = ("junta", "peca")          # at the origin: a joint, or a piece's middle
@@ -324,6 +325,12 @@ def _livre(bx, d):
     return polys, kinds
 
 
+def _continuo(bx, d):
+    """(0.569) One piece over it all — a coat of paint, microcement, plaster, a sheet of wallpaper's whole wall."""
+    x0, y0, x1, y1 = bx
+    return [box(x0 - 1.0, y0 - 1.0, x1 + 1.0, y1 + 1.0)], ["A"]
+
+
 def _letter(k):
     s = ""
     k += 1
@@ -335,7 +342,8 @@ def _letter(k):
 
 BONDS = {"eito": _eito, "desencontrado": _desencontrado, "vertical": _vertical, "espinha": _espinha,
          "espinha_reta": _espinha, "cestaria": _cestaria, "diagonal": _eito, "opus": _opus, "reguas": _reguas,
-         "hexagono": _hexagono, "escama": _escama, "flamengo": _flamengo, "ingles": _ingles, "livre": _livre}
+         "hexagono": _hexagono, "escama": _escama, "flamengo": _flamengo, "ingles": _ingles, "livre": _livre,
+         "continuo": _continuo}
 EXTRA_ANGLE = {"espinha": 45.0, "diagonal": 45.0}
 
 
@@ -343,6 +351,8 @@ def repeat(d):
     """The pattern's repeat (along x, up y) — a shift of either leaves it as it was."""
     p, w, h = d["pattern"], d["w"], d["h"]
     L, W = max(w, h), min(w, h)
+    if p == "continuo":
+        return (1e6, 1e6)
     if p in ("espinha", "espinha_reta"):
         return (2 * L, 2 * L)
     if p == "cestaria":
@@ -439,7 +449,7 @@ def _clip(poly, d, origin):
     pts = _to_pattern(np.asarray(poly.exterior.coords), fr)
     bx = (*pts.min(axis=0), *pts.max(axis=0))
     rw, rh = repeat(d)
-    if (bx[2] - bx[0]) * (bx[3] - bx[1]) / max(rw * rh, 1e-12) > MAX_PIECES / 4:
+    if d["pattern"] != "continuo" and (bx[2] - bx[0]) * (bx[3] - bx[1]) / max(rw * rh, 1e-12) > MAX_PIECES / 4:
         raise LayoutError("tiling_too_many")
     polys, kinds = BONDS[d["pattern"]](bx, d)
     laid = _joint_off(polys, d)

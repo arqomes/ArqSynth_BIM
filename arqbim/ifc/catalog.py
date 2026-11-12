@@ -139,6 +139,12 @@ MATERIALS = {m.key: m for m in (
                  density=1700.0),
     MaterialSpec("cola_cimenticia", "Cola cimentícia", "Cement tile adhesive", "plaster", (0.78, 0.77, 0.74),
                  density=1500.0),
+    MaterialSpec("microcimento", "Microcimento", "Microcement", "plaster", (0.74, 0.72, 0.69),     # (0.569)
+                 density=2000.0, finish="satin"),
+    MaterialSpec("papel_parede", "Papel de parede", "Wallpaper", "other", (0.86, 0.82, 0.74)),
+    MaterialSpec("hpl", "Painel HPL", "HPL panel", "other", (0.55, 0.42, 0.32), density=1350.0),
+    MaterialSpec("acm", "Painel compósito de alumínio", "Aluminium composite panel", "metal", (0.80, 0.81, 0.82),
+                 finish="metal"),
     MaterialSpec("solo", "Solo natural", "Natural soil", "earth", (0.62, 0.55, 0.42)),            # (0.155)
     MaterialSpec("a400", "Aço A400 NR", "Reinforcing steel A400 NR", "steel", (0.62, 0.24, 0.16)),   # (0.166)
     MaterialSpec("a500", "Aço A500 NR", "Reinforcing steel A500 NR", "steel", (0.62, 0.24, 0.16)),

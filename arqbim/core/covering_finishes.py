@@ -81,10 +81,109 @@ FINISHES = {f.key: f for f in (
            joint=0.003, bed=0.010, group="remate", extra={"origin": "canto"}),
     Finish("capeamento_zinco", "Capeamento de zinco", "Zinc coping", "zinco", 2.00, 0.60, 0.002, joint=0.0,
            bed=0.0, grout="", recess=0.0, group="remate", extra={"origin": "canto"}),
+    # (0.569) façades and walls in panels, continuous coats, soft floors
+    Finish("hpl_fachada", "Painel HPL de fachada 2,5 × 1,25", "HPL façade panel 2.5 × 1.25", "hpl", 2.50, 1.25,
+           0.008, joint=0.008, bed=0.0, grout="", recess=0.0, group="painel", extra={"origin": "canto"}),
+    Finish("acm_cassete", "Cassete de compósito 1,5 × 0,5", "Composite cassette 1.5 × 0.5", "acm", 1.50, 0.50,
+           0.004, joint=0.015, bed=0.0, grout="", recess=0.0, group="painel"),
+    Finish("chapa_ondulada", "Chapa metálica em faixas verticais", "Metal sheet in upright strips", "aco_grafite",
+           3.00, 0.50, 0.002, pattern="vertical", bond=0.0, joint=0.003, bed=0.0, grout="", recess=0.0,
+           group="painel"),
+    Finish("zinco_junta_agrafada", "Zinco de junta agrafada", "Standing-seam zinc", "zinco", 6.00, 0.43, 0.002,
+           pattern="vertical", bond=0.0, joint=0.012, bed=0.0, grout="", recess=0.0, group="painel"),
+    Finish("gesso_cartonado", "Gesso cartonado 1,2 × 2,6", "Plasterboard 1.2 × 2.6", "gesso", 1.20, 2.60, 0.0125,
+           pattern="eito", joint=0.001, bed=0.0, grout="", recess=0.0, group="painel", extra={"origin": "canto"}),
+    Finish("microcimento", "Microcimento (contínuo)", "Microcement (seamless)", "microcimento", 1.0, 1.0, 0.003,
+           pattern="continuo", joint=0.0, bed=0.0, grout="", recess=0.0, group="continuo"),
+    Finish("pintura_branca", "Pintura branca", "White paint", "tinta_branca", 1.0, 1.0, 0.0005,
+           pattern="continuo", joint=0.0, bed=0.0, grout="", recess=0.0, group="continuo"),
+    Finish("reboco_pintado", "Reboco pintado 2 cm", "Painted render 2 cm", "reboco", 1.0, 1.0, 0.020,
+           pattern="continuo", joint=0.0, bed=0.0, grout="", recess=0.0, group="continuo"),
+    Finish("etics", "ETICS / capoto 6 cm", "ETICS 6 cm", "etics", 1.0, 1.0, 0.065, pattern="continuo", joint=0.0,
+           bed=0.0, grout="", recess=0.0, group="continuo"),
+    Finish("papel_parede", "Papel de parede (rolos de 53 cm)", "Wallpaper (53 cm rolls)", "papel_parede", 10.0,
+           0.53, 0.0005, pattern="vertical", bond=0.0, joint=0.0, bed=0.0, grout="", recess=0.0,
+           group="continuo"),
+    Finish("vinilico_reguas", "Vinílico em réguas", "Vinyl planks", "vinilico", 1.22, 0.18, 0.005, pattern="reguas",
+           joint=0.0005, bed=0.0, grout="", recess=0.0, lengths=(0.61, 0.92, 1.22), group="madeira"),
+    Finish("cortica_placas", "Cortiça em placas 60 × 30", "Cork tiles 60 × 30", "cortica", 0.60, 0.30, 0.006,
+           pattern="desencontrado", joint=0.0005, bed=0.0, grout="", recess=0.0, group="madeira"),
+    Finish("alcatifa_placas", "Alcatifa em placas 50 × 50", "Carpet tiles 50 × 50", "tecido", 0.50, 0.50, 0.007,
+           joint=0.0, bed=0.0, grout="", recess=0.0, group="continuo"),
 )}
 GROUPS = {"ceramico": ("Cerâmico", "Ceramic"), "pedra": ("Pedra", "Stone"), "madeira": ("Madeira", "Wood"),
-          "tijolo": ("Tijolo", "Brick"), "remate": ("Rodapés e remates", "Skirtings and trims")}
+          "tijolo": ("Tijolo", "Brick"), "painel": ("Painéis e chapas", "Panels and sheets"),
+          "continuo": ("Contínuos (pintura, reboco, papel)", "Seamless (paint, render, paper)"),
+          "remate": ("Rodapés e remates", "Skirtings and trims"),
+          "proprio": ("Os meus revestimentos", "My finishes")}
+BUILT_IN = frozenset(FINISHES)
+CUSTOM_PREFIX = "proprio_"
+FIELDS = ("name_pt", "name_en", "material", "w", "h", "thickness", "pattern", "joint", "bond", "bed",
+          "bed_material", "grout", "recess", "lengths")
 
 
 def finish(key):
     return FINISHES.get(key) or FINISHES["porcelanico_60x60"]
+
+
+def to_dict(f):
+    d = {k: getattr(f, k) for k in FIELDS}
+    d["lengths"] = list(f.lengths)
+    d["key"] = f.key
+    return d
+
+
+def register(entries):
+    """(0.569) Finishes of one's own (from the project or the user's library: [{key, name_pt, …}]) put in the
+    catalogue, in the group «Os meus revestimentos». Those of the same key replaced."""
+    for d in entries or ():
+        try:
+            key = d["key"] if str(d["key"]).startswith(CUSTOM_PREFIX) else CUSTOM_PREFIX + str(d["key"])
+            FINISHES[key] = Finish(key, str(d.get("name_pt") or key), str(d.get("name_en") or d.get("name_pt") or key),
+                                   str(d["material"]), float(d["w"]), float(d["h"]), float(d["thickness"]),
+                                   str(d.get("pattern") or "eito"), float(d.get("joint") or 0.0),
+                                   float(d.get("bond") if d.get("bond") is not None else 0.5),
+                                   float(d.get("bed") or 0.0), str(d.get("bed_material") or "cola_cimenticia"),
+                                   str(d.get("grout") or ""), float(d.get("recess") or 0.0),
+                                   tuple(float(v) for v in d.get("lengths") or ()), "proprio")
+        except (KeyError, TypeError, ValueError):
+            continue
+
+
+def custom():
+    return [to_dict(f) for k, f in FINISHES.items() if k not in BUILT_IN]
+
+
+def library_path():
+    """The user's own finishes, kept between projects."""
+    import os
+    from arqsynth_templates.paths import suite_dir      # (where the company's title block is kept too)
+    return os.path.join(suite_dir(), "revestimentos.json")
+
+
+def load_library():
+    import json
+    try:
+        with open(library_path(), encoding="utf-8") as fh:
+            register(json.load(fh))
+    except (OSError, ValueError, ImportError):
+        pass
+
+
+def save_library(entries):
+    import json
+    import os
+    try:
+        path = library_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        old = {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                old = {d["key"]: d for d in json.load(fh)}
+        except (OSError, ValueError):
+            pass
+        old.update({d["key"]: d for d in entries})
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(list(old.values()), fh, ensure_ascii=False, indent=1)
+    except (OSError, ImportError):
+        pass

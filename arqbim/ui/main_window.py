@@ -314,6 +314,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tools = {cls.name: cls(self) for cls in ALL_TOOLS}
         self.tool = None
+        from ..core import covering_finishes as _cf    # (0.569) the user's own finishes, kept between projects
+        _cf.load_library()
         self._typed = ""
         self.pending_classify = None   # type chosen in "Classify as…" with nothing selected
 
@@ -6655,6 +6657,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message(t("info.covering_made", n=len(made)))
         return made
 
+    def covering_save(self, guid, name=None):
+        """(0.569) «Guardar como revestimento próprio»: the finish as it is now, under a name, in the project and in
+        the user's library. Its key."""
+        if name is None:
+            name, ok = QtWidgets.QInputDialog.getText(self, t("act.covering_save"), t("ask.covering_name"))
+            if not ok or not name.strip():
+                return None
+        key = bim.save_covering_finish(self.doc, guid, name.strip())
+        self.viewport.set_selection({guid})
+        self.message(t("info.covering_saved", n=name.strip()))
+        return key
+
     def covering_extras(self, guid, values=None):
         """(0.566) «Faixas, cercadura e mistura» of a Revestimento: its window (or `values` (zones, mix) given)."""
         x = self.doc.ifc.tiled_extras(guid)
@@ -7680,6 +7694,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             elif action == "covering_extras":              # (0.566) its bands, border and mix
                 QtCore.QTimer.singleShot(0, lambda: self.covering_extras(guid))
+                return
+            elif action == "covering_save":                # (0.569) kept as a finish of one's own
+                QtCore.QTimer.singleShot(0, lambda: self.covering_save(guid))
                 return
             elif action.startswith("covering_"):           # (0.563) a Revestimento: its finish, layout, materials
                 key = action[9:]

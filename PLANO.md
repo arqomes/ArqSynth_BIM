@@ -1873,7 +1873,8 @@ Falta:
    - pilares redondos;
    - **superfícies paramétricas e formas orgânicas** (painéis pela grelha, com a análise de planaridade da 0.559 a
      dizer o que é plano).
-9. **Catálogo de revestimentos:**
+9. ~~**Catálogo de revestimentos:**~~ (0.569.0: 31 revestimentos em 8 grupos, contínuo, os meus revestimentos no
+   projeto e na biblioteca; as texturas vêm do material, como nos outros elementos)
    - cerâmico, porcelânico, pedra natural, madeira, compósito, HPL, chapa metálica, cassete, tijolo face à vista,
      deck, microcimento, pintura, papel de parede, gesso cartonado, ETICS;
    - com texturas (Poly Haven, 0.471) e peças tipo de mercado;

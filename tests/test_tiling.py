@@ -39,7 +39,7 @@ class EveryBond(unittest.TestCase):
                 d.update(w=0.3)
             with self.subTest(key):
                 r = tl.lay(ROOM, d)
-                self.assertGreater(len(r.pieces), 10)
+                self.assertGreater(len(r.pieces), 0 if key == "continuo" else 10)
                 self.assertAlmostEqual(covered(r), 4.1 * 3.05, delta=0.02 * 4.1 * 3.05, msg=key)
                 self.assertEqual(overlaps(r), 0, key)
 

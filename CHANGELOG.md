@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.569.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 9: o catálogo.**
+
+- **13 revestimentos novos**, agrupados:
+  - **Painéis e chapas**: HPL de fachada 2,5 × 1,25 com juntas abertas de 8 mm; cassete de compósito; chapa em
+    faixas verticais; zinco de junta agrafada; gesso cartonado 1,2 × 2,6;
+  - **Contínuos**: microcimento, pintura branca, reboco pintado, ETICS / capoto, papel de parede em rolos de 53 cm;
+  - **Pavimentos macios**: vinílico em réguas, cortiça, alcatifa em placas.
+- Novo aparelho **Contínuo (sem juntas)**: uma só peça na face inteira, com os vãos recortados.
+- Novos materiais: microcimento, papel de parede, painel HPL, compósito de alumínio.
+- **Os meus revestimentos**:
+  - nas Propriedades, «Guardar como meu…» guarda o revestimento como está (peça, aparelho, juntas, cola, betume),
+    com um nome;
+  - fica no projeto: quem abre o IFC tem-no;
+  - fica na biblioteca do utilizador (`revestimentos.json` na pasta da suite), para os projetos seguintes;
+  - aparece no grupo «Os meus revestimentos» em todas as listas.
+- As **esquinas sobrepostas** passam a seguir a espessura do revestimento vizinho: trocar a pedra (3 cm) por HPL
+  (8 mm) acerta a sobreposição sozinho.
+- Testes: `tests/test_tiled_coverings.py` (todos os revestimentos do catálogo assentam, contínuo numa só peça,
+  revestimento próprio gravado e relido); «revestimento_proprio» no gui_smoke, com captura.
+
 ## 0.568.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 6: remates.**

@@ -1349,6 +1349,15 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_save": ("Revestimento próprio", "Own finish"),                                         # (0.569)
+    "act.covering_save": ("Guardar como meu…", "Save as mine…"),
+    "tip.covering_save": ("Guarda este revestimento como está (peça, aparelho, juntas, cola, betume) com um nome: "
+                          "fica no projeto e na sua biblioteca, em «Os meus revestimentos».",
+                          "Keeps this finish as it is (piece, bond, joints, bed, grout) under a name: in the project "
+                          "and in your library, under «My finishes»."),
+    "ask.covering_name": ("Nome do revestimento:", "Finish name:"),
+    "info.covering_saved": ("Revestimento «{n}» guardado — aparece em «Os meus revestimentos».",
+                            "Finish «{n}» saved — it is under «My finishes»."),
     "props.cov_exp_every": ("Juntas de dilatação a cada (0: nenhuma)", "Expansion joints every (0: none)"),  # (0.568)
     "props.cov_exp_width": ("Junta de dilatação (largura)", "Expansion joint (width)"),
     "props.cov_extend_start": ("Prolongar no início", "Prolong at the start"),

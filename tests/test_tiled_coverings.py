@@ -293,3 +293,39 @@ class Expansion(unittest.TestCase):
         r, _m = tl.lay_all(face, tl.layout({"w": 0.6, "h": 0.6, "joint": 0.0, "exp_every": 4.0, "exp_width": 0.01}))
         covered = sum(p.area for p in r.pieces)
         self.assertAlmostEqual(covered, 30.0 - 2 * 3 * 0.01, places=3)
+
+
+class Catalogue(unittest.TestCase):
+    """(0.569) Panels, seamless coats, a finish kept as one's own."""
+
+    def test_every_finish_lays(self):
+        from arqbim.core import covering_finishes as cf
+        doc = Document()
+        for key in [k for k in cf.FINISHES if k in cf.BUILT_IN]:
+            with self.subTest(key):
+                g = bim.add_covering(doc, WALL, key)
+                self.assertIsNotNone(doc.ifc.by_guid(g))
+
+    def test_seamless_one_piece(self):
+        doc = Document()
+        g = bim.add_covering(doc, WALL, "microcimento", holes=[DOOR])
+        r = doc.ifc.tiled_layout(g)
+        self.assertEqual(len(r.pieces), 1)
+
+    def test_own_finish(self):
+        from arqbim.core import covering_finishes as cf
+        doc = Document()
+        g = bim.add_covering(doc, WALL, "azulejo_20x20")
+        bim.set_covering(doc, g, layout={"pattern": "diagonal", "joint": 0.004})
+        key = bim.save_covering_finish(doc, g, "Azulejo da avó", library=False)
+        self.assertTrue(key.startswith(cf.CUSTOM_PREFIX))
+        self.assertEqual(ifcopenshell.util.element.get_type(doc.ifc.by_guid(g)).Name, "Azulejo da avó")
+        g2 = bim.add_covering(doc, FLOOR, key)
+        self.assertEqual(doc.ifc.tiled_params(g2)["layout"]["pattern"], "diagonal")
+        path = os.path.join(tempfile.mkdtemp(), "own.ifc")
+        doc.ifc.file.write(path)
+        del cf.FINISHES[key]
+        from arqbim.ifc.model import IfcModel
+        again = IfcModel(ifcopenshell.open(path)) if hasattr(IfcModel, "__init__") else None
+        self.assertEqual(again.tiled_params(g2)["layout"]["pattern"], "diagonal")
+        self.assertIn(key, cf.FINISHES)                 # (the project's own put back in the catalogue)

@@ -24977,6 +24977,20 @@ def revestimentos():
         shot("revestimento_ambiente.png")
         ok_rooms = len(made_rooms or []) == 5 and len(outside or []) >= 4
         check("revestimento_ambientes", ok_rooms, "{} {}".format(len(made_rooms or []), len(outside or [])))
+        # (0.569) the façade in HPL panels instead, one kept as «my» finish
+        for g in outside or []:
+            _bim.set_covering(win.doc, g, finish="hpl_fachada")
+        pump(600)
+        key = win.covering_save(outside[0], "Fachada HPL nogueira") if outside else None
+        pump(400)
+        win.viewport.set_selection({outside[0]} if outside else set())
+        pump(400)
+        shot("revestimento_hpl_meu.png")
+        from arqbim.core import covering_finishes as _cf
+        laps = [max(win.doc.ifc.tiled_extend(g)) for g in outside]
+        check("revestimento_proprio", bool(key) and key in _cf.FINISHES and
+              win.props.editors.get("covering_finish") is not None and 0 < max(laps) < 0.01,
+              "{} {}".format(key, laps))
     else:
         check("revestimento_ambientes", False, "sem ambiente: {} {}".format(
             [(s["name"], [tuple(round(c, 1) for c in q) for q in s["outline"]][:4]) for s in win.doc.ifc.spaces()],

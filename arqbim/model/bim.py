@@ -721,6 +721,17 @@ def cover_category(doc, guids, category, finish, sides="ambas", slab_faces=("top
     return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
 
 
+def save_covering_finish(doc, guid, name, library=True):
+    """(0.569) A Revestimento's finish as it is now kept as one's own (`name`): in the project — one undo step —
+    and, `library`, in the user's library (for the next projects). Its key."""
+    from ..core import covering_finishes as cf
+    key, entry = doc.execute(IfcCommand(t("cmd.tiled_covering"),
+                                        lambda ifc: ifc.save_custom_finish(guid, name))).result
+    if library:
+        cf.save_library([entry])
+    return key
+
+
 def set_covering_extend(doc, guid, start=None, end=None):
     """(0.568) A Revestimento prolonged at its start / end. One undo step."""
     language = lang()
@@ -769,7 +780,10 @@ def set_covering(doc, guid, **changes):
     """(0.563) A Revestimento changed (ifc.set_tiled_covering: layout, finish, material, thickness, bed, grout…).
     One undo step."""
     language = lang()
-    _edit(doc, lambda ifc: ifc.set_tiled_covering(guid, lang=language, **changes), [guid], "cmd.tiled_covering")
+    lapped = [e.GlobalId for e in doc.ifc.file.by_type("IfcCovering")            # (0.569: those lapped over its
+              if guid in (doc.ifc._params(e).get("ProlongarAuto") or "").split(";")]   # end are drawn again too)
+    _edit(doc, lambda ifc: ifc.set_tiled_covering(guid, lang=language, **changes), [guid] + lapped,
+          "cmd.tiled_covering")
     return guid
 
 
