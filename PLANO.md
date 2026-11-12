@@ -1766,6 +1766,126 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    `ifc.follow_claddings` no passo de desfazer da própria parede).
 9. ~~Desfazer (Ctrl+Z) no editor; o gráfico da IA aparece na janela aberta.~~ (0.543.0)
 
+### Gerador de revestimentos 3D em IFC (pedido do dono do projeto, 2026-11-12)
+
+O dono: «gerador de revestimento 3D IFC… aplicado por categoria de estrutura, face, plano ou polígono selecionado.
+O revestimento compreende tudo o que se possa fazer para acabamento de uma estrutura. Paginação de diferentes formas
+e controlo sobre tudo».
+
+**O que já existe** (levantamento de 2026-11-12):
+- revestimentos de parede `ifc/coverings.py` (azulejo, reboco, pedra, ripado, canelado, perfurado, ondulado — os
+  três primeiros são uma placa só, sem peças nem juntas);
+- piso `add_flooring` (uma placa só);
+- teto em placas `core/ceilings.py` (uma quadrícula fixa de 0,60 m, nada é parâmetro);
+- painel numa face plana qualquer `add_plane_panel` (só perfurado, IfcPlate);
+- o motor de telhas `core/roof_tiles.py` (assentamento, corte nas arestas — a base a reaproveitar);
+- o padrão desenhado e o seu alinhamento só à vista (`material_graphics`, `pattern_align`).
+
+Falta:
+- peças reais com juntas e aparelhos;
+- origem, rotação e regras de corte;
+- alvos por categoria, por qualquer face, por plano ou polígono;
+- subestruturas e fixações;
+- quantidades por peça.
+
+**Proposta:**
+- um elemento **Revestimento** (`IfcCovering`, com `IfcCoveringType` editável como no Revit) sobre uma ou mais
+  superfícies;
+- as camadas (suporte, isolamento, cola/argamassa, peça) e a **paginação** como parâmetros guardados;
+- as peças geradas como geometria do revestimento (`IfcMappedItem`: leve, mesmo com milhares de peças);
+- a opção «peças separadas» (cada peça um elemento) para fachadas ventiladas e painéis grandes que se encomendam um
+  a um;
+- os acabamentos antigos (azulejo, pedra, piso cerâmico, teto em placas) passam a usar este motor, e os ficheiros
+  antigos abrem como estão.
+
+1. ~~**Núcleo da paginação**~~ (0.562.0) (`core/tiling.py`, sem janela):
+   - **aparelhos:**
+     - a eito (stack);
+     - juntas desencontradas (½, ⅓, ¼ ou livre);
+     - espinha de peixe (90° e 45°);
+     - cestaria;
+     - diagonal;
+     - Versalhes / opus romano;
+     - réguas de comprimento variável (soalho, deck);
+     - hexágono;
+     - escama;
+     - tijolo (meia vez, flamengo, inglês);
+     - mosaico livre (uma imagem ou um padrão do utilizador);
+   - **parâmetros:**
+     - peça L × A × espessura;
+     - junta (horizontal e vertical à parte);
+     - **origem** (canto, centro, eixo de simetria ou ponto escolhido);
+     - rotação;
+     - **corte mínimo** (redistribui para não ficar uma tira estreita);
+   - sobre um polígono com furos, num plano;
+   - devolve peças inteiras e cortadas, com marca e contagem.
+2. **O elemento Revestimento em IFC:**
+   - `IfcCovering` + `IfcCoveringType` com `IfcMaterialLayerSet` (suporte, argamassa/cola, peça);
+   - as peças como `IfcMappedItem` e as juntas recuadas;
+   - `Pset_CoveringCommon` e `Qto_CoveringBaseQuantities`;
+   - `IfcRelCoversBldgElements` (elementos) e `IfcRelCoversSpaces` (ambientes);
+   - o tipo editável (Editar tipo) e as Propriedades com toda a paginação.
+3. **Alvos — face, plano, polígono:**
+   - **a face clicada de qualquer elemento** (parede, laje e o seu bordo, pilar, viga, escada, cobertura,
+     superfície paramétrica plana);
+   - **um polígono desenhado** num plano de trabalho;
+   - **um polígono ou face escolhido** (os desenhos fechados da 0.553);
+   - vãos e furos recortados sozinhos;
+   - o revestimento **segue** o elemento quando este muda (como os da 0.374).
+4. **Alvos — por categoria:**
+   - todas as paredes, pisos, tetos, pilares ou vigas de um tipo, de um pavimento ou do modelo;
+   - faces exteriores e/ou interiores;
+   - **por ambiente**: o pavimento, as paredes até uma altura, o rodapé, o teto, num clique;
+   - uma regra guardada («todas as instalações sanitárias: azulejo 30×60 até 2,10 m»), reaplicada quando o modelo
+     muda.
+5. **Controlo na tela:**
+   - pré-visualização ao vivo enquanto se escolhe;
+   - pegas para **mover a origem** e **rodar**;
+   - pôr uma junta num eixo ou no meio de um vão (alinhar com o Alinhar do Revit);
+   - **editar peça a peça**: trocar material, cor ou tamanho de uma peça, faixas e frisos, cercaduras;
+   - variação de cor aleatória (pedra, madeira);
+   - uma paginação copiada de uma superfície para outra (as juntas continuam à volta da esquina).
+6. **Remates e acabamentos de bordo:**
+   - rodapés;
+   - cantoneiras e perfis de esquina;
+   - soleiras;
+   - peitoris e capeamentos;
+   - frisos;
+   - juntas de dilatação;
+   - remate em vãos (a peça dobra para a ombreira ou leva perfil);
+   - o encontro em esquina (meia-esquadria, sobreposta, perfil).
+7. **Subestruturas e fixações:**
+   - **fachada ventilada** (montantes, travessas, esquadros, grampos ou rebites, caixa de ar, isolamento);
+   - **ETICS / capoto** (isolamento + rede + reboco delgado);
+   - **soalho flutuante e pavimento sobrelevado** (apoios reguláveis);
+   - **teto falso** (perfis, tirantes);
+   - **ripado e deck** (barrotes, afastamentos);
+   - todas com espaçamentos e afastamentos como parâmetros;
+   - todas `IfcMember` / `IfcMechanicalFastener` em IFC.
+8. **Superfícies curvas e não planas:**
+   - paredes curvas (peças facetadas ou curvadas);
+   - pilares redondos;
+   - **superfícies paramétricas e formas orgânicas** (painéis pela grelha, com a análise de planaridade da 0.559 a
+     dizer o que é plano).
+9. **Catálogo de revestimentos:**
+   - cerâmico, porcelânico, pedra natural, madeira, compósito, HPL, chapa metálica, cassete, tijolo face à vista,
+     deck, microcimento, pintura, papel de parede, gesso cartonado, ETICS;
+   - com texturas (Poly Haven, 0.471) e peças tipo de mercado;
+   - tudo editável e guardado no modelo e na biblioteca.
+10. **Quantidades, desenho e fabrico:**
+    - tabela de peças inteiras e cortadas, com m², desperdício, juntas em ml, cola e argamassa em kg e fixações;
+    - **o desenho de paginação** (alçado ou planta da superfície com as peças, cotas e marcas) numa folha;
+    - DXF e XLSX para o fornecedor;
+    - nós no Gráfico Visual («Paginação», «Revestir») e comandos MCP.
+
+Ordem proposta: 1 → 2 → 3 (já se usa a sério) → 5 → 4 → 6 → 9 → 10 → 7 → 8. Cada passo uma versão, com testes,
+captura e passos de teste para o dono.
+
+Por decidir com o dono:
+- (a) peças como geometria do revestimento (proposta), com «peças separadas» à escolha;
+- (b) os acabamentos antigos passam a usar este motor (proposta: sim);
+- (c) a ordem.
+
 ### Gerador de formas orgânicas (pedido do dono do projeto, 2026-11-12)
 
 O dono: «gerador de formas orgânicas baseada em polígonos ou faces de parede ou piso, ou com medidas indicadas».

@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.562.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 1: o núcleo da paginação** (`core/tiling.py`, ainda sem janela).
+
+- 14 aparelhos:
+  - a eito;
+  - juntas desencontradas (½, ⅓, ¼ ou livre);
+  - desencontrado vertical;
+  - espinha de peixe a 45° e a 90°;
+  - cestaria;
+  - diagonal;
+  - opus romano (4 peças em 3 tamanhos);
+  - réguas de comprimento variável (sem juntas alinhadas entre fiadas);
+  - hexágono;
+  - escama;
+  - tijolo em aparelho flamengo e inglês;
+  - padrão livre (peças desenhadas numa célula).
+- Medidas:
+  - peça L × A;
+  - junta (horizontal e vertical à parte);
+  - ângulo.
+- Origem:
+  - no canto;
+  - no centro (com uma junta ou o meio de uma peça);
+  - num ponto escolhido, com deslocamento;
+  - **automática**: das partidas possíveis, a que deixa o corte mais estreito mais largo — nunca uma tira de 5 cm
+    junto à parede.
+- Os vãos e furos são recortados.
+- Cada peça sai inteira ou cortada, com a sua marca (A, B, C… por tamanho); conta-se a área, o número de peças e
+  os cortes estreitos.
+- Uma face em 3D tem o seu plano de assentamento: numa parede, as fiadas horizontais a partir do pé; num piso, a
+  norte e a leste.
+- Testes: `tests/test_tiling.py` (cada aparelho cobre a superfície sem sobreposições, juntas, origens, ângulo,
+  furos, tamanhos de tijolo e de opus, réguas, recusas).
+
 ## 0.561.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 6: contornos orgânicos.** O último passo do plano.
