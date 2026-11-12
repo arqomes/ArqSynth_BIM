@@ -6657,6 +6657,40 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message(t("info.covering_made", n=len(made)))
         return made
 
+    def covering_quantities(self, guids=None, show=True):
+        """(0.570) «Quantidades e desenho» of the Revestimentos chosen (or all): their list of pieces and totals, the
+        layout drawing (DXF, of one) and the list (XLSX). (header, rows)."""
+        from ..core import covering_quantities as cq
+        from ..ifc import catalog
+        if guids is None:
+            guids = [g for g in self.viewport.selection if isinstance(g, str)
+                     and self.doc.ifc.kind_of(g) == "tiled_covering"] or \
+                [e.GlobalId for e in self.doc.ifc.file.by_type("IfcCovering")
+                 if self.doc.ifc._params(e).get("Elemento") == "tiled_covering"]
+        _each, total = bim.covering_quantities(self.doc, guids)
+        names = {k: m.name_pt if lang() == "pt" else m.name_en for k, m in catalog.MATERIALS.items()}
+        header, rows = cq.table(total, names)
+        if not show:
+            return header, rows
+
+        def save(kind):
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self, t("act.covering_quantities"), "paginacao.{}".format(kind),
+                "DXF (*.dxf)" if kind == "dxf" else "Excel (*.xlsx)")
+            if not path:
+                return
+            if kind == "xlsx":
+                from ..model.schedules import write_xlsx
+                write_xlsx(path, header, rows, title="Revestimentos")
+            else:
+                bim.covering_export(self.doc, guids[0], dxf_path=path)
+            self.message(t("info.covering_exported", path=path))
+
+        from .covering_dialog import QuantitiesDialog
+        QuantitiesDialog(header, rows, (lambda: save("dxf")) if len(guids) == 1 else None, lambda: save("xlsx"),
+                         self).exec()
+        return header, rows
+
     def covering_save(self, guid, name=None):
         """(0.569) «Guardar como revestimento próprio»: the finish as it is now, under a name, in the project and in
         the user's library. Its key."""
@@ -7694,6 +7728,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             elif action == "covering_extras":              # (0.566) its bands, border and mix
                 QtCore.QTimer.singleShot(0, lambda: self.covering_extras(guid))
+                return
+            elif action == "covering_quantities":          # (0.570) its list, its drawing and exports
+                QtCore.QTimer.singleShot(0, lambda: self.covering_quantities([guid]))
                 return
             elif action == "covering_save":                # (0.569) kept as a finish of one's own
                 QtCore.QTimer.singleShot(0, lambda: self.covering_save(guid))

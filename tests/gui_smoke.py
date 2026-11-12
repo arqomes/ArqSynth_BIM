@@ -24987,6 +24987,9 @@ def revestimentos():
         pump(400)
         shot("revestimento_hpl_meu.png")
         from arqbim.core import covering_finishes as _cf
+        header, rows = win.covering_quantities(made_rooms + list(outside), show=False)     # (0.570)
+        check("revestimento_quantidades", len(header) == 7 and any(r and r[0] == "Desperdício (%)" for r in rows),
+              str(rows[-6:]))
         laps = [max(win.doc.ifc.tiled_extend(g)) for g in outside]
         check("revestimento_proprio", bool(key) and key in _cf.FINISHES and
               win.props.editors.get("covering_finish") is not None and 0 < max(laps) < 0.01,

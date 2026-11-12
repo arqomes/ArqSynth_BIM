@@ -50,11 +50,13 @@ class McpProtocol(unittest.TestCase):
         listed = self.server.handle({"jsonrpc": "2.0", "id": 4, "method": "tools/list"})["result"]["tools"]
         names = [t["name"] for t in listed]
         self.assertEqual(names, ["summary", "query", "get", "create", "edit", "delete", "undo", "file",
-                                 "graph_nodes", "graph", "graph_eval", "graph_apply"])     # (0.543: the Visual Graph)
+                                 "graph_nodes", "graph", "graph_eval", "graph_apply",     # (0.543: the Visual Graph)
+                                 "covering"])                                             # (0.570: Revestimentos)
         self.assertTrue(next(t for t in listed if t["name"] == "query")["annotations"]["readOnlyHint"])
         self.assertEqual(self.server.handle({"jsonrpc": "2.0", "id": 5, "method": "nope"})["error"]["code"], -32601)
         size = len(json.dumps(listed, ensure_ascii=False, separators=(",", ":")))
-        self.assertLess(size, 4000)                         # (about a thousand tokens, all the tools)
+        self.assertLess(size, 4600)                         # (about a thousand tokens, all the tools; 0.570: one
+        #                                                      more tool for the Revestimentos, ~150 tokens)
 
 
 class McpTools(unittest.TestCase):

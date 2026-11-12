@@ -1349,6 +1349,13 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_quantities": ("Quantidades e desenho", "Quantities and drawing"),                     # (0.570)
+    "act.covering_quantities": ("Quantidades…", "Quantities…"),
+    "tip.covering_quantities": ("A lista de peças (inteiras, cortadas, a comprar, desperdício), juntas, cola e "
+                                "betume; o desenho de paginação em DXF e a lista em XLSX para o fornecedor.",
+                                "The list of pieces (whole, cut, to buy, waste), joints, adhesive and grout; the "
+                                "layout drawing as DXF and the list as XLSX for the supplier."),
+    "info.covering_exported": ("Gravado: {path}", "Saved: {path}"),
     "props.cov_save": ("Revestimento próprio", "Own finish"),                                         # (0.569)
     "act.covering_save": ("Guardar como meu…", "Save as mine…"),
     "tip.covering_save": ("Guarda este revestimento como está (peça, aparelho, juntas, cola, betume) com um nome: "

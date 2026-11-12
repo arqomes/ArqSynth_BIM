@@ -721,6 +721,53 @@ def cover_category(doc, guids, category, finish, sides="ambas", slab_faces=("top
     return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
 
 
+def covering_quantities(doc, guids):
+    """(0.570) The quantities of these Revestimentos, each and together: ({guid: q}, totals q-like {area, buy_area,
+    waste, joints_m, glue_kg, grout_kg, pieces, whole, cut, rows})."""
+    from ..core import covering_quantities as cq
+    each = {}
+    for g in guids:
+        if doc.ifc.by_guid(g) is None or doc.ifc.kind_of(g) != "tiled_covering":
+            continue
+        result, mats = doc.ifc.tiled_pieces(g)
+        each[g] = cq.quantities(result, mats, doc.ifc.tiled_params(g))
+    total = {k: sum(q[k] for q in each.values()) for k in ("area", "buy_area", "joints_m", "glue_kg", "grout_kg",
+                                                          "pieces", "whole", "cut")}
+    total["waste"] = (total["buy_area"] - total["area"]) / total["area"] if total.get("area") else 0.0
+    rows = {}
+    for q in each.values():
+        for r in q["rows"]:
+            key = (r["mark"], r["material"], round(r["w"], 3), round(r["h"], 3))
+            have = rows.setdefault(key, dict(r, whole=0, cut=0, buy=0, area=0.0))
+            for k in ("whole", "cut", "buy", "area"):
+                have[k] += r[k]
+    total["rows"] = list(rows.values())
+    return each, total
+
+
+def covering_export(doc, guid, dxf_path=None, xlsx_path=None):
+    """(0.570) A Revestimento's layout drawing (DXF) and list of pieces (XLSX) written. (pieces, rows)."""
+    from ..core import covering_quantities as cq
+    from ..ifc import catalog
+    result, mats = doc.ifc.tiled_pieces(guid)
+    _m, face = doc.ifc.tiled_face(guid)
+    name = doc.ifc.by_guid(guid).Name or "Revestimento"
+    n = 0
+    if dxf_path:
+        text, n = cq.layout_dxf(result, face, name)
+        with open(dxf_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    rows = 0
+    if xlsx_path:
+        q = cq.quantities(result, mats, doc.ifc.tiled_params(guid))
+        names = {k: (m.name_pt if lang() == "pt" else m.name_en) for k, m in catalog.MATERIALS.items()}
+        header, table = cq.table(q, names)
+        from .schedules import write_xlsx
+        write_xlsx(xlsx_path, header, table, title=name)
+        rows = len(table)
+    return n, rows
+
+
 def save_covering_finish(doc, guid, name, library=True):
     """(0.569) A Revestimento's finish as it is now kept as one's own (`name`): in the project — one undo step —
     and, `library`, in the user's library (for the next projects). Its key."""

@@ -570,3 +570,34 @@ def corrigir_fabrico(furos, furo_min, ponte_min):
         d = np.minimum(d, limit)
     keep = d >= furo_min
     return {"furos": take_holes(furos, keep, d=d[keep])}
+
+
+# ------------------------------------------------------------------ (0.570) a finish's layout as points
+@r.node("paginacao", "Padrões", "Pontos da paginação",
+        "Um ponto no meio de cada peça inteira de um aparelho de revestimento (a eito, desencontrado, espinha, "
+        "cestaria, hexágono, escama, tijolo…) sobre a superfície — para furar uma chapa ou modular um painel com o "
+        "desenho de um pavimento.",
+        inputs=[Port("painel", "panel", "Painel")], outputs=[Port("pontos", "points", "Pontos")],
+        params=[Port("aparelho", "choice", "Aparelho", default="espinha",
+                     choices=("eito", "desencontrado", "vertical", "espinha", "espinha_reta", "cestaria", "diagonal",
+                              "opus", "hexagono", "escama", "flamengo", "ingles")),
+                _num("w", "Peça — comprimento", 0.20, 0.02, 3.0, 0.01), _num("h", "Peça — altura", 0.07, 0.01, 3.0, 0.005),
+                _num("angulo", "Ângulo", 0.0, -180.0, 180.0, 1.0, "°")],
+        example="Furos em espinha de peixe numa chapa de 3 m: cada furo no meio de uma «peça» de 20 × 7 cm.")
+def paginacao(painel, aparelho, w, h, angulo):
+    from shapely.geometry.polygon import orient
+    from shapely.geometry import Polygon
+    from .. import tiling as tl
+    shape = painel["shape"]
+    parts = [g for g in getattr(shape, "geoms", [shape]) if g.geom_type == "Polygon"]
+    if not parts:
+        raise ValueError("a superfície não tem área")
+    q = orient(max(parts, key=lambda g: g.area), 1.0)
+    try:
+        r_ = tl.lay(list(q.exterior.coords)[:-1], {"pattern": aparelho, "w": w, "h": h, "joint": 0.0,
+                                                    "angle": angulo, "origin": "centro"},
+                    [list(i.coords)[:-1] for i in q.interiors])
+    except tl.LayoutError:
+        raise ValueError("peça pequena demais para esta superfície") from None
+    xy = np.array([Polygon(p.points).centroid.coords[0] for p in r_.pieces if p.whole], dtype=float).reshape(-1, 2)
+    return {"pontos": {"panel": painel, "xy": xy, "pitch": min(w, h)}}

@@ -1879,7 +1879,8 @@ Falta:
      deck, microcimento, pintura, papel de parede, gesso cartonado, ETICS;
    - com texturas (Poly Haven, 0.471) e peças tipo de mercado;
    - tudo editável e guardado no modelo e na biblioteca.
-10. **Quantidades, desenho e fabrico:**
+10. ~~**Quantidades, desenho e fabrico:**~~ (0.570.0; o desenho vai para a folha pelo importar DXF; o
+    aproveitamento dos restos de corte fica por fazer)
     - tabela de peças inteiras e cortadas, com m², desperdício, juntas em ml, cola e argamassa em kg e fixações;
     - **o desenho de paginação** (alçado ou planta da superfície com as peças, cotas e marcas) numa folha;
     - DXF e XLSX para o fornecedor;

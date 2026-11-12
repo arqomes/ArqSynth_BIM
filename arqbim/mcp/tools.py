@@ -498,10 +498,16 @@ def definitions(live=False):
          False),
         ("file", "action new|open|save; path (save: the same file if none).",
          _schema({"action": {"type": "string"}, "path": {"type": "string"}}, ["action"]), file_, False),
-    ] + _graph_definitions()
+    ] + _graph_definitions() + _covering_definitions()
 
 
 def _graph_definitions():
     """(0.543) The Visual Graph's tools."""
     from . import graph_tools
     return graph_tools.definitions(_schema)
+
+
+def _covering_definitions():
+    """(0.570) The Revestimento's tools."""
+    from . import covering_tools
+    return covering_tools.definitions(_schema)

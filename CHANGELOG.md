@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.570.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 10: quantidades, desenho e fabrico.**
+
+- Propriedades do Revestimento ▸ **Quantidades…**:
+  - a lista por marca e material: peça, inteiras, cortadas, **a comprar** (cada peça cortada é uma inteira
+    comprada) e área assente;
+  - os totais: m² assentes, m² a comprar, **desperdício** (%), **juntas** (m), **cola** (kg, pela espessura da
+    cama) e **betume** (kg, pelo volume das juntas);
+  - na mesma janela, «Desenho de paginação (DXF)…» e «Lista de peças (XLSX)…».
+- O **desenho de paginação** (DXF em mm, na escala real da face):
+  - a face e os vãos;
+  - as peças inteiras e as cortadas em camadas próprias (PECAS, CORTES);
+  - a marca de cada peça cortada;
+  - o título com as medidas e as contagens.
+  - Abre-se no CAD do fornecedor, ou importa-se numa folha (0.472).
+- **Gráfico Visual**: o nó «Pontos da paginação» (Padrões) põe um ponto no meio de cada peça de um aparelho
+  (espinha, tijolo, hexágono, escama…), para furar uma chapa com o desenho de um pavimento.
+- **MCP**: o comando `covering` faz tudo:
+  - `keys`: a lista dos revestimentos;
+  - `lay`: numa face, num ambiente ou por categoria;
+  - `edit`: mudar a paginação;
+  - `qty`: as quantidades, com DXF e XLSX.
+  - O limite de tamanho do conjunto dos comandos subiu de 4000 para 4600 carateres (cerca de 150 tokens a mais).
+- Testes: `tests/test_tiled_coverings.py` (Quantities: área, a comprar, juntas, cola, betume, DXF com CORTES e VAOS,
+  XLSX); `tests/test_covering_mcp.py`; «revestimento_quantidades» no gui_smoke.
+
 ## 0.569.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 9: o catálogo.**

@@ -329,3 +329,28 @@ class Catalogue(unittest.TestCase):
         again = IfcModel(ifcopenshell.open(path)) if hasattr(IfcModel, "__init__") else None
         self.assertEqual(again.tiled_params(g2)["layout"]["pattern"], "diagonal")
         self.assertIn(key, cf.FINISHES)                 # (the project's own put back in the catalogue)
+
+
+class Quantities(unittest.TestCase):
+    """(0.570) Pieces to buy, waste, joints, glue, grout; the layout drawing and the list."""
+
+    def test_figures_and_exports(self):
+        doc = Document()
+        g = bim.add_covering(doc, WALL, "azulejo_20x20", holes=[DOOR])
+        each, total = bim.covering_quantities(doc, [g])
+        q = each[g]
+        self.assertAlmostEqual(q["area"], doc.ifc.describe(g)["params"]["area"], places=3)
+        self.assertGreaterEqual(q["buy_area"], q["area"])
+        self.assertGreater(q["joints_m"], 50.0)
+        self.assertGreater(q["glue_kg"], 0.0)
+        self.assertGreater(q["grout_kg"], 0.0)
+        self.assertEqual(q["whole"] + q["cut"], q["pieces"])
+        folder = tempfile.mkdtemp()
+        n, rows = bim.covering_export(doc, g, os.path.join(folder, "p.dxf"), os.path.join(folder, "p.xlsx"))
+        self.assertEqual(n, q["pieces"])
+        with open(os.path.join(folder, "p.dxf"), encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn("CORTES", text)
+        self.assertIn("VAOS", text)
+        self.assertTrue(os.path.getsize(os.path.join(folder, "p.xlsx")) > 1000)
+        self.assertGreater(rows, 5)

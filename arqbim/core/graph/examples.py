@@ -23,6 +23,7 @@ SWEEP = {           # (the measure that shows the node best; else its first numb
     "matriz": ("desvio", 0.0, 1.0),                                                            # (0.553)
     "forma_organica": ("altura", 0.2, 1.2), "furos_na_forma": None,                            # (0.558)
     "contorno_organico": ("passos", 10, 120),                                                  # (0.561)
+    "paginacao": ("w", 0.10, 0.40),                                                            # (0.570)
 }
 # (0.542) nodes shown on a surface with a window (they read its openings); those whose modulator must be linked
 WITH_WINDOW = {"distancia_vaos", "distancia_contorno", "contorno_pontos"}

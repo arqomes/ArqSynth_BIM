@@ -17,6 +17,39 @@ def _materials():
     return sorted(((m.name_pt if pt else m.name_en), k) for k, m in catalog.MATERIALS.items())
 
 
+class QuantitiesDialog(QtWidgets.QDialog):
+    """(0.570) What a Revestimento takes — its list of pieces and totals — and its exports: the layout drawing (DXF)
+    and the list (XLSX)."""
+
+    def __init__(self, header, rows, on_dxf=None, on_xlsx=None, parent=None, title="Quantidades do revestimento"):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(720, 460)
+        lay = QtWidgets.QVBoxLayout(self)
+        self.table = QtWidgets.QTableWidget(len(rows), len(header))
+        self.table.setHorizontalHeaderLabels(header)
+        for r, row in enumerate(rows):
+            for c, v in enumerate(row):
+                text = "{:.2f}".format(v).replace(".", ",") if isinstance(v, float) else str(v)
+                self.table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
+        self.table.resizeColumnsToContents()
+        lay.addWidget(self.table)
+        row = QtWidgets.QHBoxLayout()
+        if on_dxf:
+            b = QtWidgets.QPushButton("Desenho de paginação (DXF)…")
+            b.clicked.connect(on_dxf)
+            row.addWidget(b)
+        if on_xlsx:
+            b = QtWidgets.QPushButton("Lista de peças (XLSX)…")
+            b.clicked.connect(on_xlsx)
+            row.addWidget(b)
+        row.addStretch(1)
+        close = QtWidgets.QPushButton("Fechar")
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+
+
 class CoveringExtrasDialog(QtWidgets.QDialog):
     def __init__(self, zones=(), mix=None, parent=None):
         super().__init__(parent)

@@ -723,6 +723,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                            [(t("props.cov_no_grout"), "")] + mats, p["grout"] or "")
         if p["grout"]:
             self._mm_editor(t("props.cov_recess"), p["recess"], "covering_recess", guid)
+        item = self._row(t("props.cov_quantities"), "")         # (0.570) its list, drawing and exports
+        button = QtWidgets.QPushButton(t("act.covering_quantities"))
+        button.setToolTip(t("tip.covering_quantities"))
+        button.clicked.connect(lambda _c=False: self._emit("covering_quantities", guid, None))
+        self.tree.setItemWidget(item, 1, button)
+        self.editors["covering_quantities"] = button
         item = self._row(t("props.cov_save"), "")               # (0.569) kept as a finish of one's own
         button = QtWidgets.QPushButton(t("act.covering_save"))
         button.setToolTip(t("tip.covering_save"))
