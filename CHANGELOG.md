@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.542.0 — 2026-11-11
+
+**Gráfico Visual: 17 operadores novos, «poderosos e lógicos» (passo 6 da 2.ª fase).** Todos no menu Shift+A, cada um
+com o seu desenho.
+
+- **Moduladores que leem a própria superfície**: **Junto aos vãos** (forte à volta das portas e janelas), **Junto ao
+  contorno** (forte nas arestas), **Junto a uma linha** (um atrator comprido).
+- **Moduladores novos**: **Ondas** (faixas, direitas ou sinuosas), **Zona** (retângulo ou elipse, com orla suave),
+  **Aleatório** (um valor ao acaso por quadrícula).
+- **Trabalhar moduladores**: **Misturar** (multiplicar, somar, subtrair, máximo, mínimo, média, diferença, com fator)
+  e **Remapear** (cortar, curva de resposta, e **degraus**: a fachada toda com só 3 ou 4 diâmetros de furo).
+- **Padrões novos**: **Anéis** (círculos à volta de um centro, ou em espiral) e **Ao longo do contorno** (filas de
+  pontos a emoldurar os vãos ou o contorno).
+- **Pontos**: **Escolher pontos** (só onde o modulador é forte — tira os furos de uma zona ou de junto às janelas),
+  **Desalinhar** (a grelha que se desfaz), **Juntar pontos**.
+- **Furos**: **Escalar furos**, **Juntar furos**, **Levar à área aberta** (todos os furos por igual até à percentagem
+  pedida, para luz ou ventilação).
+- **Fabrico**: **Corrigir para fabrico** — encolhe sozinho os furos que deixariam pontes finas ou invadiriam a margem
+  e tira os pequenos demais: o desenho sai fabricável.
+- **Três operadores novos na biblioteca** (e em Modelos ▾): «Janelas emolduradas», «Ondas em quatro furos» e «Espiral
+  com 25 % de área aberta». Entram sozinhos no painel «Operadores»; um operador de origem que apague não volta.
+- Corrigido: a miniatura dos moduladores num gráfico que parte da «Superfície do modelo» usava o tamanho errado.
+- Por fazer (PLANO): formas de furo novas (ranhura, polígono, desenho próprio) e rodar furos — pedem que o
+  revestimento do BIM guarde mais do que posição e tamanho de cada furo.
+- Testes: `tests/test_graph_logic.py`.
+
 ## 0.541.0 — 2026-11-11
 
 **Gráfico Visual, 2.ª fase: operadores no painel lateral, a superfície do modelo ao vivo, Shift+A (passos 1 a 5).**

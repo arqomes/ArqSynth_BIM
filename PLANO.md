@@ -1740,10 +1740,12 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
 5. ~~**Shift+A** na tela: menu de procura com nome e desenho do que cada nó faz (como o Blender), por famílias;
    escrever filtra; o nó aparece onde está o rato e, se houver uma ligação selecionada, entra no meio dela.~~
    (0.541.0)
-6. Operadores poderosos e lógicos (nós novos): Dividir superfície (UV/painéis), Distância a curva/aresta,
-   Distância a aberturas (afastar dos vãos), Máscara/Excluir zona, Misturar campos (soma, máximo, multiplicar),
-   Remapear (curva de resposta), Aleatório com semente, Rodar/escala por campo, Formas (círculo, polígono, ranhura,
-   desenho próprio), Juntar/Escolher, Matemática, Contar/Área aberta (%), Avisos de fabrico na própria superfície.
+6. ~~Operadores poderosos e lógicos (nós novos): Distância a aresta/linha, Distância a aberturas, Zona, Misturar
+   campos, Remapear (curva, degraus), Aleatório com semente, Ondas, Anéis, Ao longo do contorno, Escolher / Desalinhar
+   / Juntar pontos, Escalar / Juntar furos, Levar à área aberta, Corrigir para fabrico.~~ (0.542.0,
+   `core/graph/nodes_logic.py`; três operadores novos de origem) Por fazer: formas de furo (polígono, ranhura,
+   desenho próprio) e rodar por campo — o `FurosLivres` do BIM só guarda x, y, d e uma forma para todos (mudar o
+   formato pergunta-se antes); a área aberta por módulo; um nó de número/matemática para ligar medidas entre nós.
 7. Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
    ajustar sem abrir o editor).
 8. Aplicar a várias superfícies de uma vez; reaplicar quando a parede muda (como o «Combinar e recortar»).

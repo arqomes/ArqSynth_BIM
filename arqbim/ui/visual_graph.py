@@ -32,7 +32,7 @@ DEFAULT_DOMAIN = (0.0, 0.0, 3.0, 1.2)
 def domain_of(results, graph):
     """The panel the pictures are drawn on: the first «Painel plano»'s (else 3 × 1,2 m)."""
     for nid, node in graph.nodes.items():
-        if node["type"] == "painel_plano" and nid in results:
+        if node["type"] in ("painel_plano", "fachada_bim") and nid in results:      # (0.542: the surface too)
             return results[nid]["painel"]["shape"].bounds
     return DEFAULT_DOMAIN
 
@@ -299,6 +299,10 @@ def operator_png(graph, w=240, h=152):
 
 
 _THUMBS = {}
+# (0.542) measures that show a node best in its small picture, where its own would not tell it from its input
+THUMB_PARAMS = {"remapear": {"degraus": 3}, "desalinhar": {"quanto": 0.9}, "escalar_furos": {"fator": 0.4},
+                "contorno_pontos": {"passo": 0.1, "distancia": 0.15, "filas": 2}, "area_aberta": {"alvo": 45.0},
+                "corrigir_fabrico": {"ponte_min": 0.08}}
 
 
 def node_thumb(key, w=96, h=60):
@@ -313,6 +317,7 @@ def node_thumb(key, w=96, h=60):
                     node["params"]["passo"] = 0.2
                 if node["type"] == "perfurar":
                     node["params"].update(d_min=0.03, d_max=0.17)
+            g.nodes[nid]["params"].update(THUMB_PARAMS.get(key, {}))
             results = g.evaluate()
             out = results.get(nid)
             port = g.registry.get(g.nodes[nid]["type"]).outputs[0]

@@ -19,6 +19,7 @@ FORMAT = "arqsynth-operador"
 VERSION = 1
 FOLDER = "operadores"
 SEEDED = ".de_origem"
+_seeding = False
 SIDES = ("frente", "trás")
 
 
@@ -148,16 +149,31 @@ def import_from(path):
 def seed():
     """The program's ready graphs put in the library the first time (the folder not there yet): something to apply
     at once, and to open and learn from."""
-    mark = os.path.join(folder(), SEEDED)
-    if os.path.exists(mark):
+    global _seeding
+    if _seeding:
         return
     from . import templates
+    mark = os.path.join(folder(), SEEDED)
+    try:
+        with open(mark, encoding="utf-8") as f:
+            done = set(f.read().split())
+    except OSError:
+        done = set()
+    if "ArqSynth" in done:                                 # (0.541's mark: its four were put then)
+        done |= {"atrator_hexagono", "voronoi_centro", "gradiente_grelha", "ruido_folhagem"}
+    new = [k for k in templates.TEMPLATES if k not in done and k != "imagem_painel"]   # (that one asks a picture)
+    if not new:
+        return
     os.makedirs(folder(), exist_ok=True)
-    with open(mark, "w", encoding="utf-8") as f:           # (once: one the owner deletes does not come back)
-        f.write("ArqSynth\n")
-    for key, (name, about, maker) in templates.TEMPLATES.items():
-        if key != "imagem_painel":                     # (it asks for a picture: made from «Criar novo»)
+    with open(mark, "w", encoding="utf-8") as f:           # (each once: one the owner deletes does not come back;
+        f.write("\n".join(sorted(done | set(new))) + "\n")  # a later version's new ones are added)
+    _seeding = True
+    try:
+        for key in new:
+            name, about, maker = templates.TEMPLATES[key]
             save(name, maker(), about=about)
+    finally:
+        _seeding = False
 
 
 # ------------------------------------------------------------------ on a surface

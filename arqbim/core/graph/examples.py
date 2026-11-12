@@ -12,7 +12,17 @@ SWEEP = {           # (the measure that shows the node best; else its first numb
     "imagem": None, "ruido": ("escala", 0.15, 1.5), "perfurar": ("d_max", 0.02, 0.09),
     "verificar_fabrico": ("ponte_min", 0.002, 0.03), "subdividir": ("colunas", 1, 6),
     "extrudir": ("espessura", 0.005, 0.06), "relevo": ("altura", -0.15, 0.15), "dobrar": ("angulo", 0.0, 120.0),
+    # (0.542) the logic nodes
+    "distancia_vaos": ("alcance", 0.1, 1.0), "distancia_contorno": ("alcance", 0.1, 0.6),
+    "distancia_linha": ("alcance", 0.1, 1.2), "ondas": ("comprimento", 0.2, 1.2), "mascara": ("largura", 0.3, 2.0),
+    "aleatorio": ("tamanho", 0.05, 0.4), "misturar": ("fator", 0.0, 1.0), "remapear": ("degraus", 0, 5),
+    "radial": ("passo", 0.05, 0.16), "contorno_pontos": ("filas", 1, 4), "escolher_pontos": ("limiar", 0.1, 0.9),
+    "desalinhar": ("quanto", 0.0, 1.0), "juntar_pontos": ("folga", 0.0, 1.5), "escalar_furos": ("fator", 0.3, 1.6),
+    "juntar_furos": None, "area_aberta": ("alvo", 5.0, 45.0), "corrigir_fabrico": ("ponte_min", 0.002, 0.04),
 }
+# (0.542) nodes shown on a surface with a window (they read its openings); those whose modulator must be linked
+WITH_WINDOW = {"distancia_vaos", "distancia_contorno", "contorno_pontos"}
+NEEDS_FIELD = {"perfurar", "voronoi", "escolher_pontos", "escalar_furos", "desalinhar"}
 
 
 def _feed(g, kind, cache):
@@ -56,13 +66,35 @@ def example(key):
     nid = g.add_node(key)
     spec = g.registry.get(key)
     cache = {}
-    for port in spec.inputs:
-        if port.optional and port.kind == "field" and key not in ("perfurar", "voronoi"):
+    if key in WITH_WINDOW:
+        cache["panel"] = (g.add_node("fachada_bim"), "painel")       # (no wall: the example face, with its window)
+    for k, port in enumerate(spec.inputs):
+        if port.optional and port.kind == "field" and key not in NEEDS_FIELD:
             continue
-        src = _feed(g, port.kind, cache)
+        if k and port.kind == spec.inputs[0].kind:                  # (a second of the same kind: something else)
+            src = _second(g, port.kind, cache)
+        else:
+            src = _feed(g, port.kind, cache)
         if src is not None:
             g.connect(src[0], src[1], nid, port.name)
     return g, nid, SWEEP.get(key)
+
+
+def _second(g, kind, cache):
+    """Another node giving `kind`, unlike _feed's (for the nodes that join two things)."""
+    if kind == "field":
+        return (g.add_node("ondas", {"comprimento": 0.5}), "campo")
+    if kind == "points":
+        p = _feed(g, "panel", cache)
+        n = g.add_node("radial", {"x": 1.2, "y": 0.6, "passo": 0.11})
+        g.connect(p[0], p[1], n, "painel")
+        return (n, "pontos")
+    if kind == "holes":
+        pts = _second(g, "points", cache)
+        n = g.add_node("perfurar", {"d_max": 0.03})
+        g.connect(pts[0], pts[1], n, "pontos")
+        return (n, "furos")
+    return _feed(g, kind, cache)
 
 
 def frame_value(sweep, k, frames):
