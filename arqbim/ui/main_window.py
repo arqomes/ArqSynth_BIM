@@ -955,6 +955,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "organic_points": "",                                 # (0.556)
+                "covering": "",                                       # (0.564)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
                 "work_plane": "",                                     # (0.412)
                 "lot": "",                                            # (0.423)

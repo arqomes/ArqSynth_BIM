@@ -691,6 +691,20 @@ def _paint(a):
     a.poly([(bx - 1.0, by - 0.9), (bx - 2.0, by + 0.3), (bx - 1.6, by + 0.9)], "blue", "blue", 0.6)
 
 
+def _covering(a):
+    """(0.564) A wall's face laid in tiles, the rows offset, one cut at the end."""
+    for row in range(4):
+        z0, z1 = row * 0.75, row * 0.75 + 0.68
+        s = 0.0 if row % 2 == 0 else -0.6
+        x = s
+        while x < 4.0:
+            x0, x1 = max(x, 0.0), min(x + 1.14, 4.0)
+            if x1 - x0 > 0.15:
+                a.face([(x0, 0, z0), (x1, 0, z0), (x1, 0, z1), (x0, 0, z1)],
+                       "blue" if (row, round(x, 1)) in ((1, 1.8), (3, 0.6)) else "glass", "ink")
+            x += 1.2
+
+
 def _perforated_panel(a):
     a.face([(0, 0, 0), (4, 0, 0), (4, 0, 3), (0, 0, 3)], "steel")
     for x in (0.7, 1.55, 2.4, 3.25):
@@ -2507,7 +2521,7 @@ DRAWN = {"select": _select, "move": _move, "copy": _copy, "rotate": _rotate, "mi
          "rules_editor": _rules_editor, "check_ifc": _check_ifc, "check_ids": _check_ids,
          "missing_data": _missing_data,
          "calibrate_image": _calibrate_image, "control_ring": _control_ring, "organic_form": _organic_form,
-         "organic_points": _organic_points, "organic_line": _organic_line, "walls_from_cad": _walls_from_cad,
+         "organic_points": _organic_points, "organic_line": _organic_line, "covering": _covering, "walls_from_cad": _walls_from_cad,
          "model_from_scan": _model_from_scan,
          "site_location": _site_location, "terrain": _terrain_icon, "lot": _lot, "platform": _platform,
          "terrain_ramp": _terrain_ramp, "edit_platform": _edit_platform, "earthworks": _earthworks,

@@ -468,6 +468,8 @@ class IfcCommand(Command):
                 self.changed += [g for g in cut if g not in self.changed]
                 # the finishes on the walls it changed made again on them (0.119)
                 self.changed += [g for g in doc.ifc.follow_claddings(self.changed) if g not in self.changed]
+                # (0.564) …and the Revestimentos laid on their faces
+                self.changed += [g for g in doc.ifc.follow_tiled(list(self.changed)) if g not in self.changed]
                 # …and their light frames (0.437; a wall copied: its own)
                 framed = doc.ifc.follow_framing(list(self.changed) + list(doc.ifc.made or ()))
                 self.changed += [g for g in framed if g not in self.changed]

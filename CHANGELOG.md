@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.564.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 3: revestir uma face, um plano ou um polígono.**
+
+- **Arquitetura ▸ Acabamentos ▸ Revestimento** (a primeira ferramenta do painel):
+  - escolhe-se na barra o revestimento, o aparelho («o do revestimento» ou outro) e onde começa;
+  - ao passar o rato, a face plana debaixo dele fica destacada;
+  - um clique reveste-a.
+- Qualquer face plana de qualquer elemento: parede (com os vãos recortados), laje e o seu bordo, pilar, viga,
+  degrau, ou a face de um desenho.
+- **Desenhos fechados escolhidos antes** (polígono, retângulo, círculo desenhado num plano de trabalho ou numa face)
+  são revestidos logo, cada um inteiro; os horizontais por cima.
+- **Segue o elemento**:
+  - liga-se a ele em IFC (`IfcRelCoversBldgElements`) e guarda a face nas coordenadas do elemento;
+  - quando o elemento muda (mais comprido, uma porta posta, movido), o revestimento é refeito na face como ela
+    está agora;
+  - o elemento apagado leva os seus revestimentos (como os elementos hospedados do Revit);
+  - sem procurar no modelo inteiro: só pelas ligações do elemento que mudou.
+- Testes: `tests/test_face_region.py` (a face de uma caixa, a face com um furo de janela);
+  `tests/test_tiled_coverings.py` (parede real com porta posta depois, apagada; desenho escolhido);
+  «revestimento_ferramenta» no gui_smoke, com capturas da face destacada e da parede com porta.
+
 ## 0.563.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 2: o elemento Revestimento em IFC.**

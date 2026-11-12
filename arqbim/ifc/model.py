@@ -1659,7 +1659,13 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
             if element.is_a("IfcRoof"):
                 self.drop_carpentry(guid)                                   # (its carpentry with it, 0.276)
                 self.drop_tiles(guid)                                       # (its tiles, 0.279: while tied to it)
-            self.uncover(element)                                           # (a wall's finishes' ties, 0.119)
+            hosted = [c for rel in (getattr(element, "HasCoverings", None) or ()) for c in rel.RelatedCoverings
+                      if self._params(c).get("Elemento") == "tiled_covering"]      # (0.564: its Revestimentos go
+            self.uncover(element)                                           # with it, as Revit's hosted ones)
+            for c in hosted:                                                # (a wall's finishes' ties, 0.119)
+                if self.by_guid(c.GlobalId) is not None:
+                    self.uncover(c)
+                    api.root.remove_product(f, product=c)
             if self.by_guid(guid) is not None:
                 api.root.remove_product(f, product=element)
         self.remove_empty_groups()

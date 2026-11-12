@@ -115,3 +115,44 @@ class Element(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OnTheModel(unittest.TestCase):
+    """(0.564) Laid on a clicked face of an element (it follows it), and on drawings chosen."""
+
+    def test_wall_face_follows(self):
+        from arqbim.ifc import catalog
+        doc = Document()
+        wall = bim.add_wall(doc, np.array((0.0, 0.0, 0.0)), np.array((5.0, 0.0, 0.0)), catalog.BY_KEY["parede_alv_20"])
+        v, _f = mesh(doc, wall)
+        front = float(v[:, 1].min())
+        g = bim.cover_face(doc, wall, (2.5, front, 1.0), (0.0, -1.0, 0.0), "azulejo_20x20")
+        self.assertIsNotNone(g)
+        e = doc.ifc.by_guid(g)
+        self.assertEqual(e.CoversElements[0].RelatingBuildingElement.GlobalId, wall)
+        a0 = ifcopenshell.util.element.get_psets(e)["Qto_CoveringBaseQuantities"]["GrossArea"]
+        self.assertAlmostEqual(a0, 5.0 * bim.WALL_HEIGHT, delta=0.3)
+        frame = bim.wall_frame(doc, wall)                 # (a door put in: the finish cut round it, by itself)
+        bim.add_opening(doc, wall, catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 2.0, 1)
+        e = doc.ifc.by_guid(g)
+        a1 = ifcopenshell.util.element.get_psets(e)["Qto_CoveringBaseQuantities"]["GrossArea"]
+        self.assertLess(a1, a0 - 1.0)
+        self.assertGreater(a1, a0 - 3.0)
+        doc.execute_remove = None
+        from arqbim.model.document import IfcCommand
+        doc.execute(IfcCommand("x", lambda ifc: ifc.remove([wall])))    # (the wall gone: its finish with it)
+        self.assertIsNone(doc.ifc.by_guid(g))
+
+    def test_drawing_chosen(self):
+        from arqbim.core.mesh import PolyMesh
+        from arqbim.model.document import AddObject, SketchObject
+        doc = Document()
+        pts = [(0, 0, 0), (3, 0, 0), (3, 2, 0), (0, 2, 0)]
+        sk = SketchObject("Polígono", np.eye(4), PolyMesh([np.array(p, float) for p in pts], [[0, 1, 2, 3]]))
+        doc.execute(AddObject(sk))
+        made = bim.cover_drawings(doc, [sk.id], "porcelanico_60x60")
+        self.assertEqual(len(made), 1)
+        e = doc.ifc.by_guid(made[0])
+        self.assertEqual(ifcopenshell.util.element.get_predefined_type(e), "FLOORING")
+        v, _f = mesh(doc, made[0])
+        self.assertGreater(v[:, 2].max(), 0.01)

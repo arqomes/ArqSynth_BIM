@@ -598,6 +598,89 @@ def add_covering(doc, points, finish, holes=(), layout=None, source="", **change
     return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
 
 
+def covering_face(doc, guid, point, normal):
+    """(0.564) (outline, holes, normal) of the flat face of `guid` — an element or a drawing — round `point` facing
+    `normal` (world), or None."""
+    from ..core import face_region
+    obj = doc.get(guid)
+    if obj is None:
+        return None
+    if obj.is_bim:
+        return doc.ifc.tiled_on(guid, point, normal)
+    m = np.asarray(getattr(obj, "matrix", np.eye(4)), float)
+    tris, _owner = obj.mesh.triangulate()
+    if not len(tris):
+        return None
+    verts = np.array([(m @ np.append(v, 1.0))[:3] for v in obj.mesh.verts])
+    found = face_region.face_at(verts, tris, point, normal)
+    if found is None:                                    # (a drawing's face may be wound either way)
+        found = face_region.face_at(verts, tris, point, -np.asarray(normal, float))
+        if found is not None:
+            found = (found[0], found[1], -found[2])
+    return found
+
+
+def cover_face(doc, guid, point, normal, finish, layout=None, **changes):
+    """(0.564) A Revestimento on the flat face of `guid` (an element: it follows it; a drawing: laid where it is)
+    clicked at `point`, facing `normal`. One undo step. Its GlobalId — None when there is no flat face there."""
+    found = covering_face(doc, guid, point, normal)
+    if found is None:
+        return None
+    outline, holes, n = found
+    from ..ifc.tiled_coverings import face_frame_and_shape
+    frame, face = face_frame_and_shape(outline, holes)
+    language, bim_host = lang(), doc.get(guid).is_bim
+
+    def action(ifc):
+        count = sum(1 for e in ifc.file.by_type("IfcCovering") if ifc._params(e).get("Elemento") == "tiled_covering")
+        e = ifc.add_tiled_covering(frame, face, finish, "{} {}".format(t("elem.tiled_covering"), count + 1),
+                                   layout, guid, language, **changes)
+        if bim_host:
+            ifc.remember_face(e.GlobalId, guid, point, n)
+        return e.GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
+
+
+def cover_drawings(doc, sketches, finish, layout=None, **changes):
+    """(0.564) A Revestimento on each closed drawing chosen (a polygon, a rectangle, a circle drawn on a plane or a
+    face) — its whole face (level ones from above). One undo step. Their GlobalIds."""
+    from ..ifc.tiled_coverings import face_frame_and_shape
+    from .surface_curves import sketch_chains
+    jobs = []
+    for g in sketches:
+        obj = doc.get(g)
+        if obj is None or obj.is_bim:
+            continue
+        for pts, closed in sketch_chains(obj):
+            pts = np.asarray(pts, float)
+            if not closed or len(pts) < 3:
+                continue
+            if np.linalg.norm(pts[0] - pts[-1]) < 1e-9:
+                pts = pts[:-1]
+            from ..core.mesh import polygon_normal
+            n = np.asarray(polygon_normal(pts), float)
+            if abs(n[2]) > 0.7 and n[2] < 0:             # (a level drawing: covered from above)
+                pts = pts[::-1]
+            frame, face = face_frame_and_shape(pts)
+            if face.area > 1e-4:
+                jobs.append((frame, face, g))
+    if not jobs:
+        raise ValueError("tiling_empty")
+    language = lang()
+
+    def action(ifc):
+        out = []
+        for frame, face, g in jobs:
+            count = sum(1 for e in ifc.file.by_type("IfcCovering")
+                        if ifc._params(e).get("Elemento") == "tiled_covering")
+            out.append(ifc.add_tiled_covering(frame, face, finish, "{} {}".format(t("elem.tiled_covering"), count + 1),
+                                              layout, g, language, **changes).GlobalId)
+        return out
+
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
+
+
 def set_covering(doc, guid, **changes):
     """(0.563) A Revestimento changed (ifc.set_tiled_covering: layout, finish, material, thickness, bed, grout…).
     One undo step."""

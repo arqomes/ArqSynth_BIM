@@ -24857,6 +24857,43 @@ def revestimentos():
             pump(300)
     check("revestimento_propriedades", ok_props, "{} {}".format(ok_props, sorted(k for k in win.props.editors
                                                                                 if "cover" in k)))
+    # (0.564) the tool: a wall's face clicked in the 3D view, the finish laid on it; a door put in after: cut round it
+    from arqbim.ifc import catalog as _catalog
+    wall = _bim.add_wall(win.doc, np.array((x0, y0 + 6.0, 0.0)), np.array((x0 + 5.0, y0 + 6.0, 0.0)),
+                         _catalog.BY_KEY["parede_alv_20"])
+    pump(400)
+    win.viewport.set_selection(set())
+    win.viewport.zoom_extents({wall})
+    pump(600)
+    win.set_tool("covering")
+    pump(200)
+    tool = win.tool
+    tool.set_option("finish", "azulejo_30x60")
+    vp = win.viewport
+    v = np.asarray(win.doc.get(wall).mesh.verts)
+    front = float(v[:, 1].min())
+    sx, sy = vp.project((x0 + 3.5, front, 1.6))
+    tool.pointer_move(sx, sy, ())
+    pump(300)
+    shot("revestimento_ferramenta.png")
+    tool.pointer_down(sx, sy, 1, ())
+    pump(800)
+    made_tool = next(iter(win.viewport.selection), None)
+    ok_tool = made_tool is not None and win.doc.ifc.kind_of(made_tool) == "tiled_covering"
+    a0 = win.doc.ifc.describe(made_tool)["params"]["gross"] if ok_tool else 0.0
+    frame = _bim.wall_frame(win.doc, wall)
+    _bim.add_opening(win.doc, wall, _catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 1.0, 1)
+    pump(800)
+    a1 = win.doc.ifc.describe(made_tool)["params"]["gross"] if ok_tool else 0.0
+    win.set_tool("select")
+    win.viewport.set_selection(set())
+    win.viewport.zoom_extents({wall})
+    pump(800)
+    shot("revestimento_parede_porta.png")
+    check("revestimento_ferramenta", ok_tool and a1 < a0 - 1.0, "{} {:.2f} → {:.2f}".format(made_tool, a0, a1))
+    for _ in range(3):
+        win.doc.undo()
+    pump(300)
     for _ in range(len(made)):
         win.doc.undo()
     pump(200)

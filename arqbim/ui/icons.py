@@ -3038,6 +3038,7 @@ TOOL_ICONS = {"select": select_icon, "line": line_icon, "rectangle": rectangle_i
     "param_surface": param_surface_icon,                                      # (0.395)
     "organic_points": control_ring_icon,                                      # (0.556; the ribbon's own drawing)
               "paint": paint_icon,                                                      # (0.391)
+              "covering": paint_icon,                                                   # (0.564; the ribbon: its own)
               "dim_exterior": dimension_facades_icon,                                   # (0.399)
               "dim_interior": dimension_rooms_icon,                                     # (0.400)
               "lot": lot_icon}                                                          # (0.423)

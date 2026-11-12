@@ -43,7 +43,71 @@ def predefined_for(normal):
     return "FLOORING" if nz > 0.7 else "CEILING" if nz < -0.7 else "CLADDING"
 
 
+def face_frame_and_shape(outline, holes=()):
+    """(frame (4, 4), face shapely in it) of a 3D face (its outline and holes): on a wall x level along it and y
+    up, on a floor x east and y north."""
+    fr = tl.face_frame(outline)
+    o, x, y, n = fr
+    m = np.eye(4)
+    m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, y, n, o
+    face = Polygon(tl.to_plane(outline, fr), [tl.to_plane(h, fr) for h in holes if len(h) >= 3]).buffer(0)
+    return m, face
+
+
 class TiledCoveringMixin:
+    def tiled_on(self, host, point, normal, reach=0.01):
+        """(outline, holes, normal) of the flat face of element `host` round `point` (world), facing `normal` — or
+        None. `reach`: how far the face may be from the point (following: anywhere in its plane)."""
+        from ..core import face_region
+        found = self.triangulate([host]).get(host)
+        if found is None:
+            return None
+        return face_region.face_at(found[0], found[1], point, normal, reach)
+
+    def remember_face(self, guid, host, point, normal):
+        """(0.564) The face a Revestimento was laid on, kept in its host's own coordinates (so that it follows it):
+        Origem, FacePonto, FaceNormal."""
+        e, _ = self._require(guid, KIND)
+        h = self.by_guid(host)
+        m = self._placement_si(h)
+        inv = np.linalg.inv(m)
+        local = inv @ np.append(np.asarray(point, float), 1.0)
+        n = inv[:3, :3] @ np.asarray(normal, float)
+        self._set_params(e, {"Origem": host, "FacePonto": "{:.6f},{:.6f},{:.6f}".format(*local[:3]),
+                             "FaceNormal": "{:.6f},{:.6f},{:.6f}".format(*n)})
+        if h.is_a("IfcElement") and not h.is_a("IfcCovering"):
+            self._cover(e, h)                             # (IfcRelCoversBldgElements: the host knows it)
+
+    def follow_tiled(self, changed):
+        """(0.564) After elements changed: the Revestimentos laid on their faces laid again on those faces as they
+        are now (a wall longer, a window put in, a slab moved); a host gone takes them. Returns those changed."""
+        changed = set(changed)
+        if not changed:
+            return []
+        out, found_on = [], []
+        for g in changed:                                 # (through the hosts' own ties: no look through the model)
+            h = self.by_guid(g)
+            for rel in (getattr(h, "HasCoverings", None) or ()) if h is not None else ():
+                found_on += [c for c in rel.RelatedCoverings if c not in found_on]
+        for e in found_on:
+            p = self._params(e)
+            if p.get("Elemento") != KIND or p.get("Origem") not in changed or not p.get("FacePonto"):
+                continue
+            host = self.by_guid(p["Origem"])
+            m = self._placement_si(host)
+            point = (m @ np.append([float(v) for v in p["FacePonto"].split(",")], 1.0))[:3]
+            normal = m[:3, :3] @ np.array([float(v) for v in p["FaceNormal"].split(",")])
+            found = self.tiled_on(host.GlobalId, point, normal, reach=1e9)
+            if found is None:
+                continue
+            frame, face = face_frame_and_shape(found[0], found[1])
+            try:
+                self.set_tiled_covering(e.GlobalId, frame=frame, face=face)
+            except EditRefused:
+                continue
+            out.append(e.GlobalId)
+        return out
+
     def tiled_params(self, guid):
         """{finish, layout, material, thickness, bed, bed_material, grout, recess, source} of a Revestimento."""
         e, _ = self._require(guid, KIND)

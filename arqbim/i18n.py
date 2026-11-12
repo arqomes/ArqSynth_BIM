@@ -1311,6 +1311,28 @@ _STRINGS = {
     "refuse.tiling_thickness": ("as espessuras vão de 0 a 50 cm", "thicknesses go from 0 to 50 cm"),
     "elem.tiled_covering": ("Revestimento", "Finish"),
     "props.covering_finish": ("Revestimento (tipo)", "Finish (type)"),
+    "tool.covering": ("Revestimento", "Finish"),                                                    # (0.564)
+    "tip.covering": ("Reveste em peças (azulejo, pedra, soalho, tijolo…) qualquer face plana clicada — de uma parede "
+                     "(os vãos recortados), de uma laje e do seu bordo, de um pilar, de uma viga, de um degrau — ou os "
+                     "desenhos fechados escolhidos. Segue o elemento quando este muda. Toda a paginação nas "
+                     "Propriedades.",
+                     "Lays a finish in pieces (tile, stone, boards, brick…) on any flat face clicked — a wall's "
+                     "(openings cut out), a slab's top or edge, a column's, a beam's, a step's — or on the closed "
+                     "drawings chosen. It follows the element when it changes. The whole layout in Properties."),
+    "keys.covering": ("Clique: revestir a face  ·  Botão direito / Esc: Selecionar",
+                      "Click: cover the face  ·  Right button / Esc: Select"),
+    "hint.covering": ("Revestimento ({f}): passe o rato por uma face plana e clique. Desenhos fechados escolhidos "
+                      "antes são revestidos logo.",
+                      "Finish ({f}): move over a flat face and click. Closed drawings chosen first are covered at "
+                      "once."),
+    "tip.covering_here": ("Revestir com {f}", "Cover with {f}"),
+    "tip.covering_no_face": ("Aqui não há uma face plana", "There is no flat face here"),
+    "info.covering_one": ("Revestimento feito: {n} peças ({c} cortadas). A paginação muda-se nas Propriedades.",
+                          "Finish made: {n} pieces ({c} cut). Its layout is changed in Properties."),
+    "info.covering_made": ("{n} revestimento(s) feito(s) nos desenhos escolhidos.",
+                           "{n} finish(es) made on the drawings chosen."),
+    "ctx.covering_finish": ("Revestimento", "Finish"),
+    "covering.own_pattern": ("o do revestimento", "the finish's own"),
     "props.cov_pattern": ("Aparelho", "Bond"),
     "props.cov_w": ("Peça — comprimento", "Piece — length"),
     "props.cov_h": ("Peça — altura / largura", "Piece — height / width"),

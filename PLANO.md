@@ -1826,7 +1826,8 @@ Falta:
    - `Pset_CoveringCommon` e `Qto_CoveringBaseQuantities`;
    - `IfcRelCoversBldgElements` (elementos) e `IfcRelCoversSpaces` (ambientes);
    - o tipo editável (Editar tipo) e as Propriedades com toda a paginação.
-3. **Alvos — face, plano, polígono:**
+3. ~~**Alvos — face, plano, polígono:**~~ (0.564.0: ferramenta Revestimento, `core/face_region.py`;
+   desenhar o polígono faz-se com as ferramentas de desenho num plano de trabalho e revestir o escolhido)
    - **a face clicada de qualquer elemento** (parede, laje e o seu bordo, pilar, viga, escada, cobertura,
      superfície paramétrica plana);
    - **um polígono desenhado** num plano de trabalho;
