@@ -1625,7 +1625,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             column.addWidget(title)
             grid = QtWidgets.QGridLayout()
             grid.setSpacing(2)
-            for n, key in enumerate(("csv", "text", "export", "import")):
+            for n, key in enumerate(("csv", "text", "export", "import",
+                                     "curvature", "planarity", "unroll")):           # (0.559: analysis, unrolling)
                 b = QtWidgets.QPushButton(t("props.surface_" + key))
                 b.clicked.connect(lambda _c=False, a="surface_" + key: self._emit(a, guid, True))
                 grid.addWidget(b, n // 2, n % 2)

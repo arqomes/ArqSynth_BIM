@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.559.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 8: análise e fabrico.** Nas Propriedades de qualquer Superfície paramétrica
+(orgânica ou não), três botões novos:
+
+- **Ver curvatura** — pinta a superfície na vista 3D: cinzento plana, verde curva num sentido (cilíndrica), laranja
+  dupla curvatura em cúpula, azul em sela; a mensagem diz a percentagem de cada. Carregar outra vez tira as cores.
+- **Ver painéis planos** — cada painel da grelha pela sua torção: verde vidro plano, amarelo vidro curvado a frio,
+  vermelho curvar a quente / painel curvo; a mensagem conta-os.
+- **Planificar (DXF)…** — a superfície desenrolada em **faixas** ao longo da grelha, cada triângulo com os lados do
+  tamanho real (para cortar lona, chapa ou madeira): contorno de cada faixa (camada FAIXAS), as dobras (DOBRAS), o
+  número e a área (TEXTOS), umas por cima das outras.
+- Os óculos ficam sem cor (abertos).
+- Testes: `tests/test_surface_analysis.py` (esfera, cilindro, sela; cilindro desenrolado exato; a área da cúpula
+  igual à das faixas); «forma_organica_analise» no gui_smoke, com captura.
+
 ## 0.558.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 7: nós no Gráfico Visual.**

@@ -1304,6 +1304,9 @@ _STRINGS = {
     "props.surface_csv": ("Lista de peças (CSV)…", "Parts list (CSV)…"),
     "props.surface_export": ("Exportar definição…", "Export definition…"),
     "props.surface_import": ("Importar definição…", "Import definition…"),
+    "props.surface_curvature": ("Ver curvatura", "Show curvature"),                            # (0.559)
+    "props.surface_planarity": ("Ver painéis planos", "Show flat panels"),
+    "props.surface_unroll": ("Planificar (DXF)…", "Unroll (DXF)…"),
     "props.surface_text": ("Editar a definição…", "Edit the definition…"),
     "props.surface_file": ("Definição", "Definition"),
     "props.surface_up": ("Subir", "Move up"),

@@ -24887,6 +24887,19 @@ def formas_organicas():
         shot("forma_organica_oculo.png")
         check("forma_organica_oculo", len(holes) == 1 and 3.0 < holes[0]["h"] < 4.05, str(holes))  # (where the
         #                                                                                    shell was: near its top)
+        # (0.559) the shell's curvature over it, its flat panels, its strips unrolled as DXF
+        rep = win.surface_analysis(made, "curvature")
+        pump(500)
+        shot("forma_organica_curvatura.png")
+        rep2 = win.surface_analysis(made, "planarity")
+        pump(300)
+        shown = getattr(win.viewport, "operator_preview_shown", 0)
+        win.surface_analysis(made, "planarity")                       # (again: taken away)
+        dxf_path = os.path.join(OUT, "forma_organica_faixas.dxf")
+        win._surface_property("surface_unroll", made, True, path=dxf_path)
+        check("forma_organica_analise", rep is not None and rep["curvature"]["cupula"] > 0.3 and rep2 is not None
+              and shown > 100 and win.viewport.operator_preview_shown == 0 and os.path.exists(dxf_path),
+              "{} {}".format(rep and {k: round(v, 2) for k, v in rep["curvature"].items()}, rep2 and rep2["panels"]))
     for _ in range(6):
         win.doc.undo()
     pump(200)

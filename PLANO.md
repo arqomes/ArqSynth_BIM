@@ -1814,7 +1814,7 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
 7. ~~**No Gráfico Visual**~~ (0.558.0: «Forma orgânica» e «Furos sobre a forma», `core/graph/nodes_organic.py`;
    «Crescimento» fica para o passo 6): nós «Membrana», «Inflar», «Catenária», «Suavizar», «Crescimento» — a forma como base dos
    painéis perfurados, das nervuras e das matrizes.
-8. **Análise e fabrico**: mapa de **curvatura** (onde a forma é plana, cilíndrica ou de dupla curvatura) e de
+8. ~~**Análise e fabrico**~~ (0.559.0: `core/surface_analysis.py`, botões nas Propriedades da superfície): mapa de **curvatura** (onde a forma é plana, cilíndrica ou de dupla curvatura) e de
    **planaridade dos painéis** (o que pode ser vidro plano), **planificar** em faixas para corte (lona, chapa,
    madeira), e a lista de peças com áreas reais.
 

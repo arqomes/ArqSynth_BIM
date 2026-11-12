@@ -7636,6 +7636,21 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             if action == "surface_usage":
                 bim.set_param_surface(doc, guid, usage=value)
+            elif action in ("surface_curvature", "surface_planarity"):   # (0.559) coloured over it — again: off
+                return self.surface_analysis(guid, "curvature" if action == "surface_curvature" else "planarity")
+            elif action == "surface_unroll":                              # (0.559) its strips flat, as DXF
+                from ..core import surface_analysis as sa
+                if path is None:
+                    path, _ = QtWidgets.QFileDialog.getSaveFileName(self, t("props.surface_unroll"),
+                                                                    "{} - {} faixas.dxf".format(base, name),
+                                                                    "DXF (*.dxf)")
+                    if not path:
+                        return
+                on = ps.Surface(ifc.surface_definition(guid))
+                text, n = sa.unrolled_dxf(on.rows, on.close_u, name=name)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(text)
+                self.message("{} faixas planificadas em {}".format(n, path))
             elif action == "surface_csv":
                 if path is None:
                     path, _ = QtWidgets.QFileDialog.getSaveFileName(self, t("dlg.surface_csv"),
@@ -7685,6 +7700,38 @@ class MainWindow(QtWidgets.QMainWindow):
             self.message(t("err.edit_refused", e=refusal(exc) if isinstance(exc, ValueError) else str(exc)),
                          warning=True)
             self._refresh_properties()
+
+    def surface_analysis(self, guid, what="curvature"):
+        """(0.559) A parametric surface coloured by its curvature (grey flat, green one way, orange a dome, blue a
+        saddle) or by how flat its panels are (green flat glass, yellow glass bent cold, red bent hot) — over it in the
+        3D view; the same asked again, taken away. Returns the report (None: taken away)."""
+        from ..core import param_surface as ps
+        from ..core import surface_analysis as sa
+        if getattr(self, "_surface_analysis", None) == (guid, what):
+            self._surface_analysis = None
+            self.viewport.show_operator_preview()
+            return None
+        on = ps.Surface(self.doc.ifc.surface_definition(guid))
+        m = self.doc.ifc._placement_si(self.doc.ifc.by_guid(guid))
+        tris, cols = sa.coloured_cells(on.rows, on.close_u, what)
+        cut = ps.organic_cut(on.data, on.rows)                # (an oculus's cells: left open, not coloured)
+        if cut is not None:
+            c = np.concatenate((cut, cut[:, :1]), axis=1) if on.close_u else cut
+            gone = (c[:-1, :-1] & c[:-1, 1:] & c[1:, 1:] & c[1:, :-1]).ravel()
+            keep = np.repeat(~gone, 2)
+            tris, cols = tris[keep], cols[keep]
+        flat = tris.reshape(-1, 3)
+        tris = ((m @ np.column_stack((flat, np.ones(len(flat)))).T).T[:, :3]).reshape(-1, 3, 3)
+        self.viewport.show_operator_preview(tris, cols)
+        self._surface_analysis = (guid, what)
+        rep = sa.report(on.rows, on.close_u)
+        if what == "curvature":
+            text = " · ".join("{} {:.0f} %".format(sa.CLASS_TEXT[k], v * 100) for k, v in rep["curvature"].items()
+                              if v > 0.005)
+        else:
+            text = " · ".join("{} {}".format(k, v) for k, v in rep["panels"].items() if v)
+        self.message(text)
+        return rep
 
     def _surface_text_dialog(self, text):
         """(0.395) The definition as text to edit (JSON): the new text, or None if let go."""
