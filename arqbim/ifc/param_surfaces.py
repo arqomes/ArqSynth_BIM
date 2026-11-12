@@ -29,6 +29,8 @@ USAGES = {"estrutura": ("IfcBuildingElementProxy", "NOTDEFINED"), "cobertura": (
           "fachada": ("IfcCurtainWall", "NOTDEFINED"), "pala": ("IfcShadingDevice", "AWNING")}
 KIND = "param_surface"
 BARE = "concreto"                   # the bare surface's material (no construction)
+SHEET_MATERIAL = "inox"             # (0.550) a perforated sheet's (a Visual Graph operator's) on it
+SHEET_KEYS = ("free", "free_repeat", "sheet_w", "sheet_h", "margin", "thickness", "operator")
 
 
 def _mask_loader(path):
@@ -119,11 +121,72 @@ class ParamSurfaceMixin:
         self._surface_store(element, self.surface_definition(guid) if data is None else data, lang)
         return element.GlobalId
 
-    def _surface_store(self, element, data, lang):
+    # ------------------------------------------------------------ a perforated sheet on it (0.550)
+
+    def surface_sheet_face(self, guid):
+        """(0.550) The surface unrolled (core/surface_sheet.flat_face): the rectangle a Visual Graph operator works
+        on."""
+        from ..core import surface_sheet
+        self._require(guid, KIND)
+        try:
+            return surface_sheet.flat_face(ps.Surface(self.surface_definition(guid)))
+        except ps.SurfaceError as exc:
+            raise EditRefused(str(exc)) from None
+
+    def surface_perforation(self, guid):
+        """(0.550) {"count", "open_area"} of the perforated sheet on a parametric surface — None: it has none."""
+        p = self._params(self.by_guid(guid))
+        if not p.get("FurosLivres") or p.get("FurosConta") is None:
+            return None
+        return {"count": int(float(p["FurosConta"])), "open_area": float(p.get("FurosAberta") or 0.0)}
+
+    def set_surface_perforation(self, guid, pattern, lang="pt"):
+        """(0.550) A parametric surface's perforated sheet — a Visual Graph operator's holes (free, free_repeat,
+        sheet_w, sheet_h, margin, thickness, operator — as a wall finish's; free «»: none again); its body again."""
+        element, _ = self._require(guid, KIND)
+        self._set_params(element, self._pattern_changes({k: v for k, v in pattern.items() if k in SHEET_KEYS}))
+        self._surface_store(element, self.surface_definition(guid), lang, rework=False)
+
+    def _surface_sheet(self, element, surface, rework):
+        """(vertices, triangles) of the perforated sheet a surface carries — None: none. `rework`: the surface
+        changed — its holes worked out again first by the operator it keeps, on it as it is now."""
+        from ..core import surface_sheet
+        from ..core import surfaces as core_surfaces
+        if not self._params(element).get("FurosLivres"):
+            return None
+        if rework and self._params(element).get("Operador"):
+            from ..core.graph import operators
+            operators.rework(self, element, face=surface_sheet.flat_face(surface))
+        p = self._params(element)
+        free = core_surfaces.free_read(p.get("FurosLivres") or "")
+        if free is None:
+            return None
+        size = (float(p.get("PainelLargura") or 1.0), float(p.get("PainelAltura") or 1.0))
+        repeat = float(p.get("FurosRepetir") if p.get("FurosRepetir") is not None else 1.0) > 0.5
+        try:
+            verts, tris, count, area = surface_sheet.sheet(
+                surface, free[0], free[1], float(p.get("Margem") or 0.0), size, repeat,
+                float(p.get("Espessura") or 0.003), max_holes=core_surfaces.MAX_HOLES)
+        except ValueError as exc:
+            raise EditRefused(str(exc)) from None
+        face = surface_sheet.flat_face(surface)
+        self._set_params(element, {"FurosConta": float(count),
+                                   "FurosAberta": area / face.area if face.area > 1e-9 else 0.0})
+        return verts, tris
+
+    def _surface_store(self, element, data, lang, rework=True):
         try:
             surface, pieces, parts, warnings = work_out(data)
         except ps.SurfaceError as exc:
             raise EditRefused(str(exc)) from None
+        sheet = self._surface_sheet(element, surface, rework)
+        if sheet is not None:                            # (0.550) the sheet: in the bare surface's place, or over
+            if not data.get("build"):                    # its construction
+                pieces = {}
+            if SHEET_MATERIAL in pieces:
+                v0, t0 = pieces[SHEET_MATERIAL]
+                sheet = (np.vstack((v0, sheet[0])), np.vstack((t0, sheet[1] + len(v0))))
+            pieces = dict(pieces, **{SHEET_MATERIAL: sheet})
         f, u = self.file, 1.0 / self.unit_scale
         items, main = [], None
         for key, (verts, tris) in pieces.items():

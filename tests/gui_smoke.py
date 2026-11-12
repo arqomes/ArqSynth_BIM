@@ -24901,6 +24901,33 @@ def grafico_visual():
     win.doc.undo()
     win.doc.undo()
     pump(200)
+    # (0.550) a parametric surface: the operator's sheet put on it
+    from arqbim.core import param_surface as _ps
+    data = _ps.default_definition("grid")
+    data["inputs"] = {"L": 6.0, "W": 4.0, "H": 1.2}
+    data["surface"].update(u=14, v=10)
+    dome = _bim.add_param_surface(win.doc, data, np.array((60.0, 30.0, 0.0)))
+    pump(300)
+    win.viewport.set_selection({dome})
+    pump(200)
+    made = win.apply_operator(next(op["slug"] for op in _operators.listing() if op["name"] == "Atrator em favo"),
+                              None)
+    pump(600)
+    got = win.doc.ifc.surface_perforation(dome)
+    check("grafico_superficie", made == [dome] and got is not None and got["count"] > 500 and panel.target() == 1
+          and panel.update_button.isEnabled(), "furos {}".format(got and got["count"]))
+    if os.environ.get("ARQBIM_COMPARE"):
+        win.viewport.zoom_extents({dome})
+        pump(800)
+        shot("grafico_superficie.png")
+        box = win.viewport.bounds([win.doc.get(dome)])
+        win.viewport.zoom_box((box[0] + (2.0, 1.0, 0.3), box[0] + (4.0, 2.5, 1.2)))
+        pump(800)
+        shot("grafico_superficie_perto.png")
+    win.viewport.set_selection(set())
+    win.doc.undo()
+    win.doc.undo()
+    pump(200)
     win.set_module("project")
     pump(100)
 

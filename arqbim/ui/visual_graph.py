@@ -310,6 +310,11 @@ def model_preview(doc, value, bad=None):
         if kind == "ceiling":
             face, frame = doc.ifc.ceiling_face(wall), None
             flat = (doc.ifc._placement_si(doc.ifc.by_guid(wall)), 0.0)
+        elif kind == "param_surface":                    # (0.550) unrolled; each point put back on it
+            from ..core import param_surface, surface_sheet
+            on = param_surface.Surface(doc.ifc.surface_definition(wall))
+            face, frame = surface_sheet.flat_face(on), None
+            flat = (doc.ifc._placement_si(doc.ifc.by_guid(wall)), on)
         elif kind == "slab":
             from shapely.geometry import Polygon
 
@@ -331,6 +336,10 @@ def model_preview(doc, value, bad=None):
     step = surfaces.strip_step(radius, frame.length) if curved else None
 
     def world(uv, off):
+        if flat is not None and not isinstance(flat[1], float):      # (a parametric surface)
+            from ..core import surface_sheet
+            local = surface_sheet.to_surface(flat[1], np.column_stack((uv, np.full(len(uv), off))))
+            return (flat[0] @ np.column_stack((local, np.ones(len(uv)))).T).T[:, :3]
         if flat is not None:                             # (seen from under it: a hair under its underside)
             local = np.column_stack((uv, np.full(len(uv), flat[1] - off), np.ones(len(uv))))
             return (flat[0] @ local.T).T[:, :3]
@@ -353,6 +362,11 @@ def model_preview(doc, value, bad=None):
         if curved:                                       # (fine enough along the arc to follow it)
             unrolled = np.column_stack((t, np.zeros(len(t))))
             unrolled, index = surfaces.split_strips(unrolled, np.arange(len(t)).reshape(-1, 3), step)
+            t = unrolled[index].reshape(-1, 3)[:, :2]
+        elif flat is not None and not isinstance(flat[1], float):      # (cut to the surface's own triangles)
+            from ..core import surface_sheet
+            unrolled = np.column_stack((t, np.zeros(len(t))))
+            unrolled, index = surface_sheet.cut_to_cells(flat[1], unrolled, np.arange(len(t)).reshape(-1, 3))
             t = unrolled[index].reshape(-1, 3)[:, :2]
         tris.append(world(t, lift).reshape(-1, 3, 3))
         colours.append(np.tile(SHEET_RGBA, (len(t) // 3, 1)))
@@ -1110,6 +1124,8 @@ class GraphWindow(QtWidgets.QMainWindow):
                     where = "{} · em planta de teto".format(getattr(obj, "name", None) or "Teto")
                 elif kind == "slab":
                     where = "{} · teto falso por baixo (planta de teto)".format(getattr(obj, "name", None) or "Laje")
+                elif kind == "param_surface":                         # (0.550)
+                    where = "{} · desenrolada".format(getattr(obj, "name", None) or "Superfície")
             except Exception:  # (no model behind the window)
                 pass
             where = where or "{} · face {}".format(getattr(obj, "name", None) or "Parede", side)

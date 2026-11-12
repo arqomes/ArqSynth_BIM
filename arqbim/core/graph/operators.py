@@ -22,7 +22,8 @@ SEEDED = ".de_origem"
 WALLS = ("wall", "curved_wall")      # (0.548) what an operator's panel can stand on
 # (0.549) what an operator works on: a wall's face (its panel a finish on it), a ceiling (its own holes), a slab (a
 # perforated false ceiling made under it)
-HOSTS = WALLS + ("ceiling", "slab")
+HOSTS = WALLS + ("ceiling", "slab", "param_surface")      # (0.550) a parametric surface: a sheet on it
+OWN = ("ceiling", "param_surface")   # those that carry their holes themselves (no finish apart)
 _seeding = False
 SIDES = ("frente", "trás")
 
@@ -311,6 +312,8 @@ def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug
     kind = _kind(doc, wall)
     if kind == "ceiling":                            # (0.549) the ceiling itself perforated
         return [bim.perforate_ceiling(doc, wall, dict(found[0][2], operator=text))]
+    if kind == "param_surface":                      # (0.550) a perforated sheet on the surface
+        return [bim.perforate_surface(doc, wall, dict(found[0][2], operator=text))]
     if kind == "slab":                               # (0.549) a perforated false ceiling made under the slab
         return [bim.perforated_ceiling_under(doc, wall, dict(found[0][2], operator=text))]
     return [bim.add_cladding(doc, w or wall, s, "perfurado", 0.0, dict(pattern, operator=text))
@@ -324,9 +327,9 @@ def operator_of(doc, guid):
         p = doc.ifc._params(doc.ifc.by_guid(guid))
     except Exception:  # (not of the IFC: a sketch, a dimension)
         return None
-    if p.get("Elemento") not in ("cladding", "ceiling") or not p.get("Operador"):
+    if p.get("Elemento") not in ("cladding",) + OWN or not p.get("Operador"):
         return None
-    if p.get("Elemento") == "ceiling":               # (0.549) a perforated ceiling: it is its own surface
+    if p.get("Elemento") in OWN:                     # (0.549) a perforated ceiling: it is its own surface
         p = dict(p, Parede=guid, Lado=1)
     try:
         data = json.loads(p["Operador"])
@@ -369,7 +372,7 @@ def host_wall(doc, guid):
     return None
 
 
-def rework(ifc, covering):
+def rework(ifc, covering, face=None):
     """(0.544) Called by the IFC when a wall changed (ifc.follow_claddings — inside the wall's own undo step): the
     finish's holes worked out again by the operator it keeps, on the wall's face as it is now. Its «Operador» text
     stays. Whatever fails (an operator of a newer version, a node's error on the new face), the finish keeps the
@@ -382,18 +385,23 @@ def rework(ifc, covering):
     try:
         graph = Graph.from_dict(json.loads(p["Operador"])["graph"])
         side = SIDES[0] if int(p.get("Lado") or 1) > 0 else SIDES[1]
-        ceiling = p.get("Elemento") == "ceiling"     # (0.549) a ceiling: itself; its sheet's thickness its own
-        found = _worked(types.SimpleNamespace(ifc=ifc), graph, covering.GlobalId if ceiling else p.get("Parede"),
-                        side)
+        own = p.get("Elemento") in OWN               # (0.549) a ceiling, (0.550) a surface: itself
+        if face is not None:                         # (0.550: its face as it is being made, not as it was kept)
+            nodes_3d.MODEL["faces"] = {covering.GlobalId: face}
+        found = _worked(types.SimpleNamespace(ifc=ifc), graph, covering.GlobalId if own else p.get("Parede"), side)
         pattern = found[0][2]
-        if ceiling:
+        if p.get("Elemento") == "ceiling":           # (its board's thickness its own)
             from ...ifc.coverings import CEILING_HOLES
             pattern = {k: v for k, v in pattern.items() if k in CEILING_HOLES}
+        elif p.get("Elemento") == "param_surface":
+            from ...ifc.param_surfaces import SHEET_KEYS
+            pattern = {k: v for k, v in pattern.items() if k in SHEET_KEYS}
         ifc._set_params(covering, ifc._pattern_changes(pattern))
     except Exception:  # noqa: BLE001 (see above)
         return False
     finally:
         nodes_3d.MODEL["doc"] = before
+        nodes_3d.MODEL.pop("faces", None)
     return True
 
 
@@ -409,7 +417,9 @@ def update(doc, guid, graph=None, name=None, slug=None):
     found = _worked(doc, graph, kept["wall"], kept["side"])
     _wall, _side, pattern = found[0]
     text = record(graph, kept["name"] if name is None else name, kept["slug"] if slug is None else slug)
-    if kept["wall"] == guid:                         # (0.549) a ceiling
+    if _kind(doc, guid) == "param_surface":          # (0.550)
+        bim.perforate_surface(doc, guid, dict(pattern, operator=text))
+    elif kept["wall"] == guid:                       # (0.549) a ceiling
         bim.perforate_ceiling(doc, guid, dict(pattern, operator=text))
     else:
         bim.set_cladding(doc, guid, **dict(pattern, operator=text))

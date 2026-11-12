@@ -56,7 +56,8 @@ def seen_mirrored(doc, wall, side="frente"):
     if is_curved(doc, wall):
         _frame, _face, _radius, turn = doc.ifc.curved_face(wall, _side(side))
         return turn * _side(side) > 0
-    if doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) in ("ceiling", "slab"):
+    if doc is not None and doc.ifc.by_guid(wall) is not None and \
+            doc.ifc.kind_of(wall) in ("ceiling", "slab", "param_surface"):
         return False                    # (0.549) a ceiling: as its plan is drawn
     return _side(side) < 0
 
@@ -66,9 +67,13 @@ def wall_face(doc, wall, side="frente"):
     from its base). (0.548) A curved wall's: unrolled — `side` "frente" its inner face, "trás" its outer one, each
     as long as its own arc. ValueError where the wall is gone."""
     from shapely.geometry import box
+    if wall in (MODEL.get("faces") or {}):          # (0.550) a face handed over: an element being made again
+        return MODEL["faces"][wall]
     if is_curved(doc, wall):
         return doc.ifc.curved_face(wall, _side(side))[1]
     kind = doc.ifc.kind_of(wall) if doc is not None and doc.ifc.by_guid(wall) is not None else None
+    if kind == "param_surface":                     # (0.550) a parametric surface: unrolled into a rectangle
+        return doc.ifc.surface_sheet_face(wall)
     if kind in ("ceiling", "slab"):
         # (0.549) a ceiling's flat part — or a slab's plan, for the false ceiling made under it — as in a ceiling
         # plan: seen from above (x to the right, y up the sheet), its corner at (0, 0)

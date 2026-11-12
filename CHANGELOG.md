@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.550.0 — 2026-11-12
+
+**Gráfico Visual: a Superfície paramétrica como superfície de trabalho.**
+
+- Escolhe-se uma **Superfície paramétrica** e **Aplicar**, **Criar novo** ou **Editar** como numa parede. A superfície
+  recebe uma **chapa perfurada que a segue** (cúpulas, abóbadas, superfícies de dupla curvatura).
+- No editor a superfície aparece **desenrolada** num retângulo: a largura é o seu comprimento médio num sentido, a
+  altura o comprimento médio no outro. Onde a superfície é mais larga ou mais estreita que essa média, os furos ficam
+  um pouco esticados ou apertados.
+- Sem «Construção», a chapa toma o lugar da superfície lisa; com «Construção» (nervuras, ripas, painéis…), fica por
+  cima dela. A chapa é de inox, com a espessura do painel do operador.
+- A chapa **acompanha a superfície**: ao mudar a fórmula, as medidas, um modificador ou as curvas de que foi feita, os
+  furos refazem-se no mesmo passo de desfazer. Os recortes («trim») ficam sem chapa. «Atualizar na parede», «Editar o
+  da parede» e a pré-visualização na vista 3D funcionam nela.
+- A chapa é cortada pelas facetas da própria superfície, para se ver lisa, com os furos e sem linhas de triângulos.
+- Por fazer: escolher o lado da superfície (hoje é sempre o da normal); a chapa na lista de peças e nas tabelas; tirar
+  a chapa pelo painel (hoje: Ctrl+Z, ou aplicar outro operador).
+- Testes: `tests/test_graph_operators.py` (OnAParametricSurface); «grafico_superficie» no gui_smoke.
+
 ## 0.549.0 — 2026-11-12
 
 **Gráfico Visual: teto falso perfurado.**

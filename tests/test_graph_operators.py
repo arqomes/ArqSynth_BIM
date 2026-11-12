@@ -510,6 +510,85 @@ class OnACeiling(unittest.TestCase):
         win.close()
 
 
+class OnAParametricSurface(unittest.TestCase):
+    """0.550 — a parametric surface as the surface: unrolled in the editor, the sheet put back on it."""
+
+    def setUp(self):
+        from arqbim.core import param_surface as ps
+        self.ps = ps
+        self.doc = Document()
+        data = ps.default_definition("grid")                    # (a 6 × 4 m dome, 0,8 m high)
+        data["inputs"] = {"L": 6.0, "W": 4.0, "H": 0.8}
+        data["surface"].update(u=12, v=8)
+        self.surface = bim.add_param_surface(self.doc, data, np.array((10.0, 10.0, 0.0)))
+
+    def test_unrolled_and_put_back(self):
+        from arqbim.core import surface_sheet
+        from arqbim.core.mesh import TriMesh
+        doc, guid = self.doc, self.surface
+        on = self.ps.Surface(doc.ifc.surface_definition(guid))
+        width, height = surface_sheet.flat_size(on)
+        self.assertTrue(6.0 < width < 6.6 and 4.0 < height < 4.7)                  # (longer than its plan: it rises)
+        face = nodes_3d.wall_face(doc, guid)
+        np.testing.assert_allclose(face.bounds, (0.0, 0.0, width, height))
+        corners = surface_sheet.to_surface(on, np.array([(0.0, 0.0, 0.0), (width, height, 0.0),
+                                                         (width / 2, height / 2, 0.0)]))
+        np.testing.assert_allclose(corners[0], on.rows[0, 0], atol=1e-9)
+        np.testing.assert_allclose(corners[1], on.rows[-1, -1], atol=1e-9)
+        self.assertAlmostEqual(corners[2][2], 0.8, delta=0.05)                     # (its top)
+        off = surface_sheet.to_surface(on, np.array([(width / 2, height / 2, 0.1)]))[0]
+        self.assertAlmostEqual(off[2] - corners[2][2], 0.1, delta=0.01)            # (off it along its normal)
+        self.assertEqual(operators.host_wall(doc, guid), guid)
+        slug = operators.save("Na superfície", operators.starter())
+        self.assertEqual(operators.apply_to(doc, slug, guid), [guid])              # (the surface itself)
+        got = doc.ifc.surface_perforation(guid)
+        self.assertGreater(got["count"], 1000)
+        self.assertTrue(0.01 < got["open_area"] < 0.6)
+        kept = operators.operator_of(doc, guid)
+        self.assertEqual((kept["slug"], kept["wall"]), (slug, guid))
+        verts, faces = doc.ifc.triangulate([guid])[guid]
+        tris = np.asarray(faces).reshape(-1, 3)
+        local = verts - (10.0, 10.0, 0.0)
+        self.assertTrue(local[:, 2].min() > -0.01 and local[:, 2].max() < 0.8 + 0.02)
+        self.assertTrue(local[:, 0].min() > -0.02 and local[:, 0].max() < 6.02)    # (on the surface, not flat by it)
+        edges = len(TriMesh(verts, tris).edge_array()[0])
+        self.assertLess(edges, 0.5 * 3 * len(tris))                                # (no triangle soup drawn)
+
+    def test_follows_the_surface_and_is_edited(self):
+        doc, guid = self.doc, self.surface
+        operators.apply_to(doc, operators.starter(), guid)
+        before = doc.ifc.surface_perforation(guid)["count"]
+        data = doc.ifc.surface_definition(guid)
+        data["inputs"]["L"] = 9.0                                                  # (half as long again)
+        bim.set_param_surface(doc, guid, data)
+        after = doc.ifc.surface_perforation(guid)["count"]
+        self.assertGreater(after, before * 1.3)
+        doc.undo()
+        self.assertEqual(doc.ifc.surface_perforation(guid)["count"], before)
+        g = operators.operator_of(doc, guid)["graph"]
+        g.set_param("n2", "passo", 0.25)
+        operators.update(doc, guid, g)
+        self.assertLess(doc.ifc.surface_perforation(guid)["count"], before / 4)
+        bim.perforate_surface(doc, guid, {"free": "", "operator": ""})             # (none again: the bare surface)
+        self.assertIsNone(doc.ifc.surface_perforation(guid))
+
+    def test_editor_and_model_picture(self):
+        doc, guid = self.doc, self.surface
+        main = types.SimpleNamespace(doc=doc, viewport=types.SimpleNamespace(selection={guid}))
+        nodes_3d.MODEL["doc"] = doc
+        win = vg.GraphWindow(graph=None, wall=guid, side="frente")
+        win.main = main
+        win.set_target(guid, "frente")
+        self.assertIn("desenrolada", win.target_label.text())
+        last = vg.final_result(win.graph, win.results)
+        tris, colours = vg.model_preview(doc, last[2])
+        self.assertEqual(len(tris), len(colours))
+        z = tris[:, :, 2]
+        self.assertTrue(z.min() > -0.01 and 0.75 < z.max() < 0.85)                 # (over the dome, following it)
+        self.assertEqual(win.apply_to_model(), [guid])
+        win.close()
+
+
 class UndoAndAI(unittest.TestCase):
     """0.543 — step 9: Ctrl+Z in the editor; the AI's graph is the open window's."""
 

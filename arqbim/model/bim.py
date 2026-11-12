@@ -557,6 +557,16 @@ def perforated_ceiling_under(doc, slab, pattern, drop=CEILING_DROP):
     return doc.execute(IfcCommand(t("cmd.ceiling"), action)).result
 
 
+def perforate_surface(doc, guid, pattern):
+    """(0.550) A parametric surface's perforated sheet — a Visual Graph operator's holes
+    (ifc.set_surface_perforation; free «»: none again). In a group, every copy. One undo step."""
+    gs = _and_copies(doc, guid)
+    language = lang()
+    _edit(doc, lambda ifc: [ifc.set_surface_perforation(g, pattern, language) for g in gs], gs,
+          "cmd.param_surface_edit", plan=False)
+    return guid
+
+
 def set_flooring(doc, guid, finish):
     """(0.415) A floor finish's finish (its material and thickness). In a group, every copy. One undo step."""
     gs = _and_copies(doc, guid)
