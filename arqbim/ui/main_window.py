@@ -955,7 +955,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "paint": "B",                                         # (0.391, SketchUp's Paint Bucket)
                 "param_surface": "",                                  # (0.395)
                 "organic_points": "",                                 # (0.556)
-                "covering": "",                                       # (0.564)
+                "covering": "", "covering_layout": "",                # (0.564, 0.565)
                 "dim_exterior": "", "dim_interior": "",               # (0.399, 0.400)
                 "work_plane": "",                                     # (0.412)
                 "lot": "",                                            # (0.423)
@@ -7590,6 +7590,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_ripado_screen(doc, guid, **{action[7:]: value})
             elif action in ("loose_piece", "loose_width", "loose_depth", "loose_height"):   # (0.440)
                 bim.set_loose(doc, guid, **{action[6:]: value})
+            elif action == "covering_layout":              # (0.565) its start and angle by grips in the view
+                QtCore.QTimer.singleShot(0, lambda: self.tools["covering_layout"].edit(guid))
+                return
             elif action.startswith("covering_"):           # (0.563) a Revestimento: its finish, layout, materials
                 key = action[9:]
                 if key in ("finish", "material", "thickness", "bed", "grout", "recess"):

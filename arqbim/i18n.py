@@ -1332,6 +1332,27 @@ _STRINGS = {
     "info.covering_made": ("{n} revestimento(s) feito(s) nos desenhos escolhidos.",
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
+    "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_in_view": ("Paginação na vista", "Layout in the view"),
+    "act.covering_layout": ("Mover origem / rodar…", "Move start / turn…"),
+    "tip.covering_layout": ("Na vista: arraste o quadrado para levar a origem das juntas (encaixa nos cantos e nos "
+                            "meios das arestas e dos vãos) e o losango para rodar o aparelho. As peças acompanham; "
+                            "as cortadas a laranja.",
+                            "In the view: drag the square to move where the joints start (it snaps to corners and to "
+                            "the middles of edges and openings) and the diamond to turn the bond. The pieces follow; "
+                            "the cut ones orange."),
+    "keys.covering_layout": ("Arrastar ■: origem  ·  Arrastar ◆: rodar  ·  Esc: Selecionar",
+                             "Drag ■: start  ·  Drag ◆: turn  ·  Esc: Select"),
+    "hint.covering_layout": ("Paginação: arraste o quadrado (origem das juntas) ou o losango (ângulo). As peças "
+                             "cortadas aparecem a laranja.",
+                             "Layout: drag the square (where joints start) or the diamond (angle). Cut pieces show "
+                             "orange."),
+    "tip.covering_move": ("Mover a origem das juntas", "Move where the joints start"),
+    "tip.covering_turn": ("Rodar o aparelho", "Turn the bond"),
+    "tip.covering_snap": ("Junta aqui", "Joint here"),
+    "tip.covering_along_edge": ("Paralelo à aresta", "Along the edge"),
+    "info.covering_layout": ("Paginação: {n} peças, {c} cortadas, {k} abaixo do corte mínimo.",
+                             "Layout: {n} pieces, {c} cut, {k} under the smallest cut."),
     "covering.own_pattern": ("o do revestimento", "the finish's own"),
     "props.cov_pattern": ("Aparelho", "Bond"),
     "props.cov_w": ("Peça — comprimento", "Piece — length"),

@@ -30,6 +30,7 @@ from .ripado_screen import RipadoScreenTool        # (0.441)
 from .param_surface import ParamSurfaceTool       # (0.395: replaces the «Cobertura orgânica» tool — tools/organic_roof)
 from .organic_points import OrganicPointsTool     # (0.556: masts and supports on an organic form)
 from .covering import CoveringTool                # (0.564: a Revestimento on a face clicked)
+from .covering_layout import CoveringLayoutTool   # (0.565: its layout's start and angle by grips)
 from .paint import PaintTool
 from .hvac import AirTerminalTool, EquipmentTool
 from .line import LineTool
@@ -71,4 +72,4 @@ ALL_TOOLS = (SelectTool, LineTool, RectangleTool, PushPullTool, MoveTool, Rotate
              NicheTool, FlooringTool, GutterTool, ElevatorTool, SeparatorTool, PerforatedPanelTool,
              PaintTool, ParamSurfaceTool, ExteriorDimsTool, InteriorDimsTool, WorkPlaneTool, LotTool, RipadoTool,
              LooseFurnitureTool, RipadoScreenTool, RoomNeedTool, SteelMemberTool, SteelShedTool, SteelTrussTool,
-             SteelStairTool, OrganicPointsTool, CoveringTool)
+             SteelStairTool, OrganicPointsTool, CoveringTool, CoveringLayoutTool)

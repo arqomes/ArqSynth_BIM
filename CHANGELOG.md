@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.565.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 5 (1.ª parte): a paginação controlada na vista.**
+
+- **Pré-visualização ao vivo** na ferramenta Revestimento: ao passar o rato numa face, as peças aparecem como
+  ficariam, as inteiras a azul e as **cortadas a laranja**, antes de clicar. Muda logo quando se escolhe outro
+  revestimento, aparelho ou começo na barra.
+- **Paginação** (Propriedades do Revestimento ▸ «Mover origem / rodar…»):
+  - **o quadrado** é a origem das juntas: arrasta-se para onde se quer uma junta. Encaixa nos cantos da face e nos
+    meios das suas arestas e dos vãos («Junta aqui»), como o fiel marca a junta na ombreira de uma porta ou no eixo
+    de uma janela;
+  - **o losango** roda o aparelho, de 15° em 15°, ou paralelo a uma aresta da face;
+  - as peças acompanham o rato, com as cortadas a laranja;
+  - ao largar fica feito, num só Desfazer, e a barra diz quantas peças, quantas cortadas e quantas abaixo do corte
+    mínimo.
+- Teste: «revestimento_paginacao» no gui_smoke (origem arrastada para um canto, encaixada), com captura.
+
 ## 0.564.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 3: revestir uma face, um plano ou um polígono.**

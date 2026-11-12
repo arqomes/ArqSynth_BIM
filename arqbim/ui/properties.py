@@ -679,6 +679,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
         from ..ifc import catalog as cat
         d = p["layout"]
         pt = lang() == "pt"
+        item = self._row(t("props.cov_in_view"), "")             # (0.565) its start and angle by grips
+        button = QtWidgets.QPushButton(t("act.covering_layout"))
+        button.setToolTip(t("tip.covering_layout"))
+        button.clicked.connect(lambda _c=False: self._emit("covering_layout", guid, None))
+        self.tree.setItemWidget(item, 1, button)
+        self.editors["covering_layout"] = button
         self._choice_combo(t("props.cov_pattern"), "covering_pattern", guid,
                            [(v[0 if pt else 1], k) for k, v in tl.PATTERNS.items() if k != "livre"
                             or d["pattern"] == "livre"], d["pattern"])

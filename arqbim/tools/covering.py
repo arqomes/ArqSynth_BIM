@@ -90,8 +90,38 @@ class CoveringTool(Tool):
         n /= max(np.linalg.norm(n), 1e-12)
         return obj, n, np.asarray(hit[2], dtype=float)
 
+    def _preview(self, key, outline, holes):
+        """(0.565) The pieces as they would be laid on the face under the mouse — the cut ones orange (kept while
+        the mouse stays on that face with the same choices)."""
+        want = (key, self.finish, self.pattern, self.origin)
+        if getattr(self, "_shown", None) == want:
+            return
+        self._shown = want
+        from shapely.geometry.polygon import orient
+        from ..ifc.tiled_coverings import face_frame_and_shape
+        frame, shape = face_frame_and_shape(outline, holes)
+        fin = cf.finish(self.finish)
+        d = dict(fin.layout(), **self.layout())
+        try:
+            q = orient(shape, 1.0)
+            result = tl.lay(list(q.exterior.coords)[:-1], d, [list(h.coords)[:-1] for h in q.interiors])
+        except (tl.LayoutError, ValueError):
+            self.viewport.show_operator_preview()
+            return
+        tris, whole = tl.top_triangles(result)
+        if not len(tris):
+            self.viewport.show_operator_preview()
+            return
+        flat = tris.reshape(-1, 3)
+        z = fin.bed + fin.thickness + 0.003
+        world = frame[:3, 3] + flat[:, :1] * frame[:3, 0] + flat[:, 1:2] * frame[:3, 1] + z * frame[:3, 2]
+        rgba = np.where(whole[:, None], np.array((0.30, 0.50, 0.85, 0.40)), np.array((0.95, 0.55, 0.20, 0.60)))
+        self.viewport.show_operator_preview(world.reshape(-1, 3, 3), rgba)
+
     def _clear(self):
         self._face = None
+        self._shown = None
+        self.viewport.show_operator_preview()
         self.viewport.show_polygon([])
         self.viewport.show_marker(None)
         self.viewport.show_tip("", None)
@@ -116,7 +146,8 @@ class CoveringTool(Tool):
         lift = np.asarray(fn, float) * 0.004
         loops = [np.asarray(outline) + lift] + [np.asarray(h) + lift for h in holes]
         segs = [p for loop in loops for i in range(len(loop)) for p in (loop[i], loop[(i + 1) % len(loop)])]
-        self.viewport.show_polygon(loops[0], segments=segs, colors=[SNAP_COLORS["on_face"]] * (len(segs) // 2))
+        self.viewport.show_polygon([], segments=segs, colors=[SNAP_COLORS["on_face"]] * (len(segs) // 2))
+        self._preview(key, outline, holes)
         self.viewport.show_marker(point, SNAP_COLORS["on_face"])
         f = cf.finish(self.finish)
         self.viewport.show_tip(t("tip.covering_here", f=f.name_pt if lang() == "pt" else f.name_en), point)

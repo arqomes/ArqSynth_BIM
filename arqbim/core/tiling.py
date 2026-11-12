@@ -549,6 +549,19 @@ def prisms(polys, z0, z1):
     return np.asarray(verts, float).reshape(-1, 3), np.asarray(tris, np.int64).reshape(-1, 3)
 
 
+def top_triangles(result, z=0.0, most=8000):
+    """(triangles (n, 3, 3) in the plane's x, y at height z, whole (n,)) of the pieces' faces — a preview of the
+    layout (the first `most` pieces)."""
+    tris, whole = [], []
+    for p in result.pieces[:most]:
+        pts = np.asarray(p.points, float)
+        allp = np.vstack([pts] + [np.asarray(h, float) for h in p.holes]) if p.holes else pts
+        for a, b, c in _cap(p.points, p.holes):
+            tris.append(((allp[a][0], allp[a][1], z), (allp[b][0], allp[b][1], z), (allp[c][0], allp[c][1], z)))
+            whole.append(p.whole)
+    return np.asarray(tris, float).reshape(-1, 3, 3), np.asarray(whole, bool)
+
+
 def joints(result, face, d):
     """The joints between the pieces, as polygons [(points, holes)…]: round each piece a ring as wide as half the
     joint (two neighbours' rings meet in the joint's middle), kept on the face."""

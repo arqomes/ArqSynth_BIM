@@ -24885,6 +24885,30 @@ def revestimentos():
     _bim.add_opening(win.doc, wall, _catalog.OPENING_BY_KEY["porta_80"], frame, frame.x0 + 1.0, 1)
     pump(800)
     a1 = win.doc.ifc.describe(made_tool)["params"]["gross"] if ok_tool else 0.0
+    # (0.565) Paginação: the start's grip dragged onto the door's jamb (a corner of the face's hole) — snapped there
+    ok_layout = False
+    if ok_tool:
+        win.viewport.zoom_extents({wall})
+        pump(500)
+        win.tools["covering_layout"].edit(made_tool)
+        pump(600)
+        lt = win.tool
+        grip = vp.project(vp.grips[0][0])
+        _m, face = win.doc.ifc.tiled_face(made_tool)
+        hole = list(face.interiors[0].coords)[0] if face.interiors else list(face.exterior.coords)[1]
+        target = vp.project(lt._world(hole))
+        lt.pointer_down(grip[0], grip[1], 1, ())
+        for k in range(1, 6):
+            lt.pointer_move(grip[0] + (target[0] + 4 - grip[0]) * k / 5, grip[1] + (target[1] - 3 - grip[1]) * k / 5,
+                            ())
+            pump(60)
+        shot("revestimento_paginacao.png")
+        lt.pointer_up(target[0] + 4, target[1] - 3, 1, ())
+        pump(600)
+        got = win.doc.ifc.tiled_params(made_tool)["layout"]["point"]
+        ok_layout = abs(got[0] - hole[0]) < 1e-3 and abs(got[1] - hole[1]) < 1e-3
+        check("revestimento_paginacao", ok_layout, "{} → {}".format(hole, got))
+        win.doc.undo()
     win.set_tool("select")
     win.viewport.set_selection(set())
     win.viewport.zoom_extents({wall})
