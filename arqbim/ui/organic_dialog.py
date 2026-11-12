@@ -103,9 +103,17 @@ class OrganicDialog(QtWidgets.QDialog):
         self.usage = QtWidgets.QComboBox()
         for key, label in USAGES:
             self.usage.addItem(label, key)
+        self.volume = QtWidgets.QComboBox()                # (0.560) a sheet, or a closed body
+        self.volume.addItem("Superfície aberta", "aberta")
+        self.volume.addItem("Volume assente (fechado por baixo)", "assente")
+        self.volume.addItem("Volume em lente (as duas faces)", "lente")
+        self.volume.addItem("Massas fundidas (dos círculos escolhidos)", "blobs")
+        self.volume.setToolTip("Fechado: um volume (banco, pavilhão, almofada). Massas fundidas: cada círculo "
+                               "escolhido é uma massa; juntas fundem-se como gotas.")
         box.addRow("Comportamento", self.behaviour)
         box.addRow("Altura (m)", self.height_spin)
         box.addRow("Grelha", self.grid)
+        box.addRow("Corpo", self.volume)
         box.addRow("Uso", self.usage)
         lay.addLayout(box)
         self.section = Section()
@@ -152,4 +160,5 @@ class OrganicDialog(QtWidgets.QDialog):
         return {"measures": self.on_measures.isChecked(), "shape": self.shape.currentData(),
                 "length": self.length.value(), "width": self.width.value(), "sides": self.sides.value(),
                 "behaviour": self.behaviour.currentData(), "height": self.height_spin.value(),
-                "grid": self.grid.currentData(), "usage": self.usage.currentData() or None}
+                "grid": self.grid.currentData(), "usage": self.usage.currentData() or None,
+                "volume": self.volume.currentData()}

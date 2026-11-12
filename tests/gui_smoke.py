@@ -24900,7 +24900,37 @@ def formas_organicas():
         check("forma_organica_analise", rep is not None and rep["curvature"]["cupula"] > 0.3 and rep2 is not None
               and shown > 100 and win.viewport.operator_preview_shown == 0 and os.path.exists(dxf_path),
               "{} {}".format(rep and {k: round(v, 2) for k, v in rep["curvature"].items()}, rep2 and rep2["panels"]))
-    for _ in range(6):
+    # (0.560) closed bodies: a cushion on its base from measures; masses melted from two circles drawn
+    win.viewport.set_selection(set())
+    pump(100)
+    cushion = win.organic_form({"measures": True, "shape": "elipse", "length": 8.0, "width": 5.0,
+                                "behaviour": "almofada", "height": 2.0, "grid": "aneis", "volume": "assente"})
+    pump(600)
+    circles = []
+    for cx, r in ((140.0, 2.0), (143.2, 1.5)):
+        a = np.radians(np.arange(0, 360, 15))
+        pts = [np.array((cx + r * np.cos(x), 20.0 + r * np.sin(x), 0.0)) for x in a]
+        obj = _SketchObject("Círculo", np.eye(4), _PolyMesh(pts, [list(range(len(pts)))]))
+        win.doc.execute(_AddObject(obj))
+        circles.append(obj.id)
+    pump(300)
+    win.viewport.set_selection(set(circles))
+    pump(200)
+    blob = win.organic_form({"volume": "blobs"})
+    pump(800)
+    if blob:
+        win.viewport.zoom_extents({blob, cushion} if cushion else {blob})
+        pump(800)
+        shot("forma_organica_volumes.png")
+    from arqbim.core.mesh import TriMesh as _TriMesh
+    closed = []
+    for g in (cushion, blob):
+        if g:
+            v, f = win.doc.ifc.triangulate([g])[g]
+            closed.append(_TriMesh(v, np.asarray(f).reshape(-1, 3)).is_closed())
+    check("forma_organica_volumes", cushion is not None and blob is not None and closed == [True, True],
+          "{} {} {}".format(cushion, blob, closed))
+    for _ in range(10):
         win.doc.undo()
     pump(200)
 

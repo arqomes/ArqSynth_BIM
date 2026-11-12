@@ -30,7 +30,10 @@ from . import surface_expr as expr
 
 SCHEMA = 1
 OPS = ("grid", "loft", "coons", "revolve", "extrude", "sweep", "patch",
-       "organic")                     # (0.555) a form found over a closed outline (core/form_finding)
+       "organic",                     # (0.555) a form found over a closed outline (core/form_finding)
+       "blobs")                       # (0.560) masses melted together (metaballs), a closed volume
+VOLUMES = ("aberta", "assente", "lente")   # (0.560) an organic form open, or closed: on a flat base, or a lens
+CLOSED = ("assente", "lente")
 ORGANIC_KINDS = ("membrana", "almofada", "catenaria", "suavizar")
 POINT_KINDS = ("mastro", "apoio")
 LINE_KINDS = ("cumeeira", "vale")       # (0.556) a line held at a height: a ridge (up) or a valley (down)
@@ -63,9 +66,11 @@ OP_DEFAULTS = {
     # and supports — {"u", "v" (m, in the outline's plane), "h" (m off it), "r" (m, the head's radius), "kind"}
     "organic": {"boundary": "", "u": 28, "v": 28, "grid": "quadras", "behaviour": "catenaria", "height": 2.0,
                 "points": []},
+    # (0.560) balls {"x", "y", "z", "r"} (m) melted into one volume; «fusion» how much they melt (1: barely)
+    "blobs": {"balls": [], "u": 40, "v": 24, "fusion": 2.0},
 }
 OP_CURVES = {"grid": (0, 0), "loft": (2, MAX_CURVES), "coons": (4, 4), "revolve": (1, 1), "extrude": (1, 1),
-             "sweep": (2, 2), "patch": (1, 1), "organic": (1, 1)}
+             "sweep": (2, 2), "patch": (1, 1), "organic": (1, 1), "blobs": (0, 0)}
 
 MODIFIER_TEMPLATES = {
     "displace": {"along": "normal", "amount": "0.3*sin(2*pi*u)"},
@@ -99,6 +104,10 @@ def default_definition(op="grid", name="Superfície"):
     if op == "grid":
         data["inputs"] = {"L": 12.0, "W": 8.0, "H": 1.2}
     return data
+
+
+def blob_balls_text(data):
+    return ", ".join("r {:.2f}".format(float(q["r"])) for q in (data.get("surface") or {}).get("balls") or ())
 
 
 def dumps(data):
@@ -262,9 +271,24 @@ def validate(data):
                 ok = False
             if not ok:
                 errors.append("surface.holes[{}]: {{u, v, r (> 0), h}}".format(k))
+        if s.get("volume", "") not in VOLUMES + ("",):   # (0.560)
+            errors.append("surface.volume: um de {}".format(", ".join(VOLUMES)))
         if not isinstance(s.get("free_edges", False), bool):
             errors.append("surface.free_edges: verdadeiro ou falso")
-    for key in ("angle", "rise", "height"):
+    if op == "blobs":                                 # (0.560)
+        balls = s.get("balls") or []
+        if not isinstance(balls, list) or not balls:
+            errors.append("surface.balls: pelo menos uma massa {x, y, z, r}")
+            balls = []
+        for k, q in enumerate(balls):
+            try:
+                ok = isinstance(q, dict) and float(q.get("r", 0)) > 0 and all(
+                    math.isfinite(float(q.get(key, 0.0))) for key in ("x", "y", "z"))
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                errors.append("surface.balls[{}]: {{x, y, z, r (> 0)}}".format(k))
+    for key in ("angle", "rise", "height", "fusion"):
         if key in s:
             try:
                 expr.number(s[key], env, "surface." + key)
@@ -647,7 +671,7 @@ def _rows_organic(data, env, curves):
     s = data["surface"]
     pts, _closed = _need(curves, s.get("boundary"), closed=True, what="a forma orgânica")
     nu, nv = int(s.get("u", 28)), int(s.get("v", 28))
-    grid = s.get("grid", "quadras")
+    grid = "aneis" if s.get("volume") in CLOSED else s.get("grid", "quadras")    # (0.560: a volume closes round)
     behaviour = s.get("behaviour", "catenaria")
     height = expr.number(s.get("height", 2.0), env, "surface.height")
     o, x, y, n = outline_frame(pts)
@@ -711,7 +735,50 @@ def _rows_organic(data, env, curves):
                        groups=rings)
     except ff.FormError as exc:
         raise SurfaceError(str(exc)) from None
+    volume = s.get("volume", "")
+    if volume in CLOSED and close_u:                              # (0.560) closed: its underside, then the form over it
+        under = form.copy()
+        if volume == "assente":
+            under[..., 2] = 0.0                         # (a flat base on its outline's plane)
+        else:
+            under[..., 2] = -form[..., 2] * 0.5         # (a lens: its underside half as deep)
+        form = np.concatenate((under[::-1], form[1:]), axis=0)
     return o + form @ axes, close_u
+
+
+def _rows_blobs(data, env, curves):
+    """(0.560) Masses melted together — balls whose fields add up (a metaball volume): its surface, where the field is
+    1, found along rays from the masses' middle (rows from its bottom pole to its top one, columns round it). A form
+    that a ray crosses twice (a ring, an arch) is not one: its outermost crossing is taken."""
+    s = data["surface"]
+    balls = np.array([(float(q["x"]), float(q["y"]), float(q["z"]), float(q["r"])) for q in s.get("balls") or ()])
+    if not len(balls):
+        raise SurfaceError("ponha pelo menos uma massa")
+    nu, nv = max(int(s.get("u", 40)), 8), max(int(s.get("v", 24)), 4)
+    k = max(expr.number(s.get("fusion", 2.0), env, "surface.fusion"), 0.5)
+    centre = (balls[:, :3] * balls[:, 3:] ** 3).sum(axis=0) / (balls[:, 3] ** 3).sum()
+    reach = float((np.linalg.norm(balls[:, :3] - centre, axis=1) + balls[:, 3] * 2.5).max())
+    lon = 2 * math.pi * np.arange(nu) / nu
+    lat = math.pi * np.arange(nv + 1) / nv - math.pi / 2
+    LON, LAT = np.meshgrid(lon, lat)
+    dirs = np.stack((np.cos(LAT) * np.cos(LON), np.cos(LAT) * np.sin(LON), np.sin(LAT)), axis=-1).reshape(-1, 3)
+    samples = 240
+    t = np.linspace(0.0, reach, samples)
+
+    def field(p):                                    # (each ball 1 on its sphere; their sum — the power: the melt)
+        d2 = ((p[..., None, :] - balls[:, :3]) ** 2).sum(-1)
+        return ((balls[:, 3] ** 2 / np.maximum(d2, 1e-12)) ** (2.0 / k)).sum(-1)
+    pts = centre + dirs[:, None, :] * t[None, :, None]
+    f = field(pts)
+    inside = f >= 1.0
+    last = np.where(inside.any(axis=1), samples - 1 - np.argmax(inside[:, ::-1], axis=1), 0)
+    lo, hi = t[last], t[np.minimum(last + 1, samples - 1)]
+    for _ in range(24):                              # (the crossing refined)
+        mid = (lo + hi) / 2
+        ok = field(centre + dirs * mid[:, None]) >= 1.0
+        lo, hi = np.where(ok, mid, lo), np.where(ok, hi, mid)
+    rows = (centre + dirs * lo[:, None]).reshape(nv + 1, nu, 3)
+    return rows, True
 
 
 def _rows_patch(data, env, curves):
@@ -767,7 +834,8 @@ def _cosine_cap(rows, outline):
 
 ROW_BUILDERS = {"grid": _rows_grid, "loft": _rows_loft, "coons": _rows_coons, "revolve": _rows_revolve,
                 "extrude": _rows_extrude, "sweep": _rows_sweep, "patch": _rows_patch,
-                "organic": _rows_organic}                        # (0.555)
+                "organic": _rows_organic,                        # (0.555)
+                "blobs": _rows_blobs}                            # (0.560)
 
 
 # ---------------------------------------------------------------- the modifiers

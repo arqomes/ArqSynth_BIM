@@ -1805,7 +1805,8 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
 4. ~~**Óculos e aberturas**~~ (0.557.0: óculos redondos com anel rígido livre, «holes» da op «organic»; por fazer: a
    Construção a respeitar os óculos; aberturas de outro contorno): furos na membrana/casca com anel (claraboias, entradas de luz), desenhados como polígonos
    sobre a planta; a forma contorna-os (anel rígido ou bordo livre).
-5. **Volumes orgânicos** (fechados): «almofada» a partir de um polígono extrudido e arredondado (subdivisão), e
+5. ~~**Volumes orgânicos** (fechados)~~ (0.560.0: «volume» assente/lente da op «organic»; op «blobs» por raios a
+   partir do centro — formas em anel ou arco ficam com o contorno exterior): «almofada» a partir de um polígono extrudido e arredondado (subdivisão), e
    **massas fundidas** (pontos/linhas que se fundem como gotas — metaballs) para pavilhões, bancos, pilares árvore;
    superfície tirada por marching cubes (numpy). Uniões e cortes com o «Combinar e recortar» (0.493).
 6. **Contornos orgânicos**: suavizar um polígono em curva, **crescimento diferencial** (a linha que cresce e se

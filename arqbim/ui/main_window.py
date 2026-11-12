@@ -6561,6 +6561,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 return None
             values = dlg.values()
         try:
+            if values.get("volume") == "blobs":                 # (0.560) the circles chosen melted together
+                guid = bim.add_blobs(self.doc, [self.doc.get(i) for i in sorted(self.viewport.selection, key=str)],
+                                     usage=values.get("usage"))
+                self.viewport.set_selection({guid})
+                self.message("Massas fundidas — a fusão e cada massa mudam-se na definição (Propriedades).")
+                return guid
             if values.get("measures") or source is None:
                 ring = bim.organic_shape(values.get("shape", "retangulo"), self._organic_centre(),
                                          float(values.get("length", 12.0)), float(values.get("width", 8.0)),
@@ -6570,7 +6576,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 ring, uid, _what = bim.organic_outline(self.doc, source)
             guid = bim.add_organic_form(self.doc, ring, values.get("behaviour", "catenaria"),
                                         float(values.get("height", 3.0)), source_uid=uid, usage=values.get("usage"),
-                                        grid=values.get("grid", "quadras"))
+                                        grid=values.get("grid", "quadras"), volume=values.get("volume") or "")
         except ValueError as exc:
             self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
             return None

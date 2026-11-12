@@ -4569,8 +4569,41 @@ def organic_shape(kind, centre, length=10.0, width=6.0, sides=6, segments=48):
     return np.array([(c[0] + x, c[1] + y, c[2]) for x, y in pts])
 
 
+def add_blobs(doc, sketches, usage=None, storey=None, fusion=2.0):
+    """(0.560) Masses melted together (op «blobs»): each sketch chosen a ball — at its middle, its size its plan's
+    larger half — lying on the working level. One undo step. Its GlobalId."""
+    from ..core import param_surface as ps
+    from .surface_curves import sketch_chains
+    level = float(doc.work_level())
+    balls = []
+    for sk in sketches:
+        if sk is None or sk.is_bim:
+            continue
+        chains = sketch_chains(sk)
+        if not chains:
+            continue
+        pts = np.vstack([c[0] for c in chains])
+        r = float(np.ptp(pts[:, :2], axis=0).max()) / 2.0
+        if r > 0.01:
+            c = (pts.min(axis=0) + pts.max(axis=0)) / 2.0
+            balls.append((float(c[0]), float(c[1]), r))
+    if not balls:
+        raise ValueError("surface_no_curves")
+    origin = np.array((min(b[0] for b in balls), min(b[1] for b in balls), level))
+    data = ps.default_definition("blobs", t("elem.param_surface"))
+    data["inputs"] = {}
+    data["surface"]["fusion"] = float(fusion)
+    data["surface"]["balls"] = [{"x": round(x - origin[0], 4), "y": round(y - origin[1], 4), "z": round(r * 0.6, 4),
+                                 "r": round(r, 4)} for x, y, r in balls]
+    try:
+        ps.Surface(data)
+    except ps.SurfaceError as exc:
+        raise ValueError(str(exc)) from None
+    return add_param_surface(doc, data, origin, storey=storey or doc.active_storey, usage=usage or "estrutura")
+
+
 def add_organic_form(doc, outline, behaviour="catenaria", height=2.0, source_uid=None, usage=None, storey=None,
-                     cell=None, grid="quadras", name=None):
+                     cell=None, grid="quadras", name=None, volume=""):
     """(0.555) An organic form (a Superfície paramétrica of op «organic») over a closed ring of world points: its
     shape found by `behaviour` (membrana, almofada, catenaria, suavizar), rising `height`. `source_uid`: the sketch
     it follows when its line changes. `cell`: the grid's cell (m; by its size if None). One undo step. Its
@@ -4588,6 +4621,9 @@ def add_organic_form(doc, outline, behaviour="catenaria", height=2.0, source_uid
     data = ps.from_curves([(ring - origin, True, source_uid)], op="organic",
                           name=name or t("elem.param_surface"), divisions=(divisions, divisions),
                           behaviour=behaviour, height=float(height), grid=grid)
+    if volume in ("assente", "lente"):              # (0.560) closed: a cushion on its base, or a lens
+        data["surface"]["volume"] = volume
+        data["surface"]["grid"] = "aneis"
     try:
         ps.Surface(data)
     except ps.SurfaceError as exc:

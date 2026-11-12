@@ -19,7 +19,8 @@ import numpy as np
 
 BEHAVIOURS = ("membrana", "almofada", "catenaria", "suavizar")
 MAX_STEPS = 4000
-TOL = 1e-7                    # m: a step that moves no point more than this ends the search
+TOL = 2e-6                    # m: a step that moves no point more than this ends the search (0.560: was 1e-7 —
+#                               a grid of rings to a middle took seconds; the forms the same to a fraction of a mm)
 
 
 class FormError(ValueError):
@@ -84,6 +85,11 @@ def relax(rows, fixed, close_u=False, load=None, axes=(0, 1, 2), steps=MAX_STEPS
     jj, ii = np.indices(free.shape)
     colours = [free & ((jj + ii) % 2 == k) for k in (0, 1)]
     groups = [np.asarray(g, bool) & free for g in (groups or ()) if np.asarray(g, bool).any()]
+    for j in poles:                                        # (0.560) a tip moved as one rigid point, by its pulls
+        tip = np.zeros_like(free)
+        tip[j] = True
+        groups.append(tip & free)
+    poles = []
     links = []                                             # (each rigid group's pull from outside it: its links out)
     for g in groups:
         inner, weight = _neighbours(g[..., None].astype(float), close_u, edge_k)

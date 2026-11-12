@@ -1229,6 +1229,12 @@ _STRINGS = {
     "schoice.almofada": ("Almofada inflada", "Inflated cushion"),
     "schoice.catenaria": ("Catenária (casca)", "Catenary (shell)"),
     "schoice.suavizar": ("Suavizar", "Smooth"),
+    "surface.op.blobs": ("Massas fundidas", "Melted masses"),                                    # (0.560)
+    "sfield.volume": ("Corpo", "Body"), "sfield.balls": ("Massas", "Masses"),
+    "sfield.fusion": ("Fusão (mais: mais fundidas)", "Fusion (more: more melted)"),
+    "schoice.aberta": ("Superfície aberta", "Open surface"),
+    "schoice.assente": ("Volume assente", "Volume on its base"),
+    "schoice.lente": ("Volume em lente", "Lens volume"),
     "act.organic_form": ("Forma orgânica", "Organic form"),
     "tip.organic_form": ("Encontra uma forma orgânica sobre o que estiver escolhido — um polígono ou outro desenho "
                          "fechado, a face de uma parede, uma laje, um teto — ou com medidas: membrana, almofada, "

@@ -1530,6 +1530,11 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                                     choices=ps.PATCH_GRIDS)
                 if s.get("points"):
                     self._row(t("sfield.organic_points"), str(len(s["points"])))
+                self._surface_field(t("sfield.volume"), "surface_field:volume", guid, s.get("volume") or "aberta",
+                                    choices=ps.VOLUMES)                         # (0.560) closed or not
+            elif op == "blobs":                            # (0.560) masses melted together
+                self._row(t("sfield.balls"), str(len(s.get("balls") or ())))
+                self._surface_field(t("sfield.fusion"), "surface_field:fusion", guid, s.get("fusion", 2.0))
             elif op == "revolve":
                 self._surface_field(t("sfield.angle"), "surface_field:angle", guid, s.get("angle", 360.0))
             elif op == "extrude":

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.560.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 5: volumes orgânicos.**
+
+- Na janela **Forma orgânica**, «Corpo»:
+  - **Volume assente** — a forma fechada por baixo, assente no plano do contorno (bancos, pavilhões, almofadas);
+  - **Volume em lente** — fechada pelas duas faces (a de baixo com metade da altura);
+  - **Massas fundidas** — cada círculo (ou outro desenho) escolhido é uma massa do seu tamanho; juntas fundem-se
+    como gotas num só volume (pavilhões, pilares árvore, peças de mobiliário urbano).
+- Nas Propriedades: o corpo da forma orgânica (aberta, assente, lente); nas massas fundidas, quantas são e a
+  **fusão** (mais: mais fundidas).
+- Os volumes são fechados (sólidos de verdade no IFC) e servem-lhes a análise, a planificação e a lista de peças.
+- Mais rápido: as formas em anéis (redondas) resolviam-se em ~10 s; agora em 1 a 2 s.
+- Testes: `tests/test_organic_forms.py` (Volumes); «forma_organica_volumes» no gui_smoke, com captura.
+
 ## 0.559.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 8: análise e fabrico.** Nas Propriedades de qualquer Superfície paramétrica

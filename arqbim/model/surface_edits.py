@@ -50,8 +50,10 @@ def apply(data, action, value):
             direction = list(s.get("direction") or (0.0, 0.0, 3.0))
             direction[2] = dz if dz is not None else direction[2]
             s["direction"] = direction
-        elif key in ("form", "grid", "behaviour"):        # (0.555: an organic form's behaviour)
+        elif key in ("form", "grid", "behaviour", "volume"):   # (0.555: an organic form's behaviour; 0.560 volume)
             s[key] = str(v)
+            if key == "volume" and v in ("assente", "lente"):
+                s["grid"] = "aneis"                        # (a volume closes round)
         elif isinstance(default, bool):
             s[key] = bool(v)
         else:

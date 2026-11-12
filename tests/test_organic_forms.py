@@ -214,6 +214,56 @@ class Oculus(unittest.TestCase):
         self.assertTrue(ps.validate(data))
 
 
+class Volumes(unittest.TestCase):
+    """0.560 — closed organic volumes: a cushion on a flat base, a lens, masses melted together."""
+
+    @staticmethod
+    def _volume(mesh):
+        v, faces = mesh
+        tris = ps.triangulate(v, faces)
+        a, b, c = v[tris[:, 0]], v[tris[:, 1]], v[tris[:, 2]]
+        return float(np.einsum("ij,ij->i", a, np.cross(b, c)).sum()) / 6.0
+
+    def test_cushion_on_its_base_and_lens(self):
+        doc = Document()
+        for volume, low in (("assente", 0.0), ("lente", -1.0)):
+            guid = bim.add_organic_form(doc, bim.organic_shape("circulo", (0, 0, 0), 8), "almofada", 2.0)
+            data = doc.ifc.surface_definition(guid)
+            data["surface"]["volume"] = volume
+            self.assertEqual(ps.validate(data), [])
+            bim.set_param_surface(doc, guid, data)
+            on = ps.Surface(doc.ifc.surface_definition(guid))
+            self.assertTrue(on.close_u)
+            self.assertAlmostEqual(on.rows[..., 2].max(), 2.0, delta=0.05)
+            self.assertAlmostEqual(on.rows[..., 2].min(), low, delta=0.05)
+            vol = abs(self._volume(on.mesh()))
+            self.assertGreater(vol, 30.0)                                         # (a closed body, not a sheet)
+            verts, faces = doc.ifc.triangulate([guid])[guid]
+            from arqbim.core.mesh import TriMesh
+            self.assertTrue(TriMesh(verts, np.asarray(faces).reshape(-1, 3)).is_closed())
+
+    def test_blobs(self):
+        data = ps.default_definition("blobs")
+        data["surface"]["balls"] = [{"x": 0, "y": 0, "z": 2, "r": 2.0}]
+        self.assertEqual(ps.validate(data), [])
+        rows = ps.Surface(data).rows
+        d = np.linalg.norm(rows.reshape(-1, 3) - (0, 0, 2), axis=1)
+        self.assertTrue(np.allclose(d, 2.0, atol=1e-3))                          # (one ball: its sphere)
+        data["surface"]["balls"].append({"x": 3.2, "y": 0, "z": 2, "r": 1.5})
+        on = ps.Surface(data)
+        r2 = on.rows.reshape(-1, 3)
+        mid = np.abs(r2[:, 0] - 1.9) < 0.3                                        # (melted in between: a waist)
+        self.assertTrue(mid.any())
+        self.assertGreater(np.abs(r2[mid, 1]).max(), 0.6)
+        self.assertGreater(abs(self._volume(on.mesh())), 4 / 3 * math.pi * 8 * 0.9)
+        data["surface"]["balls"] = []
+        self.assertTrue(ps.validate(data))
+        doc = Document()
+        guid = bim.add_param_surface(doc, ps.Surface(dict(data, surface=dict(data["surface"], balls=[
+            {"x": 0, "y": 0, "z": 1.5, "r": 1.5}]))).data, np.zeros(3), usage="estrutura")
+        self.assertEqual(doc.ifc.kind_of(guid), "param_surface")
+
+
 class InTheVisualGraph(unittest.TestCase):
     """0.558 — the organic nodes of the Visual Graph."""
 
