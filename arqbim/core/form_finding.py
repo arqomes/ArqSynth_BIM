@@ -26,24 +26,32 @@ class FormError(ValueError):
     pass
 
 
-def _neighbours(rows, close_u):
-    """(sum of each point's neighbours along the grid's lines (nr, nc, 3), how many it has (nr, nc, 1))."""
+def _neighbours(rows, close_u, edge_k=1.0):
+    """(sum of each point's neighbours along the grid's lines (nr, nc, 3), how many it has (nr, nc, 1)) — each
+    weighed by its line's force density. (0.556) `edge_k`: the grid's edge lines that many times stronger — a free
+    edge's cable, pulling its points along it more than the membrane pulls them in."""
     p = np.asarray(rows, dtype=float)
     nr, nc = p.shape[:2]
     s = np.zeros_like(p)
     n = np.zeros((nr, nc, 1))
-    s[1:] += p[:-1]
-    n[1:] += 1
-    s[:-1] += p[1:]
-    n[:-1] += 1
+    wv = np.ones((nr, nc, 1))                            # (the weight of a point's lines along v, along u)
+    wu = np.ones((nr, nc, 1))
+    if edge_k != 1.0:
+        wu[0] = wu[-1] = edge_k                          # (its first and last rows run along u)
+        if not close_u:
+            wv[:, 0] = wv[:, -1] = edge_k                # (its first and last columns along v)
+    s[1:] += p[:-1] * wv[1:]
+    n[1:] += wv[1:]
+    s[:-1] += p[1:] * wv[:-1]
+    n[:-1] += wv[:-1]
     if close_u:
-        s += np.roll(p, 1, axis=1) + np.roll(p, -1, axis=1)
-        n += 2
+        s += (np.roll(p, 1, axis=1) + np.roll(p, -1, axis=1)) * wu
+        n += 2 * wu
     else:
-        s[:, 1:] += p[:, :-1]
-        n[:, 1:] += 1
-        s[:, :-1] += p[:, 1:]
-        n[:, :-1] += 1
+        s[:, 1:] += p[:, :-1] * wu[:, 1:]
+        n[:, 1:] += wu[:, 1:]
+        s[:, :-1] += p[:, 1:] * wu[:, :-1]
+        n[:, :-1] += wu[:, :-1]
     return s, n
 
 
@@ -63,7 +71,7 @@ def _poles(rows):
     return [j for j in range(p.shape[0]) if np.all(np.linalg.norm(p[j] - p[j, 0], axis=1) < 1e-9)]
 
 
-def relax(rows, fixed, close_u=False, load=None, axes=(0, 1, 2), steps=MAX_STEPS, omega=1.8, tol=TOL):
+def relax(rows, fixed, close_u=False, load=None, axes=(0, 1, 2), steps=MAX_STEPS, omega=1.8, tol=TOL, edge_k=1.0):
     """The points not `fixed` (mask (nr, nc)) moved, coordinate by coordinate in `axes`, to where each is the mean
     of its neighbours plus `load` (nr, nc, 3: a push per point, already divided by the force density) — the discrete
     Laplace/Poisson problem, solved by over-relaxed Gauss–Seidel in red-black order (half the points, then the
@@ -77,7 +85,7 @@ def relax(rows, fixed, close_u=False, load=None, axes=(0, 1, 2), steps=MAX_STEPS
     for _ in range(int(steps)):
         biggest = 0.0
         for colour in colours:
-            s, n = _neighbours(p, close_u)
+            s, n = _neighbours(p, close_u, edge_k)
             target = s / n
             if load is not None:
                 target = target + load / n
@@ -92,10 +100,10 @@ def relax(rows, fixed, close_u=False, load=None, axes=(0, 1, 2), steps=MAX_STEPS
     return p
 
 
-def plan_grid(rows, fixed, close_u=False):
+def plan_grid(rows, fixed, close_u=False, edge_k=1.0):
     """The grid's plan relaxed (its points spread evenly between the edge, no lines folded over in a concave
     outline) — z left as it is."""
-    return relax(rows, fixed, close_u, axes=(0, 1))
+    return relax(rows, fixed, close_u, axes=(0, 1), edge_k=edge_k)
 
 
 def _scaled(rows, base, fixed, height, sign=1.0):
@@ -131,7 +139,7 @@ def _normals(rows, close_u):
 
 
 def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, steps=MAX_STEPS, iterations=12,
-         plan=True):
+         plan=True, edge_k=1.0):
     """The grid's form found (rows (nr, nc, 3) as given: the points held at their place — by default its edge).
     `height`: how high the form rises over the plane of its edge (a negative one: how deep it hangs, for a
     membrane between points held at different heights it is not used). Returns the new rows."""
@@ -145,10 +153,10 @@ def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, step
         raise FormError("prenda pelo menos um ponto (o contorno, um apoio)")
     if behaviour == "suavizar":
         return smooth(p, fixed, close_u)
-    flat = plan_grid(p, fixed, close_u) if plan else p      # (the plan first: evenly spread)
+    flat = plan_grid(p, fixed, close_u, edge_k) if plan else p      # (the plan first: evenly spread)
     if behaviour == "membrana":
         # the points held where they are (masts, supports at their heights): the least-tension surface between them
-        return relax(flat, fixed, close_u, steps=steps)
+        return relax(flat, fixed, close_u, steps=steps, edge_k=edge_k)
     sign = 1.0 if height >= 0 else -1.0
     if behaviour == "catenaria":
         # its weight — each point's share of the area — hung (and turned: upwards), its plan kept; the weight
@@ -158,7 +166,7 @@ def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, step
             load = np.zeros_like(form)
             load[..., 2] = _areas(form, close_u) * sign
             load[..., 2] *= 1.0 / max(np.mean(np.abs(load[..., 2])), 1e-12) * 1e-3
-            new = relax(form, fixed, close_u, load=load, axes=(2,), steps=steps)
+            new = relax(form, fixed, close_u, load=load, axes=(2,), steps=steps, edge_k=edge_k)
             new = _scaled(new, flat, fixed, height, sign)
             if np.abs(new - form).max() < 1e-5:
                 form = new
@@ -173,10 +181,10 @@ def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, step
     for k in range(int(iterations)):
         load = _normals(form, close_u) * (_areas(form, close_u) * sign * up)[..., None]
         if pressure is None:                               # (a first guess: as a catenary of that height)
-            trial = relax(flat, fixed, close_u, load=load * 1e-3, axes=(2,), steps=steps)
+            trial = relax(flat, fixed, close_u, load=load * 1e-3, axes=(2,), steps=steps, edge_k=edge_k)
             reach = float(np.abs(trial[..., 2] - flat[..., 2]).max())
             pressure = 1e-3 * abs(height) / max(reach, 1e-12)
-        new = relax(form, fixed, close_u, load=load * pressure, steps=steps)
+        new = relax(form, fixed, close_u, load=load * pressure, steps=steps, edge_k=edge_k)
         reach = float(((new[..., 2] - flat[..., 2]) * sign).max())
         if reach <= 1e-9:
             raise FormError("a almofada não sobe — veja os pontos presos")

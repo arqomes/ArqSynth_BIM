@@ -127,6 +127,55 @@ class FromTheModel(unittest.TestCase):
         self.assertTrue(math.isfinite(doc.ifc.surface_summary(guid)["area"]))
 
 
+class Control(unittest.TestCase):
+    """0.556 — masts, supports, ridges and valleys, free edges."""
+
+    def _form(self, **surface):
+        data = ps.default_definition("organic")
+        ring = bim.organic_shape("retangulo", (6, 4, 0), 12, 8)
+        data["curves"] = [{"id": "c1", "points": ring.tolist(), "closed": True}]
+        data["surface"].update(boundary="c1", **surface)
+        self.assertEqual(ps.validate(data), [])
+        on = ps.Surface(data)
+        o, x, y, n = ps.outline_frame(np.asarray(ring, float))
+        return on.rows, o, x, y
+
+    def test_mast_and_support(self):
+        rows, o, x, y = self._form(behaviour="membrana", height=0.0,
+                                   points=[{"u": -3.0, "v": 0.0, "h": 5.0, "r": 0.3, "kind": "mastro"},
+                                           {"u": 3.0, "v": 0.0, "h": 2.0, "r": 0.3, "kind": "mastro"}])
+        z = rows[..., 2]
+        near = lambda u, v: z.reshape(-1)[np.argmin(np.hypot(*((rows.reshape(-1, 3) - o) @ np.stack((x, y)).T
+                                                               - (u, v)).T))]
+        self.assertAlmostEqual(near(-3, 0), 5.0, places=6)
+        self.assertAlmostEqual(near(3, 0), 2.0, places=6)
+        self.assertTrue(0 < near(0, 0) < 5.0)
+
+    def test_ridge_and_valley(self):
+        rows, o, x, y = self._form(behaviour="membrana", height=0.0,
+                                   lines=[{"a": [-5, 0], "b": [5, 0], "h": 3.0, "kind": "cumeeira"}])
+        local = (rows.reshape(-1, 3) - o) @ np.stack((x, y)).T
+        z = rows.reshape(-1, 3)[:, 2]
+        on_line = (np.abs(local[:, 1]) < 0.15) & (np.abs(local[:, 0]) < 4.5)
+        self.assertTrue(on_line.any())
+        self.assertTrue(np.allclose(z[on_line], 3.0))
+        catenary = self._form(behaviour="catenaria", height=3.0,
+                              lines=[{"a": [-5, 0], "b": [5, 0], "h": -0.5, "kind": "vale"}])[0]
+        self.assertLess(catenary[..., 2].min(), -0.4)                             # (a valley pulled down)
+
+    def test_free_edges(self):
+        held, o, x, y = self._form(behaviour="membrana", height=4.0)
+        free = self._form(behaviour="membrana", height=4.0, free_edges=True)[0]
+        mid = held.shape[0] // 2
+        self.assertLess(np.abs(free[0, mid, 2] - held[0, mid, 2]), 10)            # (it is worked out)
+        edge_y_held = (held[0, mid] - o) @ y
+        edge_y_free = (free[0, mid] - o) @ y
+        self.assertGreater(edge_y_free, edge_y_held + 0.3)                        # (its edge pulled in, as a sail)
+        corners = [free[0, 0], free[0, -1], free[-1, 0], free[-1, -1]]
+        self.assertTrue(all(abs(c[2]) < 1e-9 for c in corners))                   # (held at its corners)
+        self.assertGreater(free[0, mid, 2], 0.05)                                 # (its free edge lifted)
+
+
 class Window(unittest.TestCase):
     def test_dialog(self):
         from PySide6 import QtWidgets

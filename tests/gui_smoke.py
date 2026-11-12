@@ -24838,7 +24838,34 @@ def formas_organicas():
         shot("forma_organica_membrana.png")
     check("forma_organica", ok and from_measures is not None and win.viewport.selection == {from_measures},
           "{} {}".format(made, from_measures))
-    for _ in range(3):
+    # (0.556) «Mastros e apoios» on the membrane: a second mast clicked, then its head dragged higher
+    if from_measures:
+        win.set_tool("organic_points")
+        pump(300)
+        tool = win.tool
+        vp = win.viewport
+        target = tool._world(3.0, 0.0, 0.0)
+        sx, sy = vp.project(target)
+        tool.set_option("height", 2.0)
+        tool.pointer_down(sx, sy, 1, ())
+        pump(800)
+        points = win.doc.ifc.surface_definition(from_measures)["surface"].get("points") or []
+        head = vp.project(tool._world(points[-1]["u"], points[-1]["v"], points[-1]["h"])) if points else (0, 0)
+        tool.pointer_down(head[0], head[1], 1, ())
+        up = vp.project(tool._world(points[-1]["u"], points[-1]["v"], 3.5)) if points else (0, 0)
+        tool.pointer_move(up[0], up[1], ())
+        tool.pointer_up(up[0], up[1], 1, ())
+        pump(800)
+        after = win.doc.ifc.surface_definition(from_measures)["surface"].get("points") or []
+        win.viewport.zoom_extents({from_measures})
+        pump(800)
+        shot("forma_organica_mastros.png")
+        check("forma_organica_mastros", len(points) == 2 and len(after) == 2 and abs(after[-1]["h"] - 3.5) < 0.05
+              and abs(after[0]["h"] - 5.0) < 1e-6,                    # (the membrane's own mast kept)
+              "{} → {}".format([round(q["h"], 2) for q in points], [round(q["h"], 2) for q in after]))
+        win.set_tool("select")
+        pump(200)
+    for _ in range(5):
         win.doc.undo()
     pump(200)
 

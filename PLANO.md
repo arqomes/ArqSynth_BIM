@@ -1797,7 +1797,8 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
    a face de parede, a laje/piso/teto — ou escrevem-se as medidas num pequeno quadro (retângulo, círculo, elipse,
    polígono de N lados). Escolhe-se o comportamento e a altura; o resultado aparece logo, como Superfície paramétrica
    com o contorno guardado. Se o contorno for um desenho do modelo, a forma **segue-o** quando muda.
-3. **Apoios e pontos de controlo na própria forma**: clicar na superfície para pôr um **mastro** (ponto alto), um
+3. ~~**Apoios e pontos de controlo na própria forma**~~ (0.556.0: `tools/organic_points.py`, «points»/«lines»/
+   «free_edges» da op «organic», cabo dos bordos em `form_finding`): clicar na superfície para pôr um **mastro** (ponto alto), um
    **apoio** (ponto baixo, até ao chão) ou uma **linha de cumeeira/vale**; arrastá-los muda a altura e a forma
    resolve-se de novo (com pré-visualização ao vivo). Bordos **livres** (que sobem em arco entre apoios, como uma
    vela) ou **presos**.

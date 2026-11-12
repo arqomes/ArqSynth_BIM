@@ -1172,6 +1172,10 @@ _STRINGS = {
                             "the organic roof would have too many bars: make the spacing larger"),
     # (0.395) the parametric surface (the addon's «Superfícies Paramétricas»): form first, construction after
     "tool.param_surface": ("Superfície paramétrica", "Parametric surface"),
+    "tool.organic_points": ("Mastros e apoios", "Masts and supports"),                         # (0.556)
+    "act.organic_points": ("Mastros e apoios", "Masts and supports"),
+    "ctx.organic_height": ("Altura", "Height"),
+    "ctx.organic_radius": ("Cabeça (raio)", "Head (radius)"),
     "tip.param_surface": ("Uma superfície curva feita das curvas do modelo — loft entre secções, 4 bordos, revolução, "
                           "extrusão, varrimento, tampa sobre um contorno ou uma fórmula —, afinada por modificadores "
                           "(torcer, onda, atrator, dobrar…) e com construção por cima: casca, nervuras, ripas, "

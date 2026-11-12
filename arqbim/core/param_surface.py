@@ -33,6 +33,8 @@ OPS = ("grid", "loft", "coons", "revolve", "extrude", "sweep", "patch",
        "organic")                     # (0.555) a form found over a closed outline (core/form_finding)
 ORGANIC_KINDS = ("membrana", "almofada", "catenaria", "suavizar")
 POINT_KINDS = ("mastro", "apoio")
+LINE_KINDS = ("cumeeira", "vale")       # (0.556) a line held at a height: a ridge (up) or a valley (down)
+EDGE_CABLE = 4.0                        # (0.556) a free edge's cable: this many times the membrane's pull
 PATCH_FORMS = ("cosseno", "cupula", "abobada", "onda", "plano")
 PATCH_GRIDS = ("quadras", "aneis")
 MODIFIERS = ("displace", "attractor", "taper", "twist", "shear", "wave", "relax", "bend", "trim")
@@ -238,6 +240,22 @@ def validate(data):
                 ok = False
             if not ok:
                 errors.append("surface.points[{}]: {{u, v, h, r, kind: {}}}".format(k, "|".join(POINT_KINDS)))
+        lines = s.get("lines") or []
+        if not isinstance(lines, list):
+            errors.append("surface.lines: tem de ser uma lista")
+            lines = []
+        for k, q in enumerate(lines):                 # (0.556)
+            try:
+                ok = isinstance(q, dict) and q.get("kind", "cumeeira") in LINE_KINDS and \
+                    len(q.get("a") or ()) == 2 and len(q.get("b") or ()) == 2 and math.isfinite(float(q.get("h", 0)))
+                ok = ok and all(math.isfinite(float(c)) for c in list(q["a"]) + list(q["b"]))
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                errors.append("surface.lines[{}]: {{a: [u, v], b: [u, v], h, kind: {}}}".format(
+                    k, "|".join(LINE_KINDS)))
+        if not isinstance(s.get("free_edges", False), bool):
+            errors.append("surface.free_edges: verdadeiro ou falso")
     for key in ("angle", "rise", "height"):
         if key in s:
             try:
@@ -554,6 +572,28 @@ def _boundary_grid(pts, nu, nv, grid):
     return np.array(ring[None] + (c - ring)[None] * tt), True
 
 
+def centre_mast(local, height):
+    """(0.556) The mast a membrane with none stands on: in its outline's middle, `height` high."""
+    size = float(np.ptp(np.asarray(local)[:, :2], axis=0).max())
+    return [{"u": round(float(np.mean(local[:, 0])), 3), "v": round(float(np.mean(local[:, 1])), 3),
+             "h": float(height), "r": round(0.06 * size, 3), "kind": "mastro"}]
+
+
+def implicit_points(data):
+    """(0.556) The masts an organic form stands on without any given: a membrane's mast in its middle — so that the
+    first one put by hand joins it instead of taking its place."""
+    s = data.get("surface") or {}
+    if s.get("behaviour") != "membrana" or s.get("points") or s.get("lines"):
+        return []
+    curve = next((c for c in data.get("curves") or () if c.get("id") == s.get("boundary")), None)
+    if curve is None:
+        return []
+    pts, _closed = sample_curve(curve, {k: float(v) for k, v in (data.get("inputs") or {}).items()})
+    o, x, y, n = outline_frame(pts)
+    local = (pts - o) @ np.stack((x, y, n)).T
+    return centre_mast(local, expr.number(s.get("height", 2.0), {}, "surface.height"))
+
+
 def _rows_organic(data, env, curves):
     """(0.555) A form found over a closed outline in any plane (a floor's, a wall's face, a polygon drawn): its grid
     laid in the outline's plane, its edge held, masts and supports held at their heights, the forces of its
@@ -571,15 +611,24 @@ def _rows_organic(data, env, curves):
     local[:, 2] = 0.0
     rows, close_u = _boundary_grid(local, nu, nv, grid)
     rows[..., 2] = 0.0
-    fixed = ff.boundary_mask(rows.shape, close_u)
+    edge = ff.boundary_mask(rows.shape, close_u)
     if close_u:                                         # (rings: only the outer one is the edge)
-        fixed[-1] = False
+        edge[-1] = False
+    free_edges = bool(s.get("free_edges", False))
+    if free_edges:                                      # (0.556) only the outline's corners held: its edges sag in
+        fixed = np.zeros_like(edge)
+        for c in local[:, :2]:
+            d = np.where(edge, np.hypot(rows[..., 0] - c[0], rows[..., 1] - c[1]), np.inf)
+            fixed[np.unravel_index(int(np.argmin(d)), d.shape)] = True
+    else:
+        fixed = edge.copy()
     points = list(s.get("points") or ())
-    if behaviour == "membrana" and not points:          # (a membrane needs something to lift it: a mast in the middle)
-        size = float(np.ptp(local[:, :2], axis=0).max())
-        points = [{"u": float(local[:, 0].mean()), "v": float(local[:, 1].mean()), "h": height,
-                   "r": 0.06 * size, "kind": "mastro"}]
-    flat = ff.plan_grid(rows, fixed, close_u)
+    lines = list(s.get("lines") or ())
+    if behaviour == "membrana" and not points and not lines:   # (a membrane needs something to lift it: a mast)
+        points = centre_mast(local, height)
+    k = EDGE_CABLE if free_edges else 1.0
+    flat = ff.plan_grid(rows, edge, close_u)            # (the plan spread with its whole edge — then let go)
+    cell = float(np.median(np.linalg.norm(np.diff(flat[..., :2], axis=1), axis=-1)))
     for q in points:                                    # (each mast's head — or support's foot — held at its height)
         r = max(float(q.get("r", 0.0)), 1e-9)
         d = np.hypot(flat[..., 0] - float(q.get("u", 0.0)), flat[..., 1] - float(q.get("v", 0.0)))
@@ -588,8 +637,16 @@ def _rows_organic(data, env, curves):
             near = d == d.min()
         flat[..., 2] = np.where(near, float(q.get("h", 0.0)), flat[..., 2])
         fixed |= near
+    for q in lines:                                     # (0.556) a ridge or a valley: its points held at its height
+        a, b = np.asarray(q["a"], float), np.asarray(q["b"], float)
+        ab = b - a
+        t = np.clip(((flat[..., :2] - a) @ ab) / max(float(ab @ ab), 1e-12), 0.0, 1.0)
+        d = np.linalg.norm(flat[..., :2] - (a + t[..., None] * ab), axis=-1)
+        near = d <= cell * 0.55
+        flat[..., 2] = np.where(near, float(q.get("h", 0.0)), flat[..., 2])
+        fixed |= near
     try:
-        form = ff.find(flat, behaviour, height, fixed, close_u)
+        form = ff.find(flat, behaviour, height, fixed, close_u, plan=free_edges, edge_k=k)
     except ff.FormError as exc:
         raise SurfaceError(str(exc)) from None
     return o + form @ axes, close_u

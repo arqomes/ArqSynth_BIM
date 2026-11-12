@@ -838,6 +838,19 @@ def _organic_form(a):
     a.line((16, 5), (16, 22), "ink", 1.0, dash=[2, 2])
 
 
+def _organic_points(a):
+    """(0.556) Two masts of different heights lifting a membrane."""
+    path = QtGui.QPainterPath(QtCore.QPointF(2, 27))
+    path.cubicTo(6, 22, 8, 8, 10, 6)
+    path.cubicTo(13, 12, 17, 16, 22, 12)
+    path.cubicTo(25, 16, 27, 24, 30, 27)
+    a.path(path, "glass", "blue", 1.4)
+    a.line((10, 6), (10, 29), "red", 1.6)
+    a.line((22, 12), (22, 29), "red", 1.6)
+    a.circle((10, 6), 1.8, "red", "red", 0.6)
+    a.circle((22, 12), 1.8, "red", "red", 0.6)
+
+
 def _steel_mitre(a):
     a.poly([(3, 8), (26, 8), (19, 15), (3, 15)], theme.ART["steel"][1])
     a.poly([(26, 8), (26, 30), (19, 30), (19, 15)], theme.ART["steel"][2])
@@ -2483,7 +2496,8 @@ DRAWN = {"select": _select, "move": _move, "copy": _copy, "rotate": _rotate, "mi
          "verify_panel": _verify_panel, "verify_settings": _verify_settings, "verify_sheet": _verify_sheet,
          "rules_editor": _rules_editor, "check_ifc": _check_ifc, "check_ids": _check_ids,
          "missing_data": _missing_data,
-         "calibrate_image": _calibrate_image, "control_ring": _control_ring, "organic_form": _organic_form,"walls_from_cad": _walls_from_cad,
+         "calibrate_image": _calibrate_image, "control_ring": _control_ring, "organic_form": _organic_form,
+         "organic_points": _organic_points, "walls_from_cad": _walls_from_cad,
          "model_from_scan": _model_from_scan,
          "site_location": _site_location, "terrain": _terrain_icon, "lot": _lot, "platform": _platform,
          "terrain_ramp": _terrain_ramp, "edit_platform": _edit_platform, "earthworks": _earthworks,

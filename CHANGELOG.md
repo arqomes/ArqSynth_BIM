@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.556.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 3: mastros, apoios, cumeeiras, vales e bordos livres.**
+
+- **Massa e Estudos ▸ Mastros e apoios** (com uma forma orgânica escolhida): um **clique** põe um **mastro** (ponto
+  alto) ou um **apoio** (ponto baixo); dois cliques fazem uma **cumeeira** ou um **vale** (uma linha presa a uma
+  altura). **Arrastar a cabeça** de um mastro muda a altura e a forma encontra-se de novo enquanto se arrasta; o
+  **botão direito** num deles tira-o; Delete tira o último.
+- Na barra: o que o clique põe, a altura, o raio da cabeça do mastro, e os **bordos**: **presos** ao contorno ou
+  **livres** — só os cantos presos, os bordos puxados como cabos (uma vela; numa casca, os bordos levantam em arco,
+  à Isler).
+- A membrana com o seu mastro do meio: o primeiro mastro posto à mão junta-se a ele (não o substitui).
+- Nas Propriedades, a linha «Mastros e apoios» diz quantos há.
+- Testes: `tests/test_organic_forms.py` (Control); «forma_organica_mastros» no gui_smoke, com captura.
+
 ## 0.555.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 2: a ferramenta «Forma orgânica».**
