@@ -1819,7 +1819,8 @@ Falta:
      - **corte mínimo** (redistribui para não ficar uma tira estreita);
    - sobre um polígono com furos, num plano;
    - devolve peças inteiras e cortadas, com marca e contagem.
-2. **O elemento Revestimento em IFC:**
+2. ~~**O elemento Revestimento em IFC:**~~ (0.563.0; as peças num `IfcTriangulatedFaceSet` por material — tão
+   leve como o `IfcMappedItem` e sem uma forma por peça cortada)
    - `IfcCovering` + `IfcCoveringType` com `IfcMaterialLayerSet` (suporte, argamassa/cola, peça);
    - as peças como `IfcMappedItem` e as juntas recuadas;
    - `Pset_CoveringCommon` e `Qto_CoveringBaseQuantities`;

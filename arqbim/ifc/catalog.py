@@ -135,6 +135,10 @@ MATERIALS = {m.key: m for m in (
     MaterialSpec("vidro", "Vidro", "Glass", "glass", (0.62, 0.78, 0.88)),            # curtain walls (0.117)
     MaterialSpec("azulejo", "Azulejo cerâmico", "Ceramic tile", "ceramic", (0.90, 0.92, 0.93)),   # (0.119)
     MaterialSpec("pedra", "Pedra natural", "Natural stone", "stone", (0.80, 0.76, 0.68)),         # (0.119)
+    MaterialSpec("argamassa_junta", "Argamassa de juntas", "Tile grout", "plaster", (0.70, 0.69, 0.66),   # (0.563)
+                 density=1700.0),
+    MaterialSpec("cola_cimenticia", "Cola cimentícia", "Cement tile adhesive", "plaster", (0.78, 0.77, 0.74),
+                 density=1500.0),
     MaterialSpec("solo", "Solo natural", "Natural soil", "earth", (0.62, 0.55, 0.42)),            # (0.155)
     MaterialSpec("a400", "Aço A400 NR", "Reinforcing steel A400 NR", "steel", (0.62, 0.24, 0.16)),   # (0.166)
     MaterialSpec("a500", "Aço A500 NR", "Reinforcing steel A500 NR", "steel", (0.62, 0.24, 0.16)),

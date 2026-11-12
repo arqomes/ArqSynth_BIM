@@ -570,6 +570,42 @@ def add_plane_panel(doc, frame, face, pattern, source=""):
     return doc.execute(IfcCommand(t("cmd.perforated"), action)).result
 
 
+def covering_frame(points):
+    """(0.563) (frame (4, 4), to_plane) of a face to lay a Revestimento on — on a wall x level along it and y up,
+    on a floor x east and y north (core/tiling.face_frame); to_plane(points) its points in the frame's x, y."""
+    from ..core import tiling as tl
+    fr = tl.face_frame(points)
+    o, x, y, n = fr
+    m = np.eye(4)
+    m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, y, n, o
+    return m, (lambda pts: tl.to_plane(pts, fr))
+
+
+def add_covering(doc, points, finish, holes=(), layout=None, source="", **changes):
+    """(0.563) A Revestimento (ifc.add_tiled_covering) on the flat face `points` (3D, its outline; `holes` 3D too),
+    of the finish `finish` (core/covering_finishes), its layout and anything else changed. One undo step. Its
+    GlobalId."""
+    from shapely.geometry import Polygon
+    frame, flat = covering_frame(points)
+    face = Polygon(flat(points), [flat(h) for h in holes if len(h) >= 3]).buffer(0)
+    language = lang()
+
+    def action(ifc):
+        count = sum(1 for e in ifc.file.by_type("IfcCovering") if ifc._params(e).get("Elemento") == "tiled_covering")
+        return ifc.add_tiled_covering(frame, face, finish, "{} {}".format(t("elem.tiled_covering"), count + 1),
+                                      layout, source, language, **changes).GlobalId
+
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
+
+
+def set_covering(doc, guid, **changes):
+    """(0.563) A Revestimento changed (ifc.set_tiled_covering: layout, finish, material, thickness, bed, grout…).
+    One undo step."""
+    language = lang()
+    _edit(doc, lambda ifc: ifc.set_tiled_covering(guid, lang=language, **changes), [guid], "cmd.tiled_covering")
+    return guid
+
+
 def set_plane_panel(doc, guid, pattern=None, frame=None, face=None):
     """(0.553) A plane panel's holes, plane or shape. One undo step."""
     _edit(doc, lambda ifc: ifc.set_plane_panel(guid, pattern, frame, face), [guid], "cmd.cladding_edit")

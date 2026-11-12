@@ -77,6 +77,7 @@ from .dwellings import DwellingMixin  # noqa: E402
 from .lot import LotMixin  # noqa: E402
 from .wall_framing import WallFramingMixin  # noqa: E402
 from .loose_furniture import LooseFurnitureMixin  # noqa: E402
+from .tiled_coverings import TiledCoveringMixin  # noqa: E402  (0.563)
 from .ripado_screen import RipadoScreenMixin  # noqa: E402
 from .steel_members import SteelMemberMixin  # noqa: E402
 from .steel_connections import SteelConnectionMixin  # noqa: E402
@@ -393,7 +394,8 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                CabinetMixin, ApplianceMixin, ProfileMixin, KeynoteMixin, IfcDataMixin, CarpentryMixin,
                RoofTilesMixin, JoineryMixin, ArchitectureMixin, OrganicRoofMixin, ParamSurfaceMixin,
                ElementTypeMixin, DwellingMixin, LotMixin, WallFramingMixin,
-               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin, SteelConnectionMixin, SteelStairMixin, StructureCutMixin):
+               LooseFurnitureMixin, RipadoScreenMixin, SteelMemberMixin, SteelConnectionMixin, SteelStairMixin, StructureCutMixin,
+               TiledCoveringMixin):
     def __init__(self, file):
         self.file = file
         self.file.set_history_size(HISTORY_SIZE)
@@ -1815,7 +1817,9 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 out[e.GlobalId] = mesh
                 # (0.276: a carpentry piece, its wood; 0.279: a roof's tiles, their clay)
                 if colours is not None and (e.is_a() in COLOURED or (
-                        e.is_a("IfcCovering") and ifcopenshell.util.element.get_predefined_type(e) == "ROOFING")):
+                        e.is_a("IfcCovering") and (ifcopenshell.util.element.get_predefined_type(e) == "ROOFING"
+                                                   or self._params(e).get("Elemento") == "tiled_covering"))):
+                    # (0.563: a Revestimento's pieces, bed and grout, each its own)
                     painted = self._styled_colours(e, len(mesh[1]))         # (0.288: a door's pieces, each its own)
                     rgb = _material_colour(e) if painted is None else None
                     if painted is not None:
@@ -2466,6 +2470,15 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 info["params"] = {k: v for k, v in sp.items() if k not in ("start", "end")}
             elif kind == "loose":                                       # (0.440) a piece of loose furniture
                 info["params"] = self.loose_params(guid)
+            elif kind == "tiled_covering":                              # (0.563) a Revestimento: its finish, layout
+                tp = self.tiled_params(guid)
+                pg = ifcopenshell.util.element.get_psets(e).get("ArqSynth_Paginacao", {})
+                q = ifcopenshell.util.element.get_psets(e).get("Qto_CoveringBaseQuantities", {})
+                info["params"] = dict(tp, layout=dict(tp["layout"]), area=float(q.get("NetArea") or 0.0),
+                                      gross=float(q.get("GrossArea") or 0.0),       # (m², as written)
+                                      pieces=int(pg.get("Pecas") or 0), whole=int(pg.get("PecasInteiras") or 0),
+                                      cut=int(pg.get("PecasCortadas") or 0), narrow=int(pg.get("CortesEstreitos") or 0),
+                                      narrowest=float(pg.get("CorteMaisEstreito") or 0.0))
             elif kind == "gutter":                                      # (0.438) its section, its downpipes
                 info["params"] = {"shape": self.gutter_shape(guid), "downpipes": self.gutter_downpipes(guid)}
             elif kind == "flooring":                                    # (0.415) a floor finish: its finish

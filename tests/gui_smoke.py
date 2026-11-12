@@ -24803,6 +24803,63 @@ def navigation():
     shot("9_depois_de_orbitar.png")
     grafico_visual()
     formas_organicas()
+    revestimentos()
+
+
+def revestimentos():
+    """(0.563) Gerador de revestimentos: a Revestimento of pieces on a wall's face (round its door) and on a floor."""
+    from arqbim.model import bim as _bim
+    win.viewport.set_selection(set())
+    pump(100)
+    x0, y0 = 200.0, 0.0
+    wall = [(x0, y0, 0.0), (x0 + 4.0, y0, 0.0), (x0 + 4.0, y0, 2.7), (x0, y0, 2.7)]
+    door = [(x0 + 1.0, y0, 0.0), (x0 + 1.9, y0, 0.0), (x0 + 1.9, y0, 2.1), (x0 + 1.0, y0, 2.1)]
+    floor = [(x0, y0 - 3.0, 0.0), (x0 + 4.0, y0 - 3.0, 0.0), (x0 + 4.0, y0, 0.0), (x0, y0, 0.0)]
+    made = []
+    try:
+        made.append(_bim.add_covering(win.doc, wall, "metro_10x20", holes=[door]))
+        made.append(_bim.add_covering(win.doc, floor, "espinha_carvalho"))
+    except Exception as exc:                  # noqa: BLE001
+        print("revestimentos:", exc)
+    pump(800)
+    if made:
+        win.viewport.zoom_extents(set(made))
+        pump(800)
+        shot("revestimento_parede_piso.png")
+        if os.environ.get("ARQBIM_COMPARE"):         # (close: a small one beside, its joints and bond)
+            small = [(x0 + 5.0, y0, 0.0), (x0 + 5.8, y0, 0.0), (x0 + 5.8, y0, 0.6), (x0 + 5.0, y0, 0.6)]
+            near = _bim.add_covering(win.doc, small, "metro_10x20")
+            wood = _bim.add_covering(win.doc, [(x0 + 5.0, y0 - 0.8, 0.0), (x0 + 5.8, y0 - 0.8, 0.0),
+                                               (x0 + 5.8, y0, 0.0), (x0 + 5.0, y0, 0.0)], "espinha_carvalho")
+            pump(600)
+            win.viewport.zoom_extents({near, wood})
+            pump(600)
+            shot("revestimento_perto.png")
+            win.doc.undo()
+            win.doc.undo()
+    check("revestimento_pecas", len(made) == 2 and all(win.doc.get(g) is not None for g in made), str(made))
+    # its Properties: the bond changed there, the layout made again
+    ok_props = False
+    if made:
+        win.viewport.set_selection({made[0]})
+        pump(400)
+        combo = win.props.editors.get("covering_pattern")
+        if combo is not None:
+            k = combo.findData("espinha_reta")
+            combo.setCurrentIndex(k)
+            combo.activated.emit(k)                  # (as a click on the list)
+            pump(600)
+            ok_props = win.doc.ifc.tiled_params(made[0])["layout"]["pattern"] == "espinha_reta"
+            win.viewport.set_selection({made[0]})
+            pump(400)
+            shot("revestimento_propriedades.png")
+            win.doc.undo()
+            pump(300)
+    check("revestimento_propriedades", ok_props, "{} {}".format(ok_props, sorted(k for k in win.props.editors
+                                                                                if "cover" in k)))
+    for _ in range(len(made)):
+        win.doc.undo()
+    pump(200)
 
 
 def formas_organicas():

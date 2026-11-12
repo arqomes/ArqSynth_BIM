@@ -1564,8 +1564,11 @@ class Document:
     def _put(self, obj):
         if getattr(obj, "is_bim", False) and getattr(self, "ifc", None) is not None:
             try:                                  # (0.555) a free-form surface: drawn smooth, as Revit's
-                if self.ifc.kind_of(obj.id) == "param_surface" and hasattr(obj.mesh, "soften"):
+                kind = self.ifc.kind_of(obj.id)
+                if kind == "param_surface" and hasattr(obj.mesh, "soften"):
                     obj.mesh.soften(FREEFORM_SOFT_DEG)
+                elif kind == "tiled_covering" and hasattr(obj.mesh, "silence"):   # (0.563) its face's direction
+                    obj.mesh.silence(self.ifc._placement_si(self.ifc.by_guid(obj.id))[:3, 2])
             except Exception:  # (an element half made: drawn as it is)
                 pass
         self.objects[obj.id] = obj

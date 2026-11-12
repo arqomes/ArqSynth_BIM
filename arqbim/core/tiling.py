@@ -503,6 +503,70 @@ def lay(outline, d=None, holes=()):
     return best[1]
 
 
+# ---------------------------------------------------------------------------------------------------- solids
+
+def _cap(points, holes):
+    """Triangles (index triples into points + the holes' points, in that order) of a polygon's face, counter-
+    clockwise: a fan when it is convex and has no holes, else shapely's constrained Delaunay."""
+    n = len(points)
+    if not holes and n <= 12 and Polygon(points).convex_hull.area <= Polygon(points).area * (1 + 1e-9):
+        return [(0, k, k + 1) for k in range(1, n - 1)]
+    allp = np.asarray(list(points) + [q for h in holes for q in h], float)
+    tris = []
+    for tri in shapely.constrained_delaunay_triangles(Polygon(points, holes)).geoms:
+        c = np.asarray(tri.exterior.coords)[:3]
+        ids = [int(np.argmin(((allp - q) ** 2).sum(axis=1))) for q in c]   # (each corner: the point it is)
+        if len(set(ids)) < 3:
+            continue
+        a, b, cc = allp[ids[0]], allp[ids[1]], allp[ids[2]]
+        if (b[0] - a[0]) * (cc[1] - a[1]) - (b[1] - a[1]) * (cc[0] - a[0]) < 0:
+            ids = [ids[0], ids[2], ids[1]]
+        tris.append(tuple(ids))
+    return tris
+
+
+def prisms(polys, z0, z1):
+    """One mesh (verts (N, 3), tris (M, 3), outwards) of the polygons [(points, holes)…] in their plane raised from
+    z0 to z1 — a finish's pieces, or its grout bed."""
+    verts, tris = [], []
+    for points, holes in polys:
+        loops = [list(points)] + [list(h) for h in holes]
+        flat = [q for loop in loops for q in loop]
+        m = len(flat)
+        base = len(verts)
+        verts += [(x, y, z0) for x, y in flat] + [(x, y, z1) for x, y in flat]
+        for a, b, c in _cap(points, holes):
+            tris.append((base + m + a, base + m + b, base + m + c))      # (the top, up)
+            tris.append((base + a, base + c, base + b))                  # (the bottom, down)
+        k = 0
+        for loop in loops:                                               # (the sides: an outline counter-clockwise,
+            n = len(loop)                                                # its holes clockwise — outwards both)
+            for i in range(n):
+                a, b = base + k + i, base + k + (i + 1) % n
+                tris.append((a, b, b + m))
+                tris.append((a, b + m, a + m))
+            k += n
+    return np.asarray(verts, float).reshape(-1, 3), np.asarray(tris, np.int64).reshape(-1, 3)
+
+
+def joints(result, face, d):
+    """The joints between the pieces, as polygons [(points, holes)…]: round each piece a ring as wide as half the
+    joint (two neighbours' rings meet in the joint's middle), kept on the face."""
+    half = max(d["joint"], d["joint_v"] or 0.0) / 2.0
+    if half <= 1e-6 or not result.pieces:
+        return []
+    arr = np.array([Polygon(p.points, p.holes) for p in result.pieces], dtype=object)
+    rings = shapely.intersection(shapely.difference(shapely.buffer(arr, half * 1.02, join_style="mitre"), arr), face)
+    out = []
+    for g in rings:
+        for part in getattr(g, "geoms", [g]):
+            if part.geom_type == "Polygon" and part.area > 1e-9:
+                part = orient(part, 1.0)
+                out.append(([tuple(c) for c in list(part.exterior.coords)[:-1]],
+                            [[tuple(c) for c in list(r.coords)[:-1]] for r in part.interiors]))
+    return out
+
+
 # ---------------------------------------------------------------------------------------------------- a face in 3D
 
 def face_frame(points):

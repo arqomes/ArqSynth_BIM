@@ -672,6 +672,73 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                                  parse=lambda s: (lambda v: v if v is not None and v > 0 else None)(parse_length(s)),
                                  least=0.001)
 
+    def _covering_rows(self, guid, p):
+        """(0.563) A Revestimento's rows: the bond, the piece and its joints, where it starts and its angle, its
+        materials and thicknesses; then what it came to (pieces whole and cut, the narrowest cut)."""
+        from ..core import tiling as tl
+        from ..ifc import catalog as cat
+        d = p["layout"]
+        pt = lang() == "pt"
+        self._choice_combo(t("props.cov_pattern"), "covering_pattern", guid,
+                           [(v[0 if pt else 1], k) for k, v in tl.PATTERNS.items() if k != "livre"
+                            or d["pattern"] == "livre"], d["pattern"])
+        self._length_editor(t("props.cov_w"), d["w"], "covering_w", guid)
+        self._length_editor(t("props.cov_h"), d["h"], "covering_h", guid)
+        self._mm_editor(t("props.cov_joint"), d["joint"], "covering_joint", guid)
+        self._mm_editor(t("props.cov_joint_v"), d["joint_v"] if d["joint_v"] is not None else d["joint"],
+                        "covering_joint_v", guid)
+        if d["pattern"] in ("desencontrado", "vertical", "livre"):
+            self._choice_combo(t("props.cov_bond"), "covering_bond", guid,
+                               [("½", 0.5), ("⅓", round(1 / 3, 6)), ("¼", 0.25), ("⅔", round(2 / 3, 6)),
+                                (t("props.cov_bond_none"), 0.0)], round(d["bond"], 6))
+        self._text_editor(t("props.cov_angle"), format_angle(d["angle"]), "covering_angle", guid, parse=parse_angle)
+        self._choice_combo(t("props.cov_origin"), "covering_origin", guid,
+                           [(t("cov.origin." + k), k) for k in tl.ORIGINS], d["origin"])
+        if d["origin"] in ("centro", "ponto"):
+            self._choice_combo(t("props.cov_align"), "covering_align", guid,
+                               [(t("cov.align." + k), k) for k in tl.ALIGNS], d["align"])
+        if d["origin"] != "auto":
+            self._text_editor(t("props.cov_dx"), _len(d["dx"]).replace("~ ", ""), "covering_dx", guid,
+                              parse=parse_length)
+            self._text_editor(t("props.cov_dy"), _len(d["dy"]).replace("~ ", ""), "covering_dy", guid,
+                              parse=parse_length)
+        self._mm_editor(t("props.cov_min_cut"), d["min_cut"], "covering_min_cut", guid)
+        mats = [(cat.MATERIALS[k].name_pt if pt else cat.MATERIALS[k].name_en, k) for k in cat.MATERIALS]
+        self._choice_combo(t("props.cov_material"), "covering_material", guid, mats, p["material"])
+        self._mm_editor(t("props.cov_thickness"), p["thickness"], "covering_thickness", guid)
+        self._mm_editor(t("props.cov_bed"), p["bed"], "covering_bed", guid)
+        self._choice_combo(t("props.cov_grout"), "covering_grout", guid,
+                           [(t("props.cov_no_grout"), "")] + mats, p["grout"] or "")
+        if p["grout"]:
+            self._mm_editor(t("props.cov_recess"), p["recess"], "covering_recess", guid)
+        num = "{:.2f} m²".format
+        self._row(t("props.area"), num(p.get("area") or 0.0).replace(".", decimal_sep()))
+        self._row(t("props.cov_pieces"), t("props.cov_pieces_v", n=p.get("pieces", 0), w=p.get("whole", 0),
+                                           c=p.get("cut", 0)))
+        narrow = p.get("narrowest") or 0.0
+        item = self._row(t("props.cov_narrowest"), _len(narrow) if narrow else "—")
+        if p.get("narrow"):
+            item.setForeground(1, QtGui.QBrush(theme.colour("warning")))
+            item.setToolTip(1, t("props.cov_narrow_tip", n=p["narrow"]))
+
+    def _mm_editor(self, key, meters, action, guid):
+        """(0.563) A small length — a joint, a tile's thickness — shown and typed in millimetres (a bare number is
+        mm; «0,5 cm», «0,003 m» are read as written)."""
+        text = "{:g} mm".format(round(float(meters) * 1000.0, 2)).replace(".", decimal_sep())
+
+        def parse(s):
+            s = s.strip()
+            if s and not any(c.isalpha() for c in s):
+                try:
+                    v = float(s.replace(",", ".")) / 1000.0
+                except ValueError:
+                    return None
+            else:
+                v = parse_length(s)
+            return v if v is not None and v >= 0 else None
+
+        return self._text_editor(key, text, action, guid, parse=parse, least=0.0)
+
     def _length0_editor(self, key, meters, action, guid):
         """A length that may be 0 (a gap, a margin, a height over the floor)."""
         return self._text_editor(key, _len(meters).replace("~ ", ""), action, guid,
@@ -2085,6 +2152,13 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             spec = p.get("spec")                   # (0.415: a stair's slab, a ceiling's board… from the catalogue)
             if spec is not None:
                 self._row(t("props.catalog_type"), _type_name(spec))
+        elif kind == "tiled_covering":             # (0.563) a Revestimento: its finish on top, as a type
+            from ..core import covering_finishes as cf
+            pt = lang() == "pt"
+            self._header_choice(t("props.covering_finish"), "covering_finish", guid,
+                                [("{} ▸ {}".format(cf.GROUPS[f.group][0 if pt else 1], f.name_pt if pt else f.name_en),
+                                  k) for g in cf.GROUPS for k, f in cf.FINISHES.items() if f.group == g],
+                                p["finish"])
         elif kind == "loose":                      # (0.440) its piece, on top as a type
             from ..core import loose_furniture as core_loose
             self._header_choice(t("props.loose_piece"), "loose_piece", guid,
@@ -2184,6 +2258,8 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             battens = int(round(float(p.get("battens") or 0)))
             self._choice_combo(t("props.ripado_battens"), "screen_battens", guid,
                                [(t("ripado.no_battens") if n == 0 else str(n), n) for n in range(0, 7)], battens)
+        elif kind == "tiled_covering":                     # (0.563) a Revestimento: everything of its layout
+            self._covering_rows(guid, p)
         elif kind == "loose":                              # (0.440) a piece of loose furniture: its sizes
             self._length_editor(t("props.width"), p["width"], "loose_width", guid)
             self._length_editor(t("props.depth"), p["depth"], "loose_depth", guid)

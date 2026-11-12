@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.563.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 2: o elemento Revestimento em IFC.**
+
+- Um **Revestimento** é um `IfcCovering` assente em peças sobre uma face plana:
+  - CLADDING numa parede, FLOORING num piso, CEILING num teto;
+  - cada peça é um sólido seu, com as juntas entre peças;
+  - por baixo, a cola ou argamassa;
+  - nas juntas, o betume, recuado da face;
+  - os vãos recortados.
+- Em IFC:
+  - o tipo é um `IfcCoveringType` com o nome do revestimento;
+  - o material é um `IfcMaterialLayerSet` (cola + peça);
+  - quantidades em `Qto_CoveringBaseQuantities`;
+  - contagem em `ArqSynth_Paginacao` (peças inteiras e cortadas, cortes estreitos, o mais estreito).
+- **Catálogo inicial** (15):
+  - azulejos 20 × 20, 30 × 60 e metro 10 × 20;
+  - porcelânico 60 × 60 e 120 × 60 a ⅓;
+  - hidráulico;
+  - hexágono;
+  - pedra 60 × 40;
+  - opus romano;
+  - mármore em diagonal;
+  - soalho de réguas variáveis;
+  - carvalho em espinha;
+  - deck;
+  - tijolo face à vista;
+  - tijolo flamengo.
+- Novos materiais: argamassa de juntas e cola cimentícia.
+- **Propriedades** do Revestimento:
+  - o revestimento escolhido em cima, como um tipo;
+  - aparelho, peça (comprimento e altura) e juntas horizontal e vertical (em mm);
+  - desencontro e ângulo;
+  - onde começa (canto, centro, ponto, automático), com a junta ou o meio da peça no ponto e o deslocamento;
+  - corte mínimo;
+  - material e espessura da peça, cola, betume e o seu recuo;
+  - a área e as peças inteiras e cortadas;
+  - o corte mais estreito, a laranja quando há cortes abaixo do mínimo.
+- Na vista 3D, cada peça na sua cor (madeira, cerâmica, betume). Desenha-se só o contorno da face à vista de cada
+  peça, como o padrão de superfície do Revit: com todas as arestas, uma parede de azulejo pequeno ficava preta.
+- Para já, o Revestimento cria-se pelo MCP / `bim.add_covering`. A ferramenta que o põe numa face clicada é o passo
+  seguinte.
+- Testes: `tests/test_tiled_coverings.py` (parede com porta, piso, teto, sólidos fechados, mudar e desfazer,
+  recusas, gravado e relido); «revestimento_pecas» e «revestimento_propriedades» no gui_smoke, com capturas.
+
 ## 0.562.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 1: o núcleo da paginação** (`core/tiling.py`, ainda sem janela).

@@ -7589,6 +7589,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_ripado_screen(doc, guid, **{action[7:]: value})
             elif action in ("loose_piece", "loose_width", "loose_depth", "loose_height"):   # (0.440)
                 bim.set_loose(doc, guid, **{action[6:]: value})
+            elif action.startswith("covering_"):           # (0.563) a Revestimento: its finish, layout, materials
+                key = action[9:]
+                if key in ("finish", "material", "thickness", "bed", "grout", "recess"):
+                    bim.set_covering(doc, guid, **{key: value})
+                else:
+                    bim.set_covering(doc, guid, layout={key: value})
             elif action in ("gutter_shape", "gutter_downpipes"):        # (0.438) a gutter's section, its downpipes
                 bim.set_gutter(doc, guid, **{action[7:]: value})
             elif action == "connection_equal":            # (0.505) its values to the alike nodes

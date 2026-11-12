@@ -423,6 +423,15 @@ class TriMesh:
         return self.tris
 
     soft_deg = None              # (0.555) a free-form surface's: every fold under this many degrees softened
+    quiet = False                # (0.563) a finish of many pieces: the direction its pieces' faces look
+
+    def silence(self, up):
+        """(0.563) Only the edges round the faces looking `up` drawn (a Revestimento: each piece's outline on its
+        face, not its sides)."""
+        up = tuple(float(c) for c in up)
+        if self.quiet != up:
+            self.quiet = up
+            self._edges = self._edge_array = self._edge_faces = None
 
     def soften(self, degrees):
         """(0.555) A free-form surface (a parametric one): its folds under `degrees` softened as its curved parts —
@@ -449,6 +458,12 @@ class TriMesh:
         uniq, counts, first, second, cos = self._edge_table()
         flat = (counts == 2) & (cos > 1 - 1e-6)                  # a diagonal inside a flat face
         keep = ~flat & ~self._smooth(uniq, counts, cos)
+        if self.quiet is not False:                              # (0.563) a finish of many pieces: only the outline
+            up = np.asarray(self.quiet, dtype=float)             # of each piece's face seen — as Revit's pattern;
+            on = (self.normals[first] @ up > 0.99) | ((second >= 0) & (self.normals[np.maximum(second, 0)] @ up
+                                                                        > 0.99))
+            keep = keep & on                                     # all of every piece's edges blacken a wall of
+            # small tiles seen from afar
         self._edge_array = uniq[keep]
         self._edge_faces = np.column_stack((first[keep], second[keep]))
         self._closed = bool(np.all(counts == 2))
