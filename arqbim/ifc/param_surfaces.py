@@ -86,10 +86,22 @@ class ParamSurfaceMixin:
     def surface_parts(self, guid):
         """The register of a surface's parts (the cut list), worked out from its definition."""
         try:
-            _s, _p, parts, _w = work_out(self.surface_definition(guid))
+            surface, _p, parts, _w = work_out(self.surface_definition(guid))
         except ps.SurfaceError as exc:
             raise EditRefused(str(exc)) from None
-        return parts
+        sheet = self._sheet_part(self.by_guid(guid), surface)
+        return parts + ([sheet] if sheet else [])
+
+    def _sheet_part(self, element, surface):
+        """(0.552) The perforated sheet a Visual Graph operator put on the surface, as a part of its cut list: its
+        area (the surface's), its thickness, how many holes and how open — None: it has none."""
+        p = self._params(element)
+        if not p.get("FurosLivres") or p.get("FurosConta") is None:
+            return None
+        holes, opened = int(float(p["FurosConta"])), float(p.get("FurosAberta") or 0.0)
+        return {"id": "CP1", "name": "Chapa perfurada — {} furos, {:.0f} % aberta".format(holes, opened * 100.0),
+                "kind": "chapa perfurada", "count": 1, "area": round(float(surface.area()), 4),
+                "thickness": float(p.get("Espessura") or 0.003), "holes": holes, "open_area": opened}
 
     def add_param_surface(self, data, origin, name, storey=None, usage="estrutura", lang="pt"):
         """A parametric surface of `data` (its curves in coordinates from `origin`, a world point on the storey's
@@ -183,6 +195,9 @@ class ParamSurfaceMixin:
         except ps.SurfaceError as exc:
             raise EditRefused(str(exc)) from None
         sheet = self._surface_sheet(element, surface, rework)
+        if sheet is not None:                            # (0.552) in its cut list and its summary too
+            part = self._sheet_part(element, surface)
+            parts = list(parts) + ([part] if part else [])
         if sheet is not None:                            # (0.550) the sheet: in the bare surface's place, or over
             if not data.get("build"):                    # its construction
                 pieces = {}

@@ -425,6 +425,9 @@ def verificar_fabrico(furos, furo_min, ponte_min):
     report = {"ok": not bad.any(), "holes": int(len(xy)), "bad": int(bad.sum()), "small": int(small.sum()),
               "bridges": bridges, "edge": int(edge.sum()), "open_area": open_area,
               "min_bridge": None if min_bridge == math.inf else min_bridge, "problems": problems}
+    from .nodes_logic import module_open_areas, modules_of
+    if len(modules_of(panel)) > 1:                # (0.552) each module's own open area (Subdividir's)
+        report["modules"] = module_open_areas(furos)
     return {"furos": {**furos, "bad": bad}, "relatorio": report}
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.552.0 — 2026-11-12
+
+**Gráfico Visual: a chapa na lista de peças da superfície, e a área aberta módulo a módulo.**
+
+- **Lista de peças da Superfície paramétrica**: a chapa perfurada de um operador entra na lista (Propriedades ▸
+  «Lista de peças (CSV)…») e no resumo por família, como «chapa perfurada»: a área (a da superfície), a espessura, o
+  número de furos e a percentagem aberta.
+- **Área aberta por módulo**: depois de «Subdividir», «Verificar fabrico» diz a área aberta de cada chapa (no editor,
+  por baixo da superfície: «3 módulos: área aberta de 12 a 31 %»).
+- «Levar à área aberta» tem a caixa **Cada módulo**: ligada, cada chapa chega à percentagem pedida por si (todas
+  iguais); desligada, como antes, só o conjunto.
+- A IA vê também a área aberta de cada módulo em `graph_eval`.
+- Testes: `tests/test_graph_finishing.py` (CutList, PerModule).
+
 ## 0.551.0 — 2026-11-12
 
 **Gráfico Visual: acabamentos — tirar o aplicado, furo desenhado por si, lado da superfície, tetos na tabela.**

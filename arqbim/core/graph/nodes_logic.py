@@ -384,25 +384,73 @@ def alongar_furos(furos, campo, alongar):
     return {"furos": dict(furos, ratio=k, bad=np.zeros(len(xy), dtype=bool))}
 
 
-@r.node("area_aberta", "Operações", "Levar à área aberta",
-        "Aumenta ou diminui todos os furos por igual até a chapa ter a percentagem de área aberta pedida (luz, "
-        "ventilação, sombreamento), sem passar do diâmetro máximo.",
-        inputs=[Port("furos", "holes", "Furos")], outputs=[Port("furos", "holes", "Furos")],
-        params=[_num("alvo", "Área aberta", 25.0, 0.5, 80.0, 0.5, "%"),
-                _num("d_max", "Diâmetro máximo", 0.1, 0.001, 0.5, 0.001)],
-        example="Ventilação natural: 30 % de área aberta, qualquer que seja o desenho.")
-def area_aberta(furos, alvo, d_max):
+def modules_of(panel):
+    """(0.552) The panel's modules (Subdividir's), each a polygon — one: the panel itself."""
+    shape = panel["shape"]
+    return [q for q in getattr(shape, "geoms", [shape]) if q.geom_type == "Polygon" and q.area > 1e-9]
+
+
+def module_index(panel, xy):
+    """Each hole's module (its index in modules_of; −1: in none)."""
+    import shapely
+    out = np.full(len(xy), -1)
+    if not len(xy):
+        return out
+    for k, q in enumerate(modules_of(panel)):
+        inside = shapely.contains_xy(q.buffer(1e-9), xy[:, 0], xy[:, 1])
+        out[(out < 0) & inside] = k
+    return out
+
+
+def module_open_areas(furos):
+    """(0.552) The open area (0–1) of each module of the panel, in modules_of's order."""
+    from .. import surfaces
+    mods = modules_of(furos["panel"])
     if not len(furos["xy"]):
-        raise ValueError("não há furos")
-    d = furos["d"].copy()
-    target = alvo / 100.0
-    for _ in range(40):                           # (those at the largest diameter stop growing: the others go on)
-        now = open_area(dict(furos, d=d))
+        return [0.0] * len(mods)
+    where = module_index(furos["panel"], furos["xy"])
+    area = surfaces.hole_area(furos["shape"], furos["d"], hole_extras(furos)[1])
+    return [float(area[where == k].sum() / max(q.area, 1e-12)) for k, q in enumerate(mods)]
+
+
+def _scale_to(furos, d, target, d_max, area_of, rounds=40):
+    for _ in range(rounds):                       # (those at the largest diameter stop growing: the others go on)
+        now = area_of(d)
         if abs(now - target) < 1e-4 or now <= 0:
             break
         d = np.minimum(d * math.sqrt(target / now), d_max)
         if np.all(d >= d_max - 1e-12):
             break
+    return d
+
+
+@r.node("area_aberta", "Operações", "Levar à área aberta",
+        "Aumenta ou diminui todos os furos por igual até a chapa ter a percentagem de área aberta pedida (luz, "
+        "ventilação, sombreamento), sem passar do diâmetro máximo. «Cada módulo»: depois de Subdividir, cada chapa "
+        "chega à percentagem por si (todas iguais), não só o conjunto.",
+        inputs=[Port("furos", "holes", "Furos")], outputs=[Port("furos", "holes", "Furos")],
+        params=[_num("alvo", "Área aberta", 25.0, 0.5, 80.0, 0.5, "%"),
+                _num("d_max", "Diâmetro máximo", 0.1, 0.001, 0.5, 0.001),
+                Port("por_modulo", "bool", "Cada módulo", default=False)],
+        example="Ventilação natural: 30 % de área aberta, qualquer que seja o desenho.")
+def area_aberta(furos, alvo, d_max, por_modulo=False):
+    from .. import surfaces
+    if not len(furos["xy"]):
+        raise ValueError("não há furos")
+    d = furos["d"].copy()
+    target = alvo / 100.0
+    mods = modules_of(furos["panel"])
+    if por_modulo and len(mods) > 1:              # (0.552) each module on its own
+        where = module_index(furos["panel"], furos["xy"])
+        ratio = hole_extras(furos)[1]
+        for k, q in enumerate(mods):
+            mine = where == k
+            if not mine.any():
+                continue
+            d[mine] = _scale_to(furos, d[mine], target, d_max, lambda dd, m=mine, a=q.area: float(
+                surfaces.hole_area(furos["shape"], dd, ratio[m]).sum() / max(a, 1e-12)))
+    else:
+        d = _scale_to(furos, d, target, d_max, lambda dd: open_area(dict(furos, d=dd)))
     return {"furos": dict(furos, d=d, bad=np.zeros(len(d), dtype=bool))}
 
 

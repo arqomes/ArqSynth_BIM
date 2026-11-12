@@ -1741,8 +1741,8 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    laje escolhida, um teto falso 30 cm por baixo, `bim.perforated_ceiling_under`; ~~tirar os furos pelo
    painel, os tetos na tabela dos perfurados, a altura por baixo da laje à escolha~~ — 0.551.0) — (b) era: laje — decidir se o painel é um teto falso, um pavimento ou uma pala; ~~(c) Superfície
    paramétrica — a chapa levada à superfície ponto a ponto (furos deformados)~~ (0.550.0: `core/surface_sheet.py`,
-   `ifc.set_surface_perforation`; ~~o lado, tirá-la pelo painel~~ — 0.551.0; por fazer: a chapa na lista de peças CSV
-   da superfície). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
+   `ifc.set_surface_perforation`; ~~o lado, tirá-la pelo painel~~ — 0.551.0; ~~a chapa na lista de peças CSV
+   da superfície~~ — 0.552.0). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
    «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
    superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) ~~A pré-visualização na própria
@@ -1756,8 +1756,8 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    / Juntar pontos, Escalar / Juntar furos, Levar à área aberta, Corrigir para fabrico.~~ (0.542.0,
    `core/graph/nodes_logic.py`; três operadores novos de origem) ~~Formas de furo (triângulo, losango, ranhura), rodar e alongar por
    campo~~ (0.545.0: «FurosLivres» com ângulo e alongamento por furo; nós Rodar furos e Alongar furos). ~~O furo de
-   desenho próprio~~ (0.551.0: `ui/hole_drawing.py`, forma «desenho:» no `FurosLivres`). Por fazer: a área aberta
-   por módulo; um nó de número/matemática para ligar medidas entre nós.
+   desenho próprio~~ (0.551.0: `ui/hole_drawing.py`, forma «desenho:» no `FurosLivres`). ~~A área aberta
+   por módulo~~ (0.552.0: o relatório e «Levar à área aberta ▸ Cada módulo»). Por fazer: um nó de número/matemática para ligar medidas entre nós.
 7. ~~Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
    ajustar sem abrir o editor).~~ (0.543.0: caixa «à vista» em cada medida; `operators.exposed_of`)
 8. ~~Aplicar a várias superfícies de uma vez~~ (0.541); ~~a parede guarda o operador~~ (0.543.0: propriedade

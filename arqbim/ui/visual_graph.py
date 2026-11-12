@@ -124,6 +124,8 @@ def _draw(p, kind, value, w, h, domain):
         lines = [f"{value['holes']} furos · área aberta {value['open_area'] * 100:.0f} %"]
         if bridge is not None:
             lines.append(f"ponte mais fina {bridge * 1000:.1f} mm")
+        if value.get("modules"):                           # (0.552)
+            lines.append("módulos {:.0f}–{:.0f} %".format(min(value["modules"]) * 100, max(value["modules"]) * 100))
         lines += value["problems"][:2]
         p.drawText(QtCore.QRectF(6, h / 3, w - 12, h * 2 / 3 - 4),
                    QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignTop, "\n".join(lines))
@@ -1535,6 +1537,10 @@ class GraphWindow(QtWidgets.QMainWindow):
                 text = "{} furos · área aberta {:.0f} % · {}".format(
                     rep["holes"], rep["open_area"] * 100,
                     "fabricável" if good else "{} furos a corrigir (a vermelho)".format(rep["bad"]))
+                if rep.get("modules"):                      # (0.552) each module's own
+                    mods = rep["modules"]
+                    text += "\n{} módulos: área aberta de {:.0f} a {:.0f} %".format(len(mods), min(mods) * 100,
+                                                                                   max(mods) * 100)
                 if rep["problems"]:
                     text += "\n" + "; ".join(rep["problems"][:2])
             elif "furos" in out and not text:

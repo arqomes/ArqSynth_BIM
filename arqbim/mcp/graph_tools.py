@@ -154,6 +154,9 @@ def _report(g, results):
         if "relatorio" in out:
             r = out["relatorio"]
             bridge = "" if r["min_bridge"] is None else " bridge_min={}mm".format(_v(r["min_bridge"] * 1000))
+            if r.get("modules"):                          # (0.552) each module's open area
+                bridge += " modules_open={}..{}%".format(_v(round(min(r["modules"]) * 100, 1)),
+                                                         _v(round(max(r["modules"]) * 100, 1)))
             lines.append("{} {} holes={} bad={} open={}%{}{}".format(
                 nid, "OK" if r["ok"] else "FIX", r["holes"], r["bad"], _v(round(r["open_area"] * 100, 1)), bridge,
                 (" | " + "; ".join(r["problems"])) if r["problems"] else ""))

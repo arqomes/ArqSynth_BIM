@@ -176,6 +176,61 @@ class DrawnHole(unittest.TestCase):
             again.grab().save(out)
 
 
+class CutList(unittest.TestCase):
+    """0.552 — the sheet on a parametric surface in its cut list (CSV) and its summary."""
+
+    def test_sheet_part(self):
+        from arqbim.core import surface_build
+        doc = Document()
+        surface = dome(doc)
+        self.assertFalse(any(p["kind"] == "chapa perfurada" for p in doc.ifc.surface_parts(surface)))
+        operators.apply_to(doc, operators.starter(), surface)
+        parts = doc.ifc.surface_parts(surface)
+        sheet = next(p for p in parts if p["kind"] == "chapa perfurada")
+        got = doc.ifc.surface_perforation(surface)
+        self.assertEqual(sheet["holes"], got["count"])
+        self.assertAlmostEqual(sheet["area"], ps.Surface(doc.ifc.surface_definition(surface)).area(), places=3)
+        self.assertIn("chapa perfurada", doc.ifc.surface_summary(surface)["families"])
+        path = os.path.join(tempfile.mkdtemp(), "pecas.csv")
+        surface_build.write_csv(path, parts, "Cúpula")
+        with open(path, encoding="utf-8-sig") as f:
+            text = f.read()
+        self.assertIn("Chapa perfurada — {} furos".format(got["count"]), text)
+
+
+class PerModule(unittest.TestCase):
+    """0.552 — open area module by module (after Subdividir)."""
+
+    def _graph(self, each):
+        g = Graph()
+        p = g.add_node("painel_plano", {"largura": 3.0, "altura": 1.0, "margem": 0.03})
+        s = g.add_node("subdividir", {"colunas": 3, "linhas": 1, "junta": 0.01})
+        g.connect(p, "painel", s, "painel")
+        q = g.add_node("grelha", {"passo": 0.05})
+        g.connect(s, "painel", q, "painel")
+        grad = g.add_node("gradiente", {"angulo": 0.0})
+        g.connect(s, "painel", grad, "painel")
+        f = g.add_node("perfurar", {"d_min": 0.005, "d_max": 0.03})
+        g.connect(q, "pontos", f, "pontos")
+        g.connect(grad, "campo", f, "campo")
+        o = g.add_node("area_aberta", {"alvo": 20.0, "por_modulo": each})
+        g.connect(f, "furos", o, "furos")
+        c = g.add_node("verificar_fabrico", {"ponte_min": 0.001})
+        g.connect(o, "furos", c, "furos")
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        return out[c]["relatorio"]
+
+    def test_each_module_or_the_whole(self):
+        whole = self._graph(False)
+        self.assertEqual(len(whole["modules"]), 3)
+        self.assertGreater(max(whole["modules"]) - min(whole["modules"]), 0.05)     # (the gradient: unequal)
+        each = self._graph(True)
+        self.assertTrue(all(abs(m - 0.20) < 0.002 for m in each["modules"]), each["modules"])
+        from arqbim.core.graph import nodes_logic
+        self.assertEqual(len(nodes_logic.modules_of({"shape": __import__("shapely").box(0, 0, 1, 1)})), 1)
+
+
 class Panel(unittest.TestCase):
     def test_names_and_take_off(self):
         from arqbim.ui import operators_panel

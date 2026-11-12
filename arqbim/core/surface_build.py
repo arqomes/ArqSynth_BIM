@@ -1157,7 +1157,7 @@ BUILDERS = {"shell": _build_shell, "ribs": _build_ribs, "slats": _build_slats, "
 # ---------------------------------------------------------------- how much
 
 FAMILY_ORDER = ("casca", "nervura", "ripa", "fita", "bordo", "barra", "no", "pilar", "painel", "painel metalico",
-                "painel fibrocimento", "caixilho", "vidro", "aranha", "rotula")
+                "painel fibrocimento", "chapa perfurada", "caixilho", "vidro", "aranha", "rotula")   # (0.552: chapa)
 
 
 def quantities(parts):
