@@ -145,6 +145,8 @@ class ParamSurfaceMixin:
         sheet_w, sheet_h, margin, thickness, operator — as a wall finish's; free «»: none again); its body again."""
         element, _ = self._require(guid, KIND)
         self._set_params(element, self._pattern_changes({k: v for k, v in pattern.items() if k in SHEET_KEYS}))
+        if pattern.get("side") is not None:              # (0.551) +1 the side its normal points to, −1 the other
+            self._set_params(element, {"Lado": 1 if float(pattern["side"]) > 0 else -1})
         self._surface_store(element, self.surface_definition(guid), lang, rework=False)
 
     def _surface_sheet(self, element, surface, rework):
@@ -166,7 +168,8 @@ class ParamSurfaceMixin:
         try:
             verts, tris, count, area = surface_sheet.sheet(
                 surface, free[0], free[1], float(p.get("Margem") or 0.0), size, repeat,
-                float(p.get("Espessura") or 0.003), max_holes=core_surfaces.MAX_HOLES)
+                float(p.get("Espessura") or 0.003), out=1.0 if int(p.get("Lado") or 1) > 0 else -1.0,
+                max_holes=core_surfaces.MAX_HOLES)
         except ValueError as exc:
             raise EditRefused(str(exc)) from None
         face = surface_sheet.flat_face(surface)

@@ -1738,10 +1738,11 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    elemento novo: ~~(a) parede curva — a face desenrolada (comprimento do arco × altura) como superfície, e a chapa
    dobrada sobre o arco~~ (0.548.0: `ifc.curved_face`, `_curved_cladding_body`, `surfaces.split_strips/bend/weld`);
    ~~(b) laje~~ (0.549.0, o dono: «Teto falso» — o próprio teto perfurado, `ifc.set_ceiling_perforation`; com uma
-   laje escolhida, um teto falso 30 cm por baixo, `bim.perforated_ceiling_under`; por fazer: tirar os furos pelo
-   painel, os tetos na tabela dos perfurados, a altura por baixo da laje à escolha) — (b) era: laje — decidir se o painel é um teto falso, um pavimento ou uma pala; ~~(c) Superfície
+   laje escolhida, um teto falso 30 cm por baixo, `bim.perforated_ceiling_under`; ~~tirar os furos pelo
+   painel, os tetos na tabela dos perfurados, a altura por baixo da laje à escolha~~ — 0.551.0) — (b) era: laje — decidir se o painel é um teto falso, um pavimento ou uma pala; ~~(c) Superfície
    paramétrica — a chapa levada à superfície ponto a ponto (furos deformados)~~ (0.550.0: `core/surface_sheet.py`,
-   `ifc.set_surface_perforation`; por fazer: o lado, a chapa na lista de peças, tirá-la pelo painel). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
+   `ifc.set_surface_perforation`; ~~o lado, tirá-la pelo painel~~ — 0.551.0; por fazer: a chapa na lista de peças CSV
+   da superfície). Ordem sugerida: (a), (b), (c); ~~a face de trás espelhada~~ (0.546.0: `nodes_3d.mirrored`, a medida «Face» da
    «Superfície do modelo»).
 4. ~~Editor com a superfície e a **pré-visualização ao vivo** ao lado da tela dos nós; ao mexer numa medida a
    superfície atualiza-se sem «Aplicar».~~ (0.541.0: em alçado; os sólidos em axonometria) ~~A pré-visualização na própria
@@ -1754,8 +1755,9 @@ trabalha sobre **a superfície escolhida no modelo**, que se vê ao vivo enquant
    campos, Remapear (curva, degraus), Aleatório com semente, Ondas, Anéis, Ao longo do contorno, Escolher / Desalinhar
    / Juntar pontos, Escalar / Juntar furos, Levar à área aberta, Corrigir para fabrico.~~ (0.542.0,
    `core/graph/nodes_logic.py`; três operadores novos de origem) ~~Formas de furo (triângulo, losango, ranhura), rodar e alongar por
-   campo~~ (0.545.0: «FurosLivres» com ângulo e alongamento por furo; nós Rodar furos e Alongar furos). Por fazer: o
-   furo de desenho próprio; a área aberta por módulo; um nó de número/matemática para ligar medidas entre nós.
+   campo~~ (0.545.0: «FurosLivres» com ângulo e alongamento por furo; nós Rodar furos e Alongar furos). ~~O furo de
+   desenho próprio~~ (0.551.0: `ui/hole_drawing.py`, forma «desenho:» no `FurosLivres`). Por fazer: a área aberta
+   por módulo; um nó de número/matemática para ligar medidas entre nós.
 7. ~~Gravar como operador: nome, miniatura automática, medidas expostas (as que aparecem no painel lateral para
    ajustar sem abrir o editor).~~ (0.543.0: caixa «à vista» em cada medida; `operators.exposed_of`)
 8. ~~Aplicar a várias superfícies de uma vez~~ (0.541); ~~a parede guarda o operador~~ (0.543.0: propriedade

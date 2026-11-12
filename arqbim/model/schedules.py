@@ -430,9 +430,17 @@ def tiles_rows(doc):
 
 
 def _perforated_finishes(doc):
+    """The perforated wall finishes — (0.551) and the ceilings and parametric surfaces a Visual Graph operator
+    perforated."""
     try:
-        return [e for e in doc.ifc.file.by_type("IfcCovering")
-                if doc.ifc._params(e).get("Acabamento") == "perfurado"]
+        out = [e for e in doc.ifc.file.by_type("IfcCovering")
+               if doc.ifc._params(e).get("Acabamento") == "perfurado"
+               or (doc.ifc._params(e).get("Elemento") == "ceiling" and doc.ifc._params(e).get("FurosLivres"))]
+        from ..ifc.param_surfaces import USAGES
+        for cls in sorted({c for c, _p in USAGES.values()}):
+            out += [e for e in doc.ifc.file.by_type(cls) if doc.ifc._params(e).get("Elemento") == "param_surface"
+                    and doc.ifc._params(e).get("FurosLivres")]
+        return out
     except Exception:                                  # (the IFC still being read)
         return []
 
@@ -442,6 +450,21 @@ def perforated_rows(doc):
     "holes", "open_area" (%), "area" (m², its face)."""
     out = []
     for e in _perforated_finishes(doc):
+        kind = doc.ifc._params(e).get("Elemento")
+        if kind in ("ceiling", "param_surface"):       # (0.551) a ceiling, a surface: itself the host
+            try:
+                if kind == "ceiling":
+                    got, face = doc.ifc.ceiling_perforation(e.GlobalId), doc.ifc.ceiling_face(e.GlobalId)
+                else:
+                    got, face = doc.ifc.surface_perforation(e.GlobalId), doc.ifc.surface_sheet_face(e.GlobalId)
+            except Exception:                          # (not worked out: left out)
+                continue
+            if got is None:
+                continue
+            out.append({"guid": e.GlobalId, "kind": "perforated", "name": e.Name or "", "type": "", "storey": "",
+                        "host": "teto" if kind == "ceiling" else "superfície paramétrica", "panels": 1,
+                        "holes": got["count"], "open_area": 100.0 * got["open_area"], "area": float(face.area)})
+            continue
         try:
             d = doc.ifc.pattern_params(e.GlobalId)
         except Exception:                              # (its wall gone: left out)

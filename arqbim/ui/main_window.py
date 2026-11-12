@@ -1935,6 +1935,7 @@ class MainWindow(QtWidgets.QMainWindow):
         op.on_apply, op.on_new, op.on_edit = self.apply_operator, self.new_operator, self.edit_operator
         op.kept = lambda: len(self.operator_finishes())                 # (0.543) panels that keep their operator
         op.on_update, op.on_edit_wall = self.update_operators, self.edit_wall_operator
+        op.on_remove = self.remove_operators                            # (0.551)
         self.viewport.selection_listeners.append(
             lambda _ids: op.refresh_target() if op.isVisible() else None)
         # (0.479) the ArqSynth Presentation tab: its two columns and its commands over the 3D view, hidden until the
@@ -2089,8 +2090,17 @@ class MainWindow(QtWidgets.QMainWindow):
         """(0.541) "frente" | "trás": the face of the wall turned to the eye in the view (seen from above, or the
         view not telling: the front)."""
         try:
-            if self.doc.ifc.kind_of(wall) in ("ceiling", "slab", "param_surface"):   # (0.549, 0.550) the one face
+            if self.doc.ifc.kind_of(wall) in ("ceiling", "slab"):   # (0.549) the one face
                 return "frente"
+            if self.doc.ifc.kind_of(wall) == "param_surface":        # (0.551) the side its middle turns to the eye
+                from ..core import param_surface as ps
+                on = ps.Surface(self.doc.ifc.surface_definition(wall))
+                j, i = on.rows.shape[0] // 2, on.rows.shape[1] // 2
+                m = self.doc.ifc._placement_si(self.doc.ifc.by_guid(wall))
+                point = (m @ np.append(on.rows[j, i], 1.0))[:3]
+                normal = m[:3, :3] @ ps.grid_normals(on.rows, on.close_u)[j, i]
+                eye = np.asarray(self.viewport.camera_position(), dtype=float)
+                return "frente" if float((eye - point) @ normal) >= 0 else "trás"
             if self.doc.ifc.kind_of(wall) == "curved_wall":  # (0.548) inside its circle: its inner face ("frente")
                 centre, radius, _s, _sw, _h, _t = self.doc.ifc.curved_wall_params(wall)
                 eye = np.asarray(self.viewport.camera_position(), dtype=float)
@@ -2142,18 +2152,47 @@ class MainWindow(QtWidgets.QMainWindow):
         """«Aplicar»: the operator on the face (`side`; None: the one in view) of every wall chosen. Returns the
         finishes made."""
         from ..core.graph import operators
+        from ..model.bim import CEILING_DROP
+        chosen = self.chosen_walls()
+        drop = None
+        if any(self.doc.ifc.kind_of(g) == "slab" for g in chosen):   # (0.551) how far under the slab the ceiling hangs
+            drop = getattr(self, "_ceiling_drop", CEILING_DROP)
+            if not getattr(self, "_quiet_ceiling_drop", False):
+                drop, ok = QtWidgets.QInputDialog.getDouble(
+                    self, "Teto falso perfurado", "Distância do teto à face de baixo da laje (m):", drop, 0.0, 5.0,
+                    2)
+                if not ok:
+                    return []
+            self._ceiling_drop = drop
         made, problems = [], []
-        for wall in self.chosen_walls():
+        for wall in chosen:
             try:
-                made += operators.apply_to(self.doc, slug, wall, side or self.face_in_view(wall), values)
+                made += operators.apply_to(self.doc, slug, wall, side or self.face_in_view(wall), values, drop=drop)
             except ValueError as e:                              # (GraphError too)
                 problems.append(str(e))
         if problems:
             QtWidgets.QMessageBox.warning(self, "Operadores", "Não aplicado:\n" + "\n".join(sorted(set(problems))))
         if made:
             self.statusBar().showMessage("{} painel(éis) perfurado(s) aplicado(s).".format(len(made)), 6000)
-            self.operators_panel.refresh_target()            # (0.548: «Atualizar na parede» lit at once)
+            self.operators_panel.refresh_target()            # (0.548: «Atualizar…» lit at once)
         return made
+
+    def remove_operators(self):
+        """(0.551) «Tirar o aplicado»: the chosen panels' operators taken off (a wall's panel deleted; a ceiling, a
+        surface plain again)."""
+        from ..core.graph import operators
+        done, problems = [], []
+        for guid in self.operator_finishes():
+            try:
+                done.append(operators.remove(self.doc, guid))
+            except ValueError as e:
+                problems.append(str(e))
+        if problems:
+            QtWidgets.QMessageBox.warning(self, "Operadores", "Não tirado:\n" + "\n".join(sorted(set(problems))))
+        if done:
+            self.statusBar().showMessage("{} tirado(s). Ctrl+Z repõe.".format(len(done)), 6000)
+            self.operators_panel.refresh_target()
+        return done
 
     def set_module(self, name):
         """(0.184) A module of the compact bar: its panel up in panel 5 — or, the module in view clicked again,

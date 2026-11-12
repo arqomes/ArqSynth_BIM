@@ -24924,10 +24924,41 @@ def grafico_visual():
         win.viewport.zoom_box((box[0] + (2.0, 1.0, 0.3), box[0] + (4.0, 2.5, 1.2)))
         pump(800)
         shot("grafico_superficie_perto.png")
+    # (0.551) «Tirar o aplicado»: the surface plain again; Ctrl+Z puts its sheet back
+    panel.refresh_target()
+    panel.remove_button.click()
+    pump(400)
+    check("grafico_tirar", win.doc.ifc.surface_perforation(dome) is None and not panel.remove_button.isEnabled())
+    win.doc.undo()
+    pump(200)
     win.viewport.set_selection(set())
     win.doc.undo()
     win.doc.undo()
     pump(200)
+    # (0.551) a hole of one's own drawing (a cross) on a wall, seen close
+    if os.environ.get("ARQBIM_COMPARE"):
+        from arqbim.core import surfaces as _surfaces
+        g = _operators.starter()
+        g.set_param("n4", "forma", "desenho")
+        g.set_param("n4", "desenho", _surfaces.drawn_text([(-1, -0.3), (-0.3, -0.3), (-0.3, -1), (0.3, -1),
+                                                           (0.3, -0.3), (1, -0.3), (1, 0.3), (0.3, 0.3), (0.3, 1),
+                                                           (-0.3, 1), (-0.3, 0.3), (-1, 0.3)]))
+        g.set_param("n4", "rodar", 20.0)
+        g.set_param("n4", "d_min", 0.05)
+        g.set_param("n4", "d_max", 0.08)
+        g.set_param("n2", "passo", 0.1)
+        straight = _bim.add_wall(win.doc, np.array((70.0, 30.0, 0.0)), np.array((76.0, 30.0, 0.0)),
+                                 _catalog.BY_KEY["parede_alv_20"])
+        _operators.apply_to(win.doc, g, straight, "frente")
+        _operators.apply_to(win.doc, g, straight, "trás")             # (whichever face this view looks at)
+        pump(600)
+        box = win.viewport.bounds([win.doc.get(straight)])
+        win.viewport.zoom_box((box[0] + (0.6, -0.1, 1.0), box[0] + (1.3, 0.3, 1.6)))
+        pump(800)
+        shot("grafico_furo_desenhado.png")
+        for _ in range(3):
+            win.doc.undo()
+        pump(200)
     win.set_module("project")
     pump(100)
 

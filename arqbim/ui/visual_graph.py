@@ -207,6 +207,8 @@ def _holes(p, shape, xy, d, s, ox, oy, bad=None, limit=40000, angle=None, ratio=
         angle, ratio = surfaces.extras(d)
     angle, ratio = np.asarray(angle, dtype=float), np.asarray(ratio, dtype=float)
     plain = shape in ("redondo", "quadrado", "hexagonal") and not np.any(angle) and np.allclose(ratio, 1.0)
+    if not plain and not surfaces.valid_shape(shape):
+        return
     rings = None if plain else surfaces.hole_rings(shape, xy[:limit], d[:limit], angle[:limit], ratio[:limit])
     for k, ((x, y), size) in enumerate(zip(xy[:limit], d[:limit])):
         p.setBrush(red if bad is not None and len(bad) > k and bad[k] else dark)
@@ -338,7 +340,8 @@ def model_preview(doc, value, bad=None):
     def world(uv, off):
         if flat is not None and not isinstance(flat[1], float):      # (a parametric surface)
             from ..core import surface_sheet
-            local = surface_sheet.to_surface(flat[1], np.column_stack((uv, np.full(len(uv), off))))
+            local = surface_sheet.to_surface(flat[1], np.column_stack((uv, np.full(len(uv), off))),
+                                             1.0 if front else -1.0)          # (0.551: on the side chosen)
             return (flat[0] @ np.column_stack((local, np.ones(len(uv)))).T).T[:, :3]
         if flat is not None:                             # (seen from under it: a hair under its underside)
             local = np.column_stack((uv, np.full(len(uv), flat[1] - off), np.ones(len(uv))))
@@ -913,6 +916,13 @@ class ParamsPanel(QtWidgets.QWidget):
             saving = node_type == "exportar_dxf"
             button.clicked.connect(lambda _=False, e=edit, s=saving, n=port.name: self._choose_file(e, s, n))
             lay.addWidget(button)
+        elif port.name == "desenho":                     # (0.551) the hole of one's own drawing
+            edit.setReadOnly(True)
+            edit.setPlaceholderText("estrela (por desenhar)")
+            button = QtWidgets.QPushButton("Desenhar…")
+            button.setToolTip("Desenha o contorno do furo (use com «Forma: desenho»).")
+            button.clicked.connect(lambda _=False, e=edit, n=port.name: self._draw_hole(e, n))
+            lay.addWidget(button)
         elif port.name == "parede":
             button = QtWidgets.QPushButton("Parede escolhida")
             button.setToolTip("Escolha uma parede no modelo e carregue aqui.")
@@ -930,6 +940,15 @@ class ParamsPanel(QtWidgets.QWidget):
         if path:
             edit.setText(path)
             self._emit(name, path)
+
+    def _draw_hole(self, edit, name):
+        from . import hole_drawing
+        text = hole_drawing.ask(edit.text(), self)
+        if text:
+            edit.setText(text)
+            self._emit(name, text)
+            if self.nid is not None and getattr(self, "graph_forma", None):
+                self.graph_forma(self.nid)                # (the shape made «desenho» too)
 
     def _wall(self, edit, name):
         guid = self.pick_wall() if self.pick_wall else ""
@@ -1124,8 +1143,8 @@ class GraphWindow(QtWidgets.QMainWindow):
                     where = "{} · em planta de teto".format(getattr(obj, "name", None) or "Teto")
                 elif kind == "slab":
                     where = "{} · teto falso por baixo (planta de teto)".format(getattr(obj, "name", None) or "Laje")
-                elif kind == "param_surface":                         # (0.550)
-                    where = "{} · desenrolada".format(getattr(obj, "name", None) or "Superfície")
+                elif kind == "param_surface":                         # (0.550; 0.551: its side)
+                    where = "{} · desenrolada, lado {}".format(getattr(obj, "name", None) or "Superfície", self.side)
             except Exception:  # (no model behind the window)
                 pass
             where = where or "{} · face {}".format(getattr(obj, "name", None) or "Parede", side)
@@ -1210,6 +1229,7 @@ class GraphWindow(QtWidgets.QMainWindow):
         self.params.exposed = self.exposed
         self.params.expose.connect(self.set_exposed)
         self.params.changed.connect(self.set_param)
+        self.params.graph_forma = self._drawn_shape                     # (0.551)
         self.params.pick_wall = self.chosen_wall
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1305,6 +1325,14 @@ class GraphWindow(QtWidgets.QMainWindow):
         if self._redo:
             self._undo.append((self.graph.to_json(), list(self.exposed)))
             self._restore(self._redo.pop())
+
+    def _drawn_shape(self, nid):
+        """(0.551) A hole just drawn: its node's shape made «desenho» (if it is not), its measures shown again."""
+        node = self.graph.nodes.get(nid)
+        if node is None or "forma" not in node["params"] or node["params"]["forma"] == "desenho":
+            return
+        self.set_param(nid, "forma", "desenho")
+        QtCore.QTimer.singleShot(0, lambda: self.params.show_node(nid, self.graph))
 
     def set_exposed(self, nid, name, on):
         """(0.543) A measure put in (or taken from) the side panel's sight."""

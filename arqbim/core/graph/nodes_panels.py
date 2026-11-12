@@ -270,7 +270,19 @@ def ruido(escala, semente, camadas):
 
 
 # ------------------------------------------------------------------ Operações
-SHAPES = ("redondo", "quadrado", "hexagonal", "triangular", "losango", "ranhura")     # (0.545: the last three)
+SHAPES = ("redondo", "quadrado", "hexagonal", "triangular", "losango", "ranhura",    # (0.545: the last three)
+          "desenho")                                                                   # (0.551: one's own drawing)
+
+
+def _star(n=5, inner=0.45):
+    a = np.radians(90.0 + np.arange(2 * n) * 180.0 / n)
+    r = np.where(np.arange(2 * n) % 2 == 0, 1.0, inner)
+    return np.column_stack((r * np.cos(a), r * np.sin(a)))
+
+
+def default_drawing():
+    from .. import surfaces
+    return surfaces.drawn_text(_star())
 
 
 def hole_extras(furos):
@@ -302,9 +314,15 @@ def take_holes(furos, keep, **changes):
                 Port("inverter", "bool", "Inverter", default=False),
                 _num("sem_furo", "Sem furo abaixo de", MIN_CUT, MIN_CUT, 0.05, 0.0005),
                 _num("alongar", "Alongar", 1.0, 1.0, 12.0, 0.05, "×"),
-                _num("rodar", "Rodar", 0.0, -180.0, 180.0, 1.0, "°")],
-        example="Ranhuras de 8 × 32 mm (alongar 4) a 45°.")
-def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT, alongar=1.0, rodar=0.0):
+                _num("rodar", "Rodar", 0.0, -180.0, 180.0, 1.0, "°"),
+                Port("desenho", "text", "Desenho do furo", default="")],
+        example="Ranhuras de 8 × 32 mm (alongar 4) a 45°; «desenho»: um contorno desenhado por si (Desenhar…).")
+def perfurar(pontos, campo, d_min, d_max, forma, inverter, sem_furo=MIN_CUT, alongar=1.0, rodar=0.0, desenho=""):
+    if forma == "desenho":                       # (0.551) the hole's outline drawn by the user (a star, until then)
+        from .. import surfaces
+        forma = desenho or default_drawing()
+        if surfaces.drawn_ring(forma) is None:
+            raise ValueError("o desenho do furo não é um contorno fechado — desenhe-o outra vez")
     xy = pontos["xy"]
     if campo is None:
         f = np.ones(len(xy))

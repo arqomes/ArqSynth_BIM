@@ -56,8 +56,7 @@ def seen_mirrored(doc, wall, side="frente"):
     if is_curved(doc, wall):
         _frame, _face, _radius, turn = doc.ifc.curved_face(wall, _side(side))
         return turn * _side(side) > 0
-    if doc is not None and doc.ifc.by_guid(wall) is not None and \
-            doc.ifc.kind_of(wall) in ("ceiling", "slab", "param_surface"):
+    if doc is not None and doc.ifc.by_guid(wall) is not None and doc.ifc.kind_of(wall) in ("ceiling", "slab"):
         return False                    # (0.549) a ceiling: as its plan is drawn
     return _side(side) < 0
 

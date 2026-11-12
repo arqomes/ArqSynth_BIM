@@ -94,18 +94,25 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         self.import_button.clicked.connect(self._import)
         self.export_button = QtWidgets.QPushButton("Exportar…")
         self.export_button.clicked.connect(self._export)
-        self.update_button = QtWidgets.QPushButton("Atualizar na parede")
-        self.update_button.setToolTip("Refaz os painéis das paredes escolhidas com o operador que cada um guarda: "
-                                      "depois de mudar a parede (uma janela nova, mais comprida).")
+        # (0.551) named for what they act on — a wall's panel, a ceiling's or a surface's holes: «o aplicado»
+        self.update_button = QtWidgets.QPushButton("Atualizar o aplicado")
+        self.update_button.setToolTip("Refaz os painéis (paredes, tetos, superfícies) escolhidos com o operador que "
+                                      "cada um guarda.")
         self.update_button.clicked.connect(lambda: self.on_update and self.on_update())
-        self.edit_wall_button = QtWidgets.QPushButton("Editar o da parede")
-        self.edit_wall_button.setToolTip("Abre no Gráfico Visual o operador que o painel da parede escolhida guarda; "
-                                         "«Aplicar ao modelo» refaz esse painel.")
+        self.edit_wall_button = QtWidgets.QPushButton("Editar o aplicado")
+        self.edit_wall_button.setToolTip("Abre no Gráfico Visual o operador que o painel escolhido guarda; «Aplicar "
+                                         "ao modelo» refaz esse mesmo painel.")
         self.edit_wall_button.clicked.connect(lambda: self.on_edit_wall and self.on_edit_wall())
+        self.remove_button = QtWidgets.QPushButton("Tirar o aplicado")
+        self.remove_button.setToolTip("Tira os furos dos elementos escolhidos: o painel de uma parede apaga-se; um "
+                                      "teto ou uma superfície ficam lisos como eram. Desfaz-se com Ctrl+Z.")
+        self.remove_button.clicked.connect(lambda: self.on_remove and self.on_remove())
+        self.on_remove = None            # (): the chosen panels' operators taken off (0.551)
         grid = QtWidgets.QGridLayout()
         self.apply_button.setDefault(True)
         grid.addWidget(self.apply_button, 0, 0, 1, 2)
-        for k, b in enumerate((self.new_button, self.edit_button, self.update_button, self.edit_wall_button)):
+        for k, b in enumerate((self.new_button, self.edit_button, self.update_button, self.edit_wall_button,
+                               self.remove_button)):
             grid.addWidget(b, 1 + k // 2, k % 2)
         # (0.543) the library's housekeeping in one «Mais ▾»: the list of operators keeps the room
         self.more_button = QtWidgets.QPushButton("Mais ▾")
@@ -118,10 +125,10 @@ class OperatorsPanel(QtWidgets.QDockWidget):
             b.act = act
         self.more_button.setMenu(more)
         self.more_button.setMinimumWidth(40)
-        grid.addWidget(self.more_button, 3, 0, 1, 2)
+        grid.addWidget(self.more_button, 3, 1)
         for b in (self.apply_button, self.new_button, self.edit_button, self.dup_button, self.rename_button,
                   self.delete_button, self.import_button, self.export_button, self.update_button,
-                  self.edit_wall_button):
+                  self.edit_wall_button, self.remove_button):
             b.setMinimumWidth(40)
             b.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Fixed)
         column.addLayout(grid)
@@ -219,9 +226,10 @@ class OperatorsPanel(QtWidgets.QDockWidget):
         one = self.current() is not None
         kept = self.kept() if self.kept else 0
         if kept:
-            self.target_label.setText(self.target_label.text() + " {} painel(éis) com operador.".format(kept))
+            self.target_label.setText(self.target_label.text() + " {} com operador aplicado.".format(kept))
         self.update_button.setEnabled(kept > 0)
         self.edit_wall_button.setEnabled(kept > 0)
+        self.remove_button.setEnabled(kept > 0)
         self.apply_button.setEnabled(one and n > 0)
         for b in (self.edit_button, self.dup_button, self.rename_button, self.delete_button, self.export_button):
             b.setEnabled(one)

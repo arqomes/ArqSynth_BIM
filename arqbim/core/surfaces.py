@@ -353,6 +353,55 @@ FREE_SHAPES = ("redondo", "quadrado", "hexagonal", "triangular", "losango", "ran
 SLOT_RATIO = 3.0                     # a slot's, where none is given (ratio 1)
 
 
+# (0.551) a hole of the user's own drawing: «desenho:x,y x,y …» — its outline as drawn, made 1 across (its
+# width or its height, the larger) about its middle; turned and stretched as the others
+DRAWN = "desenho"
+_DRAWN = {}
+
+
+def drawn_ring(shape):
+    """(m, 2) the outline of a drawn hole's shape text (size 1, counter-clockwise) — None: not a drawn one, or not
+    a closed outline that holds together."""
+    if not isinstance(shape, str) or not shape.startswith(DRAWN + ":"):
+        return None
+    if shape not in _DRAWN:
+        ring = None
+        try:
+            pts = np.array([[float(c) for c in pair.split(",")] for pair in shape[len(DRAWN) + 1:].split()],
+                           dtype=float).reshape(-1, 2)
+            from shapely.geometry import Polygon
+            from shapely.geometry.polygon import orient
+            if len(pts) >= 3:
+                poly = Polygon(pts)
+                if poly.is_valid and poly.area > 1e-6:
+                    ring = np.asarray(orient(poly, 1.0).exterior.coords)[:-1]
+        except (ValueError, TypeError):
+            ring = None
+        _DRAWN[shape] = ring
+    return _DRAWN[shape]
+
+
+def drawn_text(points):
+    """The shape text of an outline drawn (any size, anywhere): its middle at (0, 0), 1 across. ValueError where it
+    does not make a hole (fewer than three points, its sides crossing)."""
+    from shapely.geometry import Polygon
+    pts = np.asarray(points, dtype=float).reshape(-1, 2)
+    poly = Polygon(pts) if len(pts) >= 3 else None
+    if poly is None or not poly.is_valid or poly.area <= 1e-12:
+        raise ValueError("o desenho do furo tem de ser um contorno fechado, sem lados a cruzar")
+    x0, y0, x1, y1 = poly.bounds
+    size = max(x1 - x0, y1 - y0)
+    pts = (pts - ((x0 + x1) / 2.0, (y0 + y1) / 2.0)) / size
+    text = DRAWN + ":" + " ".join("{:.4f},{:.4f}".format(x, y) for x, y in pts)
+    if drawn_ring(text) is None:
+        raise ValueError("o desenho do furo tem de ser um contorno fechado, sem lados a cruzar")
+    return text
+
+
+def valid_shape(shape):
+    return shape in FREE_SHAPES or drawn_ring(shape) is not None
+
+
 def hole_rows(holes):
     """(n, 5) x, y, d, angle (°), ratio of holes given as rows of 3 (x, y, d: not turned, not stretched) or 5."""
     rows = [list(h) for h in holes]
@@ -367,7 +416,7 @@ def hole_rows(holes):
 def free_text(shape, holes):
     """The text a finish keeps its free holes in: «shape|x,y,d;…», mm, one panel's (its corner at 0, 0). (0.545) A
     hole turned or stretched: «x,y,d,angle,ratio» (° and times)."""
-    if shape not in FREE_SHAPES:
+    if not valid_shape(shape):
         raise ValueError(shape)
     rows = []
     for x, y, d, a, k in hole_rows(holes):
@@ -383,7 +432,7 @@ def free_read(text):
     if not text or "|" not in text:
         return None
     shape, _, rows = text.partition("|")
-    if shape not in FREE_SHAPES:
+    if not valid_shape(shape):
         return None
     try:
         vals = []
@@ -406,6 +455,9 @@ def unit_ring(shape):
     """A hole of size 1's outline ((m, 2), about its centre, counter-clockwise): a circle's diameter, a square's
     side, a hexagon's width between flats, a triangle's side, a lozenge's diagonal — 1. (A slot is not one outline
     stretched: slot_ring.)"""
+    drawn = drawn_ring(shape)
+    if drawn is not None:
+        return drawn
     if shape not in _UNIT:
         n, start, radius = {"redondo": (SEGMENTS, 0.0, 0.5), "quadrado": (4, 45.0, math.sqrt(2.0) / 2.0),
                             "hexagonal": (6, 0.0, 1.0 / math.sqrt(3.0)),
@@ -454,7 +506,7 @@ def hole_rings(shape, centres, sizes, angle=None, ratio=None):
 def hole_reach(shape, d, ratio=None):
     """How far a hole reaches from its centre (its corners; stretched: its far end)."""
     d = np.asarray(d, dtype=float)
-    if ratio is None and shape != "ranhura":
+    if ratio is None and shape in FREE_SHAPES and shape != "ranhura":
         return d / 2.0 * {"redondo": 1.0, "quadrado": math.sqrt(2.0), "hexagonal": 2.0 / math.sqrt(3.0),
                           "triangular": 2.0 / math.sqrt(3.0), "losango": 1.0}[shape]
     k = _ratio(shape, ratio, d.size).reshape(d.shape)
@@ -471,6 +523,10 @@ def hole_area(shape, d, ratio=None):
     k = _ratio(shape, ratio, d.size).reshape(d.shape)
     if shape == "ranhura":
         return d * d * (k - 1.0) + math.pi * d * d / 4.0
+    drawn = drawn_ring(shape)
+    if drawn is not None:                                # (0.551) its outline's own area, at size 1
+        x, y = drawn[:, 0], drawn[:, 1]
+        return 0.5 * abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) * d * d * k
     unit = {"redondo": math.pi / 4.0, "quadrado": 1.0, "hexagonal": math.sqrt(3.0) / 2.0,
             "triangular": math.sqrt(3.0) / 4.0, "losango": 0.5}[shape]
     return unit * d * d * k

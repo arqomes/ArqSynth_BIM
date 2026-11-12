@@ -296,7 +296,7 @@ def set_values(graph, values):
     return graph
 
 
-def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug=""):
+def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug="", drop=None):
     """An operator (its slug, or a graph) applied to a wall's face: its perforated finishes made, each keeping the
     operator (record). `values`: measures changed for this time. Returns their GlobalIds. GraphError where it has
     nothing to apply or a node failed."""
@@ -312,10 +312,11 @@ def apply_to(doc, slug_or_graph, wall, side="frente", values=None, name="", slug
     kind = _kind(doc, wall)
     if kind == "ceiling":                            # (0.549) the ceiling itself perforated
         return [bim.perforate_ceiling(doc, wall, dict(found[0][2], operator=text))]
-    if kind == "param_surface":                      # (0.550) a perforated sheet on the surface
-        return [bim.perforate_surface(doc, wall, dict(found[0][2], operator=text))]
+    if kind == "param_surface":                      # (0.550) a perforated sheet on the surface (0.551: its side)
+        return [bim.perforate_surface(doc, wall, dict(found[0][2], operator=text, side=found[0][1]))]
     if kind == "slab":                               # (0.549) a perforated false ceiling made under the slab
-        return [bim.perforated_ceiling_under(doc, wall, dict(found[0][2], operator=text))]
+        return [bim.perforated_ceiling_under(doc, wall, dict(found[0][2], operator=text),
+                                             bim.CEILING_DROP if drop is None else float(drop))]   # (0.551: drop)
     return [bim.add_cladding(doc, w or wall, s, "perfurado", 0.0, dict(pattern, operator=text))
             for w, s, pattern in found]
 
@@ -330,7 +331,7 @@ def operator_of(doc, guid):
     if p.get("Elemento") not in ("cladding",) + OWN or not p.get("Operador"):
         return None
     if p.get("Elemento") in OWN:                     # (0.549) a perforated ceiling: it is its own surface
-        p = dict(p, Parede=guid, Lado=1)
+        p = dict(p, Parede=guid, Lado=p.get("Lado") or 1)   # (0.551: a surface's side its own)
     try:
         data = json.loads(p["Operador"])
         graph = Graph.from_dict(data["graph"])
@@ -405,6 +406,22 @@ def rework(ifc, covering, face=None):
     return True
 
 
+def remove(doc, guid):
+    """(0.551) An operator taken off what it was applied to: a wall's panel deleted; a ceiling or a surface left
+    plain again (its holes and its operator gone). One undo step. GraphError where it keeps none."""
+    from ...model import bim
+    if operator_of(doc, guid) is None:
+        raise GraphError("isto não tem um operador aplicado")
+    kind = _kind(doc, guid)
+    if kind == "ceiling":
+        bim.perforate_ceiling(doc, guid, {"free": "", "operator": ""})
+    elif kind == "param_surface":
+        bim.perforate_surface(doc, guid, {"free": "", "operator": ""})
+    else:
+        bim.delete(doc, [guid])
+    return guid
+
+
 def update(doc, guid, graph=None, name=None, slug=None):
     """(0.543) A finish's holes worked out again on its wall as it is now (a window more, the wall longer) with
     the operator it keeps — or with `graph`, the editor's. One undo step. GraphError where it keeps none or a node
@@ -418,7 +435,7 @@ def update(doc, guid, graph=None, name=None, slug=None):
     _wall, _side, pattern = found[0]
     text = record(graph, kept["name"] if name is None else name, kept["slug"] if slug is None else slug)
     if _kind(doc, guid) == "param_surface":          # (0.550)
-        bim.perforate_surface(doc, guid, dict(pattern, operator=text))
+        bim.perforate_surface(doc, guid, dict(pattern, operator=text, side=found[0][1]))
     elif kept["wall"] == guid:                       # (0.549) a ceiling
         bim.perforate_ceiling(doc, guid, dict(pattern, operator=text))
     else:

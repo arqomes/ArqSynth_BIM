@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.551.0 — 2026-11-12
+
+**Gráfico Visual: acabamentos — tirar o aplicado, furo desenhado por si, lado da superfície, tetos na tabela.**
+
+- **Furo de desenho próprio**: no nó «Perfurar», «Forma: desenho» e o botão **Desenhar…** abrem uma pequena janela
+  onde se desenha o contorno do furo (clique põe um canto, arrastar muda-o, botão direito tira-o) ou se parte de um
+  pronto (estrela, cruz, gota, folha, seta, hexágono). O furo toma o tamanho, a rotação e o alongamento do nó, e vai
+  para o modelo, para o DXF de corte e para a verificação de fabrico como os outros.
+- **Tirar o aplicado** (painel lateral): tira os furos dos elementos escolhidos — o painel de uma parede apaga-se; um
+  teto ou uma superfície ficam lisos como eram. Ctrl+Z repõe.
+- Os botões passaram a **Atualizar o aplicado** e **Editar o aplicado** (servem paredes, tetos e superfícies).
+- **Teto falso por baixo da laje**: ao aplicar a uma laje, pergunta a distância à face de baixo da laje (30 cm de
+  origem; lembra a última).
+- **Lado da Superfície paramétrica**: «frente» é o lado para onde a superfície olha, «trás» o outro; em «à vista
+  (automático)», o lado virado para a câmara. A chapa fica nesse lado e, vista dele, sem sair espelhada.
+- **Tabelas ▸ Painéis perfurados** lista também os tetos e as superfícies perfurados.
+- **Formato dos dados**: o texto «FurosLivres» aceita a forma «desenho:» com o contorno; os projetos antigos abrem
+  como estavam.
+- Testes: `tests/test_graph_finishing.py`; «grafico_tirar» no gui_smoke.
+
 ## 0.550.0 — 2026-11-12
 
 **Gráfico Visual: a Superfície paramétrica como superfície de trabalho.**
