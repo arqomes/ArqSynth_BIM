@@ -214,6 +214,42 @@ class Oculus(unittest.TestCase):
         self.assertTrue(ps.validate(data))
 
 
+class InTheVisualGraph(unittest.TestCase):
+    """0.558 — the organic nodes of the Visual Graph."""
+
+    def test_form_and_holes_on_it(self):
+        from arqbim.core.graph import Graph
+        g = Graph()
+        p = g.add_node("painel_plano", {"largura": 3.0, "altura": 1.2, "margem": 0.05})
+        f = g.add_node("forma_organica", {"comportamento": "catenaria", "altura": 0.4, "divisoes": 20})
+        g.connect(p, "painel", f, "painel")
+        q = g.add_node("grelha", {"passo": 0.08})
+        g.connect(p, "painel", q, "painel")
+        h = g.add_node("perfurar", {"d_max": 0.04})
+        g.connect(q, "pontos", h, "pontos")
+        s = g.add_node("furos_na_forma")
+        g.connect(h, "furos", s, "furos")
+        g.connect(f, "malha", s, "malha")
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        form = out[f]["malha"]
+        self.assertAlmostEqual(form["verts"][:, 2].max(), 0.4, delta=0.01)
+        sheet = out[s]["malha"]
+        self.assertAlmostEqual(sheet["verts"][:, 2].max(), 0.4 + 0.003, delta=0.02)   # (the sheet on the form)
+        mid = np.hypot(sheet["verts"][:, 0] - 1.5, sheet["verts"][:, 1] - 0.6) < 0.1
+        self.assertTrue(np.all(sheet["verts"][mid, 2] > 0.3))
+        g.set_param(f, "bordos_livres", True)
+        g.set_param(f, "comportamento", "membrana")
+        out = g.evaluate()
+        self.assertEqual(g.errors, {})
+        from PySide6 import QtWidgets
+        QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        from arqbim.ui import visual_graph as vg
+        self.assertIsNotNone(vg.node_thumb("forma_organica"))
+        img = vg.picture("mesh", out[s]["malha"], 300, 200)
+        self.assertFalse(img.isNull())
+
+
 class Window(unittest.TestCase):
     def test_dialog(self):
         from PySide6 import QtWidgets

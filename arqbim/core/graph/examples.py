@@ -21,6 +21,7 @@ SWEEP = {           # (the measure that shows the node best; else its first numb
     "juntar_furos": None, "area_aberta": ("alvo", 5.0, 45.0), "corrigir_fabrico": ("ponte_min", 0.002, 0.04),
     "rodar_furos": ("angulo", 0.0, 180.0), "alongar_furos": ("alongar", 1.0, 4.0),            # (0.545)
     "matriz": ("desvio", 0.0, 1.0),                                                            # (0.553)
+    "forma_organica": ("altura", 0.2, 1.2), "furos_na_forma": None,                            # (0.558)
 }
 # (0.542) nodes shown on a surface with a window (they read its openings); those whose modulator must be linked
 WITH_WINDOW = {"distancia_vaos", "distancia_contorno", "contorno_pontos"}
@@ -47,9 +48,9 @@ def _feed(g, kind, cache):
         g.connect(fld[0], fld[1], n, "campo")
         out = (n, "furos")
     elif kind == "mesh":
-        h = _feed(g, "holes", cache)
-        n = g.add_node("extrudir", {"espessura": 0.02})
-        g.connect(h[0], h[1], n, "furos")
+        p = _feed(g, "panel", cache)                     # (0.558: an organic form — the 3D nodes take any solid)
+        n = g.add_node("forma_organica", {"altura": 0.6, "divisoes": 16})
+        g.connect(p[0], p[1], n, "painel")
         out = (n, "malha")
     else:
         return None

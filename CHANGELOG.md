@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.558.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 7: nós no Gráfico Visual.**
+
+- Família **Orgânico** no menu Shift+A:
+  - **Forma orgânica** — encontra a forma sobre o contorno do painel (catenária, almofada, membrana com mastro,
+    suavizar), com altura, divisões e bordos livres;
+  - **Furos sobre a forma** — a chapa perfurada posta sobre essa forma: cada furo no sítio da planta, a chapa a
+    seguir a curva. Para ver uma pala ou cobertura perfurada antes de a fazer.
+- Os nós 3D que recebem um sólido (Dobrar) aceitam também a forma orgânica.
+- No modelo, o caminho é: Massa e Estudos ▸ Forma orgânica, e depois um operador do painel «Operadores» aplicado a
+  ela (a chapa perfurada segue a superfície, 0.550).
+- Testes: `tests/test_organic_forms.py` (InTheVisualGraph).
+
 ## 0.557.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 4: óculos.**

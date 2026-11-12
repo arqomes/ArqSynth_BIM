@@ -1811,7 +1811,8 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
 6. **Contornos orgânicos**: suavizar um polígono em curva, **crescimento diferencial** (a linha que cresce e se
    dobra sem se cruzar) para lajes, canteiros, bancos e brises — o resultado é um desenho do modelo, que serve de
    contorno aos passos 2 e 5.
-7. **No Gráfico Visual**: nós «Membrana», «Inflar», «Catenária», «Suavizar», «Crescimento» — a forma como base dos
+7. ~~**No Gráfico Visual**~~ (0.558.0: «Forma orgânica» e «Furos sobre a forma», `core/graph/nodes_organic.py`;
+   «Crescimento» fica para o passo 6): nós «Membrana», «Inflar», «Catenária», «Suavizar», «Crescimento» — a forma como base dos
    painéis perfurados, das nervuras e das matrizes.
 8. **Análise e fabrico**: mapa de **curvatura** (onde a forma é plana, cilíndrica ou de dupla curvatura) e de
    **planaridade dos painéis** (o que pode ser vidro plano), **planificar** em faixas para corte (lona, chapa,
