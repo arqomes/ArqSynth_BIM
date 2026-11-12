@@ -29,6 +29,18 @@ def mesh(doc, g):
     return np.asarray(v), np.asarray(f).reshape(-1, 3)
 
 
+def chain(doc, pts, spec):
+    """(0.568) A closed chain of walls through the points, joined at their corners (as drawn one after another)."""
+    walls = []
+    for k, (a, b) in enumerate(zip(pts, pts[1:] + pts[:1])):
+        a3, b3 = np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0))
+        prev = (walls[-1], a3 - np.array((pts[k - 1][0], pts[k - 1][1], 0.0))) if walls else None
+        first = (walls[0], np.array((pts[1][0] - pts[0][0], pts[1][1] - pts[0][1], 0.0))) \
+            if k == len(pts) - 1 else None
+        walls.append(bim.add_wall(doc, a3, b3, spec, prev=prev, first=first))
+    return walls
+
+
 class Element(unittest.TestCase):
     def setUp(self):
         self.doc = Document()
@@ -205,9 +217,7 @@ class ManyAtOnce(unittest.TestCase):
         self.doc = doc = Document()
         spec = catalog.BY_KEY["parede_alv_20"]
         pts = [(0.0, 0.0), (5.0, 0.0), (5.0, 4.0), (0.0, 4.0)]
-        self.walls = []
-        for a, b in zip(pts, pts[1:] + pts[:1]):
-            self.walls.append(bim.add_wall(doc, np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0)), spec))
+        self.walls = chain(doc, pts, spec)
         rooms = bim.identify_rooms(doc) if hasattr(bim, "identify_rooms") else None
         self.rooms = [s["guid"] for s in doc.ifc.spaces()]
 
@@ -263,3 +273,23 @@ class ManyAtOnce(unittest.TestCase):
         n2 = sum(1 for e in self.doc.ifc.file.by_type("IfcCovering"))
         self.assertEqual(n1, n2)
         self.assertTrue(room)
+
+    def test_corners_lapped_and_coping(self):
+        outside = bim.cover_category(self.doc, self.walls, "parede", "pedra_60x40", sides="exterior") \
+            if self.rooms else bim.cover_category(self.doc, self.walls, "parede", "pedra_60x40")
+        lapped = [g for g in outside if any(self.doc.ifc.tiled_extend(g))]
+        self.assertGreaterEqual(len(lapped), 2)
+        tops = bim.cover_category(self.doc, self.walls, "parede", "capeamento_pedra", sides="topo")
+        self.assertEqual(len(tops), 4)
+        v, _f = mesh(self.doc, tops[0])
+        self.assertGreater(v[:, 2].min(), bim.WALL_HEIGHT - 1e-3)
+
+
+class Expansion(unittest.TestCase):
+    def test_expansion_joints(self):
+        from arqbim.core import tiling as tl
+        from shapely.geometry import Polygon as P
+        face = P([(0, 0), (10, 0), (10, 3), (0, 3)])
+        r, _m = tl.lay_all(face, tl.layout({"w": 0.6, "h": 0.6, "joint": 0.0, "exp_every": 4.0, "exp_width": 0.01}))
+        covered = sum(p.area for p in r.pieces)
+        self.assertAlmostEqual(covered, 30.0 - 2 * 3 * 0.01, places=3)

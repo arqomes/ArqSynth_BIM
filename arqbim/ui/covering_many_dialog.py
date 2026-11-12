@@ -40,7 +40,8 @@ class CategoryDialog(QtWidgets.QDialog):
         self.scope.addItem("Do modelo todo", "modelo")
         self.sides = QtWidgets.QComboBox()
         for k, label in (("ambas", "As duas faces"), ("exterior", "Só a face exterior"),
-                         ("interior", "Só a face interior (virada para um ambiente)")):
+                         ("interior", "Só a face interior (virada para um ambiente)"),
+                         ("topo", "O topo (capeamento)")):
             self.sides.addItem(label, k)
         self.slab = QtWidgets.QComboBox()
         for k, label in (("topo", "O topo (pavimento)"), ("baixo", "Por baixo (teto)"), ("bordos", "Os bordos"),

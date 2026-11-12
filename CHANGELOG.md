@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.568.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 6: remates.**
+
+- **Esquinas fechadas**:
+  - a face de uma parede inclui o quadrado da esquina que pertence à parede ligada a ela (antes ficava uma faixa
+    cinzenta à vista);
+  - numa **esquina exterior**, o primeiro revestimento passa por cima da ponta do outro, tanto quanto este é
+    grosso (sobreposto, como o ladrilhador faz). Automático em «Revestir por categoria».
+- **Prolongar no início / no fim** (Propriedades, em mm): um revestimento vai além da sua face, para acertar uma
+  esquina à mão.
+- **Juntas de dilatação** (Propriedades): a cada tantos metros, nos dois sentidos, com a sua largura; cortam as
+  peças a direito, a contar do canto da face.
+- **Peitoris, soleiras e capeamentos** no catálogo (pedra de 3 cm, capeamento de granito, de zinco):
+  - «Revestir por categoria ▸ Paredes ▸ O topo» capeia de uma vez o topo das paredes escolhidas;
+  - um peitoril ou uma soleira põe-se com a ferramenta Revestimento, clicando na face do vão.
+- Testes: `tests/test_tiled_coverings.py` (esquinas sobrepostas numa cadeia de paredes ligadas, capeamento no topo,
+  juntas de dilatação); a captura «revestimento_ambiente» mostra o tijolo a dar a volta à esquina.
+
 ## 0.567.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 4: por categoria, por ambiente e por regras.**

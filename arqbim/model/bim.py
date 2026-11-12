@@ -712,7 +712,20 @@ def cover_category(doc, guids, category, finish, sides="ambas", slab_faces=("top
         raise ValueError("tiling_empty")
     jobs = [(finish, layout, g, p, n, ol, hs, None, None) for g, p, n, ol, hs in faces]
     language = lang()
-    return doc.execute(IfcCommand(t("cmd.tiled_covering"), lambda ifc: _lay_many(ifc, jobs, language))).result
+
+    def action(ifc):
+        made = _lay_many(ifc, jobs, language)
+        ifc.close_corners(made, language)                 # (0.568) outside corners lapped
+        return made
+
+    return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
+
+
+def set_covering_extend(doc, guid, start=None, end=None):
+    """(0.568) A Revestimento prolonged at its start / end. One undo step."""
+    language = lang()
+    _edit(doc, lambda ifc: ifc.set_tiled_extend(guid, start, end, language), [guid], "cmd.tiled_covering")
+    return guid
 
 
 def cover_room(doc, room, floor=None, walls=None, wall_height=2.10, skirting=None, ceiling=None, layout=None):

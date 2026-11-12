@@ -2481,6 +2481,7 @@ class IfcModel(EditMixin, GroupMixin, ServicesMixin, TypicalMixin, SpaceMixin, S
                 pg = ifcopenshell.util.element.get_psets(e).get("ArqSynth_Paginacao", {})
                 q = ifcopenshell.util.element.get_psets(e).get("Qto_CoveringBaseQuantities", {})
                 info["params"] = dict(tp, layout=dict(tp["layout"]), extras=self.tiled_extras(guid),
+                                      extend=self.tiled_extend(guid),
                                       area=float(q.get("NetArea") or 0.0),
                                       gross=float(q.get("GrossArea") or 0.0),       # (m², as written)
                                       pieces=int(pg.get("Pecas") or 0), whole=int(pg.get("PecasInteiras") or 0),

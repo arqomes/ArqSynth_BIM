@@ -74,6 +74,13 @@ FINISHES = {f.key: f for f in (
            joint=0.002, bed=0.004, group="remate"),
     Finish("rodape_pedra", "Rodapé de pedra 10 cm", "Stone skirting 10 cm", "pedra", 0.60, 0.10, 0.015,
            joint=0.002, bed=0.008, group="remate"),
+    # (0.568) sills, thresholds, copings: long stone pieces, the whole depth of the face in one
+    Finish("peitoril_pedra", "Peitoril / soleira de pedra 3 cm", "Stone sill / threshold 3 cm", "calcario", 1.20,
+           0.40, 0.030, joint=0.002, bed=0.010, group="remate", extra={"origin": "canto"}),
+    Finish("capeamento_pedra", "Capeamento de pedra 3 cm", "Stone coping 3 cm", "granito", 1.00, 0.40, 0.030,
+           joint=0.003, bed=0.010, group="remate", extra={"origin": "canto"}),
+    Finish("capeamento_zinco", "Capeamento de zinco", "Zinc coping", "zinco", 2.00, 0.60, 0.002, joint=0.0,
+           bed=0.0, grout="", recess=0.0, group="remate", extra={"origin": "canto"}),
 )}
 GROUPS = {"ceramico": ("Cerâmico", "Ceramic"), "pedra": ("Pedra", "Stone"), "madeira": ("Madeira", "Wood"),
           "tijolo": ("Tijolo", "Brick"), "remate": ("Rodapés e remates", "Skirtings and trims")}

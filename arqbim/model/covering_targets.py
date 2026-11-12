@@ -16,7 +16,7 @@ from ..core import face_region
 from ..core import tiling as tl
 
 CATEGORIES = ("parede", "laje", "pilar", "viga")
-SIDES = ("ambas", "exterior", "interior")
+SIDES = ("ambas", "exterior", "interior", "topo")
 SLAB_FACES = ("topo", "baixo", "bordos")
 IFC_CLASSES = {"parede": ("IfcWall", "IfcWallStandardCase"), "laje": ("IfcSlab",), "pilar": ("IfcColumn",),
                "viga": ("IfcBeam",)}
@@ -39,7 +39,7 @@ def face_along(ifc, guid, normal, cache, at=None):
     n /= np.linalg.norm(n) or 1.0
     mid = (v.min(axis=0) + v.max(axis=0)) / 2.0 if at is None else np.asarray(at, float)
     point = mid + n * (float((v @ n).max()) - float(mid @ n))
-    out = face_region.face_at(v, t, point, n, reach=1e9)
+    out = ifc.tiled_on(guid, point, n, reach=1e9)         # (0.568: a wall's corners with it)
     if out is None:
         return None
     return point, out[0], out[1]
@@ -67,7 +67,7 @@ def by_category(ifc, guids, category, sides="ambas", slab_faces=("topo",)):
         m = ifc._placement_si(e)
         if category == "parede":
             y = m[:3, 1] / (np.linalg.norm(m[:3, 1]) or 1.0)
-            normals = [y, -y]
+            normals = [np.array((0.0, 0.0, 1.0))] if sides == "topo" else [y, -y]   # (0.568: its top: coping)
         elif category == "laje":
             normals = []
             if "topo" in slab_faces:
@@ -85,7 +85,7 @@ def by_category(ifc, guids, category, sides="ambas", slab_faces=("topo",)):
             if found is None:
                 continue
             point, outline, holes = found
-            if category == "parede" and sides != "ambas":
+            if category == "parede" and sides not in ("ambas", "topo"):
                 st = ifc.storey_of(g)
                 if st not in rooms_by_storey:
                     rooms_by_storey[st] = _rooms(ifc, st)
@@ -165,7 +165,7 @@ def room_walls(ifc, info, height):
                 continue
             gap = abs(float((np.asarray(face[0][0]) - a) @ n))
             if gap < 0.02 and (best is None or gap < best[0]):
-                best = (gap, g, face)
+                best = (gap, g, ifc.tiled_on(g, mid, n, reach=max(ln, 0.5)) or face)   # (0.568: with its corners)
         if best is None:
             continue
         _gap, g, (outline, holes, fn) = best

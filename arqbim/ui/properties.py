@@ -709,6 +709,12 @@ class PropertiesPanel(QtWidgets.QDockWidget):
             self._text_editor(t("props.cov_dy"), _len(d["dy"]).replace("~ ", ""), "covering_dy", guid,
                               parse=parse_length)
         self._mm_editor(t("props.cov_min_cut"), d["min_cut"], "covering_min_cut", guid)
+        self._length0_editor(t("props.cov_exp_every"), d.get("exp_every", 0.0), "covering_exp_every", guid)  # (0.568)
+        if d.get("exp_every"):
+            self._mm_editor(t("props.cov_exp_width"), d.get("exp_width", 0.01), "covering_exp_width", guid)
+        e0, e1 = p.get("extend") or (0.0, 0.0)
+        self._mm_editor(t("props.cov_extend_start"), e0, "covering_extend_start", guid)
+        self._mm_editor(t("props.cov_extend_end"), e1, "covering_extend_end", guid)
         mats = [(cat.MATERIALS[k].name_pt if pt else cat.MATERIALS[k].name_en, k) for k in cat.MATERIALS]
         self._choice_combo(t("props.cov_material"), "covering_material", guid, mats, p["material"])
         self._mm_editor(t("props.cov_thickness"), p["thickness"], "covering_thickness", guid)

@@ -61,10 +61,30 @@ class TiledCoveringMixin:
         """(outline, holes, normal) of the flat face of element `host` round `point` (world), facing `normal` — or
         None. `reach`: how far the face may be from the point (following: anywhere in its plane)."""
         from ..core import face_region
-        found = self.triangulate([host]).get(host)
+        e = self.by_guid(host)
+        joined = [host]                                   # (0.568) a wall's: the walls joined to it too — at a
+        for rel in list(getattr(e, "ConnectedTo", None) or ()) + list(getattr(e, "ConnectedFrom", None) or ()):
+            for other in (getattr(rel, "RelatingElement", None), getattr(rel, "RelatedElement", None)):
+                if other is not None and other.GlobalId not in joined and other.is_a("IfcWall"):
+                    joined.append(other.GlobalId)        # corner the square of it in this face's plane is its own
+        shapes = self.triangulate(joined)
+        found = shapes.get(host)
         if found is None:
             return None
-        return face_region.face_at(found[0], found[1], point, normal, reach)
+        verts, tris = [np.asarray(found[0], float)], [np.asarray(found[1])]
+        lo, hi = verts[0].min(axis=0) - 0.6, verts[0].max(axis=0) + 0.6
+        k = len(verts[0])
+        for g in joined[1:]:                              # (only its pieces by the host's end — the corner — not a
+            if g not in shapes:                           # wall in line with it all along)
+                continue
+            v, t = np.asarray(shapes[g][0], float), np.asarray(shapes[g][1])
+            c = v[t].mean(axis=1)
+            near = ((c[:, :2] >= lo[:2]) & (c[:, :2] <= hi[:2])).all(axis=1)
+            if near.any():
+                verts.append(v)
+                tris.append(t[near] + k)
+                k += len(v)
+        return face_region.face_at(np.vstack(verts), np.vstack(tris), point, normal, reach)
 
     def remember_face(self, guid, host, point, normal, stretch=None):
         """(0.564) The face a Revestimento was laid on, kept in its host's own coordinates (so that it follows it):
@@ -163,7 +183,69 @@ class TiledCoveringMixin:
         e, _ = self._require(guid, KIND)
         p = self._params(e)
         face = Polygon(_pts(p.get("Contorno")), [_pts(h) for h in (p.get("Furos") or "").split("|") if h]).buffer(0)
+        e0, e1 = self.tiled_extend(guid)
+        if (e0 or e1) and not face.is_empty:              # (0.568) prolonged at its start / end (over a corner)
+            from shapely.geometry import box as _box
+            c = np.asarray(face.exterior.coords)
+            u0, u1 = c[:, 0].min(), c[:, 0].max()
+            for e_, u, side in ((e0, u0, -1), (e1, u1, 1)):
+                if e_ > 1e-6:
+                    at = c[np.abs(c[:, 0] - u) < 1e-3]
+                    if len(at):
+                        lo, hi = at[:, 1].min(), at[:, 1].max()
+                        face = face.union(_box(min(u, u + side * e_), lo, max(u, u + side * e_), hi)).buffer(0)
         return self._placement_si(e), face
+
+    def tiled_extend(self, guid):
+        """(0.568) How far a Revestimento goes on past its face at its start and its end (m)."""
+        p = self._params(self.by_guid(guid))
+        try:
+            a, b = (float(v) for v in (p.get("Prolongar") or "0;0").split(";"))
+        except ValueError:
+            a = b = 0.0
+        return a, b
+
+    def set_tiled_extend(self, guid, start=None, end=None, lang="pt"):
+        """(0.568) Its start / end prolonged (0–1 m); its body made again."""
+        e, _ = self._require(guid, KIND)
+        a, b = self.tiled_extend(guid)
+        a = a if start is None else float(start)
+        b = b if end is None else float(end)
+        if not (0.0 <= a <= 1.0 and 0.0 <= b <= 1.0):
+            raise EditRefused("tiling_thickness")
+        self._set_params(e, {"Prolongar": "{:.4f};{:.4f}".format(a, b)})
+        self._tiled_body(e, lang)
+
+    def close_corners(self, guids, lang="pt"):
+        """(0.568) Where two of these Revestimentos meet at an outside corner (a building's edge), the first goes on
+        past the corner as far as the other is thick — over its end, as a fitter laps them. Those changed."""
+        info = []
+        for g in guids:
+            e = self.by_guid(g)
+            if e is None:
+                continue
+            m, face = self.tiled_face(g)
+            if face.is_empty:
+                continue
+            p = self.tiled_params(g)
+            x0, y0, x1, y1 = face.bounds
+            info.append((g, m, (x0, x1, (y0 + y1) / 2.0), p["bed"] + p["thickness"]))
+        out = []
+        for i, (g, m, (u0, u1, vm), _t) in enumerate(info):
+            ext = [0.0, 0.0]
+            for k, (u, side) in enumerate(((u0, -1.0), (u1, 1.0))):
+                end = m[:3, 3] + m[:3, 0] * u + m[:3, 1] * vm
+                way = m[:3, 0] * side
+                for j, (g2, m2, _b, t2) in enumerate(info):
+                    if j <= i:
+                        continue
+                    n2 = m2[:3, 2]
+                    if abs(float(n2 @ (end - m2[:3, 3]))) < 0.03 and float(way @ n2) > 0.99:
+                        ext[k] = max(ext[k], t2)
+            if ext[0] or ext[1]:
+                self.set_tiled_extend(g, ext[0] or None, ext[1] or None, lang)
+                out.append(g)
+        return out
 
     def tiled_layout(self, guid):
         """core/tiling's Result of a Revestimento's pieces as they are."""

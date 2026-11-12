@@ -1349,6 +1349,10 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_exp_every": ("Juntas de dilatação a cada (0: nenhuma)", "Expansion joints every (0: none)"),  # (0.568)
+    "props.cov_exp_width": ("Junta de dilatação (largura)", "Expansion joint (width)"),
+    "props.cov_extend_start": ("Prolongar no início", "Prolong at the start"),
+    "props.cov_extend_end": ("Prolongar no fim", "Prolong at the end"),
     "props.cov_extras": ("Faixas, cercadura, mistura", "Bands, border, mix"),                      # (0.566)
     "props.cov_extras_v": ("{z} zona(s), {m} material(is) na mistura, {k} peça(s) à mão",
                            "{z} zone(s), {m} material(s) mixed, {k} piece(s) by hand"),

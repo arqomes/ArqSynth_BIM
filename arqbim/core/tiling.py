@@ -47,7 +47,8 @@ class LayoutError(ValueError):
 
 DEFAULTS = {"pattern": "eito", "w": 0.60, "h": 0.30, "joint": 0.003, "joint_v": None, "bond": 0.5, "angle": 0.0,
             "origin": "canto", "point": (0.0, 0.0), "align": "junta", "dx": 0.0, "dy": 0.0, "min_cut": 0.05,
-            "seed": 1, "lengths": None, "unit": None, "thickness": 0.01}
+            "seed": 1, "lengths": None, "unit": None, "thickness": 0.01,
+            "exp_every": 0.0, "exp_width": 0.010}          # (0.568) expansion joints: every so many m (0: none)
 
 
 def layout(data=None, **kw):
@@ -71,8 +72,10 @@ def layout(data=None, **kw):
         if not 0.0 <= d["joint_v"] < min(d["w"], d["h"]) / 2:
             raise LayoutError("tiling_joint")
     d["bond"] = float(d["bond"]) % 1.0
-    for k in ("angle", "dx", "dy", "min_cut", "thickness"):
+    for k in ("angle", "dx", "dy", "min_cut", "thickness", "exp_every", "exp_width"):
         d[k] = float(d[k])
+    if d["exp_every"] and not (0.5 <= d["exp_every"] <= 100.0 and 0.002 <= d["exp_width"] <= 0.1):
+        raise LayoutError("tiling_joint")
     d["point"] = tuple(float(v) for v in d["point"])[:2]
     d["seed"] = int(d["seed"])
     if d["pattern"] == "livre" and not d.get("unit"):
@@ -587,6 +590,8 @@ def lay_all(face, d, zones=(), mix=None, picks=()):
         run(rest, main, None)
     else:
         run(rest, d, None)
+    if d.get("exp_every"):                            # (0.568) expansion joints across the whole face, straight
+        pieces, mats = _expansion(pieces, mats, face, d["exp_every"], d["exp_width"])
     if mix and mix.get("materials"):
         rng = np.random.default_rng(int(mix.get("seed", 1)))
         choice = list(mix["materials"])
@@ -600,6 +605,40 @@ def lay_all(face, d, zones=(), mix=None, picks=()):
                     mats[i] = m
                     break
     return Result(pieces, kinds, origin or (0.0, 0.0), narrow), mats
+
+
+def expansion_lines(face, every):
+    """The expansion joints' lines: (xs, ys) every `every` m from the face's lower left corner, inside it."""
+    x0, y0, x1, y1 = face.bounds
+    xs = list(np.arange(x0 + every, x1 - 1e-6, every))
+    ys = list(np.arange(y0 + every, y1 - 1e-6, every))
+    return xs, ys
+
+
+def _expansion(pieces, mats, face, every, width):
+    """The pieces with the expansion joints taken out of them (each one they cross cut in two)."""
+    xs, ys = expansion_lines(face, every)
+    if not xs and not ys:
+        return pieces, mats
+    x0, y0, x1, y1 = face.bounds
+    strips = shapely.union_all([box(x - width / 2, y0 - 1, x + width / 2, y1 + 1) for x in xs] +
+                               [box(x0 - 1, y - width / 2, x1 + 1, y + width / 2) for y in ys])
+    shapely.prepare(strips)
+    out, out_m = [], []
+    for p, m in zip(pieces, mats):
+        g = Polygon(p.points, p.holes)
+        if not shapely.intersects(strips, g):
+            out.append(p)
+            out_m.append(m)
+            continue
+        cut = g.difference(strips)
+        for part in getattr(cut, "geoms", [cut]):
+            if part.geom_type == "Polygon" and part.area > MIN_AREA:
+                part = orient(part, 1.0)
+                out.append(Piece([tuple(c) for c in list(part.exterior.coords)[:-1]], False, p.kind, float(part.area),
+                                 [[tuple(c) for c in list(r.coords)[:-1]] for r in part.interiors]))
+                out_m.append(m)
+    return out, out_m
 
 
 # ---------------------------------------------------------------------------------------------------- solids

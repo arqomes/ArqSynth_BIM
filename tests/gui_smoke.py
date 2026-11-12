@@ -24947,11 +24947,17 @@ def revestimentos():
     # (0.567) a room of four walls, «WC»: its finishes by a rule kept in the project; the outside walls by category
     from arqbim.model.document import IfcCommand as _IfcCommand
     bx, by = x0 + 20.0, y0
-    corners = [(bx, by), (bx + 3.0, by), (bx + 3.0, by + 2.4), (bx, by + 2.4)]
-    walls = [_bim.add_wall(win.doc, np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0)),
-                           _catalog.BY_KEY["parede_alv_20"]) for a, b in zip(corners, corners[1:] + corners[:1])]
+    corners = [(bx, by), (bx + 4.0, by), (bx + 4.0, by + 3.0), (bx, by + 3.0)]
+    walls = []                                       # (a chain, joined at its corners — as drawn)
+    for k, (a, b) in enumerate(zip(corners, corners[1:] + corners[:1])):
+        a3, b3 = np.array((a[0], a[1], 0.0)), np.array((b[0], b[1], 0.0))
+        prev = (walls[-1], a3 - np.array((corners[k - 1][0], corners[k - 1][1], 0.0))) if walls else None
+        first = (walls[0], np.array((corners[1][0] - corners[0][0], corners[1][1] - corners[0][1], 0.0))) \
+            if k == len(corners) - 1 else None
+        walls.append(_bim.add_wall(win.doc, a3, b3, _catalog.BY_KEY["parede_alv_20"], prev=prev, first=first))
     pump(400)
-    _bim.identify_rooms(win.doc)
+    found_rooms = _bim.identify_rooms(win.doc)
+    print("identify_rooms:", found_rooms, len(win.doc.ifc.file.by_type("IfcSpace")))
     pump(400)
     rooms = [s["guid"] for s in win.doc.ifc.spaces() if Polygon_contains(s["outline"], (bx + 1.5, by + 1.2))]
     ok_rooms = False
@@ -24972,7 +24978,9 @@ def revestimentos():
         ok_rooms = len(made_rooms or []) == 5 and len(outside or []) >= 4
         check("revestimento_ambientes", ok_rooms, "{} {}".format(len(made_rooms or []), len(outside or [])))
     else:
-        check("revestimento_ambientes", False, "sem ambiente")
+        check("revestimento_ambientes", False, "sem ambiente: {} {}".format(
+            [(s["name"], [tuple(round(c, 1) for c in q) for q in s["outline"]][:4]) for s in win.doc.ifc.spaces()],
+            walls))
 
 
 def Polygon_contains(outline, point):

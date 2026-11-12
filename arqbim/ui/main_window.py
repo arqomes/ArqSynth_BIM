@@ -7683,7 +7683,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             elif action.startswith("covering_"):           # (0.563) a Revestimento: its finish, layout, materials
                 key = action[9:]
-                if key in ("finish", "material", "thickness", "bed", "grout", "recess"):
+                if key in ("extend_start", "extend_end"):        # (0.568) prolonged past a corner
+                    bim.set_covering_extend(doc, guid, **{key[7:]: value})
+                elif key in ("finish", "material", "thickness", "bed", "grout", "recess"):
                     bim.set_covering(doc, guid, **{key: value})
                 else:
                     bim.set_covering(doc, guid, layout={key: value})

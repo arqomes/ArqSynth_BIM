@@ -1849,7 +1849,9 @@ Falta:
    - **editar peça a peça**: trocar material, cor ou tamanho de uma peça, faixas e frisos, cercaduras;
    - variação de cor aleatória (pedra, madeira);
    - uma paginação copiada de uma superfície para outra (as juntas continuam à volta da esquina).
-6. **Remates e acabamentos de bordo:**
+6. ~~**Remates e acabamentos de bordo:**~~ (0.567–0.568: rodapés, peitoris, soleiras, capeamentos, juntas de
+   dilatação, esquinas sobrepostas e prolongar; restos: a peça que dobra para a ombreira, perfil de esquina e
+   meia-esquadria):
    - rodapés;
    - cantoneiras e perfis de esquina;
    - soleiras;
