@@ -24,6 +24,8 @@ import numpy as np
 
 from ..core.mesh import PolyMesh, TriMesh
 from ..i18n import lang
+
+FREEFORM_SOFT_DEG = 40.0    # (0.555) a parametric surface's folds smaller than this: not drawn as edges
 from . import geomcache
 from .sheets import Placed, Sheet
 from . import annotations as notes2d
@@ -1560,6 +1562,12 @@ class Document:
     # ------------------------------------------------------------ used by commands
 
     def _put(self, obj):
+        if getattr(obj, "is_bim", False) and getattr(self, "ifc", None) is not None:
+            try:                                  # (0.555) a free-form surface: drawn smooth, as Revit's
+                if self.ifc.kind_of(obj.id) == "param_surface" and hasattr(obj.mesh, "soften"):
+                    obj.mesh.soften(FREEFORM_SOFT_DEG)
+            except Exception:  # (an element half made: drawn as it is)
+                pass
         self.objects[obj.id] = obj
         self._changed.add(obj.id)
         self._removed.discard(obj.id)

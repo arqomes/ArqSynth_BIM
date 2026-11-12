@@ -45,12 +45,12 @@ def apply(data, action, value):
     elif action == "surface_field":                       # (key, value) of the op's own
         key, v = value
         default = ps.OP_DEFAULTS[op].get(key)
-        if key == "height":                               # (an extrusion's: its direction's z)
+        if key == "height" and op == "extrude":           # (an extrusion's: its direction's z)
             dz = number_or_formula(v)
             direction = list(s.get("direction") or (0.0, 0.0, 3.0))
             direction[2] = dz if dz is not None else direction[2]
             s["direction"] = direction
-        elif key in ("form", "grid"):
+        elif key in ("form", "grid", "behaviour"):        # (0.555: an organic form's behaviour)
             s[key] = str(v)
         elif isinstance(default, bool):
             s[key] = bool(v)

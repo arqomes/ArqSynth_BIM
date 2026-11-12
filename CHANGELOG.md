@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.555.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 2: a ferramenta «Forma orgânica».**
+
+- **Massa e Estudos ▸ Forma orgânica** (ao lado de Superfície paramétrica): abre uma janela que cria a forma
+  **sobre o que estiver escolhido** — um polígono ou outro desenho fechado, a face de uma parede, uma laje, um teto —
+  ou **com medidas** (retângulo, círculo, elipse, polígono regular de N lados, no sítio para onde a vista olha).
+- Escolhe-se o **comportamento** (catenária — casca à compressão; almofada inflada; membrana com mastro ao centro;
+  suavizar), a **altura** (negativa: pendurada, para baixo), a **grelha** (quatro lados, ou anéis até ao centro para
+  formas redondas) e o **uso** (cobertura, pala, estrutura, fachada). Um corte pelo meio mostra a forma enquanto se
+  escolhe.
+- O resultado é uma **Superfície paramétrica** de forma «Forma orgânica (encontrada)»: nas Propriedades mudam-se o
+  comportamento, a altura e a grelha; a Construção (casca, nervuras, gridshell, painéis…), os modificadores, a lista
+  de peças e os operadores do Gráfico Visual servem-lhe como a qualquer outra.
+- Feita sobre um desenho, **segue-o** quando o desenho muda. Numa parede, incha para fora da face (uso: fachada).
+- As superfícies paramétricas desenham-se **lisas na vista 3D** (como no Revit): sem as pequenas dobras entre
+  triângulos, que apareciam como riscos nos cantos; os bordos e as arestas vivas continuam desenhados.
+- Testes: `tests/test_organic_forms.py`; «forma_organica» e «forma_organica_na_fita» no gui_smoke, com capturas.
+
 ## 0.554.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 1: o núcleo da procura de forma** (sem janela ainda).

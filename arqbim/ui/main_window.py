@@ -765,6 +765,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_control_ring = self._action(t("act.control_ring"), lambda: self.control_ring(),
                                              icon=icons.control_ring_icon())                            # (0.395)
         self.act_control_ring.setToolTip(t("tip.control_ring"))
+        self.act_organic_form = self._action(t("act.organic_form"), lambda: self.organic_form(),
+                                             icon=icons.control_ring_icon())                            # (0.555)
+        self.act_organic_form.setToolTip(t("tip.organic_form"))
         self.act_keynote_table = self._action(t("act.keynote_table"), lambda: self.edit_keynote_table())    # (0.248)
         self.act_roof_profile = self._action(t("act.roof_profile"), lambda: self.roof_profile_from_face())   # (0.251)
         self.act_roof_profile.setToolTip(t("tip.roof_profile"))
@@ -6518,6 +6521,61 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if bim.set_keynote_table(self.doc, dialog.entries()):
             self.message(t("info.keynote_table", n=len(dialog.entries())))
+
+    def _organic_source(self):
+        """(0.555) (the thing selected an organic form is made over, in words) — (None, None): nothing that serves."""
+        for guid in sorted(self.viewport.selection, key=str):
+            try:
+                _ring, _uid, what = bim.organic_outline(self.doc, guid)
+            except ValueError:
+                continue
+            obj = self.doc.get(guid)
+            name = getattr(obj, "name", None) or ""
+            words = {"sketch": "o desenho «{}»", "wall": "a face da parede «{}»", "slab": "a laje «{}»",
+                     "ceiling": "o teto «{}»"}[what].format(name)
+            return guid, words
+        return None, None
+
+    def _organic_centre(self):
+        """Where a form made from measures goes: where the view looks at the working level (else 0, 0)."""
+        level = float(self.doc.work_level()) if hasattr(self.doc, "work_level") else 0.0
+        try:
+            position, forward, _up, _fov = self.viewport.camera_state()
+            if forward[2] < -1e-6:
+                k = (level - position[2]) / forward[2]
+                p = position + forward * k
+                return np.array((round(float(p[0]), 2), round(float(p[1]), 2), level))
+        except Exception:  # (no camera yet)
+            pass
+        return np.array((0.0, 0.0, level))
+
+    def organic_form(self, values=None):
+        """(0.555, PLANO.md «Gerador de formas orgânicas») «Forma orgânica»: the window (or `values`, as it gives
+        them) — then a Superfície paramétrica of op «organic» over the thing selected or the measures. Its GlobalId."""
+        source, words = self._organic_source()
+        if values is None:
+            from .organic_dialog import OrganicDialog
+            dlg = OrganicDialog(words, self)
+            if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return None
+            values = dlg.values()
+        try:
+            if values.get("measures") or source is None:
+                ring = bim.organic_shape(values.get("shape", "retangulo"), self._organic_centre(),
+                                         float(values.get("length", 12.0)), float(values.get("width", 8.0)),
+                                         int(values.get("sides", 6)))
+                uid = None
+            else:
+                ring, uid, _what = bim.organic_outline(self.doc, source)
+            guid = bim.add_organic_form(self.doc, ring, values.get("behaviour", "catenaria"),
+                                        float(values.get("height", 3.0)), source_uid=uid, usage=values.get("usage"),
+                                        grid=values.get("grid", "quadras"))
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return None
+        self.viewport.set_selection({guid})
+        self.message("Forma orgânica criada — mude o comportamento e a altura nas Propriedades.")
+        return guid
 
     def control_ring(self, height=1.0, factor=0.75):
         """(0.395, the addon's «Anel de controlo») The highest curve selected copied `height` above it, `factor` its

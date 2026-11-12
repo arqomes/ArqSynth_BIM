@@ -29,7 +29,10 @@ import numpy as np
 from . import surface_expr as expr
 
 SCHEMA = 1
-OPS = ("grid", "loft", "coons", "revolve", "extrude", "sweep", "patch")
+OPS = ("grid", "loft", "coons", "revolve", "extrude", "sweep", "patch",
+       "organic")                     # (0.555) a form found over a closed outline (core/form_finding)
+ORGANIC_KINDS = ("membrana", "almofada", "catenaria", "suavizar")
+POINT_KINDS = ("mastro", "apoio")
 PATCH_FORMS = ("cosseno", "cupula", "abobada", "onda", "plano")
 PATCH_GRIDS = ("quadras", "aneis")
 MODIFIERS = ("displace", "attractor", "taper", "twist", "shear", "wave", "relax", "bend", "trim")
@@ -54,9 +57,13 @@ OP_DEFAULTS = {
     "extrude": {"profile": "", "u": 32, "v": 8, "direction": [0.0, 0.0, 3.0]},
     "sweep": {"path": "", "profile": "", "u": 16, "v": 32},
     "patch": {"boundary": "", "u": 24, "v": 16, "rise": 2.0, "form": "cupula", "grid": "quadras"},
+    # (0.555) «behaviour» the forces (form_finding); «height» how high it rises (negative: hangs); «points» masts
+    # and supports — {"u", "v" (m, in the outline's plane), "h" (m off it), "r" (m, the head's radius), "kind"}
+    "organic": {"boundary": "", "u": 28, "v": 28, "grid": "quadras", "behaviour": "catenaria", "height": 2.0,
+                "points": []},
 }
 OP_CURVES = {"grid": (0, 0), "loft": (2, MAX_CURVES), "coons": (4, 4), "revolve": (1, 1), "extrude": (1, 1),
-             "sweep": (2, 2), "patch": (1, 1)}
+             "sweep": (2, 2), "patch": (1, 1), "organic": (1, 1)}
 
 MODIFIER_TEMPLATES = {
     "displace": {"along": "normal", "amount": "0.3*sin(2*pi*u)"},
@@ -122,7 +129,7 @@ def used_curves(data):
         return [s.get("profile")] if s.get("profile") else []
     if op == "sweep":
         return [x for x in (s.get("path"), s.get("profile")) if x]
-    if op == "patch":
+    if op in ("patch", "organic"):
         return [s.get("boundary")] if s.get("boundary") else []
     return []
 
@@ -214,7 +221,24 @@ def validate(data):
             errors.append("surface.form: um de {}".format(", ".join(PATCH_FORMS)))
         if s.get("grid", "quadras") not in PATCH_GRIDS:
             errors.append("surface.grid: um de {}".format(", ".join(PATCH_GRIDS)))
-    for key in ("angle", "rise"):
+    if op == "organic":                               # (0.555)
+        if s.get("behaviour", "catenaria") not in ORGANIC_KINDS:
+            errors.append("surface.behaviour: um de {}".format(", ".join(ORGANIC_KINDS)))
+        if s.get("grid", "quadras") not in PATCH_GRIDS:
+            errors.append("surface.grid: um de {}".format(", ".join(PATCH_GRIDS)))
+        points = s.get("points") or []
+        if not isinstance(points, list):
+            errors.append("surface.points: tem de ser uma lista")
+            points = []
+        for k, q in enumerate(points):
+            try:
+                ok = isinstance(q, dict) and q.get("kind", "mastro") in POINT_KINDS and all(
+                    math.isfinite(float(q.get(key, 0.0))) for key in ("u", "v", "h", "r"))
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                errors.append("surface.points[{}]: {{u, v, h, r, kind: {}}}".format(k, "|".join(POINT_KINDS)))
+    for key in ("angle", "rise", "height"):
         if key in s:
             try:
                 expr.number(s[key], env, "surface." + key)
@@ -494,6 +518,83 @@ def _four_sides(ring):
     return bottom, right, top, left
 
 
+def outline_frame(points):
+    """(0.555) (origin, x, y, normal) of a closed outline's plane: x level where the plane allows it, the normal up
+    for a lying outline (otherwise the way its points run round)."""
+    from .mesh import polygon_normal
+    p = np.asarray(points, dtype=float)
+    n = polygon_normal(p)
+    if np.linalg.norm(n) < 1e-9:
+        raise SurfaceError("o contorno não tem área (pontos em linha)")
+    if n[2] < -0.7:                                    # (a lying outline: its form rises up)
+        n = -n
+    x = np.cross((0.0, 0.0, 1.0), n)
+    if np.linalg.norm(x) < 1e-6:
+        x = np.array((1.0, 0.0, 0.0))
+    x = x / np.linalg.norm(x)
+    return p.mean(axis=0), x, np.cross(n, x), n
+
+
+def _boundary_grid(pts, nu, nv, grid):
+    """(rows, close_u) of a closed outline (its points as given, any plane of z = 0): four sides (Coons) or rings
+    to its middle."""
+    if grid == "quadras":
+        ring = resample(pts, max(4 * (nu + nv), 64), True)
+        b, r, t, l_ = _four_sides(ring)
+        c0, c2 = resample(b, nu + 1, False), resample(t, nu + 1, False)
+        c3, c1 = resample(l_, nv + 1, False), resample(r, nv + 1, False)
+        u = (np.arange(nu + 1) / nu)[None, :, None]
+        v = (np.arange(nv + 1) / nv)[:, None, None]
+        rows = ((1 - v) * c0[None] + v * c2[None] + (1 - u) * c3[:, None] + u * c1[:, None]
+                - ((1 - u) * (1 - v) * c0[0] + u * (1 - v) * c0[-1] + (1 - u) * v * c2[0] + u * v * c2[-1]))
+        return np.array(rows), False
+    ring = resample(pts, nu, True)
+    c = ring.mean(axis=0)
+    tt = (np.arange(nv + 1) / nv)[:, None, None]
+    return np.array(ring[None] + (c - ring)[None] * tt), True
+
+
+def _rows_organic(data, env, curves):
+    """(0.555) A form found over a closed outline in any plane (a floor's, a wall's face, a polygon drawn): its grid
+    laid in the outline's plane, its edge held, masts and supports held at their heights, the forces of its
+    behaviour (form_finding) — then put back in the element's coordinates."""
+    from . import form_finding as ff
+    s = data["surface"]
+    pts, _closed = _need(curves, s.get("boundary"), closed=True, what="a forma orgânica")
+    nu, nv = int(s.get("u", 28)), int(s.get("v", 28))
+    grid = s.get("grid", "quadras")
+    behaviour = s.get("behaviour", "catenaria")
+    height = expr.number(s.get("height", 2.0), env, "surface.height")
+    o, x, y, n = outline_frame(pts)
+    axes = np.stack((x, y, n))
+    local = (pts - o) @ axes.T
+    local[:, 2] = 0.0
+    rows, close_u = _boundary_grid(local, nu, nv, grid)
+    rows[..., 2] = 0.0
+    fixed = ff.boundary_mask(rows.shape, close_u)
+    if close_u:                                         # (rings: only the outer one is the edge)
+        fixed[-1] = False
+    points = list(s.get("points") or ())
+    if behaviour == "membrana" and not points:          # (a membrane needs something to lift it: a mast in the middle)
+        size = float(np.ptp(local[:, :2], axis=0).max())
+        points = [{"u": float(local[:, 0].mean()), "v": float(local[:, 1].mean()), "h": height,
+                   "r": 0.06 * size, "kind": "mastro"}]
+    flat = ff.plan_grid(rows, fixed, close_u)
+    for q in points:                                    # (each mast's head — or support's foot — held at its height)
+        r = max(float(q.get("r", 0.0)), 1e-9)
+        d = np.hypot(flat[..., 0] - float(q.get("u", 0.0)), flat[..., 1] - float(q.get("v", 0.0)))
+        near = d <= r
+        if not near.any():
+            near = d == d.min()
+        flat[..., 2] = np.where(near, float(q.get("h", 0.0)), flat[..., 2])
+        fixed |= near
+    try:
+        form = ff.find(flat, behaviour, height, fixed, close_u)
+    except ff.FormError as exc:
+        raise SurfaceError(str(exc)) from None
+    return o + form @ axes, close_u
+
+
 def _rows_patch(data, env, curves):
     s = data["surface"]
     pts, _closed = _need(curves, s.get("boundary"), closed=True, what="a tampa")
@@ -546,7 +647,8 @@ def _cosine_cap(rows, outline):
 
 
 ROW_BUILDERS = {"grid": _rows_grid, "loft": _rows_loft, "coons": _rows_coons, "revolve": _rows_revolve,
-                "extrude": _rows_extrude, "sweep": _rows_sweep, "patch": _rows_patch}
+                "extrude": _rows_extrude, "sweep": _rows_sweep, "patch": _rows_patch,
+                "organic": _rows_organic}                        # (0.555)
 
 
 # ---------------------------------------------------------------- the modifiers
@@ -936,7 +1038,7 @@ def from_curves(curves, op=None, name="Superfície", divisions=None, **fields):
         s["profile"] = ids[0]
     elif op == "sweep":
         s["path"], s["profile"] = ids[0], ids[1]
-    elif op == "patch":
+    elif op in ("patch", "organic"):
         s["boundary"] = ids[0]
     if divisions:
         s["u"], s["v"] = int(divisions[0]), int(divisions[1])

@@ -1522,6 +1522,14 @@ class PropertiesPanel(QtWidgets.QDockWidget):
                                     choices=ps.PATCH_FORMS)
                 self._surface_field(t("sfield.grid"), "surface_field:grid", guid, s.get("grid", "quadras"),
                                     choices=ps.PATCH_GRIDS)
+            elif op == "organic":                          # (0.555) a form found
+                self._surface_field(t("sfield.behaviour"), "surface_field:behaviour", guid,
+                                    s.get("behaviour", "catenaria"), choices=ps.ORGANIC_KINDS)
+                self._surface_field(t("sfield.organic_height"), "surface_field:height", guid, s.get("height", 2.0))
+                self._surface_field(t("sfield.grid"), "surface_field:grid", guid, s.get("grid", "quadras"),
+                                    choices=ps.PATCH_GRIDS)
+                if s.get("points"):
+                    self._row(t("sfield.organic_points"), str(len(s["points"])))
             elif op == "revolve":
                 self._surface_field(t("sfield.angle"), "surface_field:angle", guid, s.get("angle", 360.0))
             elif op == "extrude":

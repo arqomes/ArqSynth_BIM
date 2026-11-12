@@ -114,7 +114,7 @@ PANELS = {
     "massing": (("select", ("select",)),
                 ("image", ("import_image", "calibrate_image")),
                 ("draw", ("line", "arc", "rectangle", "circle", ("freehand", "bezier", "work_plane"), "push_pull")),
-                ("freeform", ("param_surface", "control_ring")),     # (0.395) the addon's «Superfícies Paramétricas»
+                ("freeform", ("param_surface", "organic_form", "control_ring")),     # (0.395; 0.555: organic)
                 ("modify", ("move", "copy", "rotate", ("mirror", "align", "scale"), ("array", "offset"))),
                 ("measure", ("tape",)),
                 ("paint", ("paint",)),                                   # (0.391) SketchUp's Paint Bucket

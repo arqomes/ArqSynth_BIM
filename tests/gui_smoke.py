@@ -24802,6 +24802,45 @@ def navigation():
     check("orbitar_a_volta_do_ponto", moved > 0.5 and drift < 2.0, "camara moveu {:.2f} m, ponto desviou {:.2f}px".format(moved, drift))
     shot("9_depois_de_orbitar.png")
     grafico_visual()
+    formas_organicas()
+
+
+def formas_organicas():
+    """(0.555) Massa e Estudos ▸ Forma orgânica: over a polygon drawn, and from measures."""
+    from arqbim.core.mesh import PolyMesh as _PolyMesh
+    from arqbim.model.document import AddObject as _AddObject, SketchObject as _SketchObject
+    import arqbim.ui.ribbon as _ribbon
+    check("forma_organica_na_fita", "organic_form" in repr(getattr(_ribbon, "TABS", None) or vars(_ribbon))
+          and win.act_organic_form.text() == "Forma orgânica")
+    pts = [np.array(p, float) for p in ((100, 0, 0), (112, 0, 0), (115, 7, 0), (106, 11, 0), (98, 6, 0))]
+    poly = _SketchObject("Polígono", np.eye(4), _PolyMesh(pts, [list(range(5))]))
+    win.doc.execute(_AddObject(poly))
+    pump(300)
+    win.viewport.set_selection({poly.id})
+    pump(200)
+    made = win.organic_form({"measures": False, "behaviour": "catenaria", "height": 4.0, "grid": "quadras"})
+    pump(800)
+    ok = made is not None and win.doc.ifc.kind_of(made) == "param_surface"
+    if ok:
+        win.viewport.zoom_extents({made})
+        pump(800)
+        shot("forma_organica_catenaria.png")
+        if os.environ.get("ARQBIM_COMPARE"):
+            win.viewport.zoom_box((np.array((110.0, -1.0, 0.0)), np.array((116.0, 4.0, 2.0))))
+            pump(800)
+            shot("forma_organica_canto.png")
+    from_measures = win.organic_form({"measures": True, "shape": "circulo", "length": 10.0, "behaviour": "membrana",
+                                      "height": 5.0, "grid": "aneis"})
+    pump(800)
+    if from_measures:
+        win.viewport.zoom_extents({from_measures})
+        pump(800)
+        shot("forma_organica_membrana.png")
+    check("forma_organica", ok and from_measures is not None and win.viewport.selection == {from_measures},
+          "{} {}".format(made, from_measures))
+    for _ in range(3):
+        win.doc.undo()
+    pump(200)
 
 
 def grafico_visual():

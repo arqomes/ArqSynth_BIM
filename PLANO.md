@@ -1792,7 +1792,8 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
      Isler); dá abóbadas e gridshells «honestos».
    - **Suavizar** (Laplace/Taubin): arredonda sem encolher; para limpar formas e bordos.
    Testes de física: contorno plano → membrana plana; catenária com a flecha certa; área mínima a descer a cada passo.
-2. **A ferramenta «Forma orgânica»** (Modelagem ▸ Massa e Estudos, e no painel «Operadores»): escolhe-se o polígono,
+2. ~~**A ferramenta «Forma orgânica»**~~ (0.555.0: op «organic» da Superfície paramétrica, `bim.add_organic_form`,
+   `ui/organic_dialog.py`; superfícies paramétricas desenhadas lisas) (Modelagem ▸ Massa e Estudos, e no painel «Operadores»): escolhe-se o polígono,
    a face de parede, a laje/piso/teto — ou escrevem-se as medidas num pequeno quadro (retângulo, círculo, elipse,
    polígono de N lados). Escolhe-se o comportamento e a altura; o resultado aparece logo, como Superfície paramétrica
    com o contorno guardado. Se o contorno for um desenho do modelo, a forma **segue-o** quando muda.

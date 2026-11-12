@@ -130,7 +130,8 @@ def _normals(rows, close_u):
     return grid_normals(rows, close_u)
 
 
-def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, steps=MAX_STEPS, iterations=12):
+def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, steps=MAX_STEPS, iterations=12,
+         plan=True):
     """The grid's form found (rows (nr, nc, 3) as given: the points held at their place — by default its edge).
     `height`: how high the form rises over the plane of its edge (a negative one: how deep it hangs, for a
     membrane between points held at different heights it is not used). Returns the new rows."""
@@ -144,7 +145,7 @@ def find(rows, behaviour="membrana", height=2.0, fixed=None, close_u=False, step
         raise FormError("prenda pelo menos um ponto (o contorno, um apoio)")
     if behaviour == "suavizar":
         return smooth(p, fixed, close_u)
-    flat = plan_grid(p, fixed, close_u)                      # (the plan first: evenly spread)
+    flat = plan_grid(p, fixed, close_u) if plan else p      # (the plan first: evenly spread)
     if behaviour == "membrana":
         # the points held where they are (masts, supports at their heights): the least-tension surface between them
         return relax(flat, fixed, close_u, steps=steps)

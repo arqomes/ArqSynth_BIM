@@ -4517,6 +4517,87 @@ def surface_from_sketches(doc, picks, op=None, usage="estrutura", storey=None, d
     return add_param_surface(doc, data, origin, storey=storey or doc.active_storey, usage=usage)
 
 
+ORGANIC_SHAPES = ("retangulo", "circulo", "elipse", "poligono")
+
+
+def organic_outline(doc, source):
+    """(0.555) (outline — a closed ring of world points —, the sketch's lasting name or None, what it is: "sketch",
+    "wall", "slab", "ceiling") of what an organic form is made over: a sketch's closed line or face (a polygon…), a
+    straight wall's face (its front, less nothing: its doors are not holes yet), a slab's top, a ceiling's
+    underside. ValueError where it gives no outline."""
+    from ..core.graph.sketch_host import sketch_obj
+    sk = sketch_obj(doc, source) or (doc.get(source) if source is not None else None)
+    if sk is not None and not sk.is_bim:
+        from .surface_curves import ensure_uid, sketch_chains
+        closed = [c for c in sketch_chains(sk) if c[1] and len(c[0]) >= 3]
+        if not closed:
+            raise ValueError("surface_no_curves")
+        return np.asarray(closed[0][0], float), ensure_uid(sk), "sketch"
+    kind = doc.ifc.kind_of(source) if isinstance(source, str) and doc.ifc.by_guid(source) is not None else None
+    if kind == "wall":
+        frame = doc.ifc.element_frame(source)
+        ring = [(frame.x0, 0.0), (frame.x0 + frame.length, 0.0), (frame.x0 + frame.length, frame.height),
+                (frame.x0, frame.height)]
+        return np.array([frame.to_world((u, frame.y1, frame.z0 + v)) for u, v in ring]), None, "wall"
+    if kind == "slab":
+        info = doc.ifc.slab_outline(source)
+        if info is None:
+            raise ValueError("surface_no_curves")
+        return np.array([(x, y, info["top"]) for x, y in info["outline"]]), None, "slab"
+    if kind == "ceiling":
+        p = doc.ifc.ceiling_params(source)
+        return np.array([(x, y, p["z"]) for x, y in p["outline"]]), None, "ceiling"
+    raise ValueError("surface_no_curves")
+
+
+def organic_shape(kind, centre, length=10.0, width=6.0, sides=6, segments=48):
+    """(0.555) A closed ring of world points from measures: a rectangle `length` × `width`, a circle (diameter
+    `length`), an ellipse (`length` × `width`) or a regular polygon of `sides` (across: `length`), about `centre`."""
+    c = np.asarray(centre, dtype=float)
+    if kind == "retangulo":
+        pts = [(-length / 2, -width / 2), (length / 2, -width / 2), (length / 2, width / 2), (-length / 2, width / 2)]
+    elif kind in ("circulo", "elipse"):
+        b = length if kind == "circulo" else width
+        a = np.radians(np.arange(segments) * 360.0 / segments)
+        pts = list(zip(length / 2 * np.cos(a), b / 2 * np.sin(a)))
+    elif kind == "poligono":
+        n = max(3, int(sides))
+        a = np.radians(90.0 + np.arange(n) * 360.0 / n)
+        pts = list(zip(length / 2 * np.cos(a), length / 2 * np.sin(a)))
+    else:
+        raise ValueError(kind)
+    return np.array([(c[0] + x, c[1] + y, c[2]) for x, y in pts])
+
+
+def add_organic_form(doc, outline, behaviour="catenaria", height=2.0, source_uid=None, usage=None, storey=None,
+                     cell=None, grid="quadras", name=None):
+    """(0.555) An organic form (a Superfície paramétrica of op «organic») over a closed ring of world points: its
+    shape found by `behaviour` (membrana, almofada, catenaria, suavizar), rising `height`. `source_uid`: the sketch
+    it follows when its line changes. `cell`: the grid's cell (m; by its size if None). One undo step. Its
+    GlobalId."""
+    from ..core import param_surface as ps
+    ring = np.asarray(outline, float).reshape(-1, 3)
+    if len(ring) >= 2 and np.linalg.norm(ring[0] - ring[-1]) < 1e-9:
+        ring = ring[:-1]
+    if len(ring) < 3:
+        raise ValueError("surface_no_curves")
+    origin = ring.min(axis=0)
+    size = float(np.ptp(ring, axis=0).max())
+    step = float(cell) if cell else max(size / 28.0, 0.1)
+    divisions = max(8, min(64, int(round(size / step))))
+    data = ps.from_curves([(ring - origin, True, source_uid)], op="organic",
+                          name=name or t("elem.param_surface"), divisions=(divisions, divisions),
+                          behaviour=behaviour, height=float(height), grid=grid)
+    try:
+        ps.Surface(data)
+    except ps.SurfaceError as exc:
+        raise ValueError(str(exc)) from None
+    if usage is None:
+        n = ps.outline_frame(ring)[3]
+        usage = "fachada" if abs(n[2]) < 0.7 else "cobertura"
+    return add_param_surface(doc, data, origin, storey=storey or doc.active_storey, usage=usage)
+
+
 def control_ring(doc, sid, height=1.0, factor=0.75):
     """(0.395, the addon's «Anel de controlo») A copy of the sketch's curve `height` above it, `factor` its size
     about its middle — the next ring of a stack for a loft. One undo step; the new sketch's id."""

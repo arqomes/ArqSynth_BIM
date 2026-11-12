@@ -422,6 +422,16 @@ class TriMesh:
     def faces(self):
         return self.tris
 
+    soft_deg = None              # (0.555) a free-form surface's: every fold under this many degrees softened
+
+    def soften(self, degrees):
+        """(0.555) A free-form surface (a parametric one): its folds under `degrees` softened as its curved parts —
+        not drawn as edges, as Revit's (its borders and real creases still are)."""
+        if self.soft_deg == degrees:
+            return
+        self.soft_deg = float(degrees)
+        self._edges = self._edge_array = self._edge_faces = self._soft = None
+
     def face_normal(self, fi):
         return self.normals[fi]
 
@@ -480,6 +490,8 @@ class TriMesh:
         """The edges of a curved surface made of flat strips (a pipe, a round column, a curved wall), hidden as
         SketchUp softens them (0.69): a small bend (< SMOOTH_DEG) repeated on at least SMOOTH_FAMILY parallel
         edges of the same mesh — a single low ridge of a roof stays."""
+        if self.soft_deg is not None:            # (0.555) a free-form surface: any small fold
+            return (counts == 2) & (cos <= 1 - 1e-6) & (cos > math.cos(math.radians(self.soft_deg)))
         bent = (counts == 2) & (cos <= 1 - 1e-6) & (cos > math.cos(math.radians(SMOOTH_DEG)))
         if np.count_nonzero(bent) < SMOOTH_FAMILY:
             return np.zeros(len(pairs), dtype=bool)

@@ -1217,6 +1217,21 @@ _STRINGS = {
     "surface.op.extrude": ("Extrusão", "Extrusion"),
     "surface.op.sweep": ("Varrimento", "Sweep"),
     "surface.op.patch": ("Tampa sobre contorno", "Cap over an outline"),
+    "surface.op.organic": ("Forma orgânica (encontrada)", "Organic form (found)"),              # (0.555)
+    "sfield.behaviour": ("Comportamento", "Behaviour"),
+    "sfield.organic_height": ("Altura (negativa: pendurada)", "Height (negative: hanging)"),
+    "sfield.organic_points": ("Mastros e apoios", "Masts and supports"),
+    "schoice.membrana": ("Membrana tensionada", "Tensioned membrane"),
+    "schoice.almofada": ("Almofada inflada", "Inflated cushion"),
+    "schoice.catenaria": ("Catenária (casca)", "Catenary (shell)"),
+    "schoice.suavizar": ("Suavizar", "Smooth"),
+    "act.organic_form": ("Forma orgânica", "Organic form"),
+    "tip.organic_form": ("Encontra uma forma orgânica sobre o que estiver escolhido — um polígono ou outro desenho "
+                         "fechado, a face de uma parede, uma laje, um teto — ou com medidas: membrana, almofada, "
+                         "catenária. Fica uma Superfície paramétrica (editável nas Propriedades).",
+                         "Finds an organic form over what is selected — a polygon or other closed drawing, a wall's "
+                         "face, a slab, a ceiling — or from measures: membrane, cushion, catenary. It is a "
+                         "Parametric surface (edited in the Properties)."),
     "surface.op.grid": ("Fórmula (grelha)", "Formula (grid)"),
     "surface.usage.estrutura": ("Estrutura", "Structure"),
     "surface.usage.cobertura": ("Cobertura", "Roof"),
