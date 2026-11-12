@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.566.0 — 2026-11-12
+
+**Gerador de revestimentos 3D, passo 5 (2.ª parte): faixas, cercadura, mistura e peça a peça.**
+
+- Propriedades do Revestimento ▸ **Faixas, cercadura, mistura ▸ Editar…**:
+  - **faixas** a uma altura (de… até…, a partir do fundo da face): um friso, um rodapé, um lambrim, cada uma com a
+    sua peça, aparelho e material; as juntas do revestimento continuam alinhadas por cima e por baixo da faixa;
+  - **cercadura** à volta da face, com a largura, a peça e o material dela;
+  - **mistura**: cada peça é, ao acaso, um de até três materiais (pedra ou madeira de vários tons, uma parede de
+    duas cores), com uma «variação» para outra distribuição.
+- **Peça a peça**: na Paginação, escolhe-se o **Pincel** na barra (um material) e clica-se numa peça. Ela fica
+  desse material; outro clique devolve-a ao original. Fica guardado pelo lugar da peça.
+- Cada material é uma parte do corpo IFC, com a sua cor.
+- Testes: `tests/test_tiled_coverings.py` (faixa, cercadura, mistura, peça escolhida, recusa, desfazer);
+  «revestimento_faixa_peca» no gui_smoke, com captura.
+
 ## 0.565.0 — 2026-11-12
 
 **Gerador de revestimentos 3D, passo 5 (1.ª parte): a paginação controlada na vista.**

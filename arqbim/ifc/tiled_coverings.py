@@ -135,10 +135,56 @@ class TiledCoveringMixin:
 
     def tiled_layout(self, guid):
         """core/tiling's Result of a Revestimento's pieces as they are."""
+        return self.tiled_pieces(guid)[0]
+
+    def tiled_extras(self, guid):
+        """(0.566) {zones, mix, picks} of a Revestimento: its bands and border, its mix of materials, the pieces
+        given their own one by one."""
+        e, _ = self._require(guid, KIND)
+        p = self._params(e)
+
+        def read(key, empty):
+            try:
+                return json.loads(p.get(key) or "") if p.get(key) else empty
+            except ValueError:
+                return empty
+
+        return {"zones": read("Zonas", []), "mix": read("Mistura", {}), "picks": read("Escolhas", [])}
+
+    def tiled_pieces(self, guid):
+        """(Result, [material per piece]) of a Revestimento — its zones, mix and picked pieces with it (0.566)."""
         _m, face = self.tiled_face(guid)
-        q = orient(face, 1.0)
-        return tl.lay(list(q.exterior.coords)[:-1], self.tiled_params(guid)["layout"],
-                      [list(h.coords)[:-1] for h in q.interiors])
+        x = self.tiled_extras(guid)
+        return tl.lay_all(orient(face, 1.0), self.tiled_params(guid)["layout"], x["zones"], x["mix"],
+                          [tuple(q) for q in x["picks"]])
+
+    def set_tiled_extras(self, guid, zones=None, mix=None, picks=None, lang="pt"):
+        """(0.566) A Revestimento's bands and border, its mix, its pieces picked one by one — each given (a list or
+        {} empty: none) replaces what it had; its body made again."""
+        from . import catalog
+        e, _ = self._require(guid, KIND)
+        changes = {}
+        if zones is not None:
+            try:
+                zones = tl.check_zones(zones)
+            except tl.LayoutError as exc:
+                raise EditRefused(exc.code) from None
+            for z in zones:
+                if z.get("material") and z["material"] not in catalog.MATERIALS:
+                    raise EditRefused("tiling_material")
+            changes["Zonas"] = json.dumps(zones) if zones else ""
+        if mix is not None:
+            mats = [m for m in (mix or {}).get("materials", []) if m]
+            if any(m not in catalog.MATERIALS for m in mats):
+                raise EditRefused("tiling_material")
+            changes["Mistura"] = json.dumps({"materials": mats, "seed": int((mix or {}).get("seed", 1))}) \
+                if mats else ""
+        if picks is not None:
+            if any(len(q) != 3 or q[2] not in catalog.MATERIALS for q in picks):
+                raise EditRefused("tiling_material")
+            changes["Escolhas"] = json.dumps([[float(q[0]), float(q[1]), q[2]] for q in picks]) if picks else ""
+        self._set_params(e, changes)
+        self._tiled_body(e, lang)
 
     def add_tiled_covering(self, frame, face, finish, name, layout=None, source="", lang="pt", storey=None,
                            **changes):
@@ -219,7 +265,7 @@ class TiledCoveringMixin:
         if face.is_empty or face.area < 1e-6:
             raise EditRefused("tiling_empty")
         try:
-            result = self.tiled_layout(e.GlobalId)
+            result, mats = self.tiled_pieces(e.GlobalId)
         except tl.LayoutError as exc:
             raise EditRefused(exc.code) from None
         if len(result.pieces) > MAX_PIECES:
@@ -236,8 +282,12 @@ class TiledCoveringMixin:
             items.append(it)
             styled.append((it, key))
 
-        verts, tris = tl.prisms([(pc.points, pc.holes) for pc in result.pieces], bed, bed + t)
-        item(verts, tris, p["material"])
+        groups = {}                                      # (0.566: each material its own item — bands, mix, picks)
+        for pc, m in zip(result.pieces, mats):
+            groups.setdefault(m or p["material"], []).append((pc.points, pc.holes))
+        for key, polys in groups.items():
+            verts, tris = tl.prisms(polys, bed, bed + t)
+            item(verts, tris, key)
         q = orient(face, 1.0)
         outline = (list(q.exterior.coords)[:-1], [list(h.coords)[:-1] for h in q.interiors])
         if bed > 1e-6:                                   # (the bed under the pieces)

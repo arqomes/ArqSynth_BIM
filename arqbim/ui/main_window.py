@@ -6588,6 +6588,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.message("Forma orgânica criada — mude o comportamento e a altura nas Propriedades.")
         return guid
 
+    def covering_extras(self, guid, values=None):
+        """(0.566) «Faixas, cercadura e mistura» of a Revestimento: its window (or `values` (zones, mix) given)."""
+        x = self.doc.ifc.tiled_extras(guid)
+        if values is None:
+            from .covering_dialog import CoveringExtrasDialog
+            dlg = CoveringExtrasDialog(x["zones"], x["mix"], self)
+            if dlg.exec() != QtWidgets.QDialog.DialogCode.Accepted:
+                return False
+            values = dlg.values()
+        zones, mix = values
+        try:
+            bim.set_covering_extras(self.doc, guid, zones=zones, mix=mix)
+        except ValueError as exc:
+            self.message(t("err.edit_refused", e=refusal(exc)), warning=True)
+            return False
+        self.viewport.set_selection({guid})
+        return True
+
     def organic_line(self, values=None):
         """(0.561) «Contorno orgânico»: the line chosen rounded or grown — a new line of the model, selected. Its id."""
         chosen = [i for i in sorted(list(self.viewport.selection) + list(getattr(self.viewport, "line_selection", {})
@@ -7592,6 +7610,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 bim.set_loose(doc, guid, **{action[6:]: value})
             elif action == "covering_layout":              # (0.565) its start and angle by grips in the view
                 QtCore.QTimer.singleShot(0, lambda: self.tools["covering_layout"].edit(guid))
+                return
+            elif action == "covering_extras":              # (0.566) its bands, border and mix
+                QtCore.QTimer.singleShot(0, lambda: self.covering_extras(guid))
                 return
             elif action.startswith("covering_"):           # (0.563) a Revestimento: its finish, layout, materials
                 key = action[9:]

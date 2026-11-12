@@ -1306,6 +1306,8 @@ _STRINGS = {
     "refuse.tiling_joint": ("a junta deve ser menor que metade da peça", "the joint must be less than half the piece"),
     "refuse.tiling_unit": ("o padrão livre precisa das peças desenhadas", "the free pattern needs its pieces drawn"),
     "refuse.tiling_empty": ("não há superfície para revestir", "there is no surface to cover"),
+    "refuse.tiling_zone": ("a faixa ou a cercadura não é válida (alturas, largura)",                       # (0.566)
+                           "the band or the border is not valid (heights, width)"),
     "refuse.tiling_finish": ("esse revestimento não está no catálogo", "that finish is not in the catalogue"),  # (0.563)
     "refuse.tiling_material": ("esse material não existe", "there is no such material"),
     "refuse.tiling_thickness": ("as espessuras vão de 0 a 50 cm", "thicknesses go from 0 to 50 cm"),
@@ -1333,6 +1335,13 @@ _STRINGS = {
                            "{n} finish(es) made on the drawings chosen."),
     "ctx.covering_finish": ("Revestimento", "Finish"),
     "tool.covering_layout": ("Paginação", "Layout"),                                                # (0.565)
+    "props.cov_extras": ("Faixas, cercadura, mistura", "Bands, border, mix"),                      # (0.566)
+    "props.cov_extras_v": ("{z} zona(s), {m} material(is) na mistura, {k} peça(s) à mão",
+                           "{z} zone(s), {m} material(s) mixed, {k} piece(s) by hand"),
+    "act.covering_extras": ("Editar…", "Edit…"),
+    "ctx.covering_brush": ("Pincel (peça a peça)", "Brush (piece by piece)"),
+    "covering.no_brush": ("— (só pegas)", "— (grips only)"),
+    "tip.covering_pick": ("Dar {m} a esta peça (clique outra vez: tirar)", "Give this piece {m} (click again: undo)"),
     "props.cov_in_view": ("Paginação na vista", "Layout in the view"),
     "act.covering_layout": ("Mover origem / rodar…", "Move start / turn…"),
     "tip.covering_layout": ("Na vista: arraste o quadrado para levar a origem das juntas (encaixa nos cantos e nos "

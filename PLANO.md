@@ -1840,7 +1840,8 @@ Falta:
    - **por ambiente**: o pavimento, as paredes até uma altura, o rodapé, o teto, num clique;
    - uma regra guardada («todas as instalações sanitárias: azulejo 30×60 até 2,10 m»), reaplicada quando o modelo
      muda.
-5. **Controlo na tela:**
+5. ~~**Controlo na tela:**~~ (0.565–0.566: pré-visualização, Paginação com pegas e encaixes, faixas, cercadura,
+   mistura, pincel peça a peça; a paginação que continua à volta da esquina fica com o passo 4)
    - pré-visualização ao vivo enquanto se escolhe;
    - pegas para **mover a origem** e **rodar**;
    - pôr uma junta num eixo ou no meio de um vão (alinhar com o Alinhar do Revit);

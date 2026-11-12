@@ -35,6 +35,40 @@ class CoveringLayoutTool(Tool):
         self.guid = guid
         self.host.set_tool(self.name)
 
+    brush = ""                   # (0.566) the material a click gives a piece ("" — the grips only)
+
+    def options(self):
+        from ..i18n import lang
+        from ..ifc import catalog
+        from .base import Option
+        pt = lang() == "pt"
+        mats = sorted(((m.name_pt if pt else m.name_en), k) for k, m in catalog.MATERIALS.items())
+        return [Option("brush", t("ctx.covering_brush"), "choice", self.brush,
+                       (("", t("covering.no_brush")),) + tuple((k, n) for n, k in mats))]
+
+    def set_option(self, key, value):
+        from ..ifc import catalog
+        if key == "brush" and (value == "" or value in catalog.MATERIALS):
+            self.brush = value
+
+    def _paint_piece(self, uv):
+        """(0.566) The piece under `uv` given the brush's material — or, given one by hand before, its own back."""
+        from shapely.geometry import Point, Polygon
+        result, _mats = self.doc.ifc.tiled_pieces(self.guid)
+        pt = Point(*uv)
+        piece = next((Polygon(p.points, p.holes) for p in result.pieces if Polygon(p.points, p.holes).covers(pt)),
+                     None)
+        if piece is None:
+            return False
+        picks = [list(q) for q in self.doc.ifc.tiled_extras(self.guid)["picks"]]
+        kept = [q for q in picks if not piece.covers(Point(q[0], q[1]))]
+        if len(kept) == len(picks):
+            c = piece.representative_point()
+            kept.append([c.x, c.y, self.brush])
+        bim.set_covering_extras(self.doc, self.guid, picks=kept)
+        self._load()
+        return True
+
     def activate(self):
         super().activate()
         self._load()
@@ -152,6 +186,9 @@ class CoveringLayoutTool(Tool):
             return
         grip = self.viewport.grip_at(x, y)
         if grip is None:
+            uv = self._plane(x, y)
+            if self.brush and uv is not None:          # (0.566) a piece clicked: the brush's material
+                self._paint_piece(uv)
             return
         self._drag = "origin" if grip[0] == "end" else "angle"
 
@@ -164,6 +201,9 @@ class CoveringLayoutTool(Tool):
         if self._drag is None:
             grip = self.viewport.grip_at(x, y)
             tip = "" if grip is None else t("tip.covering_move" if grip[0] == "end" else "tip.covering_turn")
+            if grip is None and self.brush:
+                from ..tools.paint import material_name
+                tip = t("tip.covering_pick", m=material_name(self.brush))
             self.viewport.show_tip(tip, self._world(uv) if tip else None)
             return
         if self._drag == "origin":

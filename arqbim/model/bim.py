@@ -681,6 +681,13 @@ def cover_drawings(doc, sketches, finish, layout=None, **changes):
     return doc.execute(IfcCommand(t("cmd.tiled_covering"), action)).result
 
 
+def set_covering_extras(doc, guid, zones=None, mix=None, picks=None):
+    """(0.566) A Revestimento's bands and border, mix of materials, pieces given their own. One undo step."""
+    language = lang()
+    _edit(doc, lambda ifc: ifc.set_tiled_extras(guid, zones, mix, picks, language), [guid], "cmd.tiled_covering")
+    return guid
+
+
 def set_covering(doc, guid, **changes):
     """(0.563) A Revestimento changed (ifc.set_tiled_covering: layout, finish, material, thickness, bed, grout…).
     One undo step."""

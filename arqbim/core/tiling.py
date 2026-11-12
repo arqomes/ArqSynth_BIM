@@ -503,6 +503,105 @@ def lay(outline, d=None, holes=()):
     return best[1]
 
 
+# ---------------------------------------------------------------------------------------------------- zones
+
+ZONE_KINDS = ("faixa", "cercadura")
+
+
+def check_zones(zones):
+    """The zones (bands across the face, a border round it) checked: [{kind, y0, y1 | width, material, w, h,
+    pattern, joint}]."""
+    out = []
+    for z in zones or ():
+        z = dict(z)
+        if z.get("kind") not in ZONE_KINDS:
+            raise LayoutError("tiling_zone")
+        if z["kind"] == "faixa":
+            z["y0"], z["y1"] = sorted((float(z.get("y0", 0.0)), float(z.get("y1", 0.1))))
+            if z["y1"] - z["y0"] < 0.005:
+                raise LayoutError("tiling_zone")
+        else:
+            z["width"] = float(z.get("width", 0.1))
+            if not 0.005 <= z["width"] <= 5.0:
+                raise LayoutError("tiling_zone")
+        out.append(z)
+    return out
+
+
+def zone_areas(face, zones):
+    """[(zone, its polygon on the face)] — a band: the face between its two heights (the plane's y); a border: the
+    face's rim as wide as it — and what is left for the main layout."""
+    rest = face
+    out = []
+    for z in zones:
+        if z["kind"] == "cercadura":
+            area = face.difference(face.buffer(-z["width"], join_style="mitre"))
+        else:
+            x0, _y0, x1, _y1 = face.bounds
+            area = face.intersection(box(x0 - 1.0, z["y0"], x1 + 1.0, z["y1"]))
+        area = area.intersection(rest)
+        rest = rest.difference(area)
+        out.append((z, area))
+    return out, rest
+
+
+def lay_all(face, d, zones=(), mix=None, picks=()):
+    """Every piece of a finish over `face` (shapely): the zones' first (each its own layout — its piece, bond and
+    material over the main one's), then the main layout on what is left. Each piece's material: a zone's own, a
+    piece picked one by one (`picks` [(x, y, material)]: the piece under that point), else the mix (`mix`
+    {"materials": [...], "seed"}: one of them at random each), else None (the finish's). Returns (Result of them all,
+    [material or None per piece])."""
+    zones = check_zones(zones)
+    areas, rest = zone_areas(face, zones)
+    pieces, mats, kinds = [], [], dict(kinds_of(d))
+    origin, narrow = None, math.inf
+
+    def run(poly, dd, material):
+        nonlocal origin, narrow
+        for part in getattr(poly, "geoms", [poly]):
+            if part.geom_type != "Polygon" or part.area < MIN_AREA:
+                continue
+            q = orient(part, 1.0)
+            r = lay(list(q.exterior.coords)[:-1], dd, [list(h.coords)[:-1] for h in q.interiors])
+            pieces.extend(r.pieces)
+            mats.extend([material] * len(r.pieces))
+            narrow = min(narrow, r.narrowest)
+            if origin is None and material is None:
+                origin = r.origin
+
+    for k, (z, area) in enumerate(areas):
+        dd = dict(d, **{key: z[key] for key in ("w", "h", "pattern", "joint", "angle") if key in z})
+        if z["kind"] == "faixa":
+            dd.update(origin="ponto", point=(face.bounds[0], z["y0"]), align="junta", dx=0.0, dy=0.0)
+        letter = "F{}".format(k + 1)
+        before = len(pieces)
+        run(area, dd, z.get("material"))
+        for p in pieces[before:]:
+            p.kind = letter
+        kinds[letter] = (dd["w"], dd["h"])
+    if areas and not rest.is_empty:                  # (the main layout one over the whole face: its joints go on
+        q = orient(face, 1.0)                        # across a band — its start found on the whole face)
+        whole = lay(list(q.exterior.coords)[:-1], d, [list(h.coords)[:-1] for h in q.interiors])
+        main = dict(d, origin="ponto", point=whole.origin, align="junta", dx=0.0, dy=0.0)
+        origin = whole.origin
+        run(rest, main, None)
+    else:
+        run(rest, d, None)
+    if mix and mix.get("materials"):
+        rng = np.random.default_rng(int(mix.get("seed", 1)))
+        choice = list(mix["materials"])
+        mats = [m if m is not None else str(rng.choice(choice)) for m in mats]
+    if picks:
+        polys = [Polygon(p.points, p.holes) for p in pieces]
+        for x, y, m in picks:
+            pt = shapely.Point(float(x), float(y))
+            for i, g in enumerate(polys):
+                if g.covers(pt):
+                    mats[i] = m
+                    break
+    return Result(pieces, kinds, origin or (0.0, 0.0), narrow), mats
+
+
 # ---------------------------------------------------------------------------------------------------- solids
 
 def _cap(points, holes):

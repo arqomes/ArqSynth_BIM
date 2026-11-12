@@ -24909,6 +24909,32 @@ def revestimentos():
         ok_layout = abs(got[0] - hole[0]) < 1e-3 and abs(got[1] - hole[1]) < 1e-3
         check("revestimento_paginacao", ok_layout, "{} → {}".format(hole, got))
         win.doc.undo()
+        # (0.566) a frieze at 1,20 m and a mix of two tones; then a piece clicked with the brush
+        ok_extras = win.covering_extras(made_tool, ([{"kind": "faixa", "y0": 1.2, "y1": 1.3, "material": "marmore",
+                                                      "w": 0.3, "h": 0.1, "pattern": "eito"}],
+                                                    {"materials": ["azulejo", "porcelanico"], "seed": 2}))
+        pump(600)
+        _r, mats = win.doc.ifc.tiled_pieces(made_tool)
+        win.tools["covering_layout"].edit(made_tool)
+        pump(400)
+        lt = win.tool
+        lt.set_option("brush", "tinta_vermelha")
+        piece = next(p for p in _r.pieces if p.whole and p.kind == "A")
+        from shapely.geometry import Polygon as _Poly
+        c = _Poly(piece.points).representative_point()
+        sx, sy = vp.project(lt._world((c.x, c.y)))
+        lt.pointer_down(sx, sy, 1, ())
+        pump(600)
+        _r2, mats2 = win.doc.ifc.tiled_pieces(made_tool)
+        win.set_tool("select")
+        win.viewport.set_selection(set())
+        win.viewport.zoom_extents({wall})
+        pump(800)
+        shot("revestimento_faixa_mistura.png")
+        check("revestimento_faixa_peca", ok_extras and "marmore" in mats and "porcelanico" in mats
+              and mats2.count("tinta_vermelha") == 1, "{} {}".format(ok_extras, mats2.count("tinta_vermelha")))
+        win.doc.undo()
+        win.doc.undo()
     win.set_tool("select")
     win.viewport.set_selection(set())
     win.viewport.zoom_extents({wall})

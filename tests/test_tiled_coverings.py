@@ -1,4 +1,4 @@
-﻿"""0.563 — Gerador de revestimentos, step 2: the Revestimento element in IFC (ifc/tiled_coverings.py)."""
+"""0.563 — Gerador de revestimentos, step 2: the Revestimento element in IFC (ifc/tiled_coverings.py)."""
 
 import os
 import sys
@@ -13,6 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["ARQSYNTH_HOME"] = tempfile.mkdtemp(prefix="arqsynth_tiled_")
 
 import ifcopenshell.util.element  # noqa: E402
+from shapely.geometry import Polygon  # noqa: E402
 
 from arqbim.core.mesh import TriMesh  # noqa: E402
 from arqbim.model import bim  # noqa: E402
@@ -156,3 +157,41 @@ class OnTheModel(unittest.TestCase):
         self.assertEqual(ifcopenshell.util.element.get_predefined_type(e), "FLOORING")
         v, _f = mesh(doc, made[0])
         self.assertGreater(v[:, 2].max(), 0.01)
+
+
+class PieceByPiece(unittest.TestCase):
+    """(0.566) Bands, a border, a mix of materials, pieces picked one by one."""
+
+    def test_band_border_mix_picks(self):
+        from arqbim.core import tiling as tl
+        doc = Document()
+        g = bim.add_covering(doc, WALL, "azulejo_20x20")
+        bim.set_covering_extras(doc, g, zones=[{"kind": "faixa", "y0": 1.2, "y1": 1.25, "material": "marmore",
+                                                "w": 0.25, "h": 0.05},
+                                               {"kind": "cercadura", "width": 0.1, "material": "granito",
+                                                "w": 0.3, "h": 0.1}])
+        result, mats = doc.ifc.tiled_pieces(g)
+        self.assertIn("marmore", mats)
+        self.assertIn("granito", mats)
+        band = [p for p, m in zip(result.pieces, mats) if m == "marmore"]
+        ys = [q[1] for p in band for q in p.points]
+        self.assertGreaterEqual(min(ys), 1.2 - 1e-6)
+        self.assertLessEqual(max(ys), 1.25 + 1e-6)
+        e = doc.ifc.by_guid(g)
+        self.assertGreaterEqual(len(e.Representation.Representations[0].Items), 4)   # (tile, marble, granite, …)
+        bim.set_covering_extras(doc, g, zones=[], mix={"materials": ["azulejo", "tinta_azul"], "seed": 3})
+        _r, mats = doc.ifc.tiled_pieces(g)
+        self.assertEqual(set(mats), {"azulejo", "tinta_azul"})
+        main = next(p for p in _r.pieces if p.whole)
+        c = Polygon(main.points).centroid
+        bim.set_covering_extras(doc, g, mix={}, picks=[(c.x, c.y, "tinta_vermelha")])
+        _r, mats = doc.ifc.tiled_pieces(g)
+        self.assertEqual(mats.count("tinta_vermelha"), 1)
+        self.assertEqual(mats.count(None), len(mats) - 1)
+        with self.assertRaises(Exception):
+            bim.set_covering_extras(doc, g, zones=[{"kind": "faixa", "y0": 1.0, "y1": 1.0}])
+        doc.undo()
+        doc.undo()
+        _r, mats = doc.ifc.tiled_pieces(g)
+        self.assertIn("marmore", mats)
+        self.assertTrue(tl)
