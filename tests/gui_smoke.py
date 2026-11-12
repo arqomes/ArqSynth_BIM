@@ -24865,7 +24865,29 @@ def formas_organicas():
               "{} → {}".format([round(q["h"], 2) for q in points], [round(q["h"], 2) for q in after]))
         win.set_tool("select")
         pump(200)
-    for _ in range(5):
+    # (0.557) an oculus in the catenary shell over the polygon
+    if made:
+        win.viewport.set_selection({made})
+        pump(200)
+        win.set_tool("organic_points")
+        pump(300)
+        tool = win.tool
+        tool.set_option("kind", "oculo")
+        tool.set_option("radius", 1.2)
+        tool.set_option("height", 4.2)
+        c = tool._world(0.0, 0.0, 0.0)
+        sx, sy = win.viewport.project(c)
+        tool.pointer_down(sx, sy, 1, ())
+        pump(900)
+        holes = win.doc.ifc.surface_definition(made)["surface"].get("holes") or []
+        win.set_tool("select")
+        win.viewport.set_selection(set())
+        win.viewport.zoom_extents({made})
+        pump(800)
+        shot("forma_organica_oculo.png")
+        check("forma_organica_oculo", len(holes) == 1 and 3.0 < holes[0]["h"] < 4.05, str(holes))  # (where the
+        #                                                                                    shell was: near its top)
+    for _ in range(6):
         win.doc.undo()
     pump(200)
 

@@ -15,9 +15,10 @@ from ..render.viewport import PREVIEW
 from .base import LEFT, RIGHT, Option, Tool
 from .bim_draw import length_option
 
-KINDS = ("mastro", "apoio", "cumeeira", "vale")
+KINDS = ("mastro", "apoio", "cumeeira", "vale", "oculo")
 KIND_TEXT = {"mastro": "Mastro (ponto alto)", "apoio": "Apoio (ponto baixo)", "cumeeira": "Cumeeira (2 cliques)",
-             "vale": "Vale (2 cliques)"}
+             "vale": "Vale (2 cliques)", "oculo": "Óculo (abertura com anel)"}       # (0.557: the oculus)
+PLACES = {"point": "points", "line": "lines", "hole": "holes"}
 MAST = (0.95, 0.45, 0.10, 1.0)          # the masts and ridges (orange), the supports and valleys (blue)
 SUPPORT = (0.15, 0.45, 0.90, 1.0)
 GRAB_PX = 14
@@ -138,6 +139,16 @@ class OrganicPointsTool(Tool):
             return None
         return float((b * e - c * d) / den)
 
+    def _form_height(self, uv):
+        """How high the form is now over the point (u, v) of its outline's plane (the nearest of its grid's points)."""
+        try:
+            _m, o, x, y, n = self._frame()
+            rows = ps.Surface(self.data).rows.reshape(-1, 3) - o
+            d = np.hypot(rows @ x - uv[0], rows @ y - uv[1])
+            return float(rows[int(np.argmin(d))] @ n)
+        except ValueError:
+            return float(self.height)
+
     def _heads(self):
         """[(("point" | "line", index, end), world point of its head)]."""
         s = self.data["surface"]
@@ -147,6 +158,8 @@ class OrganicPointsTool(Tool):
         for k, q in enumerate(s.get("lines") or ()):
             for end in ("a", "b"):
                 out.append((("line", k, end), self._world(q[end][0], q[end][1], q["h"])))
+        for k, q in enumerate(s.get("holes") or ()):          # (0.557) an oculus: grabbed by its middle
+            out.append((("hole", k, None), self._world(q["u"], q["v"], q["h"])))
         return out
 
     def _head_at(self, sx, sy):
@@ -171,6 +184,12 @@ class OrganicPointsTool(Tool):
             col = MAST if q.get("kind", "mastro") == "mastro" else SUPPORT
             segs += [tuple(self._world(q["u"], q["v"], 0.0)), tuple(self._world(q["u"], q["v"], q["h"]))]
             colors += [col, col]
+        for q in s.get("holes") or ():                         # (0.557) an oculus's ring
+            ring = [tuple(self._world(q["u"] + q["r"] * np.cos(a), q["v"] + q["r"] * np.sin(a), q["h"]))
+                    for a in np.linspace(0, 2 * np.pi, 25)]
+            for a, b in zip(ring, ring[1:]):
+                segs += [a, b]
+                colors += [MAST, MAST]
         for q in s.get("lines") or ():
             col = MAST if q.get("kind") == "cumeeira" else SUPPORT
             segs += [tuple(self._world(q["a"][0], q["a"][1], q["h"])), tuple(self._world(q["b"][0], q["b"][1], q["h"]))]
@@ -202,8 +221,8 @@ class OrganicPointsTool(Tool):
         if self.drag is not None:
             kind, k, end = self.drag
             s = self.data["surface"]
-            q = s["points"][k] if kind == "point" else s["lines"][k]
-            u, v = (q["u"], q["v"]) if kind == "point" else q[end]
+            q = s[PLACES[kind]][k]
+            u, v = (q["u"], q["v"]) if kind != "line" else q[end]
             h = self._height_at(x, y, u, v)
             if h is not None:
                 q["h"] = round(h, 3)
@@ -226,7 +245,7 @@ class OrganicPointsTool(Tool):
         if button == RIGHT:
             if head is not None:                              # (that one taken away)
                 kind, k, _end = head
-                (s["points"] if kind == "point" else s["lines"]).pop(k)
+                s[PLACES[kind]].pop(k)
                 self._commit()
             elif self.first is not None:
                 self.first = None
@@ -245,7 +264,12 @@ class OrganicPointsTool(Tool):
             return
         if not s.get("points") and not s.get("lines"):        # (a membrane's own mast kept: joined, not replaced)
             s["points"] = ps.implicit_points(self.data)
-        if self.kind in ("mastro", "apoio"):
+        if self.kind == "oculo":                              # (0.557) an oculus: a free ring, starting where the form is
+            s.setdefault("holes", []).append({"u": round(uv[0], 3), "v": round(uv[1], 3),
+                                              "r": round(max(self.radius, 0.05), 3),
+                                              "h": round(self._form_height(uv), 3)})
+            self._commit()
+        elif self.kind in ("mastro", "apoio"):
             s.setdefault("points", []).append({"u": round(uv[0], 3), "v": round(uv[1], 3), "h": round(self.height, 3),
                                                "r": round(self.radius, 3), "kind": self.kind})
             self._commit()
@@ -279,7 +303,9 @@ class OrganicPointsTool(Tool):
         if self.guid is None:
             return False
         s = self.data["surface"]
-        if s.get("lines"):
+        if s.get("holes"):
+            s["holes"].pop()
+        elif s.get("lines"):
             s["lines"].pop()
         elif s.get("points"):
             s["points"].pop()

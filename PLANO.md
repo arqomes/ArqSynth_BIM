@@ -1802,7 +1802,8 @@ O dono: «Faça e não pare» (2026-11-12) — a proposta (Superfície paramétr
    **apoio** (ponto baixo, até ao chão) ou uma **linha de cumeeira/vale**; arrastá-los muda a altura e a forma
    resolve-se de novo (com pré-visualização ao vivo). Bordos **livres** (que sobem em arco entre apoios, como uma
    vela) ou **presos**.
-4. **Óculos e aberturas**: furos na membrana/casca com anel (claraboias, entradas de luz), desenhados como polígonos
+4. ~~**Óculos e aberturas**~~ (0.557.0: óculos redondos com anel rígido livre, «holes» da op «organic»; por fazer: a
+   Construção a respeitar os óculos; aberturas de outro contorno): furos na membrana/casca com anel (claraboias, entradas de luz), desenhados como polígonos
    sobre a planta; a forma contorna-os (anel rígido ou bordo livre).
 5. **Volumes orgânicos** (fechados): «almofada» a partir de um polígono extrudido e arredondado (subdivisão), e
    **massas fundidas** (pontos/linhas que se fundem como gotas — metaballs) para pavilhões, bancos, pilares árvore;

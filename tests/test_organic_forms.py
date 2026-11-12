@@ -176,6 +176,44 @@ class Control(unittest.TestCase):
         self.assertGreater(free[0, mid, 2], 0.05)                                 # (its free edge lifted)
 
 
+class Oculus(unittest.TestCase):
+    """0.557 — an oculus: an opening with a ring held at a height."""
+
+    def test_oculus_in_a_shell(self):
+        doc = Document()
+        guid = bim.add_organic_form(doc, bim.organic_shape("retangulo", (0, 0, 0), 12, 12), "catenaria", 3.0)
+        plain = len(ps.Surface(doc.ifc.surface_definition(guid)).mesh()[1])
+        data = doc.ifc.surface_definition(guid)
+        data["surface"]["holes"] = [{"u": 0.0, "v": 0.0, "r": 1.5, "h": 3.2, "held": True}]
+        self.assertEqual(ps.validate(data), [])
+        bim.set_param_surface(doc, guid, data)
+        on = ps.Surface(doc.ifc.surface_definition(guid))
+        verts, faces = on.mesh()
+        self.assertLess(len(faces), plain - 20)                                   # (its middle left open)
+        o, x, y, _n = ps.outline_frame(np.asarray(data["curves"][0]["points"], float))
+        uv = (verts - o) @ np.stack((x, y)).T
+        d = np.hypot(uv[:, 0], uv[:, 1])
+        ring = np.abs(d - 1.5) < 1e-6
+        self.assertGreater(int(ring.sum()), 8)                                    # (points on the ring itself)
+        self.assertTrue(np.allclose(verts[ring, 2], 3.2))                         # (held at its height)
+        mids = np.array([verts[f].mean(axis=0) for f in faces])
+        md = np.hypot(*((mids - o) @ np.stack((x, y)).T).T)
+        self.assertGreater(md.min(), 1.0)                                        # (nothing in its middle)
+        free = dict(data["surface"]["holes"][0], held=False, h=0.0)               # (a free ring: as the dome is)
+        data["surface"]["holes"] = [free]
+        bim.set_param_surface(doc, guid, data)
+        rows = ps.Surface(doc.ifc.surface_definition(guid)).rows
+        uv = (rows.reshape(-1, 3) - o) @ np.stack((x, y)).T
+        ring = np.abs(np.hypot(uv[:, 0], uv[:, 1]) - 1.5) < 1e-6
+        zr = rows.reshape(-1, 3)[ring, 2]
+        self.assertAlmostEqual(zr.max(), zr.min(), places=6)                      # (rigid: one height)
+        self.assertGreater(zr.max(), 1.5)                                         # (lifted with the shell)
+        mid = rows.shape[0] // 2
+        self.assertGreater(rows[mid, mid // 2, 2], 1.0)                           # (a dome, not a cone)
+        data["surface"]["holes"] = [{"u": 0.0, "v": 0.0, "r": -1, "h": 0}]
+        self.assertTrue(ps.validate(data))
+
+
 class Window(unittest.TestCase):
     def test_dialog(self):
         from PySide6 import QtWidgets

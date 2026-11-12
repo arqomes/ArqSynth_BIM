@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.557.0 — 2026-11-12
+
+**Gerador de formas orgânicas, passo 4: óculos.**
+
+- Em **Mastros e apoios**, «Clique põe: **Óculo**»: um clique abre uma abertura redonda (o raio da barra) com um
+  **anel rígido** à volta — claraboia, entrada de luz, o óculo de uma cúpula.
+- O anel é **livre**: sobe ou desce com a forma, como um só corpo (o anel de compressão de uma casca), e a forma à
+  volta fica igual à que seria sem a abertura. Na definição pode prender-se a uma altura («held»).
+- O anel é redondo de verdade (os pontos da grelha encostados ao círculo) e o meio fica aberto. Arrastar o centro do
+  óculo muda a altura de começo; botão direito tira-o.
+- Corrigido: numa catenária com pontos presos por dentro (mastros, apoios, anéis), a carga é a que levanta a forma
+  presa só pelo bordo à altura pedida — os pontos de dentro moldam-na sem a achatar.
+- Por fazer: a Construção (nervuras, painéis…) ainda ignora os óculos.
+- Testes: `tests/test_organic_forms.py` (Oculus); «forma_organica_oculo» no gui_smoke, com captura.
+
 ## 0.556.0 — 2026-11-12
 
 **Gerador de formas orgânicas, passo 3: mastros, apoios, cumeeiras, vales e bordos livres.**

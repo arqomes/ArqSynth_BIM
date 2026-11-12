@@ -254,6 +254,14 @@ def validate(data):
             if not ok:
                 errors.append("surface.lines[{}]: {{a: [u, v], b: [u, v], h, kind: {}}}".format(
                     k, "|".join(LINE_KINDS)))
+        for k, q in enumerate(s.get("holes") or []):  # (0.557) oculi
+            try:
+                ok = isinstance(q, dict) and float(q.get("r", 0)) > 0 and all(
+                    math.isfinite(float(q.get(key, 0.0))) for key in ("u", "v", "h"))
+            except (TypeError, ValueError):
+                ok = False
+            if not ok:
+                errors.append("surface.holes[{}]: {{u, v, r (> 0), h}}".format(k))
         if not isinstance(s.get("free_edges", False), bool):
             errors.append("surface.free_edges: verdadeiro ou falso")
     for key in ("angle", "rise", "height"):
@@ -572,6 +580,43 @@ def _boundary_grid(pts, nu, nv, grid):
     return np.array(ring[None] + (c - ring)[None] * tt), True
 
 
+def _beside(mask, close_u):
+    """The points with a neighbour in `mask` — along the grid's lines or across a cell (its diagonals: every point
+    a kept cell shares with an outside point)."""
+    rows_near = mask.copy()
+    rows_near[1:] |= mask[:-1]
+    rows_near[:-1] |= mask[1:]
+    out = rows_near.copy()
+    if close_u:
+        out |= np.roll(rows_near, 1, axis=1) | np.roll(rows_near, -1, axis=1)
+    else:
+        out[:, 1:] |= rows_near[:, :-1]
+        out[:, :-1] |= rows_near[:, 1:]
+    return out
+
+
+def organic_cut(data, rows):
+    """(0.557) The grid's points inside an organic form's oculi ((nr, nc) bool; None: no oculus) — a cell with all
+    its corners inside is left out of the surface."""
+    s = data.get("surface") or {}
+    holes = s.get("holes") or []
+    if s.get("op") != "organic" or not holes:
+        return None
+    curve = next((c for c in data.get("curves") or () if c.get("id") == s.get("boundary")), None)
+    if curve is None:
+        return None
+    pts, _closed = sample_curve(curve, {k: float(v) for k, v in (data.get("inputs") or {}).items()})
+    o, x, y, _n = outline_frame(pts)
+    uv = (np.asarray(rows, float) - o) @ np.stack((x, y)).T
+    cut = np.zeros(uv.shape[:2], dtype=bool)
+    cell = float(np.median(np.linalg.norm(np.diff(uv, axis=1), axis=-1)))
+    for q in holes:                                   # (as the form was found: a ring at least half a cell wide)
+        r = max(float(q["r"]), cell * 0.5)
+        d = np.hypot(uv[..., 0] - float(q["u"]), uv[..., 1] - float(q["v"]))
+        cut |= d <= r * (1 + 1e-6) + 1e-9
+    return cut
+
+
 def centre_mast(local, height):
     """(0.556) The mast a membrane with none stands on: in its outline's middle, `height` high."""
     size = float(np.ptp(np.asarray(local)[:, :2], axis=0).max())
@@ -622,6 +667,7 @@ def _rows_organic(data, env, curves):
             fixed[np.unravel_index(int(np.argmin(d)), d.shape)] = True
     else:
         fixed = edge.copy()
+    held_edge = fixed.copy()                            # (0.557: the edge alone — the load is found on it)
     points = list(s.get("points") or ())
     lines = list(s.get("lines") or ())
     if behaviour == "membrana" and not points and not lines:   # (a membrane needs something to lift it: a mast)
@@ -637,6 +683,21 @@ def _rows_organic(data, env, curves):
             near = d == d.min()
         flat[..., 2] = np.where(near, float(q.get("h", 0.0)), flat[..., 2])
         fixed |= near
+    rings = []
+    for q in s.get("holes") or ():                     # (0.557) an oculus: a rigid ring, nothing inside
+        c, r = np.array((float(q["u"]), float(q["v"]))), max(float(q["r"]), cell * 0.5)
+        rel = flat[..., :2] - c
+        d = np.linalg.norm(rel, axis=-1)
+        inside = d < r
+        out = ~inside
+        rim = inside & _beside(out, close_u)            # (the points just inside: put on the ring itself)
+        safe = np.where(d > 1e-9, d, 1.0)[..., None]
+        flat[..., :2] = np.where(rim[..., None], c + rel / safe * r, flat[..., :2])
+        flat[..., 2] = np.where(inside, float(q.get("h", 0.0)), flat[..., 2])
+        if q.get("held"):                               # (held at its height: on a mast, on a wall)
+            fixed |= inside
+        else:                                           # (free: it rises or sinks with the form, as one)
+            rings.append(inside)
     for q in lines:                                     # (0.556) a ridge or a valley: its points held at its height
         a, b = np.asarray(q["a"], float), np.asarray(q["b"], float)
         ab = b - a
@@ -646,7 +707,8 @@ def _rows_organic(data, env, curves):
         flat[..., 2] = np.where(near, float(q.get("h", 0.0)), flat[..., 2])
         fixed |= near
     try:
-        form = ff.find(flat, behaviour, height, fixed, close_u, plan=free_edges, edge_k=k)
+        form = ff.find(flat, behaviour, height, fixed, close_u, plan=free_edges, edge_k=k, edge=held_edge,
+                       groups=rings)
     except ff.FormError as exc:
         raise SurfaceError(str(exc)) from None
     return o + form @ axes, close_u
@@ -953,9 +1015,12 @@ class Surface:
                 index[j, :] = index[j, 0]
         faces = []
         cols = nc if close_u else nc - 1
+        cut = organic_cut(self.data, rows)                 # (0.557) an organic form's oculi left open
         for j in range(nr - 1):
             for i in range(cols):
                 i1 = (i + 1) % nc
+                if cut is not None and cut[j, i] and cut[j, i1] and cut[j + 1, i1] and cut[j + 1, i]:
+                    continue
                 q = [int(index[j, i]), int(index[j, i1]), int(index[j + 1, i1]), int(index[j + 1, i])]
                 out = []
                 for k in q:
